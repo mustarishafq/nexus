@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db, { API_ORIGIN } from '@/api/base44Client';
 import React, { useState, useMemo } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,19 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
+
+const API_BASE_URL = API_ORIGIN;
+
+const toAbsoluteUrl = (url) => {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+
+  if (!API_BASE_URL) return url;
+
+  return url.startsWith('/') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/${url}`;
+};
 
 const statusConfig = {
   online: { icon: Wifi, color: 'text-success', bg: 'bg-success/10', border: 'border-success/30' },
@@ -231,7 +244,7 @@ export default function ConnectedSystems() {
                 <Label>System Logo</Label>
                 <div className="flex items-center gap-3">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="logo" className="w-12 h-12 rounded-xl object-cover border border-border" />
+                    <img src={toAbsoluteUrl(logoUrl)} alt="logo" className="w-12 h-12 rounded-xl object-cover border border-border" />
                   ) : (
                     <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center border border-border">
                       <ImageIcon className="w-5 h-5 text-muted-foreground" />
@@ -317,7 +330,7 @@ export default function ConnectedSystems() {
                   <div className="relative mb-3">
                     {system.icon_url ? (
                       <img
-                        src={system.icon_url}
+                        src={toAbsoluteUrl(system.icon_url)}
                         alt={system.name}
                         className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:shadow-lg transition-shadow"
                       />
