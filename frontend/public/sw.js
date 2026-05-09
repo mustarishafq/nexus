@@ -1,8 +1,9 @@
-const CACHE_NAME = 'nexus-shell-v2';
+const CACHE_NAME = 'nexus-shell-v3';
 const APP_SHELL = [
   '/',
   '/offline.html',
-  '/icons/pwa-icon.svg',
+  '/icons/pwa-icon-192.png',
+  '/icons/pwa-icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -95,8 +96,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: '/icons/pwa-icon.svg',
-      badge: '/icons/pwa-icon.svg',
+      icon: '/icons/pwa-icon-192.png',
+      badge: '/icons/pwa-icon-192.png',
       tag,
       renotify: Boolean(tag),
       silent: false,
