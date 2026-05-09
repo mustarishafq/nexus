@@ -26,8 +26,12 @@ export default function TopBar({ sidebarWidth }) {
   }, []);
 
   const loadUnreadCount = async () => {
-    const notifs = await db.entities.Notification.filter({ is_read: false }, '-created_date', 100);
-    setUnreadCount(notifs.length);
+    try {
+      const notifs = await db.entities.Notification.filter({ is_read: false }, '-created_date', 100);
+      setUnreadCount(Array.isArray(notifs) ? notifs.length : 0);
+    } catch {
+      setUnreadCount(0);
+    }
   };
 
   return (

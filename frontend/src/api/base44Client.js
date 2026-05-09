@@ -90,12 +90,14 @@ function createEntityClient(entityName) {
 	return {
 		async list(sort, limit) {
 			const query = buildQuery({ sort, limit });
-			return request(`/${endpoint}${query}`);
+			const payload = await request(`/${endpoint}${query}`);
+			return Array.isArray(payload) ? payload : [];
 		},
 
 		async filter(filters = {}, sort, limit) {
 			const query = buildQuery({ ...filters, sort, limit });
-			return request(`/${endpoint}${query}`);
+			const payload = await request(`/${endpoint}${query}`);
+			return Array.isArray(payload) ? payload : [];
 		},
 
 		async get(id) {
