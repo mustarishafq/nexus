@@ -129,6 +129,8 @@ export const db = {
 		},
 
 		async login(data) {
+			// Prevent stale sessions: failed login should never keep an older token active.
+			localStorage.removeItem(AUTH_TOKEN_KEY);
 			const payload = await request('/auth/login', { method: 'POST', body: data });
 			if (payload?.token) {
 				localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
