@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
 
+const DEBUG_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 export default function Login() {
   const navigate = useNavigate();
   const { checkUserAuth, setAuthenticatedUser, appPublicSettings } = useAuth();
@@ -143,11 +145,20 @@ export default function Login() {
             </div>
           )}
           {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-              <svg className="w-4 h-4 text-destructive mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-destructive">{error}</p>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+                <svg className="w-4 h-4 text-destructive mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+              {error?.includes('invalid_api_response') && (
+                <div className="text-xs bg-slate-100 border border-slate-200 rounded p-3 font-mono text-slate-700 break-all">
+                  <div className="font-bold mb-1.5 text-slate-800">Current API Base URL:</div>
+                  <div className="bg-white rounded p-2 border border-slate-200">{DEBUG_API_BASE_URL}</div>
+                  <div className="text-slate-500 mt-2">Make sure this matches your backend URL on cloud deployment.</div>
+                </div>
+              )}
             </div>
           )}
 
