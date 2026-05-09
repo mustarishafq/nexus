@@ -152,11 +152,11 @@ export default function Login() {
                 </svg>
                 <p className="text-sm text-destructive">{error}</p>
               </div>
-              {error?.includes('invalid_api_response') && (
+              {error?.includes('API JSON') && (
                 <div className="text-xs bg-slate-100 border border-slate-200 rounded p-3 font-mono text-slate-700 break-all">
                   <div className="font-bold mb-1.5 text-slate-800">Current API Base URL:</div>
-                  <div className="bg-white rounded p-2 border border-slate-200">{DEBUG_API_BASE_URL}</div>
-                  <div className="text-slate-500 mt-2">Make sure this matches your backend URL on cloud deployment.</div>
+                  <div className="bg-white rounded p-2 border border-slate-200 break-words">{DEBUG_API_BASE_URL}</div>
+                  <div className="text-slate-500 mt-2">Must be a full URL on cloud (e.g., https://api.brain.groobok.com/api), not a relative path.</div>
                 </div>
               )}
             </div>
