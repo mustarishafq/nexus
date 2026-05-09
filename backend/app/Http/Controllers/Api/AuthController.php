@@ -39,6 +39,13 @@ class AuthController extends Controller
 
     public function login(Request $request): JsonResponse
     {
+        // Clear any previously issued token presented by the client before processing login.
+        // This prevents stale-token auth from surviving failed login attempts on older clients.
+        $existingUser = ApiTokenAuth::userFromRequest($request);
+        if ($existingUser) {
+            ApiTokenAuth::revoke($existingUser);
+        }
+
         $validated = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],

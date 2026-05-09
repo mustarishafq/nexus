@@ -20,7 +20,7 @@ class ApiTokenAuth
 
     public static function userFromRequest(Request $request): ?User
     {
-        $token = $request->bearerToken();
+        $token = self::tokenFromRequest($request);
 
         if (! $token) {
             return null;
@@ -34,5 +34,20 @@ class ApiTokenAuth
     public static function revoke(User $user): void
     {
         $user->forceFill(['remember_token' => null])->save();
+    }
+
+    private static function tokenFromRequest(Request $request): ?string
+    {
+        $bearer = $request->bearerToken();
+        if (! empty($bearer)) {
+            return $bearer;
+        }
+
+        $headerToken = $request->header('X-Auth-Token');
+        if (! empty($headerToken) && is_string($headerToken)) {
+            return $headerToken;
+        }
+
+        return null;
     }
 }

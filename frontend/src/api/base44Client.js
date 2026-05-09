@@ -30,7 +30,7 @@ function normalizeBody(data) {
 
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
 	const token = localStorage.getItem(AUTH_TOKEN_KEY);
-	const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+	const authHeaders = token ? { Authorization: `Bearer ${token}`, 'X-Auth-Token': token } : {};
 
 	const response = await fetch(`${API_BASE_URL}${path}`, {
 		method,
@@ -229,6 +229,7 @@ export const db = {
 					throw new Error('UploadFile requires a file parameter.');
 				}
 
+				const token = localStorage.getItem(AUTH_TOKEN_KEY);
 				const formData = new FormData();
 				formData.append('file', file);
 				formData.append('folder', folder);
@@ -239,6 +240,7 @@ export const db = {
 					credentials: 'omit',
 					headers: {
 						Accept: 'application/json',
+						...(token ? { Authorization: `Bearer ${token}`, 'X-Auth-Token': token } : {}),
 					},
 				});
 
@@ -281,7 +283,7 @@ export const db = {
 			method: 'POST',
 			headers: {
 				Accept: 'application/json',
-				...(token ? { Authorization: `Bearer ${token}` } : {}),
+				...(token ? { Authorization: `Bearer ${token}`, 'X-Auth-Token': token } : {}),
 			},
 			body: formData,
 			credentials: 'omit',
