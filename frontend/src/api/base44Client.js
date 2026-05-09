@@ -187,6 +187,20 @@ export const db = {
 		},
 	},
 
+	pushSubscriptions: {
+		async list() {
+			return request('/push-subscriptions');
+		},
+
+		async upsert(data) {
+			return request('/push-subscriptions', { method: 'POST', body: data });
+		},
+
+		async remove(data) {
+			return request('/push-subscriptions', { method: 'DELETE', body: data });
+		},
+	},
+
 	entities: new Proxy(
 		{},
 		{

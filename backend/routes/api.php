@@ -34,6 +34,15 @@ Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
 
 Route::post('/uploads', [FileUploadController::class, 'store']);
+Route::get('/push-subscriptions', function () {
+	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->index(request());
+});
+Route::post('/push-subscriptions', function () {
+	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->store(request());
+});
+Route::delete('/push-subscriptions', function () {
+	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
+});
 
 Route::apiResource('connected-systems', ConnectedSystemController::class);
 Route::post('connected-systems/{connected_system}/launch', [ConnectedSystemController::class, 'launch']);

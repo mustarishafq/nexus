@@ -46,6 +46,8 @@ class NotificationController extends Controller
 
         $item = Notification::create($validated);
 
+        app()->make('App\\Services\\PushNotificationService')->sendNotification($item);
+
         return response()->json($item, 201);
     }
 

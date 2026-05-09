@@ -1,7 +1,7 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 
-import { Settings as SettingsIcon, Bell, Mail, MessageSquare, Smartphone, Volume2, VolumeX } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, ShieldCheck, BellRing, BellOff, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,14 +9,24 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/lib/AuthContext';
+import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
 
 export default function Settings() {
+  const { appPublicSettings } = useAuth();
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState({
     in_app: true,
     email: true,
     sound: false,
     priority_filter: 'all',
+  });
+  const [pushState, setPushState] = useState({
+    loading: false,
+    subscribed: false,
+    supported: false,
+    permission: 'default',
+    synced: false,
   });
 
   useEffect(() => {
@@ -31,6 +41,114 @@ export default function Settings() {
       }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshPushState();
+  }, [appPublicSettings]);
+
+  const refreshPushState = async () => {
+    const supported = isWebPushSupported();
+
+    if (!supported) {
+      setPushState({
+        loading: false,
+        subscribed: false,
+        supported: false,
+        permission: 'unsupported',
+        synced: false,
+      });
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const browserSubscription = await registration.pushManager.getSubscription();
+      const storedSubscriptions = await db.pushSubscriptions.list();
+      const synced = Boolean(browserSubscription && Array.isArray(storedSubscriptions)
+        && storedSubscriptions.some((item) => item.endpoint === browserSubscription.endpoint));
+
+      setPushState({
+        loading: false,
+        subscribed: Boolean(browserSubscription),
+        supported: true,
+        permission: Notification.permission,
+        synced,
+      });
+    } catch {
+      setPushState((current) => ({
+        ...current,
+        loading: false,
+        supported: true,
+        permission: Notification.permission,
+      }));
+    }
+  };
+
+  const subscribeToPush = async () => {
+    if (!isWebPushSupported()) {
+      toast.error('Web push is not supported in this browser');
+      return;
+    }
+
+    const publicKey = appPublicSettings?.web_push_public_key;
+    if (!publicKey) {
+      toast.error('Web push is not configured by the administrator');
+      return;
+    }
+
+    setPushState((current) => ({ ...current, loading: true }));
+
+    try {
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission();
+
+      if (permission !== 'granted') {
+        throw new Error('Notification permission was not granted');
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      await db.pushSubscriptions.upsert({
+        ...subscription.toJSON(),
+        userAgent: navigator.userAgent,
+      });
+
+      toast.success('Web push enabled');
+      await refreshPushState();
+    } catch (error) {
+      toast.error(error?.message || 'Unable to enable web push');
+      await refreshPushState();
+    }
+  };
+
+  const unsubscribeFromPush = async () => {
+    if (!isWebPushSupported()) {
+      return;
+    }
+
+    setPushState((current) => ({ ...current, loading: true }));
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        await db.pushSubscriptions.remove({ endpoint: subscription.endpoint });
+        await subscription.unsubscribe();
+      }
+
+      toast.success('Web push disabled');
+      await refreshPushState();
+    } catch (error) {
+      toast.error(error?.message || 'Unable to disable web push');
+      await refreshPushState();
+    }
+  };
 
   const save = async () => {
     await db.auth.updateMe({ notification_settings: settings });
@@ -92,6 +210,54 @@ export default function Settings() {
             </div>
             <Switch checked={settings.sound} onCheckedChange={v => setSettings(p => ({ ...p, sound: v }))} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-primary" /> Web Push Notifications
+          </CardTitle>
+          <CardDescription>Receive notifications on phone, laptop, and iOS when the browser is closed</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!pushState.supported ? (
+            <div className="text-sm text-muted-foreground">
+              This browser does not support Web Push.
+            </div>
+          ) : !appPublicSettings?.web_push_public_key ? (
+            <div className="text-sm text-muted-foreground">
+              Web Push is not configured yet. Ask an admin to set the VAPID keys.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {pushState.subscribed ? <BellRing className="w-4 h-4 text-emerald-600" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
+                  {pushState.subscribed ? 'Web push enabled' : 'Web push disabled'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {pushState.subscribed
+                    ? pushState.synced
+                      ? 'This device is subscribed and synced with the server.'
+                      : 'This device is subscribed, but the server sync is pending.'
+                    : 'Subscribe this device to receive browser notifications.'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Browser permission: {pushState.permission}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={pushState.subscribed ? 'outline' : 'default'}
+                onClick={pushState.subscribed ? unsubscribeFromPush : subscribeToPush}
+                disabled={pushState.loading}
+              >
+                {pushState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                {pushState.subscribed ? 'Disable' : 'Enable'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -140,7 +140,7 @@ export default function BroadcastCenter() {
               </div>
             ) : (
               <div className="space-y-3">
-                {broadcasts.map(b => {
+                {broadcasts.slice(0, 4).map(b => {
                   const Icon = typeIcons[b.type] || Info;
                   return (
                     <div key={b.id} className={cn("flex items-start gap-3 p-3 rounded-xl border transition-colors hover:opacity-90", typeRowBg[b.type] || 'bg-muted/30 border-border')}>

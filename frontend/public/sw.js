@@ -52,3 +52,58 @@ self.addEventListener('fetch', (event) => {
     }))
   );
 });
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = { message: event.data.text() };
+    }
+  }
+
+  const title = payload.title || 'Nexus';
+  const body = payload.message || payload.body || 'You have a new notification in Nexus.';
+  const url = payload.action_url || payload.url || '/notifications';
+  const tag = payload.id ? `notification-${payload.id}` : undefined;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/pwa-icon.svg',
+      badge: '/icons/pwa-icon.svg',
+      tag,
+      renotify: Boolean(tag),
+      silent: false,
+      vibrate: [200, 100, 200],
+      data: {
+        url,
+        id: payload.id || null,
+      },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(event.notification?.data?.url || '/notifications', self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ('focus' in client && client.url === targetUrl) {
+          return client.focus();
+        }
+      }
+
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+
+      return undefined;
+    })
+  );
+});

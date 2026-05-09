@@ -118,6 +118,8 @@ class AppSettingController extends Controller
 
         return [
             'system_name' => $settings->system_name ?: config('app.name', 'Nexus'),
+            'web_push_enabled' => filled(config('services.web_push.public_key')) && filled(config('services.web_push.private_key')) && filled(config('services.web_push.subject')),
+            'web_push_public_key' => config('services.web_push.public_key'),
         ];
     }
 
