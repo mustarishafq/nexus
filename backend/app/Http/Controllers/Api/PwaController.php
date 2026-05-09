@@ -17,6 +17,7 @@ class PwaController extends Controller
         return response()->json([
             'name' => $name,
             'short_name' => $name,
+            'id' => '/',
             'start_url' => '/',
             'scope' => '/',
             'display' => 'standalone',

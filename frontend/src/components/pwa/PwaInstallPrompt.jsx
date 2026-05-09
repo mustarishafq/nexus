@@ -5,11 +5,31 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function PwaInstallPrompt() {
+  const isRunningStandalone =
+    typeof window !== 'undefined'
+    && (
+      window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+    );
+  const isIos = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(isRunningStandalone);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
 
   useEffect(() => {
+    const updateInstalledState = () => {
+      const installed =
+        window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+
+      setIsInstalled(installed);
+
+      if (!installed) {
+        setShowPrompt(true);
+      }
+    };
+
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setDeferredPrompt(event);
@@ -17,6 +37,7 @@ export default function PwaInstallPrompt() {
     };
 
     const handleAppInstalled = () => {
+      setIsInstalled(true);
       setDeferredPrompt(null);
       setShowPrompt(false);
     };
@@ -24,16 +45,22 @@ export default function PwaInstallPrompt() {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
 
+    updateInstalledState();
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', updateInstalledState);
+    document.addEventListener('visibilitychange', updateInstalledState);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', updateInstalledState);
+      document.removeEventListener('visibilitychange', updateInstalledState);
     };
   }, []);
 
@@ -46,9 +73,13 @@ export default function PwaInstallPrompt() {
     setShowPrompt(false);
   };
 
+  const installHint = isIos
+    ? 'On iPhone/iPad, tap Share then Add to Home Screen.'
+    : 'If no browser popup appears, use your browser menu and choose Install app or Add to home screen.';
+
   return (
     <AnimatePresence>
-      {(showPrompt || isOffline) && (
+      {((showPrompt && !isInstalled) || isOffline) && (
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -62,12 +93,14 @@ export default function PwaInstallPrompt() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">
-                  {isOffline ? 'You are offline' : 'Install the app'}
+                  {isOffline ? 'You are offline' : deferredPrompt ? 'Install the app' : 'Install Nexus'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isOffline
                     ? 'Cached pages stay available while you reconnect.'
-                    : 'Add Nexus to your device for a faster, app-like experience.'}
+                    : deferredPrompt
+                      ? 'Add Nexus to your device for a faster, app-like experience.'
+                      : installHint}
                 </p>
               </div>
               {!isOffline && (
@@ -87,9 +120,11 @@ export default function PwaInstallPrompt() {
                 <Button variant="outline" size="sm" onClick={() => setShowPrompt(false)}>
                   Not now
                 </Button>
-                <Button size="sm" className="gap-1.5" onClick={install} disabled={!deferredPrompt}>
-                  <Download className="w-4 h-4" /> Install
-                </Button>
+                {deferredPrompt && (
+                  <Button size="sm" className="gap-1.5" onClick={install}>
+                    <Download className="w-4 h-4" /> Install
+                  </Button>
+                )}
               </div>
             )}
           </div>
