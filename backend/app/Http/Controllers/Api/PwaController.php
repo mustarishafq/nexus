@@ -13,7 +13,6 @@ class PwaController extends Controller
     {
         $settings = $this->currentSettings();
         $name = $settings->system_name ?: config('app.name', 'Nexus');
-        $frontendUrl = env('APP_URL');
 
         return response()->json([
             'name' => $name,
@@ -27,7 +26,7 @@ class PwaController extends Controller
             'description' => 'Unified system access, alerts, and admin controls.',
             'icons' => [
                 [
-                    'src' => $frontendUrl . '/icons/pwa-icon.svg',
+                    'src' => '/icons/pwa-icon.svg',
                     'sizes' => 'any',
                     'type' => 'image/svg+xml',
                     'purpose' => 'any maskable',
