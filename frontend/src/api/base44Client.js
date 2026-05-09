@@ -1,5 +1,5 @@
 // @ts-nocheck
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
 const AUTH_TOKEN_KEY = 'nexus_auth_token';
 
 const ENTITY_ENDPOINTS = {
