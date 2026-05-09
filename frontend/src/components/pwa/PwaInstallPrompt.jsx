@@ -11,7 +11,6 @@ export default function PwaInstallPrompt() {
       window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true
     );
-  const isIos = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(isRunningStandalone);
@@ -25,7 +24,7 @@ export default function PwaInstallPrompt() {
 
       setIsInstalled(installed);
 
-      if (!installed) {
+      if (!installed && deferredPrompt) {
         setShowPrompt(true);
       }
     };
@@ -73,13 +72,9 @@ export default function PwaInstallPrompt() {
     setShowPrompt(false);
   };
 
-  const installHint = isIos
-    ? 'On iPhone/iPad, tap Share then Add to Home Screen.'
-    : 'If no browser popup appears, use your browser menu and choose Install app or Add to home screen.';
-
   return (
     <AnimatePresence>
-      {((showPrompt && !isInstalled) || isOffline) && (
+      {((showPrompt && !isInstalled && Boolean(deferredPrompt)) || isOffline) && (
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -93,14 +88,12 @@ export default function PwaInstallPrompt() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">
-                  {isOffline ? 'You are offline' : deferredPrompt ? 'Install the app' : 'Install Nexus'}
+                  {isOffline ? 'You are offline' : 'Install the app'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isOffline
                     ? 'Cached pages stay available while you reconnect.'
-                    : deferredPrompt
-                      ? 'Add Nexus to your device for a faster, app-like experience.'
-                      : installHint}
+                    : 'Add Nexus to your device for a faster, app-like experience.'}
                 </p>
               </div>
               {!isOffline && (
@@ -120,11 +113,9 @@ export default function PwaInstallPrompt() {
                 <Button variant="outline" size="sm" onClick={() => setShowPrompt(false)}>
                   Not now
                 </Button>
-                {deferredPrompt && (
-                  <Button size="sm" className="gap-1.5" onClick={install}>
-                    <Download className="w-4 h-4" /> Install
-                  </Button>
-                )}
+                <Button size="sm" className="gap-1.5" onClick={install}>
+                  <Download className="w-4 h-4" /> Install
+                </Button>
               </div>
             )}
           </div>

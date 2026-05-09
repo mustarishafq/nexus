@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,13 @@ import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
 import AdminSettings from '@/pages/AdminSettings';
 
 export default function Settings() {
+  const isRunningStandalone = () => (
+    typeof window !== 'undefined'
+    && (
+      window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+    )
+  );
   const { appPublicSettings, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
@@ -33,6 +40,12 @@ export default function Settings() {
     permission: 'default',
     synced: false,
   });
+  const [installState, setInstallState] = useState({
+    available: false,
+    installed: isRunningStandalone(),
+    loading: false,
+  });
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
 
   useEffect(() => {
     db.auth.me().then((u) => {
@@ -55,6 +68,54 @@ export default function Settings() {
     const nextTab = isAdmin && tabFromUrl === 'admin' ? 'admin' : 'user';
     setActiveTab(nextTab);
   }, [isAdmin, searchParams]);
+
+  useEffect(() => {
+    const updateInstallState = () => {
+      const installed = isRunningStandalone();
+
+      setInstallState((current) => ({
+        ...current,
+        installed,
+      }));
+
+      if (installed) {
+        setDeferredInstallPrompt(null);
+      }
+    };
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event);
+      setInstallState((current) => ({
+        ...current,
+        available: true,
+      }));
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredInstallPrompt(null);
+      setInstallState((current) => ({
+        ...current,
+        available: false,
+        installed: true,
+        loading: false,
+      }));
+    };
+
+    updateInstallState();
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('focus', updateInstallState);
+    document.addEventListener('visibilitychange', updateInstallState);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('focus', updateInstallState);
+      document.removeEventListener('visibilitychange', updateInstallState);
+    };
+  }, []);
 
   const refreshPushState = async () => {
     const supported = isWebPushSupported();
@@ -163,6 +224,31 @@ export default function Settings() {
   const save = async () => {
     await db.auth.updateMe({ notification_settings: settings });
     toast.success('Settings saved');
+  };
+
+  const installApp = async () => {
+    if (!deferredInstallPrompt) {
+      toast.info('Install prompt is not available yet on this browser session.');
+      return;
+    }
+
+    setInstallState((current) => ({ ...current, loading: true }));
+
+    try {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+
+      setDeferredInstallPrompt(null);
+      setInstallState((current) => ({
+        ...current,
+        loading: false,
+        available: false,
+        installed: choice?.outcome === 'accepted' ? true : current.installed,
+      }));
+    } catch {
+      setInstallState((current) => ({ ...current, loading: false }));
+      toast.error('Unable to open install prompt right now.');
+    }
   };
 
   const handleTabChange = (value) => {
@@ -292,6 +378,33 @@ export default function Settings() {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Download className="w-4 h-4 text-primary" /> Install App
+              </CardTitle>
+              <CardDescription>Install Nexus for a faster app-like experience</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                {installState.installed
+                  ? 'Nexus is already installed on this device.'
+                  : installState.available
+                    ? 'The browser install prompt is ready.'
+                    : 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'}
+              </div>
+
+              <Button
+                type="button"
+                onClick={installApp}
+                disabled={!installState.available || installState.installed || installState.loading}
+              >
+                {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                {installState.installed ? 'Installed' : 'Install App'}
+              </Button>
             </CardContent>
           </Card>
 
