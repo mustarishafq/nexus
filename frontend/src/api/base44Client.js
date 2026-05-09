@@ -31,8 +31,9 @@ function normalizeBody(data) {
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
 	const token = localStorage.getItem(AUTH_TOKEN_KEY);
 	const authHeaders = token ? { Authorization: `Bearer ${token}`, 'X-Auth-Token': token } : {};
+    const requestUrl = `${API_BASE_URL}${path}`;
 
-	const response = await fetch(`${API_BASE_URL}${path}`, {
+	const response = await fetch(requestUrl, {
 		method,
 		headers: {
 			Accept: 'application/json',
@@ -49,14 +50,29 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 	}
 
 	let payload = null;
+	const contentType = (response.headers.get('content-type') || '').toLowerCase();
+	const isJson = contentType.includes('application/json');
 	try {
-		payload = await response.json();
+		payload = isJson ? await response.json() : await response.text();
 	} catch {
 		payload = null;
 	}
 
+	if (response.ok && !isJson) {
+		const error = new Error(`Invalid API response from ${requestUrl}. Expected JSON but received ${contentType || 'unknown content type'}.`);
+		error.status = response.status;
+		error.data = {
+			code: 'invalid_api_response',
+			url: requestUrl,
+			contentType: contentType || null,
+			responsePreview: typeof payload === 'string' ? payload.slice(0, 160) : null,
+		};
+		throw error;
+	}
+
 	if (!response.ok) {
-		const error = new Error(payload?.message || `HTTP ${response.status}`);
+		const message = typeof payload === 'object' ? payload?.message : null;
+		const error = new Error(message || `HTTP ${response.status}`);
 		error.status = response.status;
 		error.data = payload;
 		throw error;

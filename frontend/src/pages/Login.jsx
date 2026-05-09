@@ -42,6 +42,9 @@ export default function Login() {
 
       navigate('/', { replace: true });
     } catch (err) {
+      if (err?.data?.code === 'invalid_api_response') {
+        setError('Login endpoint is not returning API JSON. Check VITE_API_BASE_URL on cloud deployment.');
+      } else
       if (err?.status === 403 && err?.data?.code === 'account_not_approved') {
         setError('Your account is pending admin approval.');
       } else {
