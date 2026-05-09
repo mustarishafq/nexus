@@ -41,7 +41,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 			...headers,
 		},
 		body: body === undefined ? undefined : JSON.stringify(normalizeBody(body)),
-		credentials: 'include',
+		credentials: 'omit',
 	});
 
 	if (response.status === 204) {
@@ -143,6 +143,9 @@ export const db = {
 		},
 
 		async isAuthenticated() {
+			if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+				return false;
+			}
 			try {
 				await request('/me');
 				return true;
@@ -152,6 +155,11 @@ export const db = {
 		},
 
 		async me() {
+			if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+				const error = new Error('Unauthorized');
+				error.status = 401;
+				throw error;
+			}
 			return request('/me');
 		},
 
@@ -228,7 +236,7 @@ export const db = {
 				const response = await fetch(`${API_BASE_URL}/uploads`, {
 					method: 'POST',
 					body: formData,
-					credentials: 'include',
+					credentials: 'omit',
 					headers: {
 						Accept: 'application/json',
 					},
@@ -276,7 +284,7 @@ export const db = {
 				...(token ? { Authorization: `Bearer ${token}` } : {}),
 			},
 			body: formData,
-			credentials: 'include',
+			credentials: 'omit',
 		});
 		let payload = null;
 		try { payload = await response.json(); } catch { payload = null; }

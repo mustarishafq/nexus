@@ -2,6 +2,7 @@ import db from '@/api/base44Client';
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
+const AUTH_TOKEN_KEY = 'nexus_auth_token';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -61,6 +62,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkUserAuth = async () => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+    // Never hydrate auth state from cookies/sessions; API auth is token-only.
+    if (!token) {
+      setIsLoadingAuth(false);
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      setAuthError({
+        type: 'auth_required',
+        message: 'Please login to continue.',
+      });
+      return;
+    }
+
     try {
       setIsLoadingAuth(true);
       const currentUser = await db.auth.me();

@@ -32,8 +32,6 @@ export default function Login() {
       await checkUserAuth();
       navigate('/', { replace: true });
     } catch (err) {
-      // Ensure auth context reflects logged-out state after failed login attempts.
-      await checkUserAuth();
       if (err?.status === 403 && err?.data?.code === 'account_not_approved') {
         setError('Your account is pending admin approval.');
       } else {
