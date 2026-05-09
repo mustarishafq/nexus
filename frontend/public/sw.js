@@ -28,6 +28,17 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
+  // Never cache dev-server and HMR assets; stale modules can break exports during development.
+  if (
+    url.pathname.startsWith('/src/')
+    || url.pathname.startsWith('/@vite/')
+    || url.pathname.startsWith('/@fs/')
+    || url.pathname.includes('vite/client')
+    || url.searchParams.has('t')
+  ) {
+    return;
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)

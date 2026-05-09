@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useMemo } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon } from 'lucide-react';
+import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +25,24 @@ export default function ConnectedSystems() {
   const [editSystem, setEditSystem] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [copiedApiKey, setCopiedApiKey] = useState(false);
   const queryClient = useQueryClient();
+
+  const generateApiKey = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let key = '';
+    for (let i = 0; i < 32; i++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setApiKey(key);
+  };
+
+  const copyApiKey = () => {
+    navigator.clipboard.writeText(apiKey);
+    setCopiedApiKey(true);
+    setTimeout(() => setCopiedApiKey(false), 2000);
+  };
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -39,6 +56,7 @@ export default function ConnectedSystems() {
   const openDialog = (system = null) => {
     setEditSystem(system);
     setLogoUrl(system?.icon_url || '');
+    setApiKey(system?.api_key || '');
     setDialogOpen(true);
   };
 
@@ -81,12 +99,12 @@ export default function ConnectedSystems() {
 
   const createMut = useMutation({
     mutationFn: (data) => db.entities.ConnectedSystem.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.ConnectedSystem.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); },
   });
 
   const deleteMut = useMutation({
@@ -115,7 +133,7 @@ export default function ConnectedSystems() {
       slug: form.get('slug'),
       description: form.get('description'),
       base_url: form.get('base_url'),
-      api_key: form.get('api_key') || undefined,
+      api_key: apiKey || undefined,
       status: form.get('status'),
       color: form.get('color'),
       icon_url: logoUrl || undefined,
@@ -136,7 +154,7 @@ export default function ConnectedSystems() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); } }}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); } }}>
           {currentUser?.role === 'admin' && (
             <DialogTrigger asChild>
               <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
@@ -151,11 +169,11 @@ export default function ConnectedSystems() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Name</Label>
+                  <Label>Name *</Label>
                   <Input name="name" defaultValue={editSystem?.name} placeholder="Booking System" required />
                 </div>
                 <div className="space-y-2">
-                  <Label>Slug</Label>
+                  <Label>Slug *</Label>
                   <Input name="slug" defaultValue={editSystem?.slug} placeholder="booking" required />
                 </div>
               </div>
@@ -169,13 +187,43 @@ export default function ConnectedSystems() {
               </div>
               <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>
-                <Input
-                  name="api_key"
-                  defaultValue={editSystem?.api_key}
-                  placeholder="super-secret-key-min-32-chars"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <Input
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="super-secret-key-min-32-chars"
+                      autoComplete="off"
+                      spellCheck={false}
+                      type="password"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={generateApiKey}
+                    title="Generate new API key"
+                    className="px-3"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={copyApiKey}
+                    disabled={!apiKey}
+                    title="Copy API key"
+                    className="px-3"
+                  >
+                    {copiedApiKey ? (
+                      <Check className="w-4 h-4 text-success" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
                 <p className="text-[11px] text-muted-foreground">Must match the key configured in the target system. Required to enable auto-login.</p>
               </div>
               {/* Logo Upload */}
@@ -240,7 +288,7 @@ export default function ConnectedSystems() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {visibleSystems.map((system, i) => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
@@ -288,14 +336,9 @@ export default function ConnectedSystems() {
                     )}
                   </div>
                   <h3 className="font-semibold text-sm text-center leading-tight">{system.name}</h3>
-                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{system.slug}</p>
-                </div>
-
-                {/* Description */}
-                <div className="px-5 pb-4 flex-1">
-                  {system.description && (
-                    <p className="text-xs text-muted-foreground text-center line-clamp-2">{system.description}</p>
-                  )}
+                  <p className="text-xs text-muted-foreground text-center line-clamp-2">
+                    {system.description?.trim() || 'No description provided'}
+                  </p>
                 </div>
 
                 {/* Launch hover overlay */}

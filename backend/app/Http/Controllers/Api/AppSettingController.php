@@ -91,16 +91,7 @@ class AppSettingController extends Controller
 
     private function currentSettings(): object
     {
-        if (! Schema::hasTable('app_settings')) {
-            return (object) [
-                'system_name' => config('app.name', 'Nexus'),
-                'smtp_from_email' => config('mail.from.address'),
-            ];
-        }
-
-        $settings = DB::table('app_settings')->first();
-
-        return $settings ?? (object) [
+        $defaults = [
             'system_name' => config('app.name', 'Nexus'),
             'smtp_host' => null,
             'smtp_port' => null,
@@ -110,6 +101,19 @@ class AppSettingController extends Controller
             'smtp_from_email' => config('mail.from.address'),
             'smtp_from_name' => config('mail.from.name'),
         ];
+
+        if (! Schema::hasTable('app_settings')) {
+            return (object) $defaults;
+        }
+
+        $settings = DB::table('app_settings')->first();
+
+        if (! $settings) {
+            return (object) $defaults;
+        }
+
+        // Legacy rows may not have all SMTP columns; merge into safe defaults.
+        return (object) array_merge($defaults, (array) $settings);
     }
 
     private function publicPayload(): array

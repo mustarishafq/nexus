@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-export default function AdminSettings() {
+export default function AdminSettings({ embedded = false }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,12 +89,14 @@ export default function AdminSettings() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Shield className="w-6 h-6 text-primary" /> Admin Settings
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage the system name and default email sender.</p>
-      </motion.div>
+      {!embedded ? (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Shield className="w-6 h-6 text-primary" /> Admin Settings
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage the system name and default email sender.</p>
+        </motion.div>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-16">

@@ -21,7 +21,6 @@ export default function Sidebar({ collapsed, onToggle }) {
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
       { path: '/admin/events', icon: Shield, label: 'System Events' },
       { path: '/admin/users', icon: Users, label: 'User Management' },
-      { path: '/admin/settings', icon: Settings, label: 'Admin Settings' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
