@@ -9,17 +9,16 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/AuthContext';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 export default function TopBar({ sidebarWidth }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
-    db.auth.me().then(setUser).catch(() => {});
     loadUnreadCount();
     const interval = setInterval(loadUnreadCount, 15000);
     return () => clearInterval(interval);
@@ -69,11 +68,11 @@ export default function TopBar({ sidebarWidth }) {
             <DropdownMenuTrigger className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <span className="text-sm font-semibold text-primary">
-                  {user?.full_name?.[0] || 'U'}
+                  {(user?.full_name || user?.name || user?.email || 'U')?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-sm font-medium leading-none">{user?.full_name || 'User'}</p>
+                <p className="text-sm font-medium leading-none">{user?.full_name || user?.name || user?.email || 'User'}</p>
                 <p className="text-xs text-muted-foreground">{user?.role || 'user'}</p>
               </div>
               <ChevronDown className="w-3 h-3 text-muted-foreground hidden md:block" />

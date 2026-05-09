@@ -31,24 +31,30 @@ export default function Profile() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    db.auth.me().then((u) => {
-      setProfileForm({
-        name: u.name || '',
-        full_name: u.full_name || '',
-        email: u.email || '',
-      });
-    }).catch(() => {});
-  }, []);
+    if (!authUser) return;
+
+    setProfileForm({
+      name: authUser.name || authUser.full_name || '',
+      full_name: authUser.full_name || authUser.name || '',
+      email: authUser.email || '',
+    });
+  }, [authUser]);
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
     setProfileSaving(true);
     try {
-      await db.auth.updateMe({
+      const updatedUser = await db.auth.updateMe({
         name: profileForm.name,
         full_name: profileForm.full_name,
       });
       await checkUserAuth();
+      setProfileForm((prev) => ({
+        ...prev,
+        name: updatedUser?.name || prev.name,
+        full_name: updatedUser?.full_name || updatedUser?.name || prev.full_name,
+        email: updatedUser?.email || prev.email,
+      }));
       toast.success('Profile updated successfully.');
     } catch (err) {
       toast.error(err?.message || 'Failed to update profile.');
