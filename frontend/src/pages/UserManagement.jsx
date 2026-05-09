@@ -3,7 +3,7 @@ import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, Filter, ChevronLeft, ChevronRight, Users as UsersIcon } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, Filter, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,23 +28,31 @@ export default function UserManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [accessDialogUser, setAccessDialogUser] = useState(null);
+  const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const csvRef = useRef(null);
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading: loadingUsers } = useQuery({
+  const { data: usersRaw = [], isLoading: loadingUsers } = useQuery({
     queryKey: ['users'],
     queryFn: () => db.entities.User.list('-created_date', 500),
   });
 
-  const { data: systems = [] } = useQuery({
+  const { data: systemsRaw = [] } = useQuery({
     queryKey: ['connected-systems'],
     queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
   });
 
-  const { data: accessList = [] } = useQuery({
+  const { data: accessListRaw = [] } = useQuery({
     queryKey: ['user-system-access'],
     queryFn: () => db.entities.UserSystemAccess.list(),
   });
+
+  const users = Array.isArray(usersRaw) ? usersRaw : [];
+  const systems = Array.isArray(systemsRaw) ? systemsRaw : [];
+  const accessList = Array.isArray(accessListRaw) ? accessListRaw : [];
 
   useEffect(() => {
     setPage(1);
@@ -148,23 +156,102 @@ export default function UserManagement() {
     }
   };
 
-  const handleCsvUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const openEditUser = (user) => {
+    setEditUser(user);
+    setEditForm({
+      full_name: user.full_name || '',
+      role: user.role || 'user',
+      is_approved: Boolean(user.is_approved),
+      password: '',
+    });
+  };
+
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setEditSaving(true);
+    try {
+      const updateData = {
+        full_name: editForm.full_name,
+        name: editForm.full_name,
+        role: editForm.role,
+        is_approved: editForm.is_approved,
+      };
+      if (editForm.password) {
+        updateData.password = editForm.password;
+      }
+      await db.entities.User.update(editUser.id, updateData);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setEditUser(null);
+      toast.success('User updated successfully');
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to update user');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleCsvUpload = async (file) => {
+    if (!file || !/\.csv$/i.test(file.name)) {
+      toast.error('Please upload a valid CSV file');
+      return;
+    }
     setImporting(true);
     try {
       const result = await db.importUsersCsv(file);
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      const count = Number(result?.count || 0);
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast.success(`Imported ${result.count} user(s)${result.errors.length ? ` (${result.errors.length} skipped)` : ''}`);
-      if (result.errors.length) {
-        result.errors.forEach(err => toast.error(err, { duration: 6000 }));
+      toast.success(`Imported ${count} user(s)${errors.length ? ` (${errors.length} skipped)` : ''}`);
+      if (errors.length) {
+        errors.forEach((err) => toast.error(err, { duration: 6000 }));
       }
     } catch (err) {
       toast.error(err?.data?.message || err.message || 'Import failed');
     } finally {
       setImporting(false);
-      e.target.value = '';
+      if (csvRef.current) csvRef.current.value = '';
     }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleCsvUpload(file);
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleCsvUpload(file);
+  };
+
+  const downloadSampleCsv = () => {
+    const sample = [
+      'full_name,email,password,role,is_approved',
+      'John Doe,john@example.com,Password@123,user,true',
+      'Jane Admin,jane@example.com,Password@456,admin,true',
+    ].join('\n');
+    const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'users-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   const setApproval = async (user, isApproved) => {
@@ -200,7 +287,10 @@ export default function UserManagement() {
           <p className="text-sm text-muted-foreground mt-1">Search, filter, approve, and manage access for large user sets.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvUpload} />
+          <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={downloadSampleCsv}>
+            <Download className="w-4 h-4" /> Sample CSV
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => csvRef.current?.click()} disabled={importing}>
             <Upload className="w-4 h-4" /> {importing ? 'Importing...' : 'Upload CSV'}
           </Button>
@@ -288,7 +378,13 @@ export default function UserManagement() {
           </div>
         </CardHeader>
 
-        <CardContent className="p-0">
+        <CardContent
+          className="p-0 relative"
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
           {loadingUsers ? (
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
@@ -344,6 +440,10 @@ export default function UserManagement() {
                         </TableCell>
                         <TableCell className="pr-6">
                           <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" className="gap-1" onClick={() => openEditUser(user)}>
+                              <Edit className="w-3 h-3" />
+                              Edit
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => setAccessDialogUser(user)}>
                               Manage Access
                             </Button>
@@ -395,8 +495,82 @@ export default function UserManagement() {
               </div>
             </div>
           )}
+
+          {dragActive && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-2xl pointer-events-none">
+              <div className="text-center">
+                <Upload className="w-8 h-8 text-primary mx-auto mb-2" />
+                <p className="text-sm font-medium text-primary">Drop CSV file here to import users</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
+          </DialogHeader>
+          {editUser && (
+            <form onSubmit={handleEditUser} className="space-y-4 mt-2">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input
+                  value={editForm.full_name || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Jane Doe"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={editUser.email || ''} disabled className="bg-muted/40" />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editForm.is_approved ? 'approved' : 'pending'}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, is_approved: value === 'approved' }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>New Password (optional)</Label>
+                <Input
+                  type="password"
+                  minLength={8}
+                  value={editForm.password || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
+                <Button type="submit" disabled={editSaving}>
+                  {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create User Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

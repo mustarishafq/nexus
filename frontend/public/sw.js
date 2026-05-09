@@ -7,7 +7,16 @@ const APP_SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const results = await Promise.allSettled(
+        APP_SHELL.map((url) => cache.add(url))
+      );
+
+      const failed = results.filter((result) => result.status === 'rejected');
+      if (failed.length) {
+        console.warn('[sw] Some app shell assets failed to cache during install', failed.length);
+      }
+    })
   );
   self.skipWaiting();
 });
