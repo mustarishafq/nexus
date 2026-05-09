@@ -1,0 +1,20 @@
+{
+  "name": "UserSystemAccess",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email of the user"
+    },
+    "allowed_system_slugs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of system slugs the user is allowed to see"
+    }
+  },
+  "required": [
+    "user_email"
+  ]
+}

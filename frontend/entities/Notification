@@ -1,0 +1,92 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Target user email"
+    },
+    "system_id": {
+      "type": "string",
+      "description": "Source system identifier"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "info",
+        "success",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "default": "info"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "data": {
+      "type": "string",
+      "description": "JSON payload data"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "booking",
+        "hr",
+        "inventory",
+        "finance",
+        "security",
+        "system",
+        "task",
+        "approval",
+        "announcement",
+        "other"
+      ],
+      "default": "other"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false
+    },
+    "read_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_broadcast": {
+      "type": "boolean",
+      "default": false
+    },
+    "snoozed_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "action_url": {
+      "type": "string",
+      "description": "Deep link to related action"
+    },
+    "delivery_channels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Channels: in_app, email, whatsapp, telegram, sms"
+    }
+  },
+  "required": [
+    "title",
+    "type"
+  ]
+}

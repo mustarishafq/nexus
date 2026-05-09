@@ -1,0 +1,55 @@
+{
+  "name": "ActivityLog",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "User email who performed the action"
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "system_id": {
+      "type": "string",
+      "description": "Source system"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "login",
+        "logout",
+        "create",
+        "update",
+        "delete",
+        "approve",
+        "reject",
+        "view",
+        "export",
+        "import",
+        "other"
+      ],
+      "default": "other"
+    },
+    "description": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string",
+      "description": "Type of resource affected"
+    },
+    "resource_id": {
+      "type": "string"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "string",
+      "description": "Additional JSON data"
+    }
+  },
+  "required": [
+    "action",
+    "description"
+  ]
+}

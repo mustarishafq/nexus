@@ -1,0 +1,47 @@
+{
+  "name": "SystemEvent",
+  "type": "object",
+  "properties": {
+    "system_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "health_check",
+        "webhook"
+      ],
+      "default": "info"
+    },
+    "title": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "string",
+      "description": "JSON event payload"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "processed",
+        "failed",
+        "acknowledged"
+      ],
+      "default": "pending"
+    },
+    "severity": {
+      "type": "number",
+      "description": "1-10 severity scale"
+    }
+  },
+  "required": [
+    "system_id",
+    "event_type",
+    "title"
+  ]
+}
