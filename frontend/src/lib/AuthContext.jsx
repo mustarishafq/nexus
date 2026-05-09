@@ -32,6 +32,11 @@ export const AuthProvider = ({ children }) => {
 
       if (publicSettings?.system_name) {
         document.title = publicSettings.system_name;
+        // Update apple-mobile-web-app-title meta tag for iOS PWA
+        const appleTitle = document.getElementById('apple-app-title');
+        if (appleTitle) {
+          appleTitle.setAttribute('content', publicSettings.system_name);
+        }
       }
     } catch {
       setAppPublicSettings({ system_name: 'Nexus' });
