@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class MeController extends Controller
 {
@@ -39,9 +41,20 @@ class MeController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
+            'current_password' => ['sometimes', 'required_with:new_password', 'string'],
+            'new_password' => ['sometimes', 'required_with:current_password', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $user->update($validated);
+        if (isset($validated['new_password'])) {
+            if (! Hash::check($validated['current_password'], $user->password)) {
+                throw ValidationException::withMessages([
+                    'current_password' => ['Current password is incorrect.'],
+                ]);
+            }
+            $user->password = $validated['new_password'];
+        }
+
+        $user->fill(collect($validated)->except(['current_password', 'new_password', 'new_password_confirmation'])->toArray())->save();
 
         return response()->json($user->fresh());
     }

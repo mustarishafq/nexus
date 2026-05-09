@@ -1,5 +1,6 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Bell, Search, LogOut, User, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 export default function TopBar({ sidebarWidth }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -73,7 +75,7 @@ export default function TopBar({ sidebarWidth }) {
               <ChevronDown className="w-3 h-3 text-muted-foreground hidden md:block" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
                 <User className="w-4 h-4 mr-2" /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />

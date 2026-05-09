@@ -12,6 +12,7 @@ import ConnectedSystems from '@/pages/ConnectedSystems';
 import BroadcastCenter from '@/pages/BroadcastCenter';
 import SystemEvents from '@/pages/SystemEvents';
 import Settings from '@/pages/Settings';
+import Profile from '@/pages/Profile';
 import UserManagement from '@/pages/UserManagement';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -48,6 +49,7 @@ const ProtectedRoutes = () => {
         <Route path="/admin/events" element={<SystemEvents />} />
         <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/admin/users" element={<UserManagement />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
