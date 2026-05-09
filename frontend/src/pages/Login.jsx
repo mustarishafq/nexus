@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { checkUserAuth, appPublicSettings } = useAuth();
+  const { checkUserAuth, setAuthenticatedUser, appPublicSettings } = useAuth();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,11 +25,21 @@ export default function Login() {
     setError('');
 
     try {
-      await db.auth.login({
+      const payload = await db.auth.login({
         email: form.get('email'),
         password: form.get('password'),
       });
-      await checkUserAuth();
+
+      if (!payload?.token) {
+        throw new Error('Login response missing token.');
+      }
+
+      if (payload?.user) {
+        setAuthenticatedUser(payload.user);
+      } else {
+        await checkUserAuth();
+      }
+
       navigate('/', { replace: true });
     } catch (err) {
       if (err?.status === 403 && err?.data?.code === 'account_not_approved') {

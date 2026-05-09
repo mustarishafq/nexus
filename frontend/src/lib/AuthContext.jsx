@@ -105,6 +105,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const setAuthenticatedUser = (nextUser) => {
+    setUser(nextUser || null);
+    setIsAuthenticated(true);
+    setIsLoadingAuth(false);
+    setAuthChecked(true);
+    setAuthError(null);
+  };
+
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
@@ -133,6 +141,7 @@ export const AuthProvider = ({ children }) => {
       authChecked,
       logout,
       navigateToLogin,
+      setAuthenticatedUser,
       checkUserAuth,
       checkAppState
     }}>
