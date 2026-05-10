@@ -8,7 +8,13 @@ import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({
+  collapsed,
+  onToggle,
+  isMobile = false,
+  mobileOpen = false,
+  onMobileClose,
+}) {
   const location = useLocation();
   const { user, appPublicSettings } = useAuth();
 
@@ -25,12 +31,10 @@ export default function Sidebar({ collapsed, onToggle }) {
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  return (
-    <motion.aside
-      animate={{ width: collapsed ? 72 : 260 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="fixed left-0 top-0 bottom-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border"
-    >
+  const showCompact = !isMobile && collapsed;
+
+  const sidebarContent = (
+    <>
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
@@ -38,7 +42,7 @@ export default function Sidebar({ collapsed, onToggle }) {
             <Zap className="w-5 h-5 text-primary-foreground" />
           </div>
           <AnimatePresence>
-            {!collapsed && (
+            {!showCompact && (
               <motion.div
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
@@ -62,6 +66,11 @@ export default function Sidebar({ collapsed, onToggle }) {
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => {
+                if (isMobile) {
+                  onMobileClose?.();
+                }
+              }}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
                 isActive
@@ -77,7 +86,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               )}
               <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
               <AnimatePresence>
-                {!collapsed && (
+                {!showCompact && (
                   <motion.span
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: 'auto' }}
@@ -94,14 +103,48 @@ export default function Sidebar({ collapsed, onToggle }) {
       </nav>
 
       {/* Collapse Toggle */}
-      <div className="p-3 border-t border-sidebar-border">
-        <button
-          onClick={onToggle}
-          className="w-full flex items-center justify-center p-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+      {!isMobile && (
+        <div className="p-3 border-t border-sidebar-border">
+          <button
+            onClick={onToggle}
+            className="w-full flex items-center justify-center p-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {mobileOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+        )}
+        <motion.aside
+          initial={false}
+          animate={{ x: mobileOpen ? 0 : -280 }}
+          transition={{ duration: 0.2, ease: 'easeInOut' }}
+          className="fixed left-0 top-0 bottom-0 z-50 w-[260px] flex flex-col bg-sidebar border-r border-sidebar-border"
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
-      </div>
+          {sidebarContent}
+        </motion.aside>
+      </>
+    );
+  }
+
+  return (
+    <motion.aside
+      animate={{ width: collapsed ? 72 : 260 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
+      className="fixed left-0 top-0 bottom-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border"
+    >
+      {sidebarContent}
     </motion.aside>
   );
 }

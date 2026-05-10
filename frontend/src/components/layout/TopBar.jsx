@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Bell, Search, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, Search, LogOut, User, ChevronDown, Menu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,7 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 
-export default function TopBar({ sidebarWidth }) {
+export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -41,12 +41,23 @@ export default function TopBar({ sidebarWidth }) {
         style={{ left: sidebarWidth }}
       >
         {/* Search */}
-        <div className="relative w-80 max-w-[40%]">
+        <div className="flex items-center gap-3 w-full max-w-[65%] md:max-w-[40%]">
+          {isMobile && (
+            <button
+              onClick={onMenuToggle}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Open sidebar"
+            >
+              <Menu className="w-5 h-5 text-muted-foreground" />
+            </button>
+          )}
+          <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search notifications, activity..."
             className="pl-9 bg-muted/50 border-0 h-9 text-sm focus-visible:ring-1"
           />
+          </div>
         </div>
 
         {/* Right side */}
