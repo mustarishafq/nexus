@@ -11,6 +11,7 @@ import ActivityTimeline from '@/pages/ActivityTimeline';
 import ConnectedSystems from '@/pages/ConnectedSystems';
 import BroadcastCenter from '@/pages/BroadcastCenter';
 import SystemEvents from '@/pages/SystemEvents';
+import AdminCalendar from '@/pages/AdminCalendar';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
 import UserManagement from '@/pages/UserManagement';
@@ -47,6 +48,7 @@ const ProtectedRoutes = () => {
         <Route path="/systems" element={<ConnectedSystems />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
+        <Route path="/admin/calendar" element={<AdminCalendar />} />
         <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />

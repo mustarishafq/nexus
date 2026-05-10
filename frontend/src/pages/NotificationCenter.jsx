@@ -19,7 +19,7 @@ export default function NotificationCenter() {
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications-center'],
-    queryFn: () => db.entities.Notification.list('-created_date', 200),
+    queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 200),
   });
 
   const updateMut = useMutation({

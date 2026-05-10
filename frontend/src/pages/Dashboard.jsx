@@ -2,13 +2,18 @@ import db from '@/api/base44Client';
 import React from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Monitor, AlertTriangle, Clock } from 'lucide-react';
+import { Bell, Monitor, AlertTriangle, Clock, Megaphone } from 'lucide-react';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ActivityWidget from '@/components/dashboard/ActivityWidget';
 import NotificationChart from '@/components/dashboard/NotificationChart';
+import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
 import { motion } from 'framer-motion';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function Dashboard() {
   const { data: user } = useQuery({
@@ -21,7 +26,12 @@ export default function Dashboard() {
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications-dash'],
-    queryFn: () => db.entities.Notification.list('-created_date', 50),
+    queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 50),
+  });
+
+  const { data: activeBroadcasts = [] } = useQuery({
+    queryKey: ['active-broadcasts-dash'],
+    queryFn: () => db.entities.Broadcast.filter({ active_only: true }, '-created_date', 10),
   });
 
   const { data: activities = [] } = useQuery({
@@ -96,16 +106,50 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Active Broadcasts */}
+      <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <Megaphone className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold">Active Broadcasts</h3>
+            {activeBroadcasts.length > 0 ? <Badge>{activeBroadcasts.length}</Badge> : null}
+          </div>
+          <Link to="/admin/broadcast">
+            <Button variant="outline" size="sm" className="h-8 text-xs">Manage Broadcasts</Button>
+          </Link>
+        </div>
+        {activeBroadcasts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No active broadcasts right now.</p>
+        ) : (
+          <div className="space-y-2">
+            {activeBroadcasts.slice(0, 3).map((broadcast) => (
+              <div key={broadcast.id} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">{broadcast.title}</p>
+                  <Badge variant="outline" className="text-[10px]">{broadcast.priority || 'medium'}</Badge>
+                </div>
+                {broadcast.message ? <p className="text-xs text-muted-foreground mt-1">{broadcast.message}</p> : null}
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Posted {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}
+                  {broadcast.broadcast_ends_at ? ` • visible until ${new Date(broadcast.broadcast_ends_at).toLocaleString()}` : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Notifications + Chart */}
+        {/* Left: Calendar + Chart */}
         <div className="lg:col-span-2 space-y-6">
-          <RecentNotificationsWidget notifications={notifications} onMarkRead={markRead} />
+          <WeeklyCalendarWidget />
           <NotificationChart notifications={notifications} />
         </div>
 
-        {/* Right: System Health + Activity */}
+        {/* Right: Notifications + System Health + Activity */}
         <div className="space-y-6">
+          <RecentNotificationsWidget notifications={notifications} onMarkRead={markRead} />
           <SystemHealthWidget systems={systems} />
           <ActivityWidget activities={activities} />
         </div>

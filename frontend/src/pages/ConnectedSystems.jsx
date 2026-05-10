@@ -485,9 +485,6 @@ export default function ConnectedSystems() {
                 {/* Footer */}
                 <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/30">
                   <span className="text-[10px] text-muted-foreground">
-                    Added {formatDistanceToNow(new Date(system.created_date), { addSuffix: true })}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
                     {system.visibility === 'public' ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}` : 'Private'}
                   </span>
                   {canManageSystem && (

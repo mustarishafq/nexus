@@ -1,0 +1,58 @@
+{
+  "name": "CalendarEvent",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "start_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_all_day": {
+      "type": "boolean",
+      "default": false
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "attendee_emails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "google_calendar_url": {
+      "type": "string"
+    },
+    "google_event_id": {
+      "type": "string"
+    },
+    "google_sync_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "synced",
+        "failed"
+      ]
+    },
+    "google_sync_error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "start_at",
+    "end_at"
+  ]
+}

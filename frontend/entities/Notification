@@ -69,6 +69,14 @@
       "type": "boolean",
       "default": false
     },
+    "broadcast_starts_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "broadcast_ends_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "snoozed_until": {
       "type": "string",
       "format": "date-time"

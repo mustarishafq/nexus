@@ -27,7 +27,7 @@ export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
 
   const loadUnreadCount = async () => {
     try {
-      const notifs = await db.entities.Notification.filter({ is_read: false }, '-created_date', 100);
+      const notifs = await db.entities.Notification.filter({ is_read: false, exclude_broadcasts: true }, '-created_date', 100);
       setUnreadCount(Array.isArray(notifs) ? notifs.length : 0);
     } catch {
       setUnreadCount(0);

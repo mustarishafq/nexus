@@ -25,6 +25,8 @@ export default function BroadcastCenter() {
   const [type, setType] = useState('info');
   const [priority, setPriority] = useState('medium');
   const [category, setCategory] = useState('announcement');
+  const [broadcastStartsAt, setBroadcastStartsAt] = useState('');
+  const [broadcastEndsAt, setBroadcastEndsAt] = useState('');
   const queryClient = useQueryClient();
 
   const { data: broadcasts = [] } = useQuery({
@@ -41,12 +43,20 @@ export default function BroadcastCenter() {
       queryClient.invalidateQueries({ queryKey: ['broadcasts'] });
       setTitle('');
       setMessage('');
+      setBroadcastStartsAt('');
+      setBroadcastEndsAt('');
       toast.success('Broadcast sent successfully');
     },
   });
 
   const handleSend = () => {
     if (!title.trim()) return;
+
+    if (broadcastStartsAt && broadcastEndsAt && new Date(broadcastEndsAt) <= new Date(broadcastStartsAt)) {
+      toast.error('Broadcast end time must be after the start time');
+      return;
+    }
+
     sendMut.mutate({
       title,
       message,
@@ -55,8 +65,20 @@ export default function BroadcastCenter() {
       category,
       is_broadcast: true,
       is_read: false,
+      broadcast_starts_at: broadcastStartsAt ? new Date(broadcastStartsAt).toISOString() : null,
+      broadcast_ends_at: broadcastEndsAt ? new Date(broadcastEndsAt).toISOString() : null,
       delivery_channels: ['in_app'],
     });
+  };
+
+  const getBroadcastStatus = (broadcast) => {
+    const now = Date.now();
+    const start = broadcast.broadcast_starts_at ? new Date(broadcast.broadcast_starts_at).getTime() : null;
+    const end = broadcast.broadcast_ends_at ? new Date(broadcast.broadcast_ends_at).getTime() : null;
+
+    if (start && start > now) return 'scheduled';
+    if (end && end < now) return 'expired';
+    return 'active';
   };
 
   return (
@@ -121,6 +143,26 @@ export default function BroadcastCenter() {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs">Show From (optional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={broadcastStartsAt}
+                  onChange={(e) => setBroadcastStartsAt(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Show Until (optional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={broadcastEndsAt}
+                  onChange={(e) => setBroadcastEndsAt(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
             <Button onClick={handleSend} disabled={!title.trim() || sendMut.isPending} className="w-full gap-2">
               <Send className="w-4 h-4" /> {sendMut.isPending ? 'Sending...' : 'Send Broadcast'}
             </Button>
@@ -142,6 +184,7 @@ export default function BroadcastCenter() {
               <div className="space-y-3">
                 {broadcasts.slice(0, 4).map(b => {
                   const Icon = typeIcons[b.type] || Info;
+                  const status = getBroadcastStatus(b);
                   return (
                     <div key={b.id} className={cn("flex items-start gap-3 p-3 rounded-xl border transition-colors hover:opacity-90", typeRowBg[b.type] || 'bg-muted/30 border-border')}>
                       <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", typeBg[b.type])}>
@@ -151,10 +194,13 @@ export default function BroadcastCenter() {
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold">{b.title}</p>
                           <Badge variant="outline" className="text-[10px]">{b.priority}</Badge>
+                          <Badge variant="secondary" className="text-[10px] capitalize">{status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{b.message}</p>
                         <p className="text-[10px] text-muted-foreground mt-1.5">
                           {formatDistanceToNow(new Date(b.created_date), { addSuffix: true })}
+                          {b.broadcast_starts_at ? ` • from ${new Date(b.broadcast_starts_at).toLocaleString()}` : ''}
+                          {b.broadcast_ends_at ? ` • until ${new Date(b.broadcast_ends_at).toLocaleString()}` : ''}
                         </p>
                       </div>
                     </div>

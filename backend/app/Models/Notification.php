@@ -21,6 +21,8 @@ class Notification extends Model
         'is_read',
         'read_at',
         'is_broadcast',
+        'broadcast_starts_at',
+        'broadcast_ends_at',
         'snoozed_until',
         'action_url',
         'delivery_channels',
@@ -38,6 +40,8 @@ class Notification extends Model
             'is_read' => 'boolean',
             'read_at' => 'datetime',
             'is_broadcast' => 'boolean',
+            'broadcast_starts_at' => 'datetime',
+            'broadcast_ends_at' => 'datetime',
             'snoozed_until' => 'datetime',
             'delivery_channels' => 'array',
         ];

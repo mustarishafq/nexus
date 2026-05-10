@@ -28,6 +28,15 @@ return [
         'private_key' => env('WEB_PUSH_PRIVATE_KEY'),
     ],
 
+    'google_oauth' => [
+        'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI'),
+        'frontend_redirect_url' => env('GOOGLE_OAUTH_FRONTEND_REDIRECT_URL'),
+        'calendar_id' => env('GOOGLE_OAUTH_CALENDAR_ID', 'primary'),
+        'timezone' => env('GOOGLE_OAUTH_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

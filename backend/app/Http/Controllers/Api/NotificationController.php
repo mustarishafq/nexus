@@ -15,11 +15,32 @@ class NotificationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $items = $this->applyIndexQuery(
+        $query = $this->applyIndexQuery(
             $request,
             Notification::query(),
             ['user_id', 'system_id', 'type', 'priority', 'category', 'is_read', 'is_broadcast']
-        )->get();
+        );
+
+        if ($request->boolean('exclude_broadcasts')) {
+            $query->where('is_broadcast', false);
+        }
+
+        if ($request->boolean('active_broadcast_only')) {
+            $now = now();
+
+            $query
+                ->where('is_broadcast', true)
+                ->where(function ($inner) use ($now) {
+                    $inner->whereNull('broadcast_starts_at')
+                        ->orWhere('broadcast_starts_at', '<=', $now);
+                })
+                ->where(function ($inner) use ($now) {
+                    $inner->whereNull('broadcast_ends_at')
+                        ->orWhere('broadcast_ends_at', '>=', $now);
+                });
+        }
+
+        $items = $query->get();
 
         return response()->json($items);
     }
@@ -38,6 +59,8 @@ class NotificationController extends Controller
             'is_read' => ['sometimes', 'boolean'],
             'read_at' => ['nullable', 'date'],
             'is_broadcast' => ['sometimes', 'boolean'],
+            'broadcast_starts_at' => ['nullable', 'date'],
+            'broadcast_ends_at' => ['nullable', 'date', 'after:broadcast_starts_at'],
             'snoozed_until' => ['nullable', 'date'],
             'action_url' => ['nullable', 'string', 'max:2048'],
             'delivery_channels' => ['nullable', 'array'],
@@ -46,7 +69,11 @@ class NotificationController extends Controller
 
         $item = Notification::create($validated);
 
-        app()->make('App\\Services\\PushNotificationService')->sendNotification($item);
+        $shouldSendPush = !($item->is_broadcast && $item->broadcast_starts_at && $item->broadcast_starts_at->isFuture());
+
+        if ($shouldSendPush) {
+            app()->make('App\\Services\\PushNotificationService')->sendNotification($item);
+        }
 
         return response()->json($item, 201);
     }
@@ -70,11 +97,29 @@ class NotificationController extends Controller
             'is_read' => ['sometimes', 'boolean'],
             'read_at' => ['sometimes', 'nullable', 'date'],
             'is_broadcast' => ['sometimes', 'boolean'],
+            'broadcast_starts_at' => ['sometimes', 'nullable', 'date'],
+            'broadcast_ends_at' => ['sometimes', 'nullable', 'date'],
             'snoozed_until' => ['sometimes', 'nullable', 'date'],
             'action_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'delivery_channels' => ['sometimes', 'nullable', 'array'],
             'delivery_channels.*' => ['string', 'max:50'],
         ]);
+
+        $startAt = array_key_exists('broadcast_starts_at', $validated)
+            ? $validated['broadcast_starts_at']
+            : $notification->broadcast_starts_at;
+        $endAt = array_key_exists('broadcast_ends_at', $validated)
+            ? $validated['broadcast_ends_at']
+            : $notification->broadcast_ends_at;
+
+        if ($startAt && $endAt && strtotime((string) $endAt) <= strtotime((string) $startAt)) {
+            return response()->json([
+                'message' => 'The broadcast_ends_at must be a date after broadcast_starts_at.',
+                'errors' => [
+                    'broadcast_ends_at' => ['The broadcast_ends_at must be a date after broadcast_starts_at.'],
+                ],
+            ], 422);
+        }
 
         $notification->update($validated);
 

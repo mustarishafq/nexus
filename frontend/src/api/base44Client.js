@@ -7,8 +7,10 @@ const ENTITY_ENDPOINTS = {
 	User: 'users',
 	ConnectedSystem: 'connected-systems',
 	UserSystemAccess: 'user-system-accesses',
+	Broadcast: 'broadcasts',
 	Notification: 'notifications',
 	SystemEvent: 'system-events',
+	CalendarEvent: 'calendar-events',
 	ActivityLog: 'activity-logs',
 };
 
@@ -201,6 +203,20 @@ export const db = {
 
 		async remove(data) {
 			return request('/push-subscriptions', { method: 'DELETE', body: data });
+		},
+	},
+
+	googleOAuth: {
+		async status() {
+			return request('/google/oauth/status');
+		},
+
+		async connect() {
+			return request('/google/oauth/connect', { method: 'POST' });
+		},
+
+		async disconnect() {
+			return request('/google/oauth/disconnect', { method: 'DELETE' });
 		},
 	},
 

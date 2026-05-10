@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Bell, Activity, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Zap, Users
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Zap, Users, Calendar
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,7 @@ export default function Sidebar({
     ...(user?.role === 'admin' ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
       { path: '/admin/events', icon: Shield, label: 'System Events' },
+      { path: '/admin/calendar', icon: Calendar, label: 'Calendar' },
       { path: '/admin/users', icon: Users, label: 'User Management' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' },
