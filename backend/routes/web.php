@@ -7,5 +7,7 @@ Route::get('/', function () {
 });
 
 Route::get('/privacy-policy', function () {
-    return view('privacy-policy');
+    $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
+
+    return redirect()->away("{$frontendUrl}/privacy-policy");
 });
