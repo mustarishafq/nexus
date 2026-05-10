@@ -213,6 +213,14 @@ export default function Login() {
                 'Sign in'
               )}
             </Button>
+
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              By signing in, you acknowledge our{' '}
+              <Link to="/privacy-policy" className="font-medium text-primary hover:text-primary/80 transition-colors">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
 
           {/* Sign up link */}
