@@ -11,7 +11,7 @@
       "items": {
         "type": "string"
       },
-      "description": "List of system slugs the user is allowed to see"
+      "description": "List of public system slugs the user is allowed to see"
     }
   },
   "required": [

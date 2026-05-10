@@ -1,14 +1,16 @@
 import db, { API_ORIGIN } from '@/api/base44Client';
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check } from 'lucide-react';
+import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -39,6 +41,10 @@ export default function ConnectedSystems() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [authMode, setAuthMode] = useState('jwt');
+  const [visibility, setVisibility] = useState('private');
+  const [privateAllowedEmails, setPrivateAllowedEmails] = useState([]);
+  const [privateUsersPickerOpen, setPrivateUsersPickerOpen] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
   const queryClient = useQueryClient();
 
@@ -70,10 +76,13 @@ export default function ConnectedSystems() {
     setEditSystem(system);
     setLogoUrl(system?.icon_url || '');
     setApiKey(system?.api_key || '');
+    setAuthMode(system?.auth_mode || 'jwt');
+    setVisibility(system?.visibility || 'private');
+    setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setDialogOpen(true);
   };
 
-  const { data: currentUser, isSuccess: userLoaded } = useQuery({
+  const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
     queryFn: () => db.auth.me(),
     staleTime: 0,
@@ -86,38 +95,22 @@ export default function ConnectedSystems() {
     queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
   });
 
-  const { data: accessRecord = null, isSuccess: accessLoaded } = useQuery({
-    queryKey: ['user-system-access', currentUser?.email],
-    queryFn: () =>
-      db.entities.UserSystemAccess.filter({ user_email: currentUser.email })
-        .then(list => list[0] ?? null),
-    enabled: userLoaded && !!currentUser?.email && currentUser?.role !== 'admin',
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-    refetchInterval: 20000,
+  const { data: users = [] } = useQuery({
+    queryKey: ['users-for-private-access'],
+    queryFn: () => db.entities.User.list('-created_date', 500),
+    staleTime: 60000,
   });
 
-  const visibleSystems = useMemo(() => {
-    // Not yet loaded — show nothing to avoid a flash of all systems
-    if (!userLoaded) return [];
-    if (currentUser?.role === 'admin') return systems;
-    // Wait for access record to load before showing anything
-    if (!accessLoaded) return [];
-    // No record means no explicit permission set — show nothing (safe default)
-    if (!accessRecord) return [];
-    const allowed = new Set(accessRecord.allowed_system_slugs || []);
-    return systems.filter(s => allowed.has(s.slug));
-  }, [systems, accessRecord, currentUser, userLoaded, accessLoaded]);
+  const visibleSystems = systems;
 
   const createMut = useMutation({
     mutationFn: (data) => db.entities.ConnectedSystem.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.ConnectedSystem.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const deleteMut = useMutation({
@@ -128,15 +121,58 @@ export default function ConnectedSystems() {
   const [launching, setLaunching] = useState(null);
   const handleLaunch = async (system) => {
     if (!system.is_enabled || launching === system.id) return;
+
+    const preloadRedirectTab = system.auth_mode === 'redirect'
+      ? window.open('', '_blank')
+      : null;
+
     setLaunching(system.id);
+
     try {
-      const { launch_url } = await db.launchSystem(system.id);
+      const { launch_url, auth_mode, open_in_new_tab } = await db.launchSystem(system.id);
+
+      if (auth_mode === 'redirect' || open_in_new_tab) {
+        if (preloadRedirectTab) {
+          preloadRedirectTab.opener = null;
+          preloadRedirectTab.location = launch_url;
+        } else {
+          const tab = window.open(launch_url, '_blank');
+          if (tab) {
+            tab.opener = null;
+          }
+        }
+
+        setLaunching(null);
+        return;
+      }
+
+      if (preloadRedirectTab) {
+        preloadRedirectTab.close();
+      }
+
       window.location.href = launch_url;
     } catch (err) {
+      if (preloadRedirectTab) {
+        preloadRedirectTab.close();
+      }
       alert(err.message);
       setLaunching(null);
     }
   };
+
+  const togglePrivateAccessEmail = (email) => {
+    setPrivateAllowedEmails((prev) => {
+      if (prev.includes(email)) {
+        return prev.filter((item) => item !== email);
+      }
+
+      return [...prev, email];
+    });
+  };
+
+  const selectableUsers = users
+    .filter((user) => user?.email && user.email !== currentUser?.email)
+    .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -146,7 +182,10 @@ export default function ConnectedSystems() {
       slug: form.get('slug'),
       description: form.get('description'),
       base_url: form.get('base_url'),
-      api_key: apiKey || undefined,
+      api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
+      auth_mode: authMode,
+      visibility: visibility,
+      private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
       status: form.get('status'),
       color: form.get('color'),
       icon_url: logoUrl || undefined,
@@ -167,19 +206,18 @@ export default function ConnectedSystems() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); } }}>
-          {currentUser?.role === 'admin' && (
-            <DialogTrigger asChild>
-              <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
-                <Plus className="w-4 h-4" /> Add System
-              </Button>
-            </DialogTrigger>
-          )}
-          <DialogContent>
-            <DialogHeader>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
+          <DialogTrigger asChild>
+            <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
+              <Plus className="w-4 h-4" /> Add System
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+            <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New System'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+              <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Name *</Label>
@@ -198,7 +236,37 @@ export default function ConnectedSystems() {
                 <Label>Base URL</Label>
                 <Input name="base_url" defaultValue={editSystem?.base_url} placeholder="https://booking.company.com" />
               </div>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>System Type</Label>
+                  <Select value={authMode} onValueChange={setAuthMode}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="jwt">JWT SSO</SelectItem>
+                      <SelectItem value="redirect">Redirect URL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Visibility</Label>
+                  <Select
+                    value={visibility}
+                    onValueChange={setVisibility}
+                    disabled={currentUser?.role !== 'admin'}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="public">Public</SelectItem>
+                      <SelectItem value="private">Private</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {currentUser?.role !== 'admin' && (
+                    <p className="text-[11px] text-muted-foreground">Only admin can make systems public.</p>
+                  )}
+                </div>
+              </div>
+              {authMode === 'jwt' && (
+                <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
@@ -239,6 +307,57 @@ export default function ConnectedSystems() {
                 </div>
                 <p className="text-[11px] text-muted-foreground">Must match the key configured in the target system. Required to enable auto-login.</p>
               </div>
+              )}
+              {visibility === 'private' && (
+                <div className="space-y-2">
+                  <Label>Private Access Users</Label>
+                  <Popover open={privateUsersPickerOpen} onOpenChange={setPrivateUsersPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" role="combobox" className="w-full justify-between">
+                        <span className="truncate">
+                          {privateAllowedEmails.length === 0
+                            ? 'Select users...'
+                            : `${privateAllowedEmails.length} user(s) selected`}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[420px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search user by name or email..." />
+                        <CommandList>
+                          <CommandEmpty>No user found.</CommandEmpty>
+                          {selectableUsers.map((user) => {
+                            const checked = privateAllowedEmails.includes(user.email);
+                            return (
+                              <CommandItem
+                                key={user.id || user.email}
+                                value={`${user.full_name || ''} ${user.email}`}
+                                onSelect={() => togglePrivateAccessEmail(user.email)}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', checked ? 'opacity-100' : 'opacity-0')} />
+                                <span className="truncate">{user.full_name || user.email}</span>
+                                <span className="text-xs text-muted-foreground truncate">({user.email})</span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {privateAllowedEmails.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {privateAllowedEmails.slice(0, 6).map((email) => (
+                        <Badge key={email} variant="secondary" className="text-xs">{email}</Badge>
+                      ))}
+                      {privateAllowedEmails.length > 6 && (
+                        <Badge variant="outline" className="text-xs">+{privateAllowedEmails.length - 6} more</Badge>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">Owner always has access. Selected users can view this private app.</p>
+                </div>
+              )}
               {/* Logo Upload */}
               <div className="space-y-2">
                 <Label>System Logo</Label>
@@ -277,9 +396,12 @@ export default function ConnectedSystems() {
                   <Input name="color" defaultValue={editSystem?.color || '#6366f1'} type="color" className="h-9" />
                 </div>
               </div>
-              <Button type="submit" className="w-full">
-                {editSystem ? 'Update System' : 'Register System'}
-              </Button>
+              </div>
+              <div className="px-6 py-4 border-t border-border/70 bg-background">
+                <Button type="submit" className="w-full">
+                  {editSystem ? 'Update System' : 'Register System'}
+                </Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -305,6 +427,7 @@ export default function ConnectedSystems() {
           {visibleSystems.map((system, i) => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
+            const canManageSystem = currentUser?.role === 'admin' || Number(system.created_by_user_id) === Number(currentUser?.id);
             return (
               <motion.div
                 key={system.id}
@@ -364,8 +487,12 @@ export default function ConnectedSystems() {
                   <span className="text-[10px] text-muted-foreground">
                     Added {formatDistanceToNow(new Date(system.created_date), { addSuffix: true })}
                   </span>
-                  {currentUser?.role === 'admin' && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {system.visibility === 'public' ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}` : 'Private'}
+                  </span>
+                  {canManageSystem && (
                     <div className="flex gap-0.5">
+                      <Badge variant="outline" className="text-[9px] h-5 mr-1">{system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}</Badge>
                       <Button
                         variant="ghost"
                         size="icon"

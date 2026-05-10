@@ -52,6 +52,7 @@ export default function UserManagement() {
 
   const users = Array.isArray(usersRaw) ? usersRaw : [];
   const systems = Array.isArray(systemsRaw) ? systemsRaw : [];
+  const publicSystems = systems.filter((system) => system.visibility === 'public');
   const accessList = Array.isArray(accessListRaw) ? accessListRaw : [];
 
   useEffect(() => {
@@ -63,8 +64,9 @@ export default function UserManagement() {
   const getAllowedSlugs = (userEmail) => {
     if (overrides[userEmail] !== undefined) return overrides[userEmail];
     const record = accessList.find(a => a.user_email === userEmail);
-    if (!record) return new Set(systems.map(s => s.slug));
-    return new Set(record.allowed_system_slugs || []);
+    if (!record) return new Set(publicSystems.map(s => s.slug));
+    const validPublicSlugs = new Set(publicSystems.map((system) => system.slug));
+    return new Set((record.allowed_system_slugs || []).filter((slug) => validPublicSlugs.has(slug)));
   };
 
   const filteredUsers = users.filter((user) => {
@@ -129,7 +131,7 @@ export default function UserManagement() {
   const setAllAccess = (userEmail, enabled) => {
     setOverrides(prev => ({
       ...prev,
-      [userEmail]: new Set(enabled ? systems.map(system => system.slug) : []),
+      [userEmail]: new Set(enabled ? publicSystems.map(system => system.slug) : []),
     }));
   };
 
@@ -433,9 +435,9 @@ export default function UserManagement() {
                         </TableCell>
                         <TableCell>
                           <p className="text-sm text-muted-foreground">
-                            {allowedSlugs.size === systems.length
-                              ? 'All systems'
-                              : `${allowedSlugs.size}/${systems.length || 0} systems`}
+                            {allowedSlugs.size === publicSystems.length
+                              ? 'All public apps'
+                              : `${allowedSlugs.size}/${publicSystems.length || 0} public apps`}
                           </p>
                         </TableCell>
                         <TableCell className="pr-6">
@@ -628,19 +630,19 @@ export default function UserManagement() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setAllAccess(currentAccessUser.email, true)} disabled={systems.length === 0}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setAllAccess(currentAccessUser.email, true)} disabled={publicSystems.length === 0}>
                   Select all
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setAllAccess(currentAccessUser.email, false)} disabled={systems.length === 0}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setAllAccess(currentAccessUser.email, false)} disabled={publicSystems.length === 0}>
                   Clear all
                 </Button>
               </div>
 
-              {systems.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No systems registered yet.</p>
+              {publicSystems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No public apps registered yet.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[55vh] overflow-auto pr-1">
-                  {systems.map(system => {
+                  {publicSystems.map(system => {
                     const allowed = currentAccessUser.allowedSlugs.has(system.slug);
 
                     return (

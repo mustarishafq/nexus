@@ -1,8 +1,8 @@
 import db from '@/api/base44Client';
-import React, { useMemo } from 'react';
+import React from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Activity, Monitor, AlertTriangle, CheckCircle, Users, Shield, Clock } from 'lucide-react';
+import { Bell, Monitor, AlertTriangle, Clock } from 'lucide-react';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
@@ -29,29 +29,10 @@ export default function Dashboard() {
     queryFn: () => db.entities.ActivityLog.list('-created_date', 20),
   });
 
-  const { data: allSystems = [] } = useQuery({
-    queryKey: ['systems-dash'],
+  const { data: systems = [] } = useQuery({
+    queryKey: ['connected-systems'],
     queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
   });
-
-  const { data: accessRecord = null } = useQuery({
-    queryKey: ['user-system-access', user?.email],
-    queryFn: () =>
-      db.entities.UserSystemAccess.filter({ user_email: user.email })
-        .then(list => list[0] ?? null),
-    enabled: !!user?.email && user?.role !== 'admin',
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-  });
-
-  const systems = useMemo(() => {
-    if (!user) return [];
-    if (user.role === 'admin') return allSystems;
-    if (!accessRecord) return [];
-    const allowed = new Set(accessRecord.allowed_system_slugs || []);
-    return allSystems.filter(s => allowed.has(s.slug));
-  }, [allSystems, accessRecord, user]);
 
   const { data: events = [] } = useQuery({
     queryKey: ['events-dash'],
