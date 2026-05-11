@@ -26,13 +26,13 @@ class PwaController extends Controller
             'description' => 'Unified system access, alerts, and admin controls.',
             'icons' => [
                 [
-                    'src' => '/icons/pwa-icon-192.png',
+                    'src' => '/icons/pwa-icon-192x192.png',
                     'sizes' => '192x192',
                     'type' => 'image/png',
                     'purpose' => 'any',
                 ],
                 [
-                    'src' => '/icons/pwa-icon-512.png',
+                    'src' => '/icons/pwa-icon-512x512.png',
                     'sizes' => '512x512',
                     'type' => 'image/png',
                     'purpose' => 'any maskable',
