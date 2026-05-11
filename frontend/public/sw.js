@@ -2,8 +2,8 @@ const CACHE_NAME = 'nexus-shell-v3';
 const APP_SHELL = [
   '/',
   '/offline.html',
-  '/icons/pwa-icon-192.png',
-  '/icons/pwa-icon-512.png',
+  '/icons/pwa-icon-192x192.png',
+  '/icons/pwa-icon-512x512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -96,12 +96,24 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: '/icons/pwa-icon-192.png',
-      badge: '/icons/pwa-icon-192.png',
+      icon: '/icons/pwa-icon-192x192.png',
+      badge: '/icons/pwa-icon-192x192.png',
       tag,
       renotify: Boolean(tag),
       silent: false,
       vibrate: [200, 100, 200],
+      requireInteraction: true,
+      actions: [
+        {
+          action: 'open',
+          title: 'Open',
+          icon: '/icons/pwa-icon-192x192.png',
+        },
+        {
+          action: 'close',
+          title: 'Dismiss',
+        },
+      ],
       data: {
         url,
         id: payload.id || null,
@@ -111,6 +123,13 @@ self.addEventListener('push', (event) => {
 });
 
 self.addEventListener('notificationclick', (event) => {
+  // Handle action button clicks
+  if (event.action === 'close') {
+    event.notification.close();
+    return;
+  }
+
+  // Default action: open the notification URL
   event.notification.close();
 
   const targetUrl = new URL(event.notification?.data?.url || '/notifications', self.location.origin).href;
