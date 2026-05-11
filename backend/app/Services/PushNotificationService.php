@@ -28,6 +28,8 @@ class PushNotificationService
     public function sendNotification(Notification $notification): void
     {
         $subscriptions = collect();
+        $successCount = 0;
+        $failureCount = 0;
 
         try {
             if (! $this->isEnabled()) {
@@ -84,19 +86,31 @@ class PushNotificationService
                 );
             }
 
-            $webPush->flushPooled(function (MessageSentReport $report): void {
+            $webPush->flushPooled(function (MessageSentReport $report) use (&$successCount, &$failureCount): void {
+                if ($report->isSuccess()) {
+                    $successCount++;
+                    return;
+                }
+
+                $failureCount++;
+
                 if ($this->shouldDeleteSubscription($report)) {
                     DB::table('push_subscriptions')->where('endpoint', $report->getEndpoint())->delete();
                     return;
                 }
 
-                if (! $report->isSuccess()) {
-                    Log::warning('Push notification delivery failed.', [
-                        'endpoint' => $report->getEndpoint(),
-                        'reason' => $report->getReason(),
-                    ]);
-                }
+                Log::warning('Push notification delivery failed.', [
+                    'endpoint' => $report->getEndpoint(),
+                    'reason' => $report->getReason(),
+                ]);
             });
+
+            Log::info('Push notification delivery summary.', [
+                'notification_id' => $notification->id,
+                'subscriptions_attempted' => $subscriptions->count(),
+                'success_count' => $successCount,
+                'failure_count' => $failureCount,
+            ]);
         } catch (Throwable $exception) {
             Log::warning('Push notification pipeline failed.', [
                 'notification_id' => $notification->id,

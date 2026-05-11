@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\Broadcast;
+use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -49,6 +50,25 @@ class BroadcastController extends Controller
         ]);
 
         $broadcast = Broadcast::create($validated);
+
+        $notification = Notification::create([
+            'title' => $broadcast->title,
+            'message' => $broadcast->message,
+            'type' => 'info',
+            'priority' => $broadcast->priority ?? 'medium',
+            'category' => 'announcement',
+            'is_broadcast' => true,
+            'is_read' => false,
+            'broadcast_starts_at' => $broadcast->broadcast_starts_at,
+            'broadcast_ends_at' => $broadcast->broadcast_ends_at,
+            'delivery_channels' => ['in_app'],
+        ]);
+
+        $shouldSendPush = !($notification->broadcast_starts_at && $notification->broadcast_starts_at->isFuture());
+
+        if ($shouldSendPush) {
+            app()->make('App\\Services\\PushNotificationService')->sendNotification($notification);
+        }
 
         return response()->json($broadcast, 201);
     }
