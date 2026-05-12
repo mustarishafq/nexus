@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v3';
+const CACHE_NAME = 'nexus-shell-v4';
 const APP_SHELL = [
   '/',
   '/offline.html',
@@ -92,32 +92,41 @@ self.addEventListener('push', (event) => {
   const body = payload.message || payload.body || 'You have a new notification in Nexus.';
   const url = payload.action_url || payload.url || '/notifications';
   const tag = payload.id ? `notification-${payload.id}` : undefined;
+  const notificationData = { url, id: payload.id || null };
+
+  const notifyOptions = {
+    body,
+    icon: '/icons/pwa-icon-192x192.png',
+    badge: '/icons/pwa-icon-192x192.png',
+    tag,
+    renotify: Boolean(tag),
+    silent: false,
+    vibrate: [200, 100, 200],
+    actions: [
+      { action: 'open', title: 'Open' },
+      { action: 'close', title: 'Dismiss' },
+    ],
+    data: notificationData,
+  };
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: '/icons/pwa-icon-192x192.png',
-      badge: '/icons/pwa-icon-192x192.png',
-      tag,
-      renotify: Boolean(tag),
-      silent: false,
-      vibrate: [200, 100, 200],
-      requireInteraction: true,
-      actions: [
-        {
-          action: 'open',
-          title: 'Open',
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Notify any focused client so the app can show an in-app alert when in the foreground.
+      const focusedClient = windowClients.find((c) => c.focused);
+      if (focusedClient) {
+        focusedClient.postMessage({ type: 'PUSH_RECEIVED', payload });
+      }
+
+      // Always show the OS-level notification so the user gets it even in the background
+      // or when no focused client is found (e.g. PWA backgrounded / device locked).
+      return self.registration.showNotification(title, notifyOptions).catch(() => {
+        // Fallback: minimal notification without optional options that some platforms reject.
+        return self.registration.showNotification(title, {
+          body,
           icon: '/icons/pwa-icon-192x192.png',
-        },
-        {
-          action: 'close',
-          title: 'Dismiss',
-        },
-      ],
-      data: {
-        url,
-        id: payload.id || null,
-      },
+          data: notificationData,
+        });
+      });
     })
   );
 });
@@ -132,14 +141,22 @@ self.addEventListener('notificationclick', (event) => {
   // Default action: open the notification URL
   event.notification.close();
 
-  const targetUrl = new URL(event.notification?.data?.url || '/notifications', self.location.origin).href;
+  const targetPath = event.notification?.data?.url || '/notifications';
+  const targetUrl = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        if ('focus' in client && client.url === targetUrl) {
-          return client.focus();
-        }
+      // Prefer a client that is already at the target URL.
+      const exactMatch = windowClients.find((c) => c.url === targetUrl);
+      if (exactMatch && 'focus' in exactMatch) {
+        return exactMatch.focus();
+      }
+
+      // Fall back to any open window on the same origin — navigate it to the target URL
+      // so the PWA window is reused rather than opening a new browser tab.
+      const anyClient = windowClients.find((c) => new URL(c.url).origin === self.location.origin);
+      if (anyClient && 'navigate' in anyClient) {
+        return anyClient.navigate(targetUrl).then((navigated) => navigated && navigated.focus());
       }
 
       if (clients.openWindow) {
