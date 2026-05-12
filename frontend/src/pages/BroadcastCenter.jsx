@@ -31,16 +31,14 @@ export default function BroadcastCenter() {
 
   const { data: broadcasts = [] } = useQuery({
     queryKey: ['broadcasts'],
-    queryFn: async () => {
-      const all = await db.entities.Notification.list('-created_date', 50);
-      return all.filter(n => n.is_broadcast);
-    },
+    queryFn: () => db.entities.Broadcast.list('-created_date', 50),
   });
 
   const sendMut = useMutation({
-    mutationFn: (data) => db.entities.Notification.create(data),
+    mutationFn: (data) => db.entities.Broadcast.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['broadcasts'] });
+      queryClient.invalidateQueries({ queryKey: ['active-broadcasts-dash'] });
       setTitle('');
       setMessage('');
       setBroadcastStartsAt('');
@@ -60,14 +58,9 @@ export default function BroadcastCenter() {
     sendMut.mutate({
       title,
       message,
-      type,
       priority,
-      category,
-      is_broadcast: true,
-      is_read: false,
       broadcast_starts_at: broadcastStartsAt ? new Date(broadcastStartsAt).toISOString() : null,
       broadcast_ends_at: broadcastEndsAt ? new Date(broadcastEndsAt).toISOString() : null,
-      delivery_channels: ['in_app'],
     });
   };
 
