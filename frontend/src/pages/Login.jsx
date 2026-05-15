@@ -45,9 +45,9 @@ export default function Login() {
   return (
     <div className="min-h-screen flex">
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[hsl(234,89%,20%)] flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[hsl(206,92%,15%)] flex-col justify-between p-12">
         {/* Gradient overlays */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(234,89%,30%)] via-[hsl(250,80%,25%)] to-[hsl(234,89%,12%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(206,92%,25%)] via-[hsl(206,92%,20%)] to-[hsl(206,92%,10%)]" />
         {/* Decorative circles */}
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
@@ -57,13 +57,7 @@ export default function Login() {
         {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center ring-1 ring-white/20">
-              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <img src="/icons/pwa-icon.svg" alt="Logo" className="w-9 h-9 rounded-xl" />
             <span className="text-white font-semibold text-lg tracking-tight">{appName}</span>
           </div>
         </div>
@@ -104,13 +98,7 @@ export default function Login() {
 
           {/* Mobile logo */}
           <div className="flex items-center gap-3 lg:hidden">
-            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-primary-foreground" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <img src="/icons/pwa-icon.svg" alt="Logo" className="w-8 h-8 rounded-xl" />
             <span className="font-semibold text-foreground text-lg">{appName}</span>
           </div>
 
