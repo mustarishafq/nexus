@@ -202,9 +202,9 @@ export default function ConnectedSystems() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Monitor className="w-6 h-6 text-primary" /> Connected Systems
+            <Monitor className="w-6 h-6 text-primary" /> Application
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p>
+          {/* <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p> */}
         </div>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
           <DialogTrigger asChild>
