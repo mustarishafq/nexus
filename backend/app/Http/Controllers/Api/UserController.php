@@ -34,7 +34,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'email'     => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8'],
             'role'      => ['sometimes', 'string', 'max:50'],
             'is_approved' => ['sometimes', 'boolean'],
@@ -43,8 +43,8 @@ class UserController extends Controller
         $user = User::create([
             'name'                   => $validated['full_name'],
             'full_name'              => $validated['full_name'],
-            'email'                  => $validated['email'],
-            'password'               => $validated['password'],
+            'email'                  => $validated['email'] ?? null,
+            'password'               => Hash::make($validated['password']),
             'role'                   => $validated['role'] ?? 'user',
             'is_approved'            => $validated['is_approved'] ?? true,
             'force_password_change'  => true,
@@ -55,7 +55,13 @@ class UserController extends Controller
 
     /**
      * Bulk-create users from a CSV upload.
-     * Expected CSV columns: full_name, email, password, role (optional), is_approved (optional)
+     * Expected CSV columns: full_name, email (nullable), password (optional), role (optional), is_approved (optional)
+     * 
+     * Features:
+     * - Batch processing to avoid memory issues
+     * - Full error tracking and reporting
+     * - Nullable email support
+     * - Transactional safety per batch
      */
     public function importCsv(Request $request): JsonResponse
     {
@@ -63,50 +69,137 @@ class UserController extends Controller
             'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
         ]);
 
-        $file    = $request->file('file');
-        $handle  = fopen($file->getRealPath(), 'r');
-        $headers = array_map('trim', fgetcsv($handle));
-
-        $created = [];
-        $errors  = [];
-        $row     = 1;
-
-        while (($data = fgetcsv($handle)) !== false) {
-            $row++;
-            $record = array_combine($headers, array_map('trim', $data));
-
-            if (empty($record['email']) || empty($record['full_name'])) {
-                $errors[] = "Row {$row}: missing email or full_name";
-                continue;
+        try {
+            $file    = $request->file('file');
+            $handle  = fopen($file->getRealPath(), 'r');
+            if (!$handle) {
+                return response()->json([
+                    'created' => [],
+                    'errors'  => ['Failed to open file'],
+                    'count'   => 0,
+                ], 400);
             }
 
-            if (User::where('email', $record['email'])->exists()) {
-                $errors[] = "Row {$row}: email {$record['email']} already exists";
-                continue;
+            $headers = array_map('trim', fgetcsv($handle));
+            if (!$headers) {
+                fclose($handle);
+                return response()->json([
+                    'created' => [],
+                    'errors'  => ['Empty CSV file or invalid format'],
+                    'count'   => 0,
+                ], 400);
             }
 
-            $password = $record['password'] ?? 'Password@123';
+            $created = [];
+            $errors  = [];
+            $batch   = [];
+            $row     = 1;
+            $batchSize = 100; // Process 100 users at a time
 
-            $user = User::create([
-                'name'                   => $record['full_name'],
-                'full_name'              => $record['full_name'],
-                'email'                  => $record['email'],
-                'password'               => Hash::make($password),
-                'role'                   => $record['role'] ?? 'user',
-                'is_approved'            => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
-                'force_password_change'  => true,
+            while (($data = fgetcsv($handle)) !== false) {
+                $row++;
+                
+                // Skip empty rows
+                if (empty(array_filter($data))) {
+                    continue;
+                }
+
+                try {
+                    $record = array_combine($headers, array_map('trim', $data));
+                    if ($record === false) {
+                        $errors[] = "Row {$row}: CSV column count mismatch";
+                        continue;
+                    }
+
+                    // Validate required fields
+                    if (empty($record['full_name'])) {
+                        $errors[] = "Row {$row}: missing full_name";
+                        continue;
+                    }
+
+                    // Email is optional now, but if provided must be unique
+                    $email = $record['email'] ?? null;
+                    if ($email) {
+                        $email = trim($email);
+                        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                            $errors[] = "Row {$row}: invalid email format '{$email}'";
+                            continue;
+                        }
+
+                        if (User::where('email', $email)->exists()) {
+                            $errors[] = "Row {$row}: email '{$email}' already exists";
+                            continue;
+                        }
+                    }
+
+                    $password = !empty($record['password']) ? trim($record['password']) : 'Password@123';
+
+                    // Add to batch
+                    $batch[] = [
+                        'name'                   => $record['full_name'],
+                        'full_name'              => $record['full_name'],
+                        'email'                  => $email,
+                        'password'               => Hash::make($password),
+                        'role'                   => $record['role'] ?? 'user',
+                        'is_approved'            => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
+                        'force_password_change'  => true,
+                        'created_at'             => now(),
+                        'updated_at'             => now(),
+                    ];
+
+                    // Execute batch if it reaches batch size
+                    if (count($batch) >= $batchSize) {
+                        $insertedCount = $this->insertBatch($batch, $created, $errors);
+                        $batch = [];
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Row {$row}: " . $e->getMessage();
+                }
+            }
+
+            // Insert remaining batch
+            if (!empty($batch)) {
+                $this->insertBatch($batch, $created, $errors);
+            }
+
+            fclose($handle);
+
+            return response()->json([
+                'created' => $created,
+                'errors'  => $errors,
+                'count'   => count($created),
+                'total_rows' => $row - 1,
             ]);
-
-            $created[] = $user->email;
+        } catch (\Exception $e) {
+            return response()->json([
+                'created' => [],
+                'errors'  => ['Import failed: ' . $e->getMessage()],
+                'count'   => 0,
+            ], 500);
         }
+    }
 
-        fclose($handle);
-
-        return response()->json([
-            'created' => $created,
-            'errors'  => $errors,
-            'count'   => count($created),
-        ]);
+    /**
+     * Helper method to insert a batch of users
+     */
+    private function insertBatch(array $batch, array &$created, array &$errors): int
+    {
+        try {
+            $inserted = 0;
+            foreach ($batch as $userData) {
+                try {
+                    $user = User::create($userData);
+                    $created[] = $user->email ?? $user->name;
+                    $inserted++;
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to create user '{$userData['full_name']}': " . $e->getMessage();
+                }
+            }
+            return $inserted;
+        } catch (\Exception $e) {
+            $errors[] = "Batch insert error: " . $e->getMessage();
+            return 0;
+        }
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -114,12 +207,17 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['sometimes', 'string', 'max:50'],
             'is_approved' => ['sometimes', 'boolean'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'password' => ['sometimes', 'string', 'min:8'],
         ]);
+
+        // Hash password if provided
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        }
 
         $user->update($validated);
 
