@@ -41,17 +41,22 @@ class MeController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
-            'current_password' => ['sometimes', 'required_with:new_password', 'string'],
+            'current_password' => ['sometimes', 'string'],
             'new_password' => ['sometimes', 'required_with:current_password', 'string', 'min:8', 'confirmed'],
         ]);
 
         if (isset($validated['new_password'])) {
-            if (! Hash::check($validated['current_password'], $user->password)) {
-                throw ValidationException::withMessages([
-                    'current_password' => ['Current password is incorrect.'],
-                ]);
+            // If not forcing password change, require current password validation
+            if (! $user->force_password_change) {
+                if (! isset($validated['current_password']) || ! Hash::check($validated['current_password'], $user->password)) {
+                    throw ValidationException::withMessages([
+                        'current_password' => ['Current password is incorrect.'],
+                    ]);
+                }
             }
             $user->password = $validated['new_password'];
+            // Clear the force_password_change flag after successful password change
+            $user->force_password_change = false;
         }
 
         $user->fill(collect($validated)->except(['current_password', 'new_password', 'new_password_confirmation'])->toArray())->save();

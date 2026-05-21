@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
 
   useEffect(() => {
     checkAppState();
@@ -71,6 +72,10 @@ export const AuthProvider = ({ children }) => {
       const currentUser = await db.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
+      
+      // Check if user needs to force password change
+      setForcePasswordChange(currentUser.force_password_change || false);
+      
       setIsLoadingAuth(false);
       setAuthChecked(true);
       setAuthError(null);
@@ -79,6 +84,7 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setUser(null);
       setIsAuthenticated(false);
+      setForcePasswordChange(false);
       setAuthChecked(true);
       if (error?.status === 403 && error?.data?.code === 'account_not_approved') {
         setAuthError({
@@ -97,6 +103,7 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    setForcePasswordChange(false);
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
@@ -120,6 +127,7 @@ export const AuthProvider = ({ children }) => {
       authError,
       appPublicSettings,
       authChecked,
+      forcePasswordChange,
       logout,
       navigateToLogin,
       checkUserAuth,

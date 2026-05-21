@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'role',
         'is_approved',
+        'force_password_change',
         'notification_settings',
     ];
 
@@ -52,6 +53,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_approved' => 'boolean',
+            'force_password_change' => 'boolean',
             'notification_settings' => 'array',
         ];
     }

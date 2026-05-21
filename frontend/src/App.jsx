@@ -18,11 +18,12 @@ import UserManagement from '@/pages/UserManagement';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
+import ForcedPasswordChange from '@/pages/ForcedPasswordChange';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 
 const ProtectedRoutes = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError, forcePasswordChange } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -38,6 +39,11 @@ const ProtectedRoutes = () => {
 
   if (authError?.type === 'user_not_approved') {
     return <Navigate to="/login?status=pending_approval" replace />;
+  }
+
+  // Redirect to forced password change if user needs to change password
+  if (forcePasswordChange) {
+    return <ForcedPasswordChange />;
   }
 
   return (

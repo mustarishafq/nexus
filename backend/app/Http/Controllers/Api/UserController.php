@@ -41,12 +41,13 @@ class UserController extends Controller
         ]);
 
         $user = User::create([
-            'name'        => $validated['full_name'],
-            'full_name'   => $validated['full_name'],
-            'email'       => $validated['email'],
-            'password'    => $validated['password'],
-            'role'        => $validated['role'] ?? 'user',
-            'is_approved' => $validated['is_approved'] ?? true,
+            'name'                   => $validated['full_name'],
+            'full_name'              => $validated['full_name'],
+            'email'                  => $validated['email'],
+            'password'               => $validated['password'],
+            'role'                   => $validated['role'] ?? 'user',
+            'is_approved'            => $validated['is_approved'] ?? true,
+            'force_password_change'  => true,
         ]);
 
         return response()->json($user, 201);
@@ -87,12 +88,13 @@ class UserController extends Controller
             $password = $record['password'] ?? 'Password@123';
 
             $user = User::create([
-                'name'        => $record['full_name'],
-                'full_name'   => $record['full_name'],
-                'email'       => $record['email'],
-                'password'    => Hash::make($password),
-                'role'        => $record['role'] ?? 'user',
-                'is_approved' => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
+                'name'                   => $record['full_name'],
+                'full_name'              => $record['full_name'],
+                'email'                  => $record['email'],
+                'password'               => Hash::make($password),
+                'role'                   => $record['role'] ?? 'user',
+                'is_approved'            => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
+                'force_password_change'  => true,
             ]);
 
             $created[] = $user->email;
