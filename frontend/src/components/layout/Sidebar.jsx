@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Bell, Activity, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Zap, Users, Calendar
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -39,9 +39,7 @@ export default function Sidebar({
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <Zap className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <img src="/icons/pwa-icon.svg" alt="Logo" className="w-9 h-9 rounded-xl shrink-0" />
           <AnimatePresence>
             {!showCompact && (
               <motion.div
@@ -82,7 +80,7 @@ export default function Sidebar({
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full"
+                  className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-1 bg-primary rounded-r-full"
                 />
               )}
               <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
