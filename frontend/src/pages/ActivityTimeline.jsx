@@ -41,7 +41,7 @@ export default function ActivityTimeline() {
 
   const { data: systems = [] } = useQuery({
     queryKey: ['systems-list'],
-    queryFn: () => db.entities.ConnectedSystem.list(),
+    queryFn: () => db.entities.Application.list(),
   });
 
   const filtered = activities.filter(a => {

@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import { useMetaTags } from '@/hooks/useMetaTags';
 
 export default function Dashboard() {
   const { data: user } = useQuery({
@@ -40,13 +41,19 @@ export default function Dashboard() {
   });
 
   const { data: systems = [] } = useQuery({
-    queryKey: ['connected-systems'],
-    queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
+    queryKey: ['applications'],
+    queryFn: () => db.entities.Application.list('-created_date', 50),
   });
 
   const { data: events = [] } = useQuery({
     queryKey: ['events-dash'],
     queryFn: () => db.entities.SystemEvent.list('-created_date', 20),
+  });
+
+  // Update meta tags for sharing
+  useMetaTags({
+    title: 'Dashboard - Nexus',
+    description: `${notifications.filter(n => !n.is_read).length} unread notifications · ${activeBroadcasts.length} active broadcasts`,
   });
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -93,7 +100,7 @@ export default function Dashboard() {
           value={`${onlineSystems}/${systems.length}`}
           icon={Monitor}
           color="bg-success/10"
-          subtitle="Connected systems"
+          subtitle="Applications"
           index={2}
         />
         <StatsCard
@@ -151,7 +158,6 @@ export default function Dashboard() {
         <div className="space-y-6">
           <RecentNotificationsWidget notifications={notifications} onMarkRead={markRead} />
           <SystemHealthWidget systems={systems} />
-          <ActivityWidget activities={activities} />
         </div>
       </div>
     </div>

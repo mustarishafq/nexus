@@ -41,8 +41,8 @@ export default function UserManagement() {
   });
 
   const { data: systemsRaw = [] } = useQuery({
-    queryKey: ['connected-systems'],
-    queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
+    queryKey: ['applications'],
+    queryFn: () => db.entities.Application.list('-created_date', 50),
   });
 
   const { data: accessListRaw = [] } = useQuery({

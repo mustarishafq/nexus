@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Models\ConnectedSystem;
+use App\Models\Application;
 use App\Models\User;
 use App\Models\UserSystemAccess;
 use App\Support\ApiTokenAuth;
@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
-class ConnectedSystemController extends Controller
+class ApplicationController extends Controller
 {
     use AppliesIndexQuery;
 
@@ -29,7 +29,7 @@ class ConnectedSystemController extends Controller
 
         $query = $this->applyIndexQuery(
             $request,
-            ConnectedSystem::query(),
+            Application::query(),
             ['slug', 'status', 'is_enabled', 'auth_mode', 'visibility']
         )->with('creator');
 
@@ -74,7 +74,7 @@ class ConnectedSystemController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:connected_systems,slug'],
+            'slug' => ['required', 'string', 'max:255', 'unique:applications,slug'],
             'description' => ['nullable', 'string'],
             'base_url' => ['nullable', 'string', 'max:2048'],
             'icon_url' => ['nullable', 'string', 'max:2048'],
@@ -99,12 +99,12 @@ class ConnectedSystemController extends Controller
             $validated['private_allowed_user_emails'] = null;
         }
 
-        $item = ConnectedSystem::create($validated);
+        $item = Application::create($validated);
 
         return response()->json($item->load('creator'), 201);
     }
 
-    public function show(ConnectedSystem $connectedSystem): JsonResponse
+    public function show(Application $application): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest(request());
 
@@ -112,14 +112,14 @@ class ConnectedSystemController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! $this->canViewSystem($user, $connectedSystem)) {
+        if (! $this->canViewSystem($user, $application)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json($connectedSystem->load('creator'));
+        return response()->json($application->load('creator'));
     }
 
-    public function update(Request $request, ConnectedSystem $connectedSystem): JsonResponse
+    public function update(Request $request, Application $application): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);
 
@@ -127,7 +127,7 @@ class ConnectedSystemController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! $this->canEditSystem($user, $connectedSystem)) {
+        if (! $this->canEditSystem($user, $application)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -137,7 +137,7 @@ class ConnectedSystemController extends Controller
                 'sometimes',
                 'string',
                 'max:255',
-                Rule::unique('connected_systems', 'slug')->ignore($connectedSystem->id),
+                Rule::unique('applications', 'slug')->ignore($application->id),
             ],
             'description' => ['nullable', 'string'],
             'base_url' => ['nullable', 'string', 'max:2048'],
@@ -162,17 +162,17 @@ class ConnectedSystemController extends Controller
             $validated['private_allowed_user_emails'] = $this->normalizePrivateEmails($validated['private_allowed_user_emails'], $user->email);
         }
 
-        $nextVisibility = $validated['visibility'] ?? $connectedSystem->visibility;
+        $nextVisibility = $validated['visibility'] ?? $application->visibility;
         if ($nextVisibility !== 'private') {
             $validated['private_allowed_user_emails'] = null;
         }
 
-        $connectedSystem->update($validated);
+        $application->update($validated);
 
-        return response()->json($connectedSystem->fresh()->load('creator'));
+        return response()->json($application->fresh()->load('creator'));
     }
 
-    public function destroy(ConnectedSystem $connectedSystem): JsonResponse
+    public function destroy(Application $application): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest(request());
 
@@ -180,23 +180,23 @@ class ConnectedSystemController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! $this->canEditSystem($user, $connectedSystem)) {
+        if (! $this->canEditSystem($user, $application)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $connectedSystem->delete();
+        $application->delete();
 
         return response()->json([], 204);
     }
 
     /**
-     * Generate a signed SSO launch URL for the connected system.
+     * Generate a signed SSO launch URL for the application.
      *
-     * The connected system should verify the JWT using the same api_key as the
+     * The application should verify the JWT using the same api_key as the
      * secret, then log in the user identified by the `sub` (user id) and `email`
      * claims.  The token is valid for 60 seconds to prevent replay attacks.
      */
-    public function launch(Request $request, ConnectedSystem $connectedSystem): JsonResponse
+    public function launch(Request $request, Application $application): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);
 
@@ -204,29 +204,29 @@ class ConnectedSystemController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! $this->canViewSystem($user, $connectedSystem)) {
+        if (! $this->canViewSystem($user, $application)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        if (! $connectedSystem->is_enabled) {
+        if (! $application->is_enabled) {
             return response()->json(['message' => 'System is not enabled.'], 403);
         }
 
-        if (! $connectedSystem->base_url) {
+        if (! $application->base_url) {
             return response()->json(['message' => 'System has no base URL configured.'], 422);
         }
 
-        $returnTo = rtrim((string) config('app.url'), '/') . '/systems';
+        $returnTo = rtrim((string) config('app.url'), '/') . '/applications';
 
-        if ($connectedSystem->auth_mode === 'redirect') {
-            $launchUrl = rtrim($connectedSystem->base_url, '/');
+        if ($application->auth_mode === 'redirect') {
+            $launchUrl = rtrim($application->base_url, '/');
 
             ActivityLog::create([
                 'user_id'     => (string) $user->id,
                 'user_name'   => $user->full_name ?? $user->name ?? $user->email,
-                'system_id'   => $connectedSystem->slug,
+                'system_id'   => $application->slug,
                 'action'      => 'view',
-                'description' => 'Opened redirect link for ' . $connectedSystem->name,
+                'description' => 'Opened redirect link for ' . $application->name,
                 'ip_address'  => $request->ip(),
             ]);
 
@@ -237,7 +237,7 @@ class ConnectedSystemController extends Controller
             ]);
         }
 
-        if (! $connectedSystem->api_key) {
+        if (! $application->api_key) {
             return response()->json(['message' => 'System has no api_key configured — cannot sign token.'], 422);
         }
 
@@ -249,22 +249,22 @@ class ConnectedSystemController extends Controller
             'sub'   => (string) $user->id,
             'email' => $user->email,
             'name'  => $user->full_name ?? $user->name ?? '',
-            'sys'   => $connectedSystem->slug,
+            'sys'   => $application->slug,
             'return_to' => $returnTo,
         ];
 
-        $token = JWT::encode($payload, $connectedSystem->api_key, 'HS256');
+        $token = JWT::encode($payload, $application->api_key, 'HS256');
 
-        $launchUrl = rtrim($connectedSystem->base_url, '/')
+        $launchUrl = rtrim($application->base_url, '/')
             . '/sso/nexus?token=' . urlencode($token)
             . '&return_to=' . urlencode($returnTo);
 
         ActivityLog::create([
             'user_id'     => (string) $user->id,
             'user_name'   => $user->full_name ?? $user->name ?? $user->email,
-            'system_id'   => $connectedSystem->slug,
+            'system_id'   => $application->slug,
             'action'      => 'login',
-            'description' => 'Launched / logged in to ' . $connectedSystem->name,
+            'description' => 'Launched / logged in to ' . $application->name,
             'ip_address'  => $request->ip(),
         ]);
 
@@ -276,27 +276,27 @@ class ConnectedSystemController extends Controller
         ]);
     }
 
-    private function canEditSystem(User $user, ConnectedSystem $connectedSystem): bool
+    private function canEditSystem(User $user, Application $application): bool
     {
         if ($user->role === 'admin') {
             return true;
         }
 
-        return (int) $connectedSystem->created_by_user_id === (int) $user->id;
+        return (int) $application->created_by_user_id === (int) $user->id;
     }
 
-    private function canViewSystem(User $user, ConnectedSystem $connectedSystem): bool
+    private function canViewSystem(User $user, Application $application): bool
     {
         if ($user->role === 'admin') {
             return true;
         }
 
-        if ($connectedSystem->visibility === 'private') {
-            if ((int) $connectedSystem->created_by_user_id === (int) $user->id) {
+        if ($application->visibility === 'private') {
+            if ((int) $application->created_by_user_id === (int) $user->id) {
                 return true;
             }
 
-            $allowedEmails = array_values(array_filter((array) $connectedSystem->private_allowed_user_emails, fn ($email) => is_string($email) && $email !== ''));
+            $allowedEmails = array_values(array_filter((array) $application->private_allowed_user_emails, fn ($email) => is_string($email) && $email !== ''));
 
             return in_array($user->email, $allowedEmails, true);
         }
@@ -309,7 +309,7 @@ class ConnectedSystemController extends Controller
 
         $allowedPublicSlugs = array_values(array_filter((array) $accessRecord->allowed_system_slugs, fn ($slug) => is_string($slug) && $slug !== ''));
 
-        return in_array($connectedSystem->slug, $allowedPublicSlugs, true);
+        return in_array($application->slug, $allowedPublicSlugs, true);
     }
 
     private function normalizePrivateEmails(?array $emails, string $ownerEmail): array

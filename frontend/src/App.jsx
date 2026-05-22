@@ -8,7 +8,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
 import NotificationCenter from '@/pages/NotificationCenter';
 import ActivityTimeline from '@/pages/ActivityTimeline';
-import ConnectedSystems from '@/pages/ConnectedSystems';
+import Applications from '@/pages/Applications';
 import BroadcastCenter from '@/pages/BroadcastCenter';
 import SystemEvents from '@/pages/SystemEvents';
 import AdminCalendar from '@/pages/AdminCalendar';
@@ -52,7 +52,7 @@ const ProtectedRoutes = () => {
         <Route path="/" element={<Dashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
-        <Route path="/systems" element={<ConnectedSystems />} />
+        <Route path="/applications" element={<Applications />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
         <Route path="/admin/calendar" element={<AdminCalendar />} />

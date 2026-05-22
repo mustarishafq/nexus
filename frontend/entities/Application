@@ -1,5 +1,5 @@
 {
-  "name": "ConnectedSystem",
+  "name": "Application",
   "type": "object",
   "properties": {
     "name": {

@@ -5,7 +5,7 @@ const AUTH_TOKEN_KEY = 'nexus_auth_token';
 
 const ENTITY_ENDPOINTS = {
 	User: 'users',
-	ConnectedSystem: 'connected-systems',
+	Application: 'applications',
 	UserSystemAccess: 'user-system-accesses',
 	Broadcast: 'broadcasts',
 	Notification: 'notifications',
@@ -269,12 +269,12 @@ export const db = {
 	},
 
 	/**
-	 * Request a signed SSO launch URL for a connected system.
+	 * Request a signed SSO launch URL for an application.
 	 * Returns { launch_url, token, expires_in }.
 	 * Open launch_url in a new tab to auto-login the user.
 	 */
 	async launchSystem(systemId) {
-		return request(`/connected-systems/${systemId}/launch`, { method: 'POST' });
+		return request(`/applications/${systemId}/launch`, { method: 'POST' });
 	},
 
 	/**

@@ -1,6 +1,6 @@
 # Nexus SSO Integration Guide
 
-This document describes what a **connected system** must implement to support
+This document describes what an **application** must implement to support
 automatic login (Single Sign-On) initiated from the Nexus notification hub.
 
 ---
@@ -14,7 +14,7 @@ systems without transmitting passwords.  The flow is:
 User clicks "Launch" in Nexus
         │
         ▼
-Nexus calls POST /api/connected-systems/{id}/launch
+Nexus calls POST /api/applications/{id}/launch
         │  (server-side, using the shared api_key as signing secret)
         ▼
 Nexus receives { launch_url, token, expires_in: 60 }
@@ -30,7 +30,7 @@ Your system verifies the JWT → creates a session → redirects user to app
 
 ## Step 1 — Share a secret key
 
-In Nexus, open **Connected Systems → Edit** and fill in the **API Key** field.
+In Nexus, open **Applications → Edit** and fill in the **API Key** field.
 
 - Use a random string of **at least 32 characters** (e.g. `openssl rand -hex 32`)
 - Store the **same value** in your system's environment/config
@@ -62,7 +62,7 @@ GET /sso/nexus?token=<JWT>&return_to=<URL>
    | `sub`   | string | Nexus user ID                                |
    | `email` | string | User's email address (use this to look up)   |
    | `name`  | string | User's display name                          |
-   | `sys`   | string | Slug of the connected system being launched  |
+   | `sys`   | string | Slug of the application being launched  |
     | `return_to` | string | Nexus URL to redirect user to after logout |
    | `iat`   | int    | Issued-at timestamp (Unix seconds)           |
    | `exp`   | int    | Expiry timestamp (Unix seconds, iat + 60)    |
@@ -76,7 +76,7 @@ GET /sso/nexus?token=<JWT>&return_to=<URL>
 
 ## Logout Redirect Back To Nexus
 
-On your connected system, after SSO login:
+On your application, after SSO login:
 
 1. Read `return_to` from query or JWT claim
 2. Save it in server-side session (example key: `nexus_return_to`)

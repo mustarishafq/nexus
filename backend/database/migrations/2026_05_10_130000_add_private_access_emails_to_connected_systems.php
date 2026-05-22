@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('connected_systems', function (Blueprint $table) {
+        Schema::table('applications', function (Blueprint $table) {
             $table->json('private_allowed_user_emails')->nullable()->after('created_by_user_id');
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('connected_systems', function (Blueprint $table) {
+        Schema::table('applications', function (Blueprint $table) {
             $table->dropColumn('private_allowed_user_emails');
         });
     }

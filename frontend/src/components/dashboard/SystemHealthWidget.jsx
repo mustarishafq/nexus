@@ -18,7 +18,7 @@ export default function SystemHealthWidget({ systems }) {
       </div>
       <div className="px-5 pb-5 space-y-3">
         {systems.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">No connected systems</p>
+          <p className="text-sm text-muted-foreground text-center py-6">No applications</p>
         ) : (
           systems.map(system => {
             const config = statusConfig[system.status] || statusConfig.online;

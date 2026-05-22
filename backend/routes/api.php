@@ -5,7 +5,7 @@ use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastController;
 use App\Http\Controllers\Api\CalendarEventController;
-use App\Http\Controllers\Api\ConnectedSystemController;
+use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\MeController;
@@ -52,8 +52,8 @@ Route::delete('/push-subscriptions', function () {
 	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
 });
 
-Route::apiResource('connected-systems', ConnectedSystemController::class);
-Route::post('connected-systems/{connected_system}/launch', [ConnectedSystemController::class, 'launch']);
+Route::apiResource('applications', ApplicationController::class);
+Route::post('applications/{application}/launch', [ApplicationController::class, 'launch']);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);
 Route::apiResource('broadcasts', BroadcastController::class);
 Route::apiResource('notifications', NotificationController::class);

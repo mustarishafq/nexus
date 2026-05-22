@@ -41,7 +41,7 @@ class UserSystemAccessController extends Controller
             'allowed_system_slugs.*' => [
                 'string',
                 'max:255',
-                Rule::exists('connected_systems', 'slug')->where(fn ($query) => $query->where('visibility', 'public')),
+                Rule::exists('applications', 'slug')->where(fn ($query) => $query->where('visibility', 'public')),
             ],
         ]);
 
@@ -71,7 +71,7 @@ class UserSystemAccessController extends Controller
             'allowed_system_slugs.*' => [
                 'string',
                 'max:255',
-                Rule::exists('connected_systems', 'slug')->where(fn ($query) => $query->where('visibility', 'public')),
+                Rule::exists('applications', 'slug')->where(fn ($query) => $query->where('visibility', 'public')),
             ],
         ]);
 

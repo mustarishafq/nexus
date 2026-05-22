@@ -35,7 +35,7 @@ const statusConfig = {
   degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
 };
 
-export default function ConnectedSystems() {
+export default function Applications() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSystem, setEditSystem] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -91,8 +91,8 @@ export default function ConnectedSystems() {
   });
 
   const { data: systems = [], isLoading } = useQuery({
-    queryKey: ['connected-systems'],
-    queryFn: () => db.entities.ConnectedSystem.list('-created_date', 50),
+    queryKey: ['applications'],
+    queryFn: () => db.entities.Application.list('-created_date', 50),
   });
 
   const { data: users = [] } = useQuery({
@@ -104,18 +104,18 @@ export default function ConnectedSystems() {
   const visibleSystems = systems;
 
   const createMut = useMutation({
-    mutationFn: (data) => db.entities.ConnectedSystem.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    mutationFn: (data) => db.entities.Application.create(data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => db.entities.ConnectedSystem.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connected-systems'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    mutationFn: ({ id, data }) => db.entities.Application.update(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => db.entities.ConnectedSystem.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connected-systems'] }),
+    mutationFn: (id) => db.entities.Application.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['applications'] }),
   });
 
   const [launching, setLaunching] = useState(null);
@@ -209,12 +209,12 @@ export default function ConnectedSystems() {
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
-              <Plus className="w-4 h-4" /> Add System
+              <Plus className="w-4 h-4" /> Add
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
-              <DialogTitle>{editSystem ? 'Edit System' : 'Register New System'}</DialogTitle>
+              <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
               <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-6 py-4">
@@ -238,7 +238,7 @@ export default function ConnectedSystems() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>System Type</Label>
+                  <Label>Application Type</Label>
                   <Select value={authMode} onValueChange={setAuthMode}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -415,7 +415,7 @@ export default function ConnectedSystems() {
       ) : visibleSystems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card rounded-2xl border border-border">
           <Monitor className="w-12 h-12 mb-4 opacity-20" />
-          <p className="font-medium">No connected systems</p>
+          <p className="font-medium">No applications</p>
           <p className="text-sm mt-1">
             {currentUser?.role === 'admin'
               ? 'Register your first system to get started'

@@ -69,7 +69,7 @@ export default function Login() {
               Unified system<br />access, simplified.
             </h1>
             <p className="text-white/60 text-base leading-relaxed max-w-xs">
-              Manage connected systems, monitor events, and control user access — all from one place.
+              Manage applications, monitor events, and control user access — all from one place.
             </p>
           </div>
           <div className="flex items-center gap-4 pt-2">

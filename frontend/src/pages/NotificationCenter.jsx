@@ -9,6 +9,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import NotificationItem from '@/components/notifications/NotificationItem';
+import { useMetaTags } from '@/hooks/useMetaTags';
+import { buildSystemStatusDescription } from '@/lib/MetaTagManager';
 
 export default function NotificationCenter() {
   const [filter, setFilter] = useState('all');
@@ -20,6 +22,13 @@ export default function NotificationCenter() {
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications-center'],
     queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 200),
+  });
+
+  // Update meta tags for sharing
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+  useMetaTags({
+    title: 'Notification Center - Nexus',
+    description: buildSystemStatusDescription(unreadCount, notifications.length),
   });
 
   const updateMut = useMutation({

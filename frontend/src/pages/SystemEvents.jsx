@@ -68,7 +68,7 @@ function IntegrationGuide() {
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">2 — Push an Event</h3>
                 <p className="text-sm text-muted-foreground"><code className="bg-muted px-1 rounded text-xs">POST /api/system-events</code></p>
                 <CodeBlock language="json" code={`{
-  "system_id": "your-connected-system-id",
+  "system_id": "your-application-id",
   "event_type": "info",
   "title": "Deployment completed",
   "severity": 3,
@@ -94,7 +94,7 @@ function IntegrationGuide() {
                     </thead>
                     <tbody>
                       {[
-                        ['system_id', 'Yes', 'string — connected system ID'],
+                        ['system_id', 'Yes', 'string — application ID'],
                         ['title', 'Yes', 'string — short summary'],
                         ['event_type', 'No', 'info · warning · error · critical · health_check · webhook'],
                         ['status', 'No', 'pending · processed · failed · acknowledged'],
