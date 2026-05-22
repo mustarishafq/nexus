@@ -65,7 +65,7 @@ class AuthController extends Controller
             'user_id'     => (string) $user->id,
             'user_name'   => $user->full_name ?? $user->name ?? $user->email,
             'action'      => 'login',
-            'description' => 'Logged in to '.config('app.name', 'Nexus'),
+            'description' => 'Logged in to '.config('app.name', 'Nexus Brain'),
             'ip_address'  => $request->ip(),
         ]);
 
@@ -106,7 +106,7 @@ class AuthController extends Controller
                 'user_id'     => (string) $user->id,
                 'user_name'   => $user->full_name ?? $user->name ?? $user->email,
                 'action'      => 'logout',
-                'description' => 'Logged out of '.config('app.name', 'Nexus'),
+                'description' => 'Logged out of '.config('app.name', 'Nexus Brain'),
                 'ip_address'  => $request->ip(),
             ]);
             ApiTokenAuth::revoke($user);

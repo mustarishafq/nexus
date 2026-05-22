@@ -27,7 +27,7 @@ export default function NotificationCenter() {
   // Update meta tags for sharing
   const unreadCount = notifications.filter(n => !n.is_read).length;
   useMetaTags({
-    title: 'Notification Center - Nexus',
+    title: 'Notification Center - Nexus Brain',
     description: buildSystemStatusDescription(unreadCount, notifications.length),
   });
 

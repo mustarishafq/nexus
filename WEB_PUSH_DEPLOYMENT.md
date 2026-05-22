@@ -128,10 +128,10 @@ Verify [frontend/index.html](../frontend/index.html) includes:
     <meta name="theme-color" content="#ffffff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Nexus" />
+    <meta name="apple-mobile-web-app-title" content="Nexus Brain" />
     <link rel="manifest" href="/api/pwa/manifest" />
     <link rel="apple-touch-icon" href="/icons/pwa-icon.svg" />
-    <title>Nexus</title>
+    <title>Nexus Brain</title>
   </head>
   <body>
     <div id="root"></div>

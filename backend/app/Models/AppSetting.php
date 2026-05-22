@@ -17,7 +17,7 @@ class AppSetting extends Model
     public static function defaults(): array
     {
         return [
-            'system_name' => config('app.name', 'Nexus'),
+            'system_name' => config('app.name', 'Nexus Brain'),
             'smtp_from_email' => config('mail.from.address'),
         ];
     }
@@ -30,14 +30,14 @@ class AppSetting extends Model
     public function publicPayload(): array
     {
         return [
-            'system_name' => $this->system_name ?: config('app.name', 'Nexus'),
+            'system_name' => $this->system_name ?: config('app.name', 'Nexus Brain'),
         ];
     }
 
     public function adminPayload(): array
     {
         return [
-            'system_name' => $this->system_name ?: config('app.name', 'Nexus'),
+            'system_name' => $this->system_name ?: config('app.name', 'Nexus Brain'),
             'smtp_from_email' => $this->smtp_from_email ?: config('mail.from.address'),
         ];
     }

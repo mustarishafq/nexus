@@ -52,7 +52,7 @@ export default function Dashboard() {
 
   // Update meta tags for sharing
   useMetaTags({
-    title: 'Dashboard - Nexus',
+    title: 'Dashboard - Nexus Brain',
     description: `${notifications.filter(n => !n.is_read).length} unread notifications · ${activeBroadcasts.length} active broadcasts`,
   });
 

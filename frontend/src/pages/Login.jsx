@@ -15,7 +15,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const status = searchParams.get('status');
-  const appName = appPublicSettings?.system_name || 'Nexus';
+  const appName = appPublicSettings?.system_name || 'Nexus Brain';
 
   const handleSubmit = async (event) => {
     event.preventDefault();

@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
   const refreshPublicSettings = async () => {
     try {
       const publicSettings = await db.appSettings.public();
-      setAppPublicSettings(publicSettings || { system_name: 'Nexus' });
+      setAppPublicSettings(publicSettings || { system_name: 'Nexus Brain' });
 
       if (publicSettings?.system_name) {
         document.title = publicSettings.system_name;
@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } catch {
-      setAppPublicSettings({ system_name: 'Nexus' });
+      setAppPublicSettings({ system_name: 'Nexus Brain' });
     }
   };
 
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingPublicSettings(false);
     } catch (error) {
       console.error('Unexpected error:', error);
-      setAppPublicSettings({ system_name: 'Nexus' });
+      setAppPublicSettings({ system_name: 'Nexus Brain' });
       setAuthError({
         type: 'unknown',
         message: error.message || 'An unexpected error occurred'
