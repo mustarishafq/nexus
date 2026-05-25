@@ -81,8 +81,11 @@ export default function Register() {
         {/* Center content */}
         <div className="relative z-10 space-y-6">
           <div className="space-y-3">
-            <h1 className="text-4xl font-bold text-white leading-tight">
-              Get started in<br />minutes.
+            <h1 className="text-4xl font-bold leading-tight">
+              <span className="text-white">Get started </span>
+              <br />
+              <span className="bg-gradient-to-r from-white to-white bg-clip-text text-transparent">in </span>
+              <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">minutes.</span>
             </h1>
             <p className="text-white/60 text-base leading-relaxed max-w-xs">
               Create your account and request access. An admin will review and approve your registration.
@@ -113,14 +116,9 @@ export default function Register() {
         {/* Mobile/Tablet: Gradient overlay for depth */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-br from-[hsl(206,92%,20%)] via-[hsl(206,92%,15%)] to-[hsl(206,92%,10%)]" />
 
-        {/* Mobile/Tablet: Decorative elements */}
-        <div className="absolute lg:hidden -top-40 -right-40 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute lg:hidden -bottom-40 -left-40 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
-
         {/* Mobile/Tablet: Logo at top */}
         <div className="relative z-10 flex flex-col items-center gap-2 lg:hidden mb-8">
-          <img src="/icons/logo.png" alt="Logo" className="w-12 h-12 rounded-2xl" />
-          <span className="font-bold text-white text-2xl">{appName}</span>
+          <img src="/icons/banner.png" alt="Logo" className="w-full" />
         </div>
 
         {/* Card container for mobile/tablet */}
@@ -137,7 +135,9 @@ export default function Register() {
 
             {/* Header */}
             <div className="space-y-2 text-center">
-              <h2 className="text-3xl font-bold text-foreground tracking-tight">Create account</h2>
+              <h2 className="text-3xl font-bold tracking-tight">
+                <span className="bg-gradient-to-r from-foreground to-foreground bg-clip-text text-transparent">Create account</span>
+              </h2>
               <p className="text-muted-foreground text-sm">Join your workspace</p>
             </div>
 
@@ -255,7 +255,10 @@ export default function Register() {
           <div className="hidden lg:block space-y-8">
             {/* Header */}
             <div className="space-y-1">
-              <h2 className="text-2xl font-bold text-foreground tracking-tight">Create an account</h2>
+              <h2 className="text-2xl font-bold tracking-tight">
+                <span className="text-foreground">Create an </span>
+                <span className="bg-gradient-to-r from-amber-600 to-orange-500 bg-clip-text text-transparent">account</span>
+              </h2>
               <p className="text-muted-foreground text-sm">Fill in your details to request access</p>
             </div>
 

@@ -98,14 +98,9 @@ export default function Login() {
         {/* Mobile/Tablet: Gradient overlay for depth */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-br from-[hsl(206,92%,20%)] via-[hsl(206,92%,15%)] to-[hsl(206,92%,10%)]" />
 
-        {/* Mobile/Tablet: Decorative elements */}
-        <div className="absolute lg:hidden -top-40 -right-40 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute lg:hidden -bottom-40 -left-40 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
-
         {/* Mobile/Tablet: Logo at top - FULL NEXUS LOGO */}
         <div className="relative z-10 flex flex-col items-center gap-2 lg:hidden mb-8">
-          <img src="/icons/logo.png" alt="Logo" className="w-12 h-12 rounded-2xl" />
-          <span className="font-bold text-white text-2xl">{appName}</span>
+          <img src="/icons/banner.png" alt="Logo" className="w-full" />
         </div>
 
         {/* Card container for mobile/tablet */}
@@ -113,7 +108,7 @@ export default function Login() {
           
           {/* Desktop: Logo */}
           <div className="hidden lg:flex items-center gap-3">
-            <img src="/icons/pwa-icon.svg" alt="Logo" className="w-8 h-8 rounded-xl" />
+            <img src="/icons/logo.png" alt="Logo" className="w-8 h-8 rounded-xl" />
             <span className="font-semibold text-foreground text-lg">{appName}</span>
           </div>
 
