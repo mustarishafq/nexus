@@ -20,7 +20,7 @@ export default function Sidebar({
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/systems', icon: Monitor, label: 'Application' },
+    { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/activity', icon: Activity, label: 'Activity Feed' },
     ...(user?.role === 'admin' ? [
