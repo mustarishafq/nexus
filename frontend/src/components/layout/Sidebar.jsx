@@ -39,7 +39,7 @@ export default function Sidebar({
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <img src="/icons/pwa-icon.svg" alt="Logo" className="w-9 h-9 rounded-xl shrink-0" />
+          <img src="/icons/logo.png" alt="Logo" className="w-9 h-9 rounded-xl shrink-0" />
           <AnimatePresence>
             {!showCompact && (
               <motion.div
