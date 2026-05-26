@@ -11,7 +11,7 @@ export default function ForgotPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const appName = appPublicSettings?.system_name || 'Nexus Brain';
+  const appName = appPublicSettings?.system_name || 'EMZI Nexus Brain';
 
   const handleSubmit = async (event) => {
     event.preventDefault();

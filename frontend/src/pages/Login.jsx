@@ -16,7 +16,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
 
   const status = searchParams.get('status');
-  const appName = appPublicSettings?.system_name || 'Nexus Brain';
+  const appName = appPublicSettings?.system_name || 'EMZI Nexus Brain';
 
   const handleSubmit = async (event) => {
     event.preventDefault();

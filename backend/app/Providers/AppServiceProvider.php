@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $settings = DB::table('app_settings')->first();
-            $systemName = $settings?->system_name ?: config('app.name', 'Nexus Brain');
+            $systemName = $settings?->system_name ?: config('app.name', 'EMZI Nexus Brain');
 
             Config::set('app.name', $systemName);
 

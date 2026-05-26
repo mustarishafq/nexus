@@ -14,7 +14,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const appName = appPublicSettings?.system_name || 'Nexus Brain';
+  const appName = appPublicSettings?.system_name || 'EMZI Nexus Brain';
 
   const handleSubmit = async (event) => {
     event.preventDefault();

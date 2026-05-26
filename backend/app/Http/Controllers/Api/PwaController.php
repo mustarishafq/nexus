@@ -12,7 +12,7 @@ class PwaController extends Controller
     public function manifest(): JsonResponse
     {
         $settings = $this->currentSettings();
-        $name = $settings->system_name ?: config('app.name', 'Nexus Brain');
+        $name = $settings->system_name ?: config('app.name', 'EMZI Nexus Brain');
 
         return response()->json([
             'name' => $name,
@@ -51,12 +51,12 @@ class PwaController extends Controller
     {
         if (! Schema::hasTable('app_settings')) {
             return (object) [
-                'system_name' => config('app.name', 'Nexus Brain'),
+                'system_name' => config('app.name', 'EMZI Nexus Brain'),
             ];
         }
 
         return DB::table('app_settings')->first() ?? (object) [
-            'system_name' => config('app.name', 'Nexus Brain'),
+            'system_name' => config('app.name', 'EMZI Nexus Brain'),
         ];
     }
 }

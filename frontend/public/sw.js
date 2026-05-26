@@ -88,8 +88,8 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = payload.title || 'Nexus Brain';
-  const body = payload.message || payload.body || 'You have a new notification in Nexus Brain.';
+  const title = payload.title || 'EMZI Nexus Brain';
+  const body = payload.message || payload.body || 'You have a new notification in EMZI Nexus Brain.';
   const url = payload.action_url || payload.url || '/notifications';
   const tag = payload.id ? `notification-${payload.id}` : undefined;
   const notificationData = { url, id: payload.id || null };

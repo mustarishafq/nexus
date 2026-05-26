@@ -16,7 +16,7 @@ export default function AdminSettings({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
-    system_name: 'Nexus Brain',
+    system_name: 'EMZI Nexus Brain',
     smtp_host: '',
     smtp_port: 587,
     smtp_username: '',
@@ -35,14 +35,14 @@ export default function AdminSettings({ embedded = false }) {
     db.appSettings.admin()
       .then((payload) => {
         setSettings({
-          system_name: payload?.system_name || 'Nexus Brain',
+          system_name: payload?.system_name || 'EMZI Nexus Brain',
           smtp_host: payload?.smtp_host || '',
           smtp_port: payload?.smtp_port || 587,
           smtp_username: payload?.smtp_username || '',
           smtp_password: payload?.smtp_password || '',
           smtp_encryption: payload?.smtp_encryption || 'tls',
           smtp_from_email: payload?.smtp_from_email || '',
-          smtp_from_name: payload?.smtp_from_name || payload?.system_name || 'Nexus Brain',
+          smtp_from_name: payload?.smtp_from_name || payload?.system_name || 'EMZI Nexus Brain',
         });
       })
       .catch((error) => {
@@ -117,7 +117,7 @@ export default function AdminSettings({ embedded = false }) {
                 id="system_name"
                 value={settings.system_name}
                 onChange={(event) => setSettings((current) => ({ ...current, system_name: event.target.value }))}
-                placeholder="Nexus Brain"
+                placeholder="EMZI Nexus Brain"
               />
             </CardContent>
           </Card>
@@ -197,7 +197,7 @@ export default function AdminSettings({ embedded = false }) {
                   id="smtp_from_name"
                   value={settings.smtp_from_name}
                   onChange={(event) => setSettings((current) => ({ ...current, smtp_from_name: event.target.value }))}
-                  placeholder="Nexus Brain"
+                  placeholder="EMZI Nexus Brain"
                 />
               </div>
             </CardContent>

@@ -49,7 +49,7 @@ export default function Sidebar({
                 className="overflow-hidden whitespace-nowrap"
               >
                 <span className="text-sidebar-foreground font-bold text-lg tracking-tight">
-                  {appPublicSettings?.system_name || 'Nexus Brain'}
+                  {appPublicSettings?.system_name || 'EMZI Nexus Brain'}
                 </span>
               </motion.div>
             )}

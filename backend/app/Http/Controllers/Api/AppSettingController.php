@@ -92,7 +92,7 @@ class AppSettingController extends Controller
     private function currentSettings(): object
     {
         $defaults = [
-            'system_name' => config('app.name', 'Nexus Brain'),
+            'system_name' => config('app.name', 'EMZI Nexus Brain'),
             'smtp_host' => null,
             'smtp_port' => null,
             'smtp_username' => null,
@@ -121,7 +121,7 @@ class AppSettingController extends Controller
         $settings = $this->currentSettings();
 
         return [
-            'system_name' => $settings->system_name ?: config('app.name', 'Nexus Brain'),
+            'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
             'web_push_enabled' => filled(config('services.web_push.public_key')) && filled(config('services.web_push.private_key')) && filled(config('services.web_push.subject')),
             'web_push_public_key' => config('services.web_push.public_key'),
         ];
@@ -132,7 +132,7 @@ class AppSettingController extends Controller
         $settings = $this->currentSettings();
 
         return [
-            'system_name' => $settings->system_name ?: config('app.name', 'Nexus Brain'),
+            'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
             'smtp_host' => $settings->smtp_host,
             'smtp_port' => $settings->smtp_port,
             'smtp_username' => $settings->smtp_username,
