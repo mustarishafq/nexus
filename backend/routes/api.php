@@ -52,6 +52,7 @@ Route::delete('/push-subscriptions', function () {
 	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
 });
 
+Route::post('applications/reorder', [ApplicationController::class, 'reorder']);
 Route::apiResource('applications', ApplicationController::class);
 Route::post('applications/{application}/launch', [ApplicationController::class, 'launch']);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);

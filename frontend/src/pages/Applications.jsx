@@ -2,7 +2,23 @@ import db, { API_ORIGIN } from '@/api/base44Client';
 import React, { useState } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +51,64 @@ const statusConfig = {
   degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
 };
 
+function SortableReorderRow({ system }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: system.id });
+
+  const config = statusConfig[system.status] || statusConfig.online;
+  const StatusIcon = config.icon;
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-4 rounded-xl border bg-card px-4 py-3 cursor-grab active:cursor-grabbing touch-none',
+        config.border,
+        isDragging && 'shadow-lg ring-2 ring-primary/30 bg-background z-10'
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="w-4 h-4 shrink-0 text-muted-foreground" />
+      {system.icon_url ? (
+        <img
+          src={toAbsoluteUrl(system.icon_url)}
+          alt={system.name}
+          className="w-10 h-10 rounded-lg object-cover shrink-0"
+        />
+      ) : (
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold shrink-0"
+          style={{ backgroundColor: system.color || '#6366f1' }}
+        >
+          {system.name?.[0]?.toUpperCase()}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm truncate">{system.name}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {system.description?.trim() || 'No description provided'}
+        </p>
+      </div>
+      <Badge className={cn('text-[10px] shrink-0', config.bg, config.color, 'border-0')}>
+        <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
+      </Badge>
+    </div>
+  );
+}
+
 export default function Applications() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSystem, setEditSystem] = useState(null);
@@ -46,6 +120,8 @@ export default function Applications() {
   const [privateAllowedEmails, setPrivateAllowedEmails] = useState([]);
   const [privateUsersPickerOpen, setPrivateUsersPickerOpen] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
+  const [reorderDialogOpen, setReorderDialogOpen] = useState(false);
+  const [orderedSystems, setOrderedSystems] = useState([]);
   const queryClient = useQueryClient();
 
   const generateApiKey = () => {
@@ -92,17 +168,26 @@ export default function Applications() {
 
   const { data: systems = [], isLoading } = useQuery({
     queryKey: ['applications'],
-    queryFn: () => db.entities.Application.list('-created_date', 50),
+    queryFn: () => db.entities.Application.list('sort_order', 50),
   });
+
+  const isAdmin = currentUser?.role === 'admin';
+
+  const openReorderDialog = () => {
+    setOrderedSystems([...systems]);
+    setReorderDialogOpen(true);
+  };
+
+  const closeReorderDialog = () => {
+    setReorderDialogOpen(false);
+    setOrderedSystems([...systems]);
+  };
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-for-private-access'],
     queryFn: () => db.entities.User.list('-created_date', 500),
     staleTime: 60000,
   });
-
-  const visibleSystems = systems;
-
   const createMut = useMutation({
     mutationFn: (data) => db.entities.Application.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
@@ -117,6 +202,33 @@ export default function Applications() {
     mutationFn: (id) => db.entities.Application.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['applications'] }),
   });
+
+  const reorderMut = useMutation({
+    mutationFn: (order) => db.reorderApplications(order),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['applications'] }),
+  });
+
+  const reorderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setOrderedSystems((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  };
+
+  const handleSaveOrder = () => {
+    reorderMut.mutate(orderedSystems.map((system) => system.id), {
+      onSuccess: () => setReorderDialogOpen(false),
+    });
+  };
 
   const [launching, setLaunching] = useState(null);
   const handleLaunch = async (system) => {
@@ -199,6 +311,35 @@ export default function Applications() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={reorderDialogOpen} onOpenChange={(open) => { if (!open) closeReorderDialog(); }}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
+            <DialogTitle>Reorder Applications</DialogTitle>
+            <p className="text-sm text-muted-foreground font-normal pt-1">
+              Drag to set the display order for everyone.
+            </p>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            <DndContext sensors={reorderSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={orderedSystems.map((system) => system.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {orderedSystems.map((system) => (
+                    <SortableReorderRow key={system.id} system={system} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+          <div className="px-6 py-4 border-t border-border/70 bg-background flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={closeReorderDialog}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveOrder} disabled={reorderMut.isPending}>
+              {reorderMut.isPending ? 'Saving...' : 'Save Order'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -206,12 +347,24 @@ export default function Applications() {
           </h1>
           {/* <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p> */}
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
-          <DialogTrigger asChild>
-            <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
-              <Plus className="w-4 h-4" /> Add
+        <div className="flex items-center gap-2">
+          {isAdmin && systems.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={openReorderDialog}
+            >
+              <ArrowUpDown className="w-4 h-4" />
+              Reorder
             </Button>
-          </DialogTrigger>
+          )}
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
+            <DialogTrigger asChild>
+              <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
+                <Plus className="w-4 h-4" /> Add
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
@@ -404,7 +557,8 @@ export default function Applications() {
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </motion.div>
 
       {/* Systems Grid */}
@@ -412,7 +566,7 @@ export default function Applications() {
         <div className="flex justify-center py-16">
           <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
         </div>
-      ) : visibleSystems.length === 0 ? (
+      ) : systems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card rounded-2xl border border-border">
           <Monitor className="w-12 h-12 mb-4 opacity-20" />
           <p className="font-medium">No applications</p>
@@ -424,10 +578,11 @@ export default function Applications() {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {visibleSystems.map((system, i) => {
+          {systems.map((system, i) => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
             const canManageSystem = currentUser?.role === 'admin' || Number(system.created_by_user_id) === Number(currentUser?.id);
+
             return (
               <motion.div
                 key={system.id}
@@ -435,20 +590,18 @@ export default function Applications() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className={cn(
-                  "bg-card rounded-2xl border overflow-hidden transition-all group relative flex flex-col",
+                  'bg-card rounded-2xl border overflow-hidden transition-all group relative flex flex-col',
                   config.border,
                   system.is_enabled
-                    ? "cursor-pointer hover:shadow-xl hover:-translate-y-0.5"
-                    : "opacity-60 cursor-not-allowed"
+                    ? 'cursor-pointer hover:shadow-xl hover:-translate-y-0.5'
+                    : 'opacity-60 cursor-not-allowed'
                 )}
                 onClick={() => handleLaunch(system)}
               >
-                {/* Status badge */}
-                <Badge className={cn("absolute top-3 right-3 text-[10px] z-10", config.bg, config.color, "border-0")}>
+                <Badge className={cn('absolute top-3 right-3 text-[10px] z-10', config.bg, config.color, 'border-0')}>
                   <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
                 </Badge>
 
-                {/* Logo + name section */}
                 <div className="flex flex-col items-center pt-8 pb-4 px-5">
                   <div className="relative mb-3">
                     {system.icon_url ? (
@@ -477,12 +630,10 @@ export default function Applications() {
                   </p>
                 </div>
 
-                {/* Launch hover overlay */}
                 {system.is_enabled && launching !== system.id && (
                   <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none" />
                 )}
 
-                {/* Footer */}
                 <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/30">
                   <span className="text-[10px] text-muted-foreground">
                     {system.visibility === 'public' ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}` : 'Private'}

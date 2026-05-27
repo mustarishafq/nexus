@@ -42,7 +42,7 @@ export default function UserManagement() {
 
   const { data: systemsRaw = [] } = useQuery({
     queryKey: ['applications'],
-    queryFn: () => db.entities.Application.list('-created_date', 50),
+    queryFn: () => db.entities.Application.list('sort_order', 50),
   });
 
   const { data: accessListRaw = [] } = useQuery({

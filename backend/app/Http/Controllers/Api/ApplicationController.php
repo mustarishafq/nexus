@@ -30,7 +30,8 @@ class ApplicationController extends Controller
         $query = $this->applyIndexQuery(
             $request,
             Application::query(),
-            ['slug', 'status', 'is_enabled', 'auth_mode', 'visibility']
+            ['slug', 'status', 'is_enabled', 'auth_mode', 'visibility'],
+            'sort_order'
         )->with('creator');
 
         if ($user->role !== 'admin') {
@@ -98,6 +99,8 @@ class ApplicationController extends Controller
         if (($validated['visibility'] ?? 'public') !== 'private') {
             $validated['private_allowed_user_emails'] = null;
         }
+
+        $validated['sort_order'] = ((int) Application::query()->max('sort_order')) + 1;
 
         $item = Application::create($validated);
 
@@ -170,6 +173,30 @@ class ApplicationController extends Controller
         $application->update($validated);
 
         return response()->json($application->fresh()->load('creator'));
+    }
+
+    public function reorder(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'order' => ['required', 'array', 'min:1'],
+            'order.*' => ['integer', 'exists:applications,id'],
+        ]);
+
+        foreach ($validated['order'] as $index => $id) {
+            Application::query()->whereKey($id)->update(['sort_order' => $index]);
+        }
+
+        return response()->json(['message' => 'Order updated']);
     }
 
     public function destroy(Application $application): JsonResponse

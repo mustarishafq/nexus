@@ -26,6 +26,7 @@ class Application extends Model
         'last_heartbeat',
         'notification_config',
         'color',
+        'sort_order',
     ];
 
     protected $appends = [

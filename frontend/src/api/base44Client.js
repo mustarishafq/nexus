@@ -277,6 +277,10 @@ export const db = {
 		return request(`/applications/${systemId}/launch`, { method: 'POST' });
 	},
 
+	async reorderApplications(order) {
+		return request('/applications/reorder', { method: 'POST', body: { order } });
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */
