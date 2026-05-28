@@ -42,7 +42,7 @@ export default function AppLayout() {
         {isFullBleed ? (
           <Outlet />
         ) : (
-          <div className="p-6 max-w-[1600px] mx-auto">
+          <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
             <Outlet />
           </div>
         )}

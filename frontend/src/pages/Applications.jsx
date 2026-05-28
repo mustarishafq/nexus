@@ -449,29 +449,31 @@ export default function Applications() {
           </div>
         </DialogContent>
       </Dialog>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Monitor className="w-6 h-6 text-primary" /> Application
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Application
           </h1>
           {/* <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p> */}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {isAdmin && systems.length > 1 && (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
+              title="Reorder"
               onClick={openReorderDialog}
             >
               <ArrowUpDown className="w-4 h-4" />
-              Reorder
+              <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
             <DialogTrigger asChild>
-              <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
-                <Plus className="w-4 h-4" /> Add
+              <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add</span>
               </Button>
             </DialogTrigger>
           <DialogContent className="sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
@@ -480,7 +482,7 @@ export default function Applications() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
               <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Name *</Label>
                   <Input name="name" defaultValue={editSystem?.name} placeholder="Booking System" required />
@@ -498,7 +500,7 @@ export default function Applications() {
                 <Label>Base URL</Label>
                 <Input name="base_url" defaultValue={editSystem?.base_url} placeholder="https://booking.company.com" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Application Type</Label>
                   <Select value={authMode} onValueChange={setAuthMode}>
@@ -643,7 +645,7 @@ export default function Applications() {
                   </label>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select name="status" defaultValue={editSystem?.status || 'online'}>
@@ -689,11 +691,14 @@ export default function Applications() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {systems.map((system, i) => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
             const canManageSystem = currentUser?.role === 'admin' || Number(system.created_by_user_id) === Number(currentUser?.id);
+            const visibilityLabel = system.visibility === 'public'
+              ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}`
+              : 'Private';
 
             return (
               <motion.div
@@ -702,10 +707,10 @@ export default function Applications() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className={cn(
-                  'bg-card rounded-2xl border overflow-hidden transition-all group relative flex flex-col',
+                  'bg-card rounded-2xl border overflow-hidden transition-all group relative flex h-full flex-col',
                   config.border,
                   system.is_enabled
-                    ? 'cursor-pointer hover:shadow-xl hover:-translate-y-0.5'
+                    ? 'cursor-pointer hover:shadow-xl sm:hover:-translate-y-0.5'
                     : 'opacity-60 cursor-not-allowed'
                 )}
                 onClick={() => handleLaunch(system)}
@@ -714,7 +719,7 @@ export default function Applications() {
                   <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
                 </Badge>
 
-                <div className="flex flex-col items-center pt-8 pb-4 px-5">
+                <div className="flex flex-1 min-w-0 flex-col items-center pt-8 pb-4 px-5">
                   <div className="relative mb-3">
                     {system.icon_url ? (
                       <img
@@ -736,8 +741,8 @@ export default function Applications() {
                       </div>
                     )}
                   </div>
-                  <h3 className="font-semibold text-sm text-center leading-tight">{system.name}</h3>
-                  <p className="text-xs text-muted-foreground text-center line-clamp-2">
+                  <h3 className="font-semibold text-sm text-center leading-tight line-clamp-2 w-full">{system.name}</h3>
+                  <p className="text-xs text-muted-foreground text-center line-clamp-2 mt-0.5 w-full">
                     {system.description?.trim() || 'No description provided'}
                   </p>
                 </div>
@@ -746,30 +751,30 @@ export default function Applications() {
                   <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none" />
                 )}
 
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/30">
-                  <span className="text-[10px] text-muted-foreground">
-                    {system.visibility === 'public' ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}` : 'Private'}
+                <div className="mt-auto flex items-center justify-between gap-2 border-t border-border bg-muted/30 px-4 py-2.5">
+                  <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1" title={visibilityLabel}>
+                    {visibilityLabel}
                   </span>
                   {canManageSystem && (
-                    <div className="flex gap-0.5">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <Badge variant="outline" className="text-[9px] h-5 mr-1">{system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}</Badge>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-8 w-8 sm:h-6 sm:w-6 touch-manipulation"
                         title="Edit"
                         onClick={(e) => { e.stopPropagation(); openDialog(system); }}
                       >
-                        <Pencil className="w-3 h-3" />
+                        <Pencil className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-destructive"
+                        className="h-8 w-8 sm:h-6 sm:w-6 text-destructive touch-manipulation"
                         title="Delete"
                         onClick={(e) => { e.stopPropagation(); deleteMut.mutate(system.id); }}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                       </Button>
                     </div>
                   )}
