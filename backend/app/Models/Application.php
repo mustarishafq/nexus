@@ -19,6 +19,7 @@ class Application extends Model
         'status',
         'api_key',
         'auth_mode',
+        'open_mode',
         'visibility',
         'created_by_user_id',
         'private_allowed_user_emails',

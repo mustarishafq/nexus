@@ -1,5 +1,6 @@
 import db, { API_ORIGIN } from '@/api/base44Client';
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown } from 'lucide-react';
+import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,13 +110,124 @@ function SortableReorderRow({ system }) {
   );
 }
 
+const OPEN_MODE_OPTIONS = [
+  {
+    value: 'embedded',
+    label: 'In-app browser',
+    description: 'Keeps Nexus sidebar visible while browsing',
+    icon: PanelLeft,
+    badge: 'Default',
+  },
+  {
+    value: 'new_tab',
+    label: 'New browser tab',
+    description: 'Opens in a separate tab outside Nexus',
+    icon: ExternalLink,
+  },
+  {
+    value: 'same_window',
+    label: 'Same window',
+    description: 'Navigates away from Nexus entirely',
+    icon: Maximize2,
+  },
+];
+
+function OpenModePreview({ mode }) {
+  if (mode === 'embedded') {
+    return (
+      <div className="flex h-14 w-full overflow-hidden rounded-lg border border-border/80 bg-muted/30">
+        <div className="flex w-5 shrink-0 flex-col gap-1 border-r border-border/60 bg-primary/10 p-1">
+          <div className="h-1 w-full rounded-full bg-primary/30" />
+          <div className="h-1 w-3/4 rounded-full bg-primary/20" />
+          <div className="h-1 w-full rounded-full bg-primary/20" />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1 p-1.5">
+          <div className="h-2 rounded bg-muted-foreground/15" />
+          <div className="flex-1 rounded-md border border-dashed border-primary/25 bg-background/80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'new_tab') {
+    return (
+      <div className="flex h-14 w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-muted/30">
+        <div className="flex h-4 items-end gap-1 border-b border-border/60 bg-muted/50 px-1.5 pb-0">
+          <div className="h-3 w-10 rounded-t-md border border-b-0 border-border/60 bg-background shadow-sm" />
+          <div className="mb-0.5 ml-auto h-2 w-2 rounded-full bg-muted-foreground/20" />
+        </div>
+        <div className="flex flex-1 items-center justify-center p-1.5">
+          <div className="flex h-full w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/20 bg-background/80">
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-14 w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-background">
+      <div className="h-3 border-b border-border/60 bg-muted/40" />
+      <div className="flex flex-1 flex-col items-center justify-center gap-1 p-2">
+        <Maximize2 className="h-3.5 w-3.5 text-muted-foreground/40" />
+        <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/15" />
+      </div>
+    </div>
+  );
+}
+
+function OpenModeSelector({ value, onChange }) {
+  return (
+    <div className="space-y-3">
+      <Label>Open Link In</Label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {OPEN_MODE_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          const selected = value === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-all hover:border-primary/40',
+                selected
+                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm'
+                  : 'border-border bg-card hover:bg-muted/30'
+              )}
+            >
+              <OpenModePreview mode={option.value} />
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Icon className={cn('h-3.5 w-3.5 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')} />
+                  <p className="text-sm font-medium leading-none">{option.label}</p>
+                  {option.badge ? (
+                    <Badge variant="secondary" className="h-4 px-1 text-[9px]">{option.badge}</Badge>
+                  ) : null}
+                </div>
+                <p className="text-[11px] leading-snug text-muted-foreground">{option.description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Some sites block in-app embedding — use New browser tab for those.
+      </p>
+    </div>
+  );
+}
+
 export default function Applications() {
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSystem, setEditSystem] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [authMode, setAuthMode] = useState('jwt');
+  const [openMode, setOpenMode] = useState('embedded');
   const [visibility, setVisibility] = useState('private');
   const [privateAllowedEmails, setPrivateAllowedEmails] = useState([]);
   const [privateUsersPickerOpen, setPrivateUsersPickerOpen] = useState(false);
@@ -153,6 +265,7 @@ export default function Applications() {
     setLogoUrl(system?.icon_url || '');
     setApiKey(system?.api_key || '');
     setAuthMode(system?.auth_mode || 'jwt');
+    setOpenMode(system?.open_mode || 'embedded');
     setVisibility(system?.visibility || 'private');
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setDialogOpen(true);
@@ -190,12 +303,12 @@ export default function Applications() {
   });
   const createMut = useMutation({
     mutationFn: (data) => db.entities.Application.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.Application.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
   });
 
   const deleteMut = useMutation({
@@ -234,39 +347,34 @@ export default function Applications() {
   const handleLaunch = async (system) => {
     if (!system.is_enabled || launching === system.id) return;
 
-    const preloadRedirectTab = system.auth_mode === 'redirect'
-      ? window.open('', '_blank')
-      : null;
-
     setLaunching(system.id);
 
     try {
-      const { launch_url, auth_mode, open_in_new_tab } = await db.launchSystem(system.id);
+      const { launch_url, auth_mode, open_mode } = await db.launchSystem(system.id);
+      const resolvedOpenMode = open_mode || system.open_mode || 'embedded';
 
-      if (auth_mode === 'redirect' || open_in_new_tab) {
-        if (preloadRedirectTab) {
-          preloadRedirectTab.opener = null;
-          preloadRedirectTab.location = launch_url;
-        } else {
-          const tab = window.open(launch_url, '_blank');
+      if (auth_mode === 'redirect') {
+        if (resolvedOpenMode === 'embedded') {
+          navigate(`/applications/${system.id}/view`);
+          setLaunching(null);
+          return;
+        }
+
+        if (resolvedOpenMode === 'new_tab') {
+          const tab = window.open(launch_url, '_blank', 'noopener,noreferrer');
           if (tab) {
             tab.opener = null;
           }
+          setLaunching(null);
+          return;
         }
 
-        setLaunching(null);
+        window.location.href = launch_url;
         return;
-      }
-
-      if (preloadRedirectTab) {
-        preloadRedirectTab.close();
       }
 
       window.location.href = launch_url;
     } catch (err) {
-      if (preloadRedirectTab) {
-        preloadRedirectTab.close();
-      }
       alert(err.message);
       setLaunching(null);
     }
@@ -296,6 +404,7 @@ export default function Applications() {
       base_url: form.get('base_url'),
       api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
       auth_mode: authMode,
+      open_mode: authMode === 'redirect' ? openMode : undefined,
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
       status: form.get('status'),
@@ -359,7 +468,7 @@ export default function Applications() {
               Reorder
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
             <DialogTrigger asChild>
               <Button className="gap-1.5" size="sm" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" /> Add
@@ -418,6 +527,9 @@ export default function Applications() {
                   )}
                 </div>
               </div>
+              {authMode === 'redirect' && (
+                <OpenModeSelector value={openMode} onChange={setOpenMode} />
+              )}
               {authMode === 'jwt' && (
                 <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>

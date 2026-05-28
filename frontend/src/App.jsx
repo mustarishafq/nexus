@@ -9,6 +9,7 @@ import Dashboard from '@/pages/Dashboard';
 import NotificationCenter from '@/pages/NotificationCenter';
 import ActivityTimeline from '@/pages/ActivityTimeline';
 import Applications from '@/pages/Applications';
+import ApplicationBrowser from '@/pages/ApplicationBrowser';
 import BroadcastCenter from '@/pages/BroadcastCenter';
 import SystemEvents from '@/pages/SystemEvents';
 import AdminCalendar from '@/pages/AdminCalendar';
@@ -53,6 +54,7 @@ const ProtectedRoutes = () => {
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
         <Route path="/applications" element={<Applications />} />
+        <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
         <Route path="/admin/calendar" element={<AdminCalendar />} />

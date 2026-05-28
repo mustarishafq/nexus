@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 export default function AppLayout() {
   const isMobile = useIsMobile();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
 
   useEffect(() => {
     if (!isMobile) {
@@ -26,18 +28,24 @@ export default function AppLayout() {
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
       />
-      <TopBar
-        sidebarWidth={sidebarWidth}
-        isMobile={isMobile}
-        onMenuToggle={() => setMobileSidebarOpen((open) => !open)}
-      />
+      {!isFullBleed ? (
+        <TopBar
+          sidebarWidth={sidebarWidth}
+          isMobile={isMobile}
+          onMenuToggle={() => setMobileSidebarOpen((open) => !open)}
+        />
+      ) : null}
       <main
-        className="pt-16 min-h-screen transition-all duration-200"
+        className={`min-h-screen transition-all duration-200${isFullBleed ? ' overflow-hidden' : ' pt-16'}`}
         style={{ marginLeft: sidebarWidth }}
       >
-        <div className="p-6 max-w-[1600px] mx-auto">
+        {isFullBleed ? (
           <Outlet />
-        </div>
+        ) : (
+          <div className="p-6 max-w-[1600px] mx-auto">
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   );

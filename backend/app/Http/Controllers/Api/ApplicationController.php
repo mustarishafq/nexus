@@ -82,6 +82,7 @@ class ApplicationController extends Controller
             'status' => ['sometimes', Rule::in(['online', 'offline', 'maintenance', 'degraded'])],
             'api_key' => ['nullable', 'string', 'max:255'],
             'auth_mode' => ['sometimes', Rule::in(['jwt', 'redirect'])],
+            'open_mode' => ['sometimes', Rule::in(['embedded', 'new_tab', 'same_window'])],
             'visibility' => ['sometimes', Rule::in(['public', 'private'])],
             'private_allowed_user_emails' => ['nullable', 'array'],
             'private_allowed_user_emails.*' => ['email', 'max:255'],
@@ -90,6 +91,10 @@ class ApplicationController extends Controller
             'notification_config' => ['nullable', 'array'],
             'color' => ['nullable', 'string', 'max:20'],
         ]);
+
+        if (($validated['auth_mode'] ?? 'jwt') !== 'redirect') {
+            unset($validated['open_mode']);
+        }
 
         $validated['created_by_user_id'] = $user->id;
         if ($user->role !== 'admin') {
@@ -148,6 +153,7 @@ class ApplicationController extends Controller
             'status' => ['sometimes', Rule::in(['online', 'offline', 'maintenance', 'degraded'])],
             'api_key' => ['nullable', 'string', 'max:255'],
             'auth_mode' => ['sometimes', Rule::in(['jwt', 'redirect'])],
+            'open_mode' => ['sometimes', Rule::in(['embedded', 'new_tab', 'same_window'])],
             'visibility' => ['sometimes', Rule::in(['public', 'private'])],
             'private_allowed_user_emails' => ['nullable', 'array'],
             'private_allowed_user_emails.*' => ['email', 'max:255'],
@@ -159,6 +165,11 @@ class ApplicationController extends Controller
 
         if ($user->role !== 'admin') {
             $validated = Arr::except($validated, ['visibility']);
+        }
+
+        $nextAuthMode = $validated['auth_mode'] ?? $application->auth_mode;
+        if ($nextAuthMode !== 'redirect') {
+            unset($validated['open_mode']);
         }
 
         if (array_key_exists('private_allowed_user_emails', $validated)) {
@@ -260,7 +271,7 @@ class ApplicationController extends Controller
             return response()->json([
                 'launch_url' => $launchUrl,
                 'auth_mode'  => 'redirect',
-                'open_in_new_tab' => true,
+                'open_mode'  => $application->open_mode ?? 'embedded',
             ]);
         }
 
