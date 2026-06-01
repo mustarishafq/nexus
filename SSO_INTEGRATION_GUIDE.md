@@ -90,6 +90,20 @@ https://nexus.example.com/systems
 
 ---
 
+## WordPress
+
+Nexus ships a ready-made must-use plugin for WordPress. See **[wordpress/README.md](wordpress/README.md)** for install steps.
+
+Quick summary:
+
+1. Copy `wordpress/mu-plugins/nexus-sso.php` and `wordpress/nexus-sso/` into `wp-content/mu-plugins/`
+2. Run `composer install --no-dev` inside the `nexus-sso` folder
+3. Define `NEXUS_API_KEY` and `NEXUS_ISSUER` in `wp-config.php` (same key as the Nexus application)
+4. Register WordPress in Nexus with **JWT SSO**, matching Base URL and API Key
+5. Click **Launch** in Nexus to auto-login
+
+---
+
 ## Step 3 — Code examples
 
 ### Laravel (PHP)
