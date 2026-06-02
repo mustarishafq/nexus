@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -30,6 +31,8 @@ class User extends Authenticatable
     protected $appends = [
         'created_date',
         'updated_date',
+        'access_group_ids',
+        'access_group_names',
     ];
 
     /**
@@ -56,6 +59,43 @@ class User extends Authenticatable
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
         ];
+    }
+
+    public function accessGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(AccessGroup::class)->withTimestamps();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function getAccessGroupIdsAttribute(): array
+    {
+        if ($this->relationLoaded('accessGroups')) {
+            return $this->accessGroups
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+        }
+
+        return $this->accessGroups()
+            ->pluck('access_groups.id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getAccessGroupNamesAttribute(): array
+    {
+        if ($this->relationLoaded('accessGroups')) {
+            return $this->accessGroups->pluck('name')->values()->all();
+        }
+
+        return $this->accessGroups()->pluck('name')->values()->all();
     }
 
     public function getCreatedDateAttribute(): ?string

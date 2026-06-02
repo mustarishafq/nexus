@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccessGroupController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\AuthController;
@@ -55,6 +56,7 @@ Route::delete('/push-subscriptions', function () {
 Route::post('applications/reorder', [ApplicationController::class, 'reorder']);
 Route::apiResource('applications', ApplicationController::class);
 Route::post('applications/{application}/launch', [ApplicationController::class, 'launch']);
+Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);
 Route::apiResource('broadcasts', BroadcastController::class);
 Route::apiResource('notifications', NotificationController::class);

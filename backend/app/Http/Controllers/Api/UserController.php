@@ -18,7 +18,7 @@ class UserController extends Controller
     {
         $users = $this->applyIndexQuery(
             $request,
-            User::query(),
+            User::query()->with('accessGroups'),
             ['role', 'email']
         )->get();
 
@@ -37,8 +37,13 @@ class UserController extends Controller
             'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8'],
             'role'      => ['sometimes', 'string', 'max:50'],
+            'access_group_ids' => ['sometimes', 'array'],
+            'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
         ]);
+
+        $groupIds = $validated['access_group_ids'] ?? null;
+        unset($validated['access_group_ids']);
 
         $user = User::create([
             'name'                   => $validated['full_name'],
@@ -50,7 +55,11 @@ class UserController extends Controller
             'force_password_change'  => true,
         ]);
 
-        return response()->json($user, 201);
+        if ($groupIds !== null) {
+            $user->accessGroups()->sync($groupIds);
+        }
+
+        return response()->json($user->load('accessGroups'), 201);
     }
 
     /**
@@ -209,10 +218,15 @@ class UserController extends Controller
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['sometimes', 'string', 'max:50'],
+            'access_group_ids' => ['sometimes', 'array'],
+            'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'password' => ['sometimes', 'string', 'min:8'],
         ]);
+
+        $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;
+        unset($validated['access_group_ids']);
 
         // Hash password if provided
         if (isset($validated['password'])) {
@@ -221,6 +235,10 @@ class UserController extends Controller
 
         $user->update($validated);
 
-        return response()->json($user->fresh());
+        if ($groupIds !== null) {
+            $user->accessGroups()->sync($groupIds);
+        }
+
+        return response()->json($user->fresh()->load('accessGroups'));
     }
 }

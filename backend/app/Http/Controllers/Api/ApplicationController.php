@@ -7,8 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Application;
 use App\Models\User;
-use App\Models\UserSystemAccess;
 use App\Support\ApiTokenAuth;
+use App\Support\UserApplicationAccess;
 use Firebase\JWT\JWT;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,8 +35,7 @@ class ApplicationController extends Controller
         )->with('creator');
 
         if ($user->role !== 'admin') {
-            $accessRecord = UserSystemAccess::query()->where('user_email', $user->email)->first();
-            $allowedPublicSlugs = $accessRecord ? array_values(array_filter((array) $accessRecord->allowed_system_slugs, fn ($slug) => is_string($slug) && $slug !== '')) : null;
+            $allowedPublicSlugs = UserApplicationAccess::allowedPublicSlugs($user);
 
             $query->where(function ($systems) use ($user, $allowedPublicSlugs) {
                 $systems->where(function ($publicSystems) use ($allowedPublicSlugs) {
@@ -339,13 +338,11 @@ class ApplicationController extends Controller
             return in_array($user->email, $allowedEmails, true);
         }
 
-        $accessRecord = UserSystemAccess::query()->where('user_email', $user->email)->first();
+        $allowedPublicSlugs = UserApplicationAccess::allowedPublicSlugs($user);
 
-        if (! $accessRecord) {
+        if ($allowedPublicSlugs === null) {
             return true;
         }
-
-        $allowedPublicSlugs = array_values(array_filter((array) $accessRecord->allowed_system_slugs, fn ($slug) => is_string($slug) && $slug !== ''));
 
         return in_array($application->slug, $allowedPublicSlugs, true);
     }

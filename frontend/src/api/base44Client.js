@@ -7,6 +7,7 @@ const ENTITY_ENDPOINTS = {
 	User: 'users',
 	Application: 'applications',
 	UserSystemAccess: 'user-system-accesses',
+	AccessGroup: 'access-groups',
 	Broadcast: 'broadcasts',
 	Notification: 'notifications',
 	SystemEvent: 'system-events',
