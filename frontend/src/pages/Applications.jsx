@@ -25,6 +25,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -234,6 +244,9 @@ export default function Applications() {
   const [copiedApiKey, setCopiedApiKey] = useState(false);
   const [reorderDialogOpen, setReorderDialogOpen] = useState(false);
   const [orderedSystems, setOrderedSystems] = useState([]);
+  const [pendingDeleteSystem, setPendingDeleteSystem] = useState(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [copiedDeleteName, setCopiedDeleteName] = useState(false);
   const queryClient = useQueryClient();
 
   const generateApiKey = () => {
@@ -313,7 +326,12 @@ export default function Applications() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => db.entities.Application.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['applications'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+      setPendingDeleteSystem(null);
+      setDeleteConfirmName('');
+      setCopiedDeleteName(false);
+    },
   });
 
   const reorderMut = useMutation({
@@ -342,6 +360,28 @@ export default function Applications() {
       onSuccess: () => setReorderDialogOpen(false),
     });
   };
+
+  const closeDeleteDialog = () => {
+    setPendingDeleteSystem(null);
+    setDeleteConfirmName('');
+    setCopiedDeleteName(false);
+  };
+
+  const copyDeleteName = () => {
+    if (!pendingDeleteSystem?.name) return;
+    navigator.clipboard.writeText(pendingDeleteSystem.name);
+    setCopiedDeleteName(true);
+    setTimeout(() => setCopiedDeleteName(false), 2000);
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDeleteSystem || deleteConfirmName !== pendingDeleteSystem.name) return;
+    deleteMut.mutate(pendingDeleteSystem.id);
+  };
+
+  const canConfirmDelete = Boolean(
+    pendingDeleteSystem && deleteConfirmName === pendingDeleteSystem.name
+  );
 
   const [launching, setLaunching] = useState(null);
   const handleLaunch = async (system) => {
@@ -772,7 +812,7 @@ export default function Applications() {
                         size="icon"
                         className="h-8 w-8 sm:h-6 sm:w-6 text-destructive touch-manipulation"
                         title="Delete"
-                        onClick={(e) => { e.stopPropagation(); deleteMut.mutate(system.id); }}
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmName(''); setPendingDeleteSystem(system); }}
                       >
                         <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                       </Button>
@@ -784,6 +824,62 @@ export default function Applications() {
           })}
         </div>
       )}
+
+      <AlertDialog open={Boolean(pendingDeleteSystem)} onOpenChange={(open) => !open && closeDeleteDialog()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteSystem
+                ? `"${pendingDeleteSystem.name}" will be permanently removed. Users will lose access to this application.`
+                : 'This application will be permanently removed.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-1">
+            <Label htmlFor="delete-confirm-name">
+              Type <span className="font-medium text-foreground">{pendingDeleteSystem?.name}</span> to confirm
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="delete-confirm-name"
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                placeholder={pendingDeleteSystem?.name || 'Application name'}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={deleteMut.isPending}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={copyDeleteName}
+                disabled={!pendingDeleteSystem?.name || deleteMut.isPending}
+                title="Copy application name"
+                className="shrink-0"
+              >
+                {copiedDeleteName ? (
+                  <Check className="w-4 h-4 text-success" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Copy the name and paste it above to confirm.</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteMut.isPending || !canConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMut.isPending ? 'Deleting...' : 'Delete Application'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
