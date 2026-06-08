@@ -27,7 +27,7 @@ class User extends Authenticatable
         'force_password_change',
         'notification_settings',
         'date_of_birth',
-        'service_start_date',
+        'joined_at',
     ];
 
     protected $appends = [
@@ -61,7 +61,7 @@ class User extends Authenticatable
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
             'date_of_birth' => 'date',
-            'service_start_date' => 'date',
+            'joined_at' => 'date',
         ];
     }
 
@@ -120,8 +120,8 @@ class User extends Authenticatable
             $array['date_of_birth'] = $this->date_of_birth->toDateString();
         }
 
-        if ($this->service_start_date) {
-            $array['service_start_date'] = $this->service_start_date->toDateString();
+        if ($this->joined_at) {
+            $array['joined_at'] = $this->joined_at->toDateString();
         }
 
         return $array;

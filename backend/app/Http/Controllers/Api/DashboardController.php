@@ -34,14 +34,14 @@ class DashboardController extends Controller
 
         $serviceUsers = User::query()
             ->where('is_approved', true)
-            ->whereNotNull('service_start_date')
-            ->whereMonth('service_start_date', $month)
-            ->whereDay('service_start_date', $day)
-            ->whereDate('service_start_date', '<', $todayDate)
+            ->whereNotNull('joined_at')
+            ->whereMonth('joined_at', $month)
+            ->whereDay('joined_at', $day)
+            ->whereDate('joined_at', '<', $todayDate)
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'name', 'email', 'service_start_date'])
+            ->get(['id', 'full_name', 'name', 'email', 'joined_at'])
             ->filter(function (User $user) use ($today) {
-                return ($today->year - $user->service_start_date->year) >= 1;
+                return ($today->year - $user->joined_at->year) >= 1;
             })
             ->values();
 
@@ -72,8 +72,8 @@ class DashboardController extends Controller
                     'id' => $user->id,
                     'full_name' => $user->full_name ?: $user->name,
                     'email' => $user->email,
-                    'service_start_date' => $user->service_start_date?->toDateString(),
-                    'years_of_service' => $today->year - $user->service_start_date->year,
+                    'joined_at' => $user->joined_at?->toDateString(),
+                    'years_of_service' => $today->year - $user->joined_at->year,
                 ],
                 $this->wishSummary($user->id, 'service_anniversary', $todayDate, $currentUser, $wishesByKey)
             );
@@ -228,16 +228,16 @@ class DashboardController extends Controller
                 && $recipient->date_of_birth->day === $date->day;
         }
 
-        if (! $recipient->service_start_date) {
+        if (! $recipient->joined_at) {
             return false;
         }
 
-        if ($recipient->service_start_date->toDateString() >= $celebrationDate) {
+        if ($recipient->joined_at->toDateString() >= $celebrationDate) {
             return false;
         }
 
-        return $recipient->service_start_date->month === $date->month
-            && $recipient->service_start_date->day === $date->day
-            && ($date->year - $recipient->service_start_date->year) >= 1;
+        return $recipient->joined_at->month === $date->month
+            && $recipient->joined_at->day === $date->day
+            && ($date->year - $recipient->joined_at->year) >= 1;
     }
 }

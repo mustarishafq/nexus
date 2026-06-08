@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->date('date_of_birth')->nullable()->after('notification_settings');
-            $table->date('service_start_date')->nullable()->after('date_of_birth');
+            $table->date('date_of_birth')->nullable()->after('remember_token');
+            $table->date('joined_at')->nullable()->after('date_of_birth');
         });
     }
 
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['date_of_birth', 'service_start_date']);
+            $table->dropColumn(['date_of_birth', 'joined_at']);
         });
     }
 };

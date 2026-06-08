@@ -393,7 +393,7 @@ export default function UserManagement() {
       access_group_ids: new Set(getUserGroupIds(user)),
       password: '',
       date_of_birth: formatDateForInput(user.date_of_birth),
-      service_start_date: formatDateForInput(user.service_start_date),
+      joined_at: formatDateForInput(user.joined_at),
     });
   };
 
@@ -409,7 +409,7 @@ export default function UserManagement() {
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
         date_of_birth: editForm.date_of_birth || null,
-        service_start_date: editForm.service_start_date || null,
+        joined_at: editForm.joined_at || null,
       };
       if (editForm.password) {
         updateData.password = editForm.password;
@@ -987,11 +987,11 @@ export default function UserManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Service Start Date</Label>
+                  <Label>Joined Date</Label>
                   <Input
                     type="date"
-                    value={editForm.service_start_date || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, service_start_date: e.target.value }))}
+                    value={editForm.joined_at || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, joined_at: e.target.value }))}
                   />
                 </div>
               </div>
