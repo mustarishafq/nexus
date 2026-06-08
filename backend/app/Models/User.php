@@ -26,6 +26,8 @@ class User extends Authenticatable
         'is_approved',
         'force_password_change',
         'notification_settings',
+        'date_of_birth',
+        'service_start_date',
     ];
 
     protected $appends = [
@@ -58,6 +60,8 @@ class User extends Authenticatable
             'is_approved' => 'boolean',
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
+            'date_of_birth' => 'date',
+            'service_start_date' => 'date',
         ];
     }
 
@@ -106,5 +110,20 @@ class User extends Authenticatable
     public function getUpdatedDateAttribute(): ?string
     {
         return $this->updated_at?->toISOString();
+    }
+
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+
+        if ($this->date_of_birth) {
+            $array['date_of_birth'] = $this->date_of_birth->toDateString();
+        }
+
+        if ($this->service_start_date) {
+            $array['service_start_date'] = $this->service_start_date->toDateString();
+        }
+
+        return $array;
     }
 }

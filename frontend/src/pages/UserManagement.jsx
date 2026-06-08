@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
+import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -392,6 +392,8 @@ export default function UserManagement() {
       is_approved: Boolean(user.is_approved),
       access_group_ids: new Set(getUserGroupIds(user)),
       password: '',
+      date_of_birth: formatDateForInput(user.date_of_birth),
+      service_start_date: formatDateForInput(user.service_start_date),
     });
   };
 
@@ -406,6 +408,8 @@ export default function UserManagement() {
         role: editForm.role,
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
+        date_of_birth: editForm.date_of_birth || null,
+        service_start_date: editForm.service_start_date || null,
       };
       if (editForm.password) {
         updateData.password = editForm.password;
@@ -973,6 +977,27 @@ export default function UserManagement() {
                   placeholder="Leave blank to keep current password"
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Date of Birth</Label>
+                  <Input
+                    type="date"
+                    value={editForm.date_of_birth || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Service Start Date</Label>
+                  <Input
+                    type="date"
+                    value={editForm.service_start_date || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, service_start_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Used for today&apos;s birthdays and service anniversaries on the dashboard.
+              </p>
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
                 <Button type="submit" disabled={editSaving}>

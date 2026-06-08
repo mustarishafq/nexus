@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { clearBirthdayShownKeys } from '@/lib/birthday';
+
 export const API_ORIGIN = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
 const AUTH_TOKEN_KEY = 'nexus_auth_token';
@@ -169,6 +171,7 @@ export const db = {
 			}
 
 			localStorage.removeItem(AUTH_TOKEN_KEY);
+			clearBirthdayShownKeys();
 			if (redirectTo) {
 				window.location.href = redirectTo;
 			}
@@ -204,6 +207,21 @@ export const db = {
 
 		async remove(data) {
 			return request('/push-subscriptions', { method: 'DELETE', body: data });
+		},
+	},
+
+	dashboard: {
+		async celebrations({ date } = {}) {
+			const query = date ? `?date=${encodeURIComponent(date)}` : '';
+			return request(`/dashboard/celebrations${query}`);
+		},
+
+        async sendReaction(data) {
+			return request('/dashboard/celebrations/wishes', { method: 'POST', body: data });
+		},
+
+		async removeReaction(reactionId) {
+			return request(`/dashboard/celebrations/wishes/${reactionId}`, { method: 'DELETE' });
 		},
 	},
 

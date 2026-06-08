@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastController;
 use App\Http\Controllers\Api\CalendarEventController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
@@ -29,6 +30,9 @@ Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);
+Route::get('/dashboard/celebrations', [DashboardController::class, 'celebrations']);
+Route::post('/dashboard/celebrations/wishes', [DashboardController::class, 'storeWish']);
+Route::delete('/dashboard/celebrations/wishes/{celebrationWish}', [DashboardController::class, 'destroyWish']);
 Route::get('/google/oauth/status', [GoogleOAuthController::class, 'status']);
 Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);

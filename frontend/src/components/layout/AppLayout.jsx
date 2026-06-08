@@ -3,6 +3,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
 
 export default function AppLayout() {
   const isMobile = useIsMobile();
@@ -21,6 +22,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      <BirthdayCelebrationGate />
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(!collapsed)}

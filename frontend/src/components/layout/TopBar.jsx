@@ -1,6 +1,7 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 
 import { Bell, Search, LogOut, User, ChevronDown, Menu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [user, setUser] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -94,7 +96,7 @@ export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
                 <User className="w-4 h-4 mr-2" /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => db.auth.logout()} className="text-destructive">
+              <DropdownMenuItem onClick={() => logout()} className="text-destructive">
                 <LogOut className="w-4 h-4 mr-2" /> Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
+import { clearBirthdayShownKeys } from '@/lib/birthday';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function Login() {
         email: form.get('email'),
         password: form.get('password'),
       });
+      clearBirthdayShownKeys();
       await checkUserAuth();
       navigate('/', { replace: true });
     } catch (err) {

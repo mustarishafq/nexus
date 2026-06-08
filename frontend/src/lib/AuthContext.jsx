@@ -1,5 +1,6 @@
 import db from '@/api/base44Client';
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { clearBirthdayShownKeys } from '@/lib/birthday';
 
 const AuthContext = createContext();
 
@@ -101,13 +102,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = (shouldRedirect = true) => {
+    clearBirthdayShownKeys();
     setUser(null);
     setIsAuthenticated(false);
     setForcePasswordChange(false);
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
-      db.auth.logout(window.location.href);
+      db.auth.logout('/login');
     } else {
       // Just remove the token without redirect
       db.auth.logout();

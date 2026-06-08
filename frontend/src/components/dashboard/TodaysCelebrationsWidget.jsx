@@ -1,0 +1,319 @@
+import db from '@/api/base44Client';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { Cake, Award, PartyPopper, SmilePlus } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+const DEFAULT_REACTIONS = ['🎉', '🎂', '👏', '🎈', '❤️', '🥳', '🙌'];
+
+function ReactionCountPills({ reactionCounts }) {
+  const entries = Object.entries(reactionCounts);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+      {entries.map(([emoji, count]) => (
+        <span
+          key={emoji}
+          className="inline-flex items-center justify-center h-6 min-w-6 px-1 rounded-full bg-muted border border-border/70 text-sm leading-none shadow-sm"
+          title={`${count} reaction${count === 1 ? '' : 's'}`}
+        >
+          <span className="text-xs">{emoji}</span>
+          {count > 1 ? (
+            <span className="text-[9px] font-semibold text-muted-foreground ml-0.5 tabular-nums">{count}</span>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CelebrationFeedCard({
+  person,
+  celebrationType,
+  celebrationDate,
+  badge,
+  accent,
+  reactions,
+  onReact,
+  isSubmitting,
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const initial = person.full_name?.[0]?.toUpperCase() || person.email?.[0]?.toUpperCase() || '?';
+  const canReact = person.can_react ?? person.can_wish !== false;
+  const myReaction = person.my_reaction?.reaction ?? person.my_wish?.reaction ?? null;
+  const reactionCounts = person.reaction_counts || {};
+
+  const accentStyles = {
+    birthday: {
+      avatar: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+      badge: 'bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/20',
+    },
+    anniversary: {
+      avatar: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    },
+  }[accent];
+
+  const handleReact = (reaction) => {
+    if (!canReact || isSubmitting) return;
+
+    const reactionId = person.my_reaction?.id ?? person.my_wish?.id;
+    if (myReaction === reaction && reactionId) {
+      onReact({ removeReactionId: reactionId });
+      setPickerOpen(false);
+      return;
+    }
+
+    onReact({
+      recipientUserId: person.id,
+      celebrationType,
+      celebrationDate,
+      reaction,
+    });
+    setPickerOpen(false);
+  };
+
+  return (
+    <article className="rounded-lg border border-border/80 bg-background overflow-hidden flex flex-col h-full min-w-0">
+      <div className="flex items-start gap-2 p-2.5 min-w-0">
+        <div
+          className={cn(
+            'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
+            accentStyles.avatar
+          )}
+        >
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold truncate leading-tight">{person.full_name || person.email}</p>
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 h-4', accentStyles.badge)}>
+              {badge}
+            </Badge>
+          </div>
+          <ReactionCountPills reactionCounts={reactionCounts} />
+        </div>
+
+        {canReact ? (
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                title="React"
+                className={cn(
+                  'shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                  myReaction && 'border-primary/30 bg-primary/5 text-primary'
+                )}
+              >
+                {myReaction ? (
+                  <span className="text-sm leading-none">{myReaction}</span>
+                ) : (
+                  <SmilePlus className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-2">
+              <div className="flex gap-1">
+                {reactions.map((reaction) => (
+                  <button
+                    key={reaction}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleReact(reaction)}
+                    title={myReaction === reaction ? 'Remove reaction' : `React with ${reaction}`}
+                    className={cn(
+                      'h-9 w-9 rounded-full text-lg transition-transform hover:scale-110 hover:bg-muted',
+                      myReaction === reaction && 'bg-primary/10 ring-2 ring-primary/30'
+                    )}
+                  >
+                    {reaction}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function CelebrationFeed({
+  items,
+  celebrationType,
+  celebrationDate,
+  accent,
+  badgeFor,
+  reactions,
+  onReact,
+  isSubmitting,
+  emptyMessage,
+}) {
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-6 col-span-full">{emptyMessage}</p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      {items.map((person) => (
+        <CelebrationFeedCard
+          key={person.id}
+          person={person}
+          celebrationType={celebrationType}
+          celebrationDate={celebrationDate}
+          badge={badgeFor(person)}
+          accent={accent}
+          reactions={reactions}
+          onReact={onReact}
+          isSubmitting={isSubmitting}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function TodaysCelebrationsWidget() {
+  const localDate = format(new Date(), 'yyyy-MM-dd');
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['dashboard-celebrations', localDate],
+    queryFn: () => db.dashboard.celebrations({ date: localDate }),
+    staleTime: 60 * 1000,
+  });
+
+  const reactMutation = useMutation({
+    mutationFn: async ({ removeReactionId, recipientUserId, celebrationType, celebrationDate, reaction }) => {
+      if (removeReactionId) {
+        return db.dashboard.removeReaction(removeReactionId);
+      }
+      return db.dashboard.sendReaction({
+        recipient_user_id: recipientUserId,
+        celebration_type: celebrationType,
+        celebration_date: celebrationDate,
+        reaction,
+      });
+    },
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-celebrations', localDate] });
+      toast.success(variables.removeReactionId ? 'Reaction removed.' : 'Reaction sent!');
+    },
+    onError: (error) => {
+      toast.error(error?.data?.message || error?.message || 'Could not save reaction.');
+    },
+  });
+
+  const birthdays = data?.birthdays || [];
+  const serviceAnniversaries = data?.service_anniversaries || [];
+  const reactions = data?.reactions || DEFAULT_REACTIONS;
+  const defaultTab = birthdays.length > 0 ? 'birthdays' : 'anniversaries';
+  const hasCelebrations = birthdays.length > 0 || serviceAnniversaries.length > 0;
+
+  return (
+    <div className="bg-card rounded-2xl border border-border">
+      {isLoading ? (
+        <>
+          <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+            <PartyPopper className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Today&apos;s Celebrations</h3>
+          </div>
+          <p className="text-sm text-muted-foreground px-5 pb-5">Loading celebrations...</p>
+        </>
+      ) : isError ? (
+        <>
+          <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+            <PartyPopper className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Today&apos;s Celebrations</h3>
+          </div>
+          <p className="text-sm text-destructive px-5 pb-5">Could not load celebrations.</p>
+        </>
+      ) : !hasCelebrations ? (
+        <>
+          <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+            <PartyPopper className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Today&apos;s Celebrations</h3>
+          </div>
+          <p className="text-sm text-muted-foreground px-5 pb-5">No birthdays or anniversaries today.</p>
+        </>
+      ) : (
+        <Tabs defaultValue={defaultTab}>
+          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <PartyPopper className="w-4 h-4 text-primary shrink-0" />
+              <h3 className="font-semibold text-sm truncate">Today&apos;s Celebrations</h3>
+            </div>
+            <TabsList className="h-auto p-1 shrink-0">
+              <TabsTrigger
+                value="birthdays"
+                className="gap-1 px-2.5 py-1.5 text-xs data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400"
+              >
+                <Cake className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Birthdays</span>
+                {birthdays.length > 0 ? (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px]">
+                    {birthdays.length}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger
+                value="anniversaries"
+                className="gap-1 px-2.5 py-1.5 text-xs data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400"
+              >
+                <Award className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Anniversaries</span>
+                {serviceAnniversaries.length > 0 ? (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px]">
+                    {serviceAnniversaries.length}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto px-4 pb-4">
+            <TabsContent value="birthdays" className="mt-0 focus-visible:outline-none">
+              <CelebrationFeed
+                items={birthdays}
+                celebrationType="birthday"
+                celebrationDate={localDate}
+                accent="birthday"
+                badgeFor={(person) =>
+                  person.age != null && person.age > 0 ? `Turns ${person.age}` : 'Birthday'
+                }
+                reactions={reactions}
+                onReact={reactMutation.mutate}
+                isSubmitting={reactMutation.isPending}
+                emptyMessage="No birthdays today"
+              />
+            </TabsContent>
+
+            <TabsContent value="anniversaries" className="mt-0 focus-visible:outline-none">
+              <CelebrationFeed
+                items={serviceAnniversaries}
+                celebrationType="service_anniversary"
+                celebrationDate={localDate}
+                accent="anniversary"
+                badgeFor={(person) =>
+                  person.years_of_service === 1 ? '1 year' : `${person.years_of_service} years`
+                }
+                reactions={reactions}
+                onReact={reactMutation.mutate}
+                isSubmitting={reactMutation.isPending}
+                emptyMessage="No anniversaries today"
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
+      )}
+    </div>
+  );
+}

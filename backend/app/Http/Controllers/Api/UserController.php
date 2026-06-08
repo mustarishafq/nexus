@@ -40,6 +40,8 @@ class UserController extends Controller
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date'],
+            'service_start_date' => ['sometimes', 'nullable', 'date'],
         ]);
 
         $groupIds = $validated['access_group_ids'] ?? null;
@@ -223,6 +225,8 @@ class UserController extends Controller
             'is_approved' => ['sometimes', 'boolean'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'password' => ['sometimes', 'string', 'min:8'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date'],
+            'service_start_date' => ['sometimes', 'nullable', 'date'],
         ]);
 
         $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;

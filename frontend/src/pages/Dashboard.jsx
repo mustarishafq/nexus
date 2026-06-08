@@ -6,9 +6,8 @@ import { Bell, Monitor, AlertTriangle, Clock, Megaphone } from 'lucide-react';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
-import ActivityWidget from '@/components/dashboard/ActivityWidget';
-import NotificationChart from '@/components/dashboard/NotificationChart';
 import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
+import TodaysCelebrationsWidget from '@/components/dashboard/TodaysCelebrationsWidget';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,11 +32,6 @@ export default function Dashboard() {
   const { data: activeBroadcasts = [] } = useQuery({
     queryKey: ['active-broadcasts-dash'],
     queryFn: () => db.entities.Broadcast.filter({ active_only: true }, '-created_date', 10),
-  });
-
-  const { data: activities = [] } = useQuery({
-    queryKey: ['activities-dash'],
-    queryFn: () => db.entities.ActivityLog.list('-created_date', 20),
   });
 
   const { data: systems = [] } = useQuery({
@@ -148,10 +142,10 @@ export default function Dashboard() {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Calendar + Chart */}
+        {/* Left: Calendar + Celebrations */}
         <div className="lg:col-span-2 space-y-6">
           <WeeklyCalendarWidget />
-          <NotificationChart notifications={notifications} />
+          <TodaysCelebrationsWidget />
         </div>
 
         {/* Right: Notifications + System Health + Activity */}
