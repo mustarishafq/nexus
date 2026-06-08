@@ -4,8 +4,10 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
+import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 
 export default function AppLayout() {
+  useNetworkHealthMonitor();
   const isMobile = useIsMobile();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);

@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -68,6 +69,16 @@ class User extends Authenticatable
     public function accessGroups(): BelongsToMany
     {
         return $this->belongsToMany(AccessGroup::class)->withTimestamps();
+    }
+
+    public function networkHealthLogs(): HasMany
+    {
+        return $this->hasMany(NetworkHealthLog::class);
+    }
+
+    public function networkHealthAlerts(): HasMany
+    {
+        return $this->hasMany(NetworkHealthAlert::class);
     }
 
     /**

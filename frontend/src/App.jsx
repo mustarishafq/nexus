@@ -16,6 +16,7 @@ import AdminCalendar from '@/pages/AdminCalendar';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
 import UserManagement from '@/pages/UserManagement';
+import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -57,6 +58,7 @@ const ProtectedRoutes = () => {
         <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
+        <Route path="/admin/network-health" element={<NetworkHealthDashboard />} />
         <Route path="/admin/calendar" element={<AdminCalendar />} />
         <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
         <Route path="/settings" element={<Settings />} />

@@ -210,6 +210,69 @@ export const db = {
 		},
 	},
 
+	networkHealth: {
+		async ping() {
+			return request('/network-health/ping');
+		},
+
+		async clientInfo() {
+			return request('/network-health/client-info');
+		},
+
+		async saveLog(data) {
+			return request('/network-health/logs', { method: 'POST', body: data });
+		},
+
+		async dashboard(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/network-health/dashboard${query}`);
+		},
+
+		async userHistory(userId) {
+			return request(`/network-health/users/${userId}/history`);
+		},
+
+		async acknowledgeAlert(alertId) {
+			return request(`/network-health/alerts/${alertId}/acknowledge`, { method: 'PATCH' });
+		},
+
+		async exportCsv(filters = {}) {
+			const token = localStorage.getItem(AUTH_TOKEN_KEY);
+			const query = buildQuery(filters);
+			const response = await fetch(`${API_BASE_URL}/network-health/export${query}`, {
+				method: 'GET',
+				headers: {
+					Accept: 'text/csv',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				let payload = null;
+				try {
+					payload = await response.json();
+				} catch {
+					payload = null;
+				}
+				const error = new Error(payload?.message || `HTTP ${response.status}`);
+				error.status = response.status;
+				error.data = payload;
+				throw error;
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `network-health-${new Date().toISOString().slice(0, 10)}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.URL.revokeObjectURL(url);
+		},
+	},
+
 	dashboard: {
 		async celebrations({ date } = {}) {
 			const query = date ? `?date=${encodeURIComponent(date)}` : '';

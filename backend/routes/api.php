@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\SystemEventController;
@@ -30,6 +31,16 @@ Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);
+Route::get('/network-health/ping', [NetworkHealthController::class, 'ping']);
+Route::get('/network-health/download-test', [NetworkHealthController::class, 'downloadTest']);
+Route::post('/network-health/upload-test', [NetworkHealthController::class, 'uploadTest']);
+Route::get('/network-health/client-info', [NetworkHealthController::class, 'clientInfo']);
+Route::post('/network-health/logs', [NetworkHealthController::class, 'storeLog']);
+Route::get('/network-health/dashboard', [NetworkHealthController::class, 'dashboard']);
+Route::get('/network-health/export', [NetworkHealthController::class, 'exportCsv']);
+Route::get('/network-health/users/{user}/history', [NetworkHealthController::class, 'userHistory']);
+Route::patch('/network-health/alerts/{networkHealthAlert}/acknowledge', [NetworkHealthController::class, 'acknowledgeAlert']);
+
 Route::get('/dashboard/celebrations', [DashboardController::class, 'celebrations']);
 Route::post('/dashboard/celebrations/wishes', [DashboardController::class, 'storeWish']);
 Route::delete('/dashboard/celebrations/wishes/{celebrationWish}', [DashboardController::class, 'destroyWish']);
