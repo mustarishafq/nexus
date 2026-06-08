@@ -140,9 +140,13 @@ class NetworkHealthController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
-            return $response;
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user || ! $user->is_approved) {
+            return response()->json(['message' => 'Unauthorized'], 401);
         }
+
+        $isAdmin = $user->role === 'admin';
 
         $validated = $request->validate([
             'date_from' => ['nullable', 'date'],
@@ -152,6 +156,11 @@ class NetworkHealthController extends Controller
             'browser' => ['nullable', 'string', 'max:64'],
             'operating_system' => ['nullable', 'string', 'max:64'],
         ]);
+
+        if (! $isAdmin) {
+            $validated['user_id'] = $user->id;
+            unset($validated['access_group_id']);
+        }
 
         $dateFrom = isset($validated['date_from'])
             ? Carbon::parse($validated['date_from'])->startOfDay()
@@ -168,10 +177,15 @@ class NetworkHealthController extends Controller
             ->selectRaw('AVG(upload_mbps) as avg_upload_mbps')
             ->first();
 
-        $usersTestedToday = NetworkHealthLog::query()
-            ->whereDate('tested_at', now()->toDateString())
-            ->distinct('user_id')
-            ->count('user_id');
+        $usersTestedToday = $isAdmin
+            ? NetworkHealthLog::query()
+                ->whereDate('tested_at', now()->toDateString())
+                ->distinct('user_id')
+                ->count('user_id')
+            : NetworkHealthLog::query()
+                ->where('user_id', $user->id)
+                ->whereDate('tested_at', now()->toDateString())
+                ->count();
 
         $hourBucketSql = match (DB::connection()->getDriverName()) {
             'sqlite' => "strftime('%Y-%m-%d %H:00:00', tested_at)",
@@ -194,54 +208,64 @@ class NetworkHealthController extends Controller
             ->limit(25)
             ->get();
 
-        $slowestUsers = (clone $baseQuery)
-            ->select('user_id')
-            ->selectRaw('AVG(latency_ms) as avg_latency_ms')
-            ->selectRaw('MAX(tested_at) as last_tested_at')
-            ->whereNotNull('latency_ms')
-            ->groupBy('user_id')
-            ->orderByDesc('avg_latency_ms')
-            ->limit(10)
-            ->get()
-            ->map(function ($row) {
-                $user = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
+        $slowestUsers = $isAdmin
+            ? (clone $baseQuery)
+                ->select('user_id')
+                ->selectRaw('AVG(latency_ms) as avg_latency_ms')
+                ->selectRaw('MAX(tested_at) as last_tested_at')
+                ->whereNotNull('latency_ms')
+                ->groupBy('user_id')
+                ->orderByDesc('avg_latency_ms')
+                ->limit(10)
+                ->get()
+                ->map(function ($row) {
+                    $rowUser = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
 
-                return [
-                    'user_id' => $row->user_id,
-                    'user' => $user,
-                    'avg_latency_ms' => round((float) $row->avg_latency_ms, 1),
-                    'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
-                ];
-            });
+                    return [
+                        'user_id' => $row->user_id,
+                        'user' => $rowUser,
+                        'avg_latency_ms' => round((float) $row->avg_latency_ms, 1),
+                        'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
+                    ];
+                })
+            : collect();
 
-        $lowestDownloadUsers = (clone $baseQuery)
-            ->select('user_id')
-            ->selectRaw('AVG(download_mbps) as avg_download_mbps')
-            ->selectRaw('MAX(tested_at) as last_tested_at')
-            ->whereNotNull('download_mbps')
-            ->groupBy('user_id')
-            ->orderBy('avg_download_mbps')
-            ->limit(10)
-            ->get()
-            ->map(function ($row) {
-                $user = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
+        $lowestDownloadUsers = $isAdmin
+            ? (clone $baseQuery)
+                ->select('user_id')
+                ->selectRaw('AVG(download_mbps) as avg_download_mbps')
+                ->selectRaw('MAX(tested_at) as last_tested_at')
+                ->whereNotNull('download_mbps')
+                ->groupBy('user_id')
+                ->orderBy('avg_download_mbps')
+                ->limit(10)
+                ->get()
+                ->map(function ($row) {
+                    $rowUser = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
 
-                return [
-                    'user_id' => $row->user_id,
-                    'user' => $user,
-                    'avg_download_mbps' => round((float) $row->avg_download_mbps, 2),
-                    'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
-                ];
-            });
+                    return [
+                        'user_id' => $row->user_id,
+                        'user' => $rowUser,
+                        'avg_download_mbps' => round((float) $row->avg_download_mbps, 2),
+                        'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
+                    ];
+                })
+            : collect();
 
-        $activeAlerts = NetworkHealthAlert::query()
+        $activeAlertsQuery = NetworkHealthAlert::query()
             ->with(['user:id,full_name,name,email', 'log'])
             ->where('status', 'active')
             ->orderByDesc('created_at')
-            ->limit(50)
-            ->get();
+            ->limit(50);
+
+        if (! $isAdmin) {
+            $activeAlertsQuery->where('user_id', $user->id);
+        }
+
+        $activeAlerts = $activeAlertsQuery->get();
 
         return response()->json([
+            'scope' => $isAdmin ? 'admin' : 'self',
             'summary' => [
                 'avg_latency_ms' => $summary->avg_latency_ms ? round((float) $summary->avg_latency_ms, 1) : null,
                 'avg_download_mbps' => $summary->avg_download_mbps ? round((float) $summary->avg_download_mbps, 2) : null,
@@ -267,8 +291,14 @@ class NetworkHealthController extends Controller
 
     public function userHistory(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
-            return $response;
+        $authUser = ApiTokenAuth::userFromRequest($request);
+
+        if (! $authUser || ! $authUser->is_approved) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($authUser->role !== 'admin' && $authUser->id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $logs = NetworkHealthLog::query()
@@ -285,9 +315,13 @@ class NetworkHealthController extends Controller
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
-            return $response;
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user || ! $user->is_approved) {
+            return response()->json(['message' => 'Unauthorized'], 401);
         }
+
+        $isAdmin = $user->role === 'admin';
 
         $validated = $request->validate([
             'date_from' => ['nullable', 'date'],
@@ -297,6 +331,11 @@ class NetworkHealthController extends Controller
             'browser' => ['nullable', 'string', 'max:64'],
             'operating_system' => ['nullable', 'string', 'max:64'],
         ]);
+
+        if (! $isAdmin) {
+            $validated['user_id'] = $user->id;
+            unset($validated['access_group_id']);
+        }
 
         $dateFrom = isset($validated['date_from'])
             ? Carbon::parse($validated['date_from'])->startOfDay()

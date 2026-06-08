@@ -89,14 +89,63 @@ class NetworkHealthControllerTest extends TestCase
         $this->assertDatabaseCount('network_health_logs', 1);
     }
 
-    public function test_dashboard_requires_admin(): void
+    public function test_dashboard_returns_own_data_for_regular_user(): void
+    {
+        $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $otherUser = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($user);
+
+        NetworkHealthLog::query()->create([
+            'user_id' => $user->id,
+            'latency_ms' => 80,
+            'download_mbps' => 40,
+            'upload_mbps' => 8,
+            'tested_at' => now(),
+        ]);
+
+        NetworkHealthLog::query()->create([
+            'user_id' => $otherUser->id,
+            'latency_ms' => 500,
+            'download_mbps' => 1,
+            'upload_mbps' => 0.2,
+            'tested_at' => now(),
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/network-health/dashboard')
+            ->assertOk()
+            ->assertJsonPath('scope', 'self')
+            ->assertJsonPath('summary.avg_latency_ms', 80)
+            ->assertJsonCount(1, 'latest_results')
+            ->assertJsonCount(0, 'slowest_users');
+    }
+
+    public function test_user_cannot_view_other_user_history(): void
+    {
+        $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $otherUser = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($user);
+
+        $this->withToken($token)
+            ->getJson("/api/network-health/users/{$otherUser->id}/history")
+            ->assertForbidden();
+    }
+
+    public function test_user_can_view_own_history(): void
     {
         $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
         $token = $this->issueToken($user);
 
+        NetworkHealthLog::query()->create([
+            'user_id' => $user->id,
+            'latency_ms' => 120,
+            'tested_at' => now(),
+        ]);
+
         $this->withToken($token)
-            ->getJson('/api/network-health/dashboard')
-            ->assertForbidden();
+            ->getJson("/api/network-health/users/{$user->id}/history")
+            ->assertOk()
+            ->assertJsonCount(1, 'history');
     }
 
     public function test_dashboard_returns_summary_for_admin(): void
@@ -118,6 +167,7 @@ class NetworkHealthControllerTest extends TestCase
         $this->withToken($token)
             ->getJson('/api/network-health/dashboard')
             ->assertOk()
+            ->assertJsonPath('scope', 'admin')
             ->assertJsonStructure([
                 'summary' => ['avg_latency_ms', 'avg_download_mbps', 'avg_upload_mbps', 'users_tested_today'],
                 'hourly_trends',

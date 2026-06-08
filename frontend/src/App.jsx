@@ -54,11 +54,12 @@ const ProtectedRoutes = () => {
         <Route path="/" element={<Dashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
+        <Route path="/network-health" element={<NetworkHealthDashboard />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
-        <Route path="/admin/network-health" element={<NetworkHealthDashboard />} />
+        <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
         <Route path="/admin/calendar" element={<AdminCalendar />} />
         <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
         <Route path="/settings" element={<Settings />} />

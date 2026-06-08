@@ -32,6 +32,7 @@ function formatHourLabel(value) {
 
 export default function NetworkHealthDashboard() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -50,27 +51,29 @@ export default function NetworkHealthDashboard() {
   }), [dateFrom, dateTo, userId, accessGroupId, browser, operatingSystem]);
 
   const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['network-health-dashboard', filters],
+    queryKey: ['network-health-dashboard', filters, isAdmin],
     queryFn: () => db.networkHealth.dashboard(filters),
-    enabled: user?.role === 'admin',
+    enabled: Boolean(user),
   });
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-network-health'],
     queryFn: () => db.entities.User.list('-created_date', 500),
-    enabled: user?.role === 'admin',
+    enabled: isAdmin,
   });
 
   const { data: accessGroups = [] } = useQuery({
     queryKey: ['access-groups-network-health'],
     queryFn: () => db.entities.AccessGroup.list('name', 200),
-    enabled: user?.role === 'admin',
+    enabled: isAdmin,
   });
 
+  const historyUserId = isAdmin ? userId : user?.id;
+
   const { data: userHistory } = useQuery({
-    queryKey: ['network-health-user-history', userId],
-    queryFn: () => db.networkHealth.userHistory(userId),
-    enabled: user?.role === 'admin' && Boolean(userId),
+    queryKey: ['network-health-user-history', historyUserId],
+    queryFn: () => db.networkHealth.userHistory(historyUserId),
+    enabled: Boolean(historyUserId),
   });
 
   const acknowledgeMut = useMutation({
@@ -90,14 +93,6 @@ export default function NetworkHealthDashboard() {
       toast.error('Failed to export CSV');
     }
   };
-
-  if (user?.role !== 'admin') {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh] text-muted-foreground">
-        Admin access required.
-      </div>
-    );
-  }
 
   const summary = dashboard?.summary || {};
   const hourlyTrends = dashboard?.hourly_trends || [];
@@ -119,7 +114,9 @@ export default function NetworkHealthDashboard() {
             Network Health Monitoring
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            System Monitoring — client network performance across Nexus Brain users
+            {isAdmin
+              ? 'System Monitoring — client network performance across Nexus Brain users'
+              : 'Your network connection performance history'}
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} className="gap-2">
@@ -137,7 +134,10 @@ export default function NetworkHealthDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className={cn(
+            'grid grid-cols-1 sm:grid-cols-2 gap-3',
+            isAdmin ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'
+          )}>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Date From</label>
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -146,32 +146,36 @@ export default function NetworkHealthDashboard() {
               <label className="text-xs text-muted-foreground mb-1 block">Date To</label>
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">User</label>
-              <Select value={userId || 'all'} onValueChange={(v) => setUserId(v === 'all' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All users</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.full_name || u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Department</label>
-              <Select value={accessGroupId || 'all'} onValueChange={(v) => setAccessGroupId(v === 'all' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="All departments" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All departments</SelectItem>
-                  {accessGroups.map((g) => (
-                    <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isAdmin && (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">User</label>
+                  <Select value={userId || 'all'} onValueChange={(v) => setUserId(v === 'all' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All users</SelectItem>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.full_name || u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Department</label>
+                  <Select value={accessGroupId || 'all'} onValueChange={(v) => setAccessGroupId(v === 'all' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="All departments" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All departments</SelectItem>
+                      {accessGroups.map((g) => (
+                        <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Browser</label>
               <Select value={browser || 'all'} onValueChange={(v) => setBrowser(v === 'all' ? '' : v)}>
@@ -224,7 +228,7 @@ export default function NetworkHealthDashboard() {
           index={2}
         />
         <StatsCard
-          title="Users Tested Today"
+          title={isAdmin ? 'Users Tested Today' : 'Tests Today'}
           value={isLoading ? '—' : summary.users_tested_today ?? 0}
           icon={Users}
           color="bg-primary/10"
@@ -261,7 +265,7 @@ export default function NetworkHealthDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2 text-warning">
               <AlertTriangle className="w-4 h-4" />
-              Active Alerts ({activeAlerts.length})
+              {isAdmin ? `Active Alerts (${activeAlerts.length})` : `Your Active Alerts (${activeAlerts.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -276,9 +280,11 @@ export default function NetworkHealthDashboard() {
                       <Badge variant="outline" className="text-warning border-warning/30">
                         {ALERT_LABELS[alert.alert_type] || alert.alert_type}
                       </Badge>
-                      <span className="text-sm font-medium">
-                        {alert.user?.full_name || alert.user?.email}
-                      </span>
+                      {isAdmin && (
+                        <span className="text-sm font-medium">
+                          {alert.user?.full_name || alert.user?.email}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Value: {alert.metric_value} (threshold: {alert.threshold_value})
@@ -286,16 +292,18 @@ export default function NetworkHealthDashboard() {
                       {alert.created_date ? format(new Date(alert.created_date), 'MMM d, h:mm a') : ''}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                    onClick={() => acknowledgeMut.mutate(alert.id)}
-                    disabled={acknowledgeMut.isPending}
-                  >
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Acknowledge
-                  </Button>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => acknowledgeMut.mutate(alert.id)}
+                      disabled={acknowledgeMut.isPending}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Acknowledge
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -354,11 +362,13 @@ export default function NetworkHealthDashboard() {
         ))}
       </div>
 
-      {userId && userHistory?.history?.length > 0 && (
+      {((isAdmin && userId) || !isAdmin) && userHistory?.history?.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
-              Per-User History — {userHistory.user?.full_name || userHistory.user?.email}
+              {isAdmin
+                ? `Per-User History — ${userHistory.user?.full_name || userHistory.user?.email}`
+                : 'Your Test History'}
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -394,15 +404,17 @@ export default function NetworkHealthDashboard() {
 
       {/* Tables */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card>
+        <Card className={!isAdmin ? 'xl:col-span-2' : ''}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Latest Test Results</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {isAdmin ? 'Latest Test Results' : 'Your Latest Tests'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
+                  {isAdmin && <TableHead>User</TableHead>}
                   <TableHead>Latency</TableHead>
                   <TableHead>Down</TableHead>
                   <TableHead>Up</TableHead>
@@ -412,11 +424,13 @@ export default function NetworkHealthDashboard() {
               <TableBody>
                 {latestResults.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">No results yet</TableCell>
+                    <TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground">No results yet</TableCell>
                   </TableRow>
                 ) : latestResults.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                    {isAdmin && (
+                      <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                    )}
                     <TableCell>{row.latency_ms != null ? `${row.latency_ms} ms` : '—'}</TableCell>
                     <TableCell>{row.download_mbps != null ? `${row.download_mbps}` : '—'}</TableCell>
                     <TableCell>{row.upload_mbps != null ? `${row.upload_mbps}` : '—'}</TableCell>
@@ -430,73 +444,77 @@ export default function NetworkHealthDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Slowest Users (avg latency)</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Avg Latency</TableHead>
-                  <TableHead>Last Test</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {slowestUsers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
-                  </TableRow>
-                ) : slowestUsers.map((row) => (
-                  <TableRow key={row.user_id}>
-                    <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
-                    <TableCell className={cn(row.avg_latency_ms > 300 && 'text-warning font-medium')}>
-                      {row.avg_latency_ms} ms
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        {isAdmin && (
+          <>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Slowest Users (avg latency)</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Avg Latency</TableHead>
+                      <TableHead>Last Test</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {slowestUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                      </TableRow>
+                    ) : slowestUsers.map((row) => (
+                      <TableRow key={row.user_id}>
+                        <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                        <TableCell className={cn(row.avg_latency_ms > 300 && 'text-warning font-medium')}>
+                          {row.avg_latency_ms} ms
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
 
-        <Card className="xl:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Lowest Download Speed Users</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Avg Download</TableHead>
-                  <TableHead>Last Test</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lowestDownloadUsers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
-                  </TableRow>
-                ) : lowestDownloadUsers.map((row) => (
-                  <TableRow key={row.user_id}>
-                    <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
-                    <TableCell className={cn(row.avg_download_mbps < 5 && 'text-warning font-medium')}>
-                      {row.avg_download_mbps} Mbps
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            <Card className="xl:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Lowest Download Speed Users</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Avg Download</TableHead>
+                      <TableHead>Last Test</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lowestDownloadUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                      </TableRow>
+                    ) : lowestDownloadUsers.map((row) => (
+                      <TableRow key={row.user_id}>
+                        <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                        <TableCell className={cn(row.avg_download_mbps < 5 && 'text-warning font-medium')}>
+                          {row.avg_download_mbps} Mbps
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );
