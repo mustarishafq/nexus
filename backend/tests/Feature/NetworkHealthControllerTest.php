@@ -179,6 +179,33 @@ class NetworkHealthControllerTest extends TestCase
             ]);
     }
 
+    public function test_dashboard_hourly_trends_use_utc_iso_timestamps(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($admin);
+        $testedAt = now()->startOfHour();
+
+        NetworkHealthLog::query()->create([
+            'user_id' => $user->id,
+            'latency_ms' => 120,
+            'tested_at' => $testedAt,
+        ]);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/network-health/dashboard')
+            ->assertOk();
+
+        $hourBucket = $response->json('hourly_trends.0.hour_bucket');
+
+        $this->assertNotNull($hourBucket);
+        $this->assertMatchesRegularExpression('/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $hourBucket);
+        $this->assertSame(
+            $testedAt->copy()->startOfHour()->toIso8601String(),
+            $hourBucket
+        );
+    }
+
     public function test_alert_service_thresholds(): void
     {
         $user = User::factory()->create(['is_approved' => true]);

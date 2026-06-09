@@ -200,7 +200,14 @@ class NetworkHealthController extends Controller
             ->selectRaw('AVG(upload_mbps) as avg_upload_mbps')
             ->groupBy('hour_bucket')
             ->orderBy('hour_bucket')
-            ->get();
+            ->get()
+            ->map(fn ($row) => [
+                'hour_bucket' => Carbon::parse($row->hour_bucket, config('app.timezone'))->toIso8601String(),
+                'avg_latency_ms' => $row->avg_latency_ms !== null ? round((float) $row->avg_latency_ms, 1) : null,
+                'avg_download_mbps' => $row->avg_download_mbps !== null ? round((float) $row->avg_download_mbps, 2) : null,
+                'avg_upload_mbps' => $row->avg_upload_mbps !== null ? round((float) $row->avg_upload_mbps, 2) : null,
+            ])
+            ->values();
 
         $latestResults = (clone $baseQuery)
             ->with('user:id,full_name,name,email')

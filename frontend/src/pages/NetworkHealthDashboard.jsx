@@ -25,9 +25,23 @@ const ALERT_LABELS = {
   upload: 'Low Upload',
 };
 
+function parseHourBucketUtc(value) {
+  if (value == null || value === '') return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(str)) {
+    const ms = Date.parse(str);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const normalized = str.includes('T') ? str : str.replace(' ', 'T');
+  const ms = Date.parse(`${normalized}Z`);
+  return Number.isNaN(ms) ? null : ms;
+}
+
 function formatHourLabel(value) {
-  if (!value) return '';
-  return format(new Date(value), 'MMM d, ha');
+  const timestamp = typeof value === 'number' ? value : parseHourBucketUtc(value);
+  if (timestamp == null) return '';
+  return format(new Date(timestamp), 'MMM d, ha');
 }
 
 export default function NetworkHealthDashboard() {
@@ -96,6 +110,15 @@ export default function NetworkHealthDashboard() {
 
   const summary = dashboard?.summary || {};
   const hourlyTrends = dashboard?.hourly_trends || [];
+  const chartTrends = useMemo(
+    () => hourlyTrends
+      .map((row) => {
+        const hourTimestamp = parseHourBucketUtc(row.hour_bucket);
+        return hourTimestamp == null ? null : { ...row, hourTimestamp };
+      })
+      .filter(Boolean),
+    [hourlyTrends],
+  );
   const latestResults = dashboard?.latest_results || [];
   const slowestUsers = dashboard?.slowest_users || [];
   const lowestDownloadUsers = dashboard?.lowest_download_users || [];
@@ -328,13 +351,16 @@ export default function NetworkHealthDashboard() {
             <CardContent>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={hourlyTrends}>
+                  <LineChart data={chartTrends}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis
-                      dataKey="hour_bucket"
+                      dataKey="hourTimestamp"
+                      type="number"
+                      scale="time"
+                      domain={['dataMin', 'dataMax']}
                       tickFormatter={formatHourLabel}
                       tick={{ fontSize: 10 }}
-                      interval="preserveStartEnd"
+                      minTickGap={32}
                     />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip
