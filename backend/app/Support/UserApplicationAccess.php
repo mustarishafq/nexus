@@ -10,7 +10,7 @@ class UserApplicationAccess
     /**
      * Resolve allowed public application slugs for a user.
      *
-     * Returns null when the user may access all public applications.
+     * Returns null when the user may access all public applications (admin only).
      * Returns an array (possibly empty) when access is restricted.
      */
     public static function allowedPublicSlugs(User $user): ?array
@@ -35,11 +35,11 @@ class UserApplicationAccess
 
         $accessRecord = UserSystemAccess::query()->where('user_email', $user->email)->first();
 
-        if (! $accessRecord) {
-            return null;
+        if ($accessRecord) {
+            return self::normalizeSlugs($accessRecord->allowed_system_slugs);
         }
 
-        return self::normalizeSlugs($accessRecord->allowed_system_slugs);
+        return [];
     }
 
     /**

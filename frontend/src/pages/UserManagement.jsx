@@ -223,7 +223,7 @@ export default function UserManagement() {
   const getUserAccessLabel = (user) => {
     if (user.role === 'admin') return 'All apps (admin)';
     const groupIds = getUserGroupIds(user);
-    if (groupIds.length === 0) return 'All public apps';
+    if (groupIds.length === 0) return 'No app access';
     const names = Array.isArray(user.access_group_names) && user.access_group_names.length > 0
       ? user.access_group_names
       : groupIds.map((id) => getGroupById(id)?.name).filter(Boolean);
@@ -1199,7 +1199,7 @@ export default function UserManagement() {
                       return { ...prev, access_group_ids: next };
                     })}
                   />
-                  <p className="text-xs text-muted-foreground">Leave empty for all public apps. Multiple groups combine their app access.</p>
+                  <p className="text-xs text-muted-foreground">Assign at least one group to grant app access. Multiple groups combine their app access.</p>
                 </div>
               )}
               <div className="space-y-2">
@@ -1322,7 +1322,7 @@ export default function UserManagement() {
                   onToggle={(id) => toggleIdInSet(setAssignGroupIds, id)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Select one or more groups. App access is combined from all assigned groups. Leave empty for all public apps.
+                  Select one or more groups. App access is combined from all assigned groups. Users with no groups cannot access public apps.
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
