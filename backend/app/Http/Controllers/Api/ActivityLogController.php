@@ -23,10 +23,18 @@ class ActivityLogController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $query = ActivityLog::query();
+
+        if ($user->role !== 'admin') {
+            $query->where('user_id', (string) $user->id);
+        }
+
         $items = $this->applyIndexQuery(
             $request,
-            ActivityLog::query()->where('user_id', (string) $user->id),
-            ['system_id', 'action', 'resource_type', 'resource_id']
+            $query,
+            $user->role === 'admin'
+                ? ['user_id', 'system_id', 'action', 'resource_type', 'resource_id']
+                : ['system_id', 'action', 'resource_type', 'resource_id']
         )->get();
 
         return response()->json($items);
@@ -113,7 +121,7 @@ class ActivityLogController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($activityLog->user_id !== (string) $user->id) {
+        if ($user->role !== 'admin' && $activityLog->user_id !== (string) $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
