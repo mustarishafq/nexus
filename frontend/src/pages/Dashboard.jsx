@@ -115,9 +115,11 @@ export default function Dashboard() {
             <h3 className="text-sm font-semibold">Active Broadcasts</h3>
             {activeBroadcasts.length > 0 ? <Badge>{activeBroadcasts.length}</Badge> : null}
           </div>
-          <Link to="/admin/broadcast">
-            <Button variant="outline" size="sm" className="h-8 text-xs">Manage Broadcasts</Button>
-          </Link>
+          {user?.role === 'admin' && (
+            <Link to="/admin/broadcast">
+              <Button variant="outline" size="sm" className="h-8 text-xs">Manage Broadcasts</Button>
+            </Link>
+          )}
         </div>
         {activeBroadcasts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No active broadcasts right now.</p>
