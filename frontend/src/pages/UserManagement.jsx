@@ -2,8 +2,8 @@
 import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, Filter, ChevronLeft, ChevronRight, ChevronDown, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers } from 'lucide-react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, Filter, ChevronLeft, ChevronRight, ChevronDown, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -19,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -143,7 +154,12 @@ export default function UserManagement() {
   const [editGroup, setEditGroup] = useState(null);
   const [groupForm, setGroupForm] = useState({ name: '', description: '', allowedSlugs: new Set(), userIds: new Set() });
   const [groupSaving, setGroupSaving] = useState(false);
-  const [deletingGroupId, setDeletingGroupId] = useState(null);
+  const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
+  const [dashboardDialogOpen, setDashboardDialogOpen] = useState(false);
+  const [editDashboard, setEditDashboard] = useState(null);
+  const [dashboardForm, setDashboardForm] = useState({ name: '', publicUrl: '', groupIds: new Set(), isEnabled: true, sortOrder: 0 });
+  const [dashboardSaving, setDashboardSaving] = useState(false);
+  const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const csvRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -162,10 +178,31 @@ export default function UserManagement() {
     queryFn: () => db.entities.AccessGroup.list('name', 100),
   });
 
+  const { data: metabaseDashboardsRaw = [], isLoading: loadingDashboards } = useQuery({
+    queryKey: ['metabase-dashboards-admin'],
+    queryFn: () => db.entities.MetabaseDashboard.listAdmin('sort_order', 100),
+  });
+
+  const [accessGroups, setAccessGroups] = useState([]);
+  const [metabaseDashboards, setMetabaseDashboards] = useState([]);
+  const hiddenAccessGroupIdsRef = useRef(new Set());
+  const hiddenMetabaseDashboardIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!Array.isArray(accessGroupsRaw)) return;
+    const hidden = hiddenAccessGroupIdsRef.current;
+    setAccessGroups(accessGroupsRaw.filter((group) => !hidden.has(String(group.id))));
+  }, [accessGroupsRaw]);
+
+  useEffect(() => {
+    if (!Array.isArray(metabaseDashboardsRaw)) return;
+    const hidden = hiddenMetabaseDashboardIdsRef.current;
+    setMetabaseDashboards(metabaseDashboardsRaw.filter((dashboard) => !hidden.has(String(dashboard.id))));
+  }, [metabaseDashboardsRaw]);
+
   const users = Array.isArray(usersRaw) ? usersRaw : [];
   const systems = Array.isArray(systemsRaw) ? systemsRaw : [];
   const publicSystems = systems.filter((system) => system.visibility === 'public');
-  const accessGroups = Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [];
 
   useEffect(() => {
     setPage(1);
@@ -317,22 +354,152 @@ export default function UserManagement() {
     }
   };
 
-  const deleteGroup = async (group) => {
-    if (!window.confirm(`Delete "${group.name}"? Users in this group will lose their group assignment.`)) {
+  const removeFromAccessGroupsCache = (id) => {
+    queryClient.setQueryData(['access-groups'], (old) =>
+      (Array.isArray(old) ? old : []).filter((group) => String(group.id) !== String(id))
+    );
+  };
+
+  const removeFromMetabaseDashboardsCache = (id) => {
+    const remove = (old) =>
+      (Array.isArray(old) ? old : []).filter((dashboard) => String(dashboard.id) !== String(id));
+
+    queryClient.setQueryData(['metabase-dashboards-admin'], remove);
+    queryClient.setQueryData(['metabase-dashboards'], remove);
+  };
+
+  const deleteGroupMut = useMutation({
+    mutationFn: ({ id }) => db.entities.AccessGroup.delete(id),
+    onError: (err, { id }) => {
+      hiddenAccessGroupIdsRef.current.delete(String(id));
+      queryClient.invalidateQueries({ queryKey: ['access-groups'] });
+      toast.error(err?.data?.message || err.message || 'Failed to delete group');
+    },
+    onSuccess: async (_data, { id, name }) => {
+      hiddenAccessGroupIdsRef.current.delete(String(id));
+      removeFromAccessGroupsCache(id);
+      await queryClient.refetchQueries({ queryKey: ['access-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards-admin'] });
+      toast.success(`Deleted group "${name}"`);
+    },
+  });
+
+  const deleteDashboardMut = useMutation({
+    mutationFn: ({ id }) => db.entities.MetabaseDashboard.delete(id),
+    onError: (err, { id }) => {
+      hiddenMetabaseDashboardIdsRef.current.delete(String(id));
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards'] });
+      toast.error(err?.data?.message || err.message || 'Failed to delete dashboard');
+    },
+    onSuccess: async (_data, { id, name }) => {
+      hiddenMetabaseDashboardIdsRef.current.delete(String(id));
+      removeFromMetabaseDashboardsCache(id);
+      await queryClient.refetchQueries({ queryKey: ['metabase-dashboards-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards'] });
+      toast.success(`Deleted dashboard "${name}"`);
+    },
+  });
+
+  const openDashboardDialog = (dashboard = null) => {
+    if (dashboard) {
+      setEditDashboard(dashboard);
+      setDashboardForm({
+        name: dashboard.name || '',
+        publicUrl: dashboard.public_url || '',
+        groupIds: new Set((dashboard.access_group_ids || []).map(String)),
+        isEnabled: dashboard.is_enabled !== false,
+        sortOrder: dashboard.sort_order ?? 0,
+      });
+    } else {
+      setEditDashboard(null);
+      setDashboardForm({ name: '', publicUrl: '', groupIds: new Set(), isEnabled: true, sortOrder: 0 });
+    }
+    setDashboardDialogOpen(true);
+  };
+
+  const closeDashboardDialog = () => {
+    setDashboardDialogOpen(false);
+    setEditDashboard(null);
+    setDashboardForm({ name: '', publicUrl: '', groupIds: new Set(), isEnabled: true, sortOrder: 0 });
+  };
+
+  const toggleDashboardGroup = (groupId) => {
+    setDashboardForm((prev) => {
+      const next = new Set(prev.groupIds);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return { ...prev, groupIds: next };
+    });
+  };
+
+  const saveDashboard = async (e) => {
+    e.preventDefault();
+    if (!dashboardForm.name.trim()) {
+      toast.error('Dashboard name is required');
+      return;
+    }
+    if (!dashboardForm.publicUrl.trim()) {
+      toast.error('Public Metabase URL is required');
+      return;
+    }
+    if (dashboardForm.groupIds.size === 0) {
+      toast.error('Select at least one access group');
       return;
     }
 
-    setDeletingGroupId(group.id);
+    setDashboardSaving(true);
     try {
-      await db.entities.AccessGroup.delete(group.id);
-      queryClient.invalidateQueries({ queryKey: ['access-groups'] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast.success(`Deleted group "${group.name}"`);
+      const payload = {
+        name: dashboardForm.name.trim(),
+        public_url: dashboardForm.publicUrl.trim(),
+        access_group_ids: [...dashboardForm.groupIds].map(Number),
+        is_enabled: dashboardForm.isEnabled,
+        sort_order: Number(dashboardForm.sortOrder) || 0,
+      };
+
+      if (editDashboard) {
+        await db.entities.MetabaseDashboard.update(editDashboard.id, payload);
+        toast.success(`Updated dashboard "${payload.name}"`);
+      } else {
+        await db.entities.MetabaseDashboard.create(payload);
+        toast.success(`Created dashboard "${payload.name}"`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['metabase-dashboards'] });
+      closeDashboardDialog();
     } catch (err) {
-      toast.error(err?.data?.message || err.message || 'Failed to delete group');
+      toast.error(err?.data?.message || err.message || 'Failed to save dashboard');
     } finally {
-      setDeletingGroupId(null);
+      setDashboardSaving(false);
     }
+  };
+
+  const confirmDeleteGroup = () => {
+    if (!pendingDeleteGroup || deleteGroupMut.isPending) return;
+    const group = pendingDeleteGroup;
+    const groupId = String(group.id);
+    setPendingDeleteGroup(null);
+    hiddenAccessGroupIdsRef.current.add(groupId);
+    setAccessGroups((prev) => prev.filter((item) => String(item.id) !== groupId));
+    deleteGroupMut.mutate({ id: group.id, name: group.name });
+  };
+
+  const confirmDeleteDashboard = () => {
+    if (!pendingDeleteDashboard || deleteDashboardMut.isPending) return;
+    const dashboard = pendingDeleteDashboard;
+    const dashboardId = String(dashboard.id);
+    setPendingDeleteDashboard(null);
+    hiddenMetabaseDashboardIdsRef.current.add(dashboardId);
+    setMetabaseDashboards((prev) => prev.filter((item) => String(item.id) !== dashboardId));
+    deleteDashboardMut.mutate({ id: dashboard.id, name: dashboard.name });
+  };
+
+  const getDashboardGroupNames = (dashboard) => {
+    const ids = (dashboard.access_group_ids || []).map(String);
+    return ids.map((id) => getGroupById(id)?.name).filter(Boolean);
   };
 
   const openAssignDialog = (user) => {
@@ -614,8 +781,8 @@ export default function UserManagement() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => deleteGroup(group)}
-                          disabled={deletingGroupId === group.id}
+                          onClick={() => setPendingDeleteGroup(group)}
+                          disabled={deleteGroupMut.isPending && String(pendingDeleteGroup?.id) === String(group.id)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -624,6 +791,87 @@ export default function UserManagement() {
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="secondary" className="text-xs">{appCount} app{appCount === 1 ? '' : 's'}</Badge>
                       <Badge variant="outline" className="text-xs">{memberCount} user{memberCount === 1 ? '' : 's'}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-border/70">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" /> Metabase Dashboards
+              </CardTitle>
+              <CardDescription>
+                Add public Metabase embed links and choose which access groups can view each dashboard on the Analytics page.
+              </CardDescription>
+            </div>
+            <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openDashboardDialog()}>
+              <Plus className="w-4 h-4" /> Add Dashboard
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingDashboards ? (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            </div>
+          ) : metabaseDashboards.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+              No Metabase dashboards yet. Add a public Metabase link and assign access groups to control visibility.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {metabaseDashboards.map((dashboard) => {
+                const groupNames = getDashboardGroupNames(dashboard);
+
+                return (
+                  <div key={dashboard.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{dashboard.name}</p>
+                        <a
+                          href={dashboard.public_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 truncate hover:text-primary"
+                        >
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{dashboard.public_url}</span>
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDashboardDialog(dashboard)}>
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => setPendingDeleteDashboard(dashboard)}
+                          disabled={deleteDashboardMut.isPending && String(pendingDeleteDashboard?.id) === String(dashboard.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant={dashboard.is_enabled ? 'default' : 'outline'} className="text-xs">
+                        {dashboard.is_enabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">Order {dashboard.sort_order ?? 0}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {groupNames.length === 0 ? (
+                        <Badge variant="outline" className="text-xs">No groups</Badge>
+                      ) : groupNames.map((name) => (
+                        <Badge key={`${dashboard.id}-${name}`} variant="outline" className="text-xs">{name}</Badge>
+                      ))}
                     </div>
                   </div>
                 );
@@ -1087,6 +1335,131 @@ export default function UserManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={dashboardDialogOpen} onOpenChange={(open) => !open && closeDashboardDialog()}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
+            <DialogTitle>{editDashboard ? `Edit Dashboard - ${editDashboard.name}` : 'Add Metabase Dashboard'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveDashboard} className="flex flex-1 min-h-0 flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Dashboard Name *</Label>
+                  <Input
+                    value={dashboardForm.name}
+                    onChange={(e) => setDashboardForm((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Sales Performance"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sort Order</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={dashboardForm.sortOrder}
+                    onChange={(e) => setDashboardForm((prev) => ({ ...prev, sortOrder: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Public Metabase URL *</Label>
+                <Input
+                  value={dashboardForm.publicUrl}
+                  onChange={(e) => setDashboardForm((prev) => ({ ...prev, publicUrl: e.target.value }))}
+                  placeholder="https://metabase.example.com/public/dashboard/..."
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use the public sharing link from Metabase. It must start with http:// or https://.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Access Groups *</Label>
+                <GroupMultiSelect
+                  groups={accessGroups}
+                  selectedIds={dashboardForm.groupIds}
+                  onToggle={toggleDashboardGroup}
+                  emptyLabel="Create an access group first, then assign this dashboard to it."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only users in the selected groups will see this dashboard under Analytics in the sidebar.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+                <div>
+                  <Label>Enabled</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Disabled dashboards stay hidden from all users.</p>
+                </div>
+                <Switch
+                  checked={dashboardForm.isEnabled}
+                  onCheckedChange={(checked) => setDashboardForm((prev) => ({ ...prev, isEnabled: checked }))}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeDashboardDialog}>Cancel</Button>
+              <Button type="submit" disabled={dashboardSaving}>
+                {dashboardSaving ? 'Saving...' : editDashboard ? 'Save Dashboard' : 'Add Dashboard'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(pendingDeleteGroup)} onOpenChange={(open) => !open && setPendingDeleteGroup(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete access group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteGroup
+                ? `"${pendingDeleteGroup.name}" will be permanently removed. Users in this group will lose their group assignment.`
+                : 'This access group will be permanently removed.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteGroup();
+              }}
+            >
+              Delete Group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(pendingDeleteDashboard)} onOpenChange={(open) => !open && setPendingDeleteDashboard(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Metabase dashboard?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteDashboard
+                ? `"${pendingDeleteDashboard.name}" will be permanently removed. Users will no longer see this dashboard.`
+                : 'This dashboard will be permanently removed.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteDashboard();
+              }}
+            >
+              Delete Dashboard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

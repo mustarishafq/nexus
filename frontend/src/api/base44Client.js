@@ -10,6 +10,7 @@ const ENTITY_ENDPOINTS = {
 	Application: 'applications',
 	UserSystemAccess: 'user-system-accesses',
 	AccessGroup: 'access-groups',
+	MetabaseDashboard: 'metabase-dashboards',
 	Broadcast: 'broadcasts',
 	Notification: 'notifications',
 	SystemEvent: 'system-events',
@@ -37,16 +38,17 @@ function normalizeBody(data) {
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
 	const token = localStorage.getItem(AUTH_TOKEN_KEY);
 	const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+	const hasBody = body !== undefined;
 
 	const response = await fetch(`${API_BASE_URL}${path}`, {
 		method,
 		headers: {
 			Accept: 'application/json',
-			'Content-Type': 'application/json',
+			...(hasBody ? { 'Content-Type': 'application/json' } : {}),
 			...authHeaders,
 			...headers,
 		},
-		body: body === undefined ? undefined : JSON.stringify(normalizeBody(body)),
+		body: hasBody ? JSON.stringify(normalizeBody(body)) : undefined,
 		credentials: 'include',
 	});
 
@@ -102,6 +104,12 @@ function createEntityClient(entityName) {
 
 		async filter(filters = {}, sort, limit) {
 			const query = buildQuery({ ...filters, sort, limit });
+			const payload = await request(`/${endpoint}${query}`);
+			return Array.isArray(payload) ? payload : [];
+		},
+
+		async listAdmin(sort, limit) {
+			const query = buildQuery({ admin: true, sort, limit });
 			const payload = await request(`/${endpoint}${query}`);
 			return Array.isArray(payload) ? payload : [];
 		},

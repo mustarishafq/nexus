@@ -17,6 +17,7 @@ import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
 import UserManagement from '@/pages/UserManagement';
 import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
+import Analytics from '@/pages/Analytics';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -55,6 +56,7 @@ const ProtectedRoutes = () => {
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
         <Route path="/network-health" element={<NetworkHealthDashboard />} />
+        <Route path="/analytics" element={<Analytics />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />

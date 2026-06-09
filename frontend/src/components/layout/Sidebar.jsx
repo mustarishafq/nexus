@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import db from '@/api/base44Client';
 import { 
   LayoutDashboard, Bell, Activity, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -18,8 +20,17 @@ export default function Sidebar({
   const location = useLocation();
   const { user, appPublicSettings } = useAuth();
 
+  const { data: metabaseDashboards = [] } = useQuery({
+    queryKey: ['metabase-dashboards'],
+    queryFn: () => db.entities.MetabaseDashboard.list('sort_order', 50),
+    staleTime: 60_000,
+  });
+
+  const showAnalytics = user?.role === 'admin' || metabaseDashboards.length > 0;
+
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/activity', icon: Activity, label: 'Activity Feed' },
