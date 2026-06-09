@@ -47,7 +47,7 @@ export default function ActivityTimeline() {
   const filtered = activities.filter(a => {
     if (actionFilter !== 'all' && a.action !== actionFilter) return false;
     if (systemFilter !== 'all' && a.system_id !== systemFilter) return false;
-    if (search && !a.description?.toLowerCase().includes(search.toLowerCase()) && !a.user_name?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !a.description?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -65,7 +65,7 @@ export default function ActivityTimeline() {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Activity className="w-6 h-6 text-primary" /> Activity Timeline
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Cross-system activity feed</p>
+        <p className="text-sm text-muted-foreground mt-1">Your activity history across connected systems</p>
       </motion.div>
 
       {/* Filters */}
@@ -135,10 +135,7 @@ export default function ActivityTimeline() {
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
-                          <p className="text-sm">
-                            <span className="font-semibold">{log.user_name || log.user_id || 'System'}</span>
-                            {' '}<span className="text-muted-foreground">{log.description}</span>
-                          </p>
+                          <p className="text-sm text-muted-foreground">{log.description}</p>
                           <div className="flex items-center gap-2 mt-1">
                             {log.system_id && (
                               <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
