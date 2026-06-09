@@ -137,6 +137,7 @@ export default function UserManagement() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [assigningGroups, setAssigningGroups] = useState(false);
   const [newUserRole, setNewUserRole] = useState('user');
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
   const [search, setSearch] = useState('');
@@ -161,6 +162,7 @@ export default function UserManagement() {
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const csvRef = useRef(null);
+  const assignGroupsCsvRef = useRef(null);
   const queryClient = useQueryClient();
 
   const { data: usersRaw = [], isLoading: loadingUsers } = useQuery({
@@ -616,9 +618,38 @@ export default function UserManagement() {
     }
   };
 
+  const handleAssignGroupsCsvUpload = async (file) => {
+    if (!file || !/\.csv$/i.test(file.name)) {
+      toast.error('Please upload a valid CSV file');
+      return;
+    }
+    setAssigningGroups(true);
+    try {
+      const result = await db.assignAccessGroupsCsv(file);
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      const count = Number(result?.count || 0);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['access-groups'] });
+      toast.success(`Assigned access groups for ${count} user(s)${errors.length ? ` (${errors.length} skipped)` : ''}`);
+      if (errors.length) {
+        errors.forEach((err) => toast.error(err, { duration: 6000 }));
+      }
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Access group assignment failed');
+    } finally {
+      setAssigningGroups(false);
+      if (assignGroupsCsvRef.current) assignGroupsCsvRef.current.value = '';
+    }
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) handleCsvUpload(file);
+  };
+
+  const handleAssignGroupsFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleAssignGroupsCsvUpload(file);
   };
 
   const handleDrag = (e) => {
@@ -650,6 +681,23 @@ export default function UserManagement() {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'users-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadAssignGroupsSampleCsv = () => {
+    const sample = [
+      'email,access_group',
+      'azira@emzi.com.my,R&F',
+      'hanis.azmi@emzi.com.my,R&F',
+    ].join('\n');
+    const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'assign-access-groups-template.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -688,21 +736,28 @@ export default function UserManagement() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
+          <input ref={assignGroupsCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleAssignGroupsFileSelect} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5" disabled={importing}>
+              <Button variant="outline" size="sm" className="gap-1.5" disabled={importing || assigningGroups}>
                 <Upload className="w-4 h-4" />
-                {importing ? 'Importing...' : 'Import CSV'}
+                {importing || assigningGroups ? 'Importing...' : 'Import CSV'}
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => csvRef.current?.click()} disabled={importing}>
-                <Upload className="w-4 h-4" /> Upload CSV
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => csvRef.current?.click()} disabled={importing || assigningGroups}>
+                <Upload className="w-4 h-4" /> Import new users
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={downloadSampleCsv}>
+                <Download className="w-4 h-4" /> User import template
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={downloadSampleCsv}>
-                <Download className="w-4 h-4" /> Download sample
+              <DropdownMenuItem onClick={() => assignGroupsCsvRef.current?.click()} disabled={importing || assigningGroups}>
+                <Layers className="w-4 h-4" /> Assign access groups
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={downloadAssignGroupsSampleCsv}>
+                <Download className="w-4 h-4" /> Access group template
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

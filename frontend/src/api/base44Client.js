@@ -375,10 +375,18 @@ export const db = {
 	 * Bulk-import users from a CSV File object.
 	 */
 	async importUsersCsv(file) {
+		return this.uploadUsersCsv(file, '/users/import-csv');
+	},
+
+	async assignAccessGroupsCsv(file) {
+		return this.uploadUsersCsv(file, '/users/assign-access-groups-csv');
+	},
+
+	async uploadUsersCsv(file, path) {
 		const token = localStorage.getItem(AUTH_TOKEN_KEY);
 		const formData = new FormData();
 		formData.append('file', file);
-		const response = await fetch(`${API_BASE_URL}/users/import-csv`, {
+		const response = await fetch(`${API_BASE_URL}${path}`, {
 			method: 'POST',
 			headers: {
 				Accept: 'application/json',

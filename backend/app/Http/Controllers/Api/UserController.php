@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
+use App\Models\AccessGroup;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -186,6 +187,119 @@ class UserController extends Controller
                 'created' => [],
                 'errors'  => ['Import failed: ' . $e->getMessage()],
                 'count'   => 0,
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk-assign access groups to existing users from a CSV upload.
+     * Expected columns: email, access_group
+     * access_group values are matched to access group names.
+     */
+    public function assignAccessGroupsCsv(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
+        ]);
+
+        try {
+            $file = $request->file('file');
+            $handle = fopen($file->getRealPath(), 'r');
+            if (!$handle) {
+                return response()->json([
+                    'updated' => [],
+                    'errors' => ['Failed to open file'],
+                    'count' => 0,
+                ], 400);
+            }
+
+            $headers = array_map(
+                fn ($header) => strtolower(trim((string) $header)),
+                fgetcsv($handle) ?: []
+            );
+            if (!$headers) {
+                fclose($handle);
+
+                return response()->json([
+                    'updated' => [],
+                    'errors' => ['Empty CSV file or invalid format'],
+                    'count' => 0,
+                ], 400);
+            }
+
+            $emailIndex = array_search('email', $headers, true);
+            $groupIndex = array_search('access_group', $headers, true);
+
+            if ($emailIndex === false || $groupIndex === false) {
+                fclose($handle);
+
+                return response()->json([
+                    'updated' => [],
+                    'errors' => ['CSV must include email and access_group columns'],
+                    'count' => 0,
+                ], 400);
+            }
+
+            $groupsByName = AccessGroup::query()
+                ->get()
+                ->keyBy(fn (AccessGroup $group) => strtolower(trim($group->name)));
+
+            $updated = [];
+            $errors = [];
+            $row = 1;
+
+            while (($data = fgetcsv($handle)) !== false) {
+                $row++;
+
+                if (empty(array_filter($data))) {
+                    continue;
+                }
+
+                $email = trim((string) ($data[$emailIndex] ?? ''));
+                $groupName = trim((string) ($data[$groupIndex] ?? ''));
+
+                if ($email === '') {
+                    $errors[] = "Row {$row}: missing email";
+                    continue;
+                }
+
+                if ($groupName === '') {
+                    $errors[] = "Row {$row}: missing access_group for '{$email}'";
+                    continue;
+                }
+
+                $user = User::where('email', $email)->first();
+                if (!$user) {
+                    $errors[] = "Row {$row}: user not found for email '{$email}'";
+                    continue;
+                }
+
+                $group = $groupsByName->get(strtolower($groupName));
+                if (!$group) {
+                    $errors[] = "Row {$row}: access group '{$groupName}' not found for '{$email}'";
+                    continue;
+                }
+
+                $user->accessGroups()->sync([$group->id]);
+                $updated[] = [
+                    'email' => $email,
+                    'access_group' => $group->name,
+                ];
+            }
+
+            fclose($handle);
+
+            return response()->json([
+                'updated' => $updated,
+                'errors' => $errors,
+                'count' => count($updated),
+                'total_rows' => $row - 1,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'updated' => [],
+                'errors' => ['Import failed: ' . $e->getMessage()],
+                'count' => 0,
             ], 500);
         }
     }
