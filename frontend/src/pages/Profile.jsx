@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
+import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
 
 export default function Profile() {
   const { user: authUser, checkUserAuth } = useAuth();
@@ -113,6 +114,14 @@ export default function Profile() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleProfileSave} className="space-y-4">
+              <ProfilePictureUploader
+                profilePicture={authUser?.profile_picture}
+                displayName={profileForm.full_name || authUser?.full_name}
+                onUpdated={checkUserAuth}
+              />
+
+              <Separator />
+
               <div className="space-y-1.5">
                 <Label htmlFor="full_name">Full Name</Label>
                 <Input

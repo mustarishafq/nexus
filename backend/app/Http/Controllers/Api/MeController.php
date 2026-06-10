@@ -40,6 +40,7 @@ class MeController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'profile_picture' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'current_password' => ['sometimes', 'string'],
             'new_password' => ['sometimes', 'required_with:current_password', 'string', 'min:8', 'confirmed'],

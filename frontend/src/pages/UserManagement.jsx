@@ -34,6 +34,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import UserAvatar from '@/components/users/UserAvatar';
 
 function GroupMultiSelect({ groups, selectedIds, onToggle, emptyLabel = 'No access groups yet.' }) {
   if (groups.length === 0) {
@@ -82,9 +83,11 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
               key={user.id}
               className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-semibold shrink-0">
-                {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
-              </div>
+              <UserAvatar
+                user={user}
+                className="h-8 w-8"
+                fallbackClassName="bg-primary/15 text-xs"
+              />
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{user.full_name || user.email}</p>
                 <p className="text-xs opacity-70 truncate">{user.email}</p>
@@ -115,9 +118,11 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
                 onSelect={() => onToggle(user.id)}
                 className="gap-3"
               >
-                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold shrink-0">
-                  {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
-                </div>
+                <UserAvatar
+                  user={user}
+                  className="h-8 w-8"
+                  fallbackClassName="bg-muted text-xs text-foreground"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium truncate">{user.full_name || user.email}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
@@ -1023,9 +1028,7 @@ export default function UserManagement() {
                     <TableRow key={user.id}>
                       <TableCell className="pl-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm shrink-0">
-                            {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
-                          </div>
+                          <UserAvatar user={user} />
                           <div>
                             <p className="font-medium leading-none">{user.full_name || user.email}</p>
                             <p className="text-xs text-muted-foreground mt-1">{user.email}</p>

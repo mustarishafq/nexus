@@ -17,6 +17,12 @@ class FileUploadController extends Controller
         ]);
 
         $folder = $validated['folder'] ?? 'uploads';
+
+        if ($folder === 'profile-pictures') {
+            $request->validate([
+                'file' => ['image', 'mimes:jpeg,jpg,png,webp,gif'],
+            ]);
+        }
         $path = $request->file('file')->store($folder, 'public');
         $url = Storage::url($path);
 

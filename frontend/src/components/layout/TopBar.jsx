@@ -2,8 +2,10 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import { toAbsoluteUrl } from '@/lib/media';
 
 import { Bell, Search, LogOut, User, ChevronDown, Menu } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,13 +17,21 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const [user, setUser] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
+    setUser(authUser);
+  }, [authUser]);
+
+  useEffect(() => {
+    if (authUser) return;
     db.auth.me().then(setUser).catch(() => {});
+  }, [authUser]);
+
+  useEffect(() => {
     loadUnreadCount();
     const interval = setInterval(loadUnreadCount, 15000);
     return () => clearInterval(interval);
@@ -80,11 +90,16 @@ export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary">
-                  {user?.full_name?.[0] || 'U'}
-                </span>
-              </div>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage
+                  src={toAbsoluteUrl(user?.profile_picture)}
+                  alt={user?.full_name || 'User'}
+                  className="rounded-lg"
+                />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                  {user?.full_name?.[0]?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium leading-none">{user?.full_name || 'User'}</p>
                 <p className="text-xs text-muted-foreground">{user?.role || 'user'}</p>
