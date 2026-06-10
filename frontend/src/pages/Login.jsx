@@ -46,7 +46,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex h-dvh min-h-dvh overflow-hidden">
+    <div className="min-h-screen flex">
       {/* Desktop: Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[hsl(206,92%,15%)] flex-col justify-between p-12">
         {/* Gradient overlays */}
@@ -96,7 +96,7 @@ export default function Login() {
       </div>
 
       {/* Desktop: Right form panel | Mobile/Tablet: Full screen with blue background */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-between lg:justify-center lg:bg-background bg-[hsl(206,92%,15%)] px-6 py-8 lg:py-12 relative overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-between lg:justify-center lg:bg-background bg-[hsl(206,92%,15%)] px-6 py-8 lg:py-12 relative">
         {/* Mobile/Tablet: Gradient overlay for depth */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-br from-[hsl(206,92%,20%)] via-[hsl(206,92%,15%)] to-[hsl(206,92%,10%)]" />
 

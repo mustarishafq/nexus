@@ -3,7 +3,6 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const SPLASH_SRC = '/lottie/splash.lottie';
-const SPLASH_BG = '#01298c';
 const MIN_SPLASH_MS = 1200;
 const MAX_SPLASH_MS = 6000;
 
@@ -73,23 +72,11 @@ export default function PwaSplashScreen() {
     const prevBodyOverflow = body.style.overflow;
     const prevBodyTouchAction = body.style.touchAction;
     const prevBodyOverscroll = body.style.overscrollBehavior;
-    const prevHtmlBackground = documentElement.style.backgroundColor;
-    const prevBodyBackground = body.style.backgroundColor;
-    const prevHtmlHeight = documentElement.style.height;
-    const prevBodyHeight = body.style.height;
-    const prevHtmlMinHeight = documentElement.style.minHeight;
-    const prevBodyMinHeight = body.style.minHeight;
 
     documentElement.style.overflow = 'hidden';
     body.style.overflow = 'hidden';
     body.style.touchAction = 'none';
     body.style.overscrollBehavior = 'none';
-    documentElement.style.backgroundColor = SPLASH_BG;
-    body.style.backgroundColor = SPLASH_BG;
-    documentElement.style.height = '100dvh';
-    body.style.height = '100dvh';
-    documentElement.style.minHeight = '100dvh';
-    body.style.minHeight = '100dvh';
 
     const preventTouchMove = (event) => {
       event.preventDefault();
@@ -102,12 +89,6 @@ export default function PwaSplashScreen() {
       body.style.overflow = prevBodyOverflow;
       body.style.touchAction = prevBodyTouchAction;
       body.style.overscrollBehavior = prevBodyOverscroll;
-      documentElement.style.backgroundColor = prevHtmlBackground;
-      body.style.backgroundColor = prevBodyBackground;
-      documentElement.style.height = prevHtmlHeight;
-      body.style.height = prevBodyHeight;
-      documentElement.style.minHeight = prevHtmlMinHeight;
-      body.style.minHeight = prevBodyMinHeight;
       document.removeEventListener('touchmove', preventTouchMove);
     };
   }, [active]);
@@ -129,7 +110,6 @@ export default function PwaSplashScreen() {
         <motion.div
           key="pwa-splash"
           className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-none bg-[#01298c]"
-          style={{ height: '100dvh', minHeight: '100dvh' }}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.45, ease: 'easeInOut' }}
