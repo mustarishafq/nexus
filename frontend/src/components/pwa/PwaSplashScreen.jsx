@@ -75,6 +75,8 @@ export default function PwaSplashScreen() {
     const prevBodyOverscroll = body.style.overscrollBehavior;
     const prevHtmlBackground = documentElement.style.backgroundColor;
     const prevBodyBackground = body.style.backgroundColor;
+    const prevHtmlHeight = documentElement.style.height;
+    const prevBodyHeight = body.style.height;
     const prevHtmlMinHeight = documentElement.style.minHeight;
     const prevBodyMinHeight = body.style.minHeight;
 
@@ -84,6 +86,8 @@ export default function PwaSplashScreen() {
     body.style.overscrollBehavior = 'none';
     documentElement.style.backgroundColor = SPLASH_BG;
     body.style.backgroundColor = SPLASH_BG;
+    documentElement.style.height = '100dvh';
+    body.style.height = '100dvh';
     documentElement.style.minHeight = '100dvh';
     body.style.minHeight = '100dvh';
 
@@ -100,6 +104,8 @@ export default function PwaSplashScreen() {
       body.style.overscrollBehavior = prevBodyOverscroll;
       documentElement.style.backgroundColor = prevHtmlBackground;
       body.style.backgroundColor = prevBodyBackground;
+      documentElement.style.height = prevHtmlHeight;
+      body.style.height = prevBodyHeight;
       documentElement.style.minHeight = prevHtmlMinHeight;
       body.style.minHeight = prevBodyMinHeight;
       document.removeEventListener('touchmove', preventTouchMove);
@@ -122,19 +128,20 @@ export default function PwaSplashScreen() {
       {!exiting && (
         <motion.div
           key="pwa-splash"
-          className="fixed inset-0 z-[9999] size-full overflow-hidden overscroll-none touch-none bg-[#01298c]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-none bg-[#01298c]"
+          style={{ height: '100dvh', minHeight: '100dvh' }}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.45, ease: 'easeInOut' }}
           aria-hidden="true"
         >
-          <div className="absolute inset-0 size-full">
+          <div className="h-48 w-48 sm:h-56 sm:w-56">
             <DotLottieReact
               src={SPLASH_SRC}
               autoplay
               loop={false}
               className="size-full"
-              layout={{ fit: 'cover', align: [0.5, 0.5] }}
+              layout={{ fit: 'contain', align: [0.5, 0.5] }}
               dotLottieRefCallback={handleDotLottieRef}
             />
           </div>
