@@ -24,6 +24,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ForcedPasswordChange from '@/pages/ForcedPasswordChange';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
+import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
 
 const ProtectedRoutes = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError, forcePasswordChange } = useAuth();
@@ -78,6 +79,7 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
+        <PwaSplashScreen />
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />

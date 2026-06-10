@@ -1,0 +1,101 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { AnimatePresence, motion } from 'framer-motion';
+
+const SPLASH_SRC = '/lottie/splash.lottie';
+const MIN_SPLASH_MS = 1200;
+const MAX_SPLASH_MS = 6000;
+
+function shouldShowSplash() {
+  if (typeof window === 'undefined') return false;
+
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+
+  if (isStandalone) return true;
+
+  try {
+    return !sessionStorage.getItem('nexus_splash_shown');
+  } catch {
+    return true;
+  }
+}
+
+export default function PwaSplashScreen() {
+  const [active, setActive] = useState(shouldShowSplash);
+  const [exiting, setExiting] = useState(false);
+  const animCompleteRef = useRef(false);
+  const minElapsedRef = useRef(false);
+  const dismissedRef = useRef(false);
+
+  const dismiss = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+
+    try {
+      sessionStorage.setItem('nexus_splash_shown', '1');
+    } catch {
+      // ignore storage errors
+    }
+
+    setExiting(true);
+  }, []);
+
+  const tryDismiss = useCallback(() => {
+    if (animCompleteRef.current && minElapsedRef.current) {
+      dismiss();
+    }
+  }, [dismiss]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+
+    const minTimer = window.setTimeout(() => {
+      minElapsedRef.current = true;
+      tryDismiss();
+    }, MIN_SPLASH_MS);
+
+    const maxTimer = window.setTimeout(dismiss, MAX_SPLASH_MS);
+
+    return () => {
+      window.clearTimeout(minTimer);
+      window.clearTimeout(maxTimer);
+    };
+  }, [active, dismiss, tryDismiss]);
+
+  const handleDotLottieRef = useCallback((dotLottie) => {
+    if (!dotLottie) return;
+
+    dotLottie.addEventListener('complete', () => {
+      animCompleteRef.current = true;
+      tryDismiss();
+    });
+  }, [tryDismiss]);
+
+  if (!active) return null;
+
+  return (
+    <AnimatePresence onExitComplete={() => setActive(false)}>
+      {!exiting && (
+        <motion.div
+          key="pwa-splash"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#183e8a]"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.45, ease: 'easeInOut' }}
+          aria-hidden="true"
+        >
+          <div className="h-48 w-48 sm:h-56 sm:w-56">
+            <DotLottieReact
+              src={SPLASH_SRC}
+              autoplay
+              loop={false}
+              dotLottieRefCallback={handleDotLottieRef}
+            />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
