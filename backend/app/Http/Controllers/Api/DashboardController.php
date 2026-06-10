@@ -30,7 +30,7 @@ class DashboardController extends Controller
             ->whereMonth('date_of_birth', $month)
             ->whereDay('date_of_birth', $day)
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'name', 'email', 'date_of_birth']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'date_of_birth']);
 
         $serviceUsers = User::query()
             ->where('is_approved', true)
@@ -39,7 +39,7 @@ class DashboardController extends Controller
             ->whereDay('joined_at', $day)
             ->whereDate('joined_at', '<', $todayDate)
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'name', 'email', 'joined_at'])
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'joined_at'])
             ->filter(function (User $user) use ($today) {
                 return ($today->year - $user->joined_at->year) >= 1;
             })
@@ -59,6 +59,7 @@ class DashboardController extends Controller
                     'id' => $user->id,
                     'full_name' => $user->full_name ?: $user->name,
                     'email' => $user->email,
+                    'profile_picture' => $user->profile_picture,
                     'date_of_birth' => $user->date_of_birth?->toDateString(),
                     'age' => $user->date_of_birth ? $today->year - $user->date_of_birth->year : null,
                 ],
@@ -72,6 +73,7 @@ class DashboardController extends Controller
                     'id' => $user->id,
                     'full_name' => $user->full_name ?: $user->name,
                     'email' => $user->email,
+                    'profile_picture' => $user->profile_picture,
                     'joined_at' => $user->joined_at?->toDateString(),
                     'years_of_service' => $today->year - $user->joined_at->year,
                 ],

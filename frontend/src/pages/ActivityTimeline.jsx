@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import UserAvatar from '@/components/users/UserAvatar';
 
 const actionIcons = {
   login: LogIn, logout: LogOut, create: Plus, update: Pencil,
@@ -154,13 +155,23 @@ export default function ActivityTimeline() {
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
-                          <p className="text-sm">
-                            {isAdmin && (
-                              <span className="font-semibold">{log.user_name || log.user_id || 'System'}</span>
-                            )}
-                            {isAdmin ? ' ' : null}
-                            <span className="text-muted-foreground">{log.description}</span>
-                          </p>
+                          {isAdmin && (log.user_name || log.user_id) ? (
+                            <div className="flex items-center gap-2 mb-1">
+                              <UserAvatar
+                                user={{
+                                  full_name: log.user_name,
+                                  email: log.user_id,
+                                  profile_picture: log.profile_picture,
+                                }}
+                                className="h-6 w-6"
+                                fallbackClassName="text-[10px]"
+                              />
+                              <span className="text-sm font-semibold">
+                                {log.user_name || log.user_id}
+                              </span>
+                            </div>
+                          ) : null}
+                          <p className="text-sm text-muted-foreground">{log.description}</p>
                           <div className="flex items-center gap-2 mt-1">
                             {log.system_id && (
                               <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">

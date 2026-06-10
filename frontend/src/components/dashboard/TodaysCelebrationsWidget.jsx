@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import UserAvatar from '@/components/users/UserAvatar';
 
 const DEFAULT_REACTIONS = ['🎉', '🎂', '👏', '🎈', '❤️', '🥳', '🙌'];
 
@@ -44,7 +45,6 @@ function CelebrationFeedCard({
   isSubmitting,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const initial = person.full_name?.[0]?.toUpperCase() || person.email?.[0]?.toUpperCase() || '?';
   const canReact = person.can_react ?? person.can_wish !== false;
   const myReaction = person.my_reaction?.reaction ?? person.my_wish?.reaction ?? null;
   const reactionCounts = person.reaction_counts || {};
@@ -82,14 +82,11 @@ function CelebrationFeedCard({
   return (
     <article className="rounded-lg border border-border/80 bg-background overflow-hidden flex flex-col h-full min-w-0">
       <div className="flex items-start gap-2 p-2.5 min-w-0">
-        <div
-          className={cn(
-            'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
-            accentStyles.avatar
-          )}
-        >
-          {initial}
-        </div>
+        <UserAvatar
+          user={person}
+          className="h-7 w-7"
+          fallbackClassName={cn('text-[10px] font-bold', accentStyles.avatar)}
+        />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold truncate leading-tight">{person.full_name || person.email}</p>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">

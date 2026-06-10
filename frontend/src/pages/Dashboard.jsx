@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import UserAvatar from '@/components/users/UserAvatar';
 
 export default function Dashboard() {
   const { data: user } = useQuery({
@@ -63,12 +64,17 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back{user?.full_name ? `, ${user.full_name}` : ''}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Your command center overview
-        </p>
+        <div className="flex items-center gap-4">
+          <UserAvatar user={user} className="h-14 w-14 border border-border shadow-sm" />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Welcome back{user?.full_name ? `, ${user.full_name}` : ''}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your command center overview
+            </p>
+          </div>
+        </div>
       </motion.div>
 
       {/* Stats Cards */}

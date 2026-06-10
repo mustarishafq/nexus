@@ -37,6 +37,17 @@ class ActivityLogController extends Controller
                 : ['system_id', 'action', 'resource_type', 'resource_id']
         )->get();
 
+        $profilePictures = User::query()
+            ->whereIn('id', $items->pluck('user_id')->filter()->unique()->values())
+            ->pluck('profile_picture', 'id');
+
+        $items = $items->map(function (ActivityLog $log) use ($profilePictures) {
+            $array = $log->toArray();
+            $array['profile_picture'] = $profilePictures->get((int) $log->user_id);
+
+            return $array;
+        });
+
         return response()->json($items);
     }
 

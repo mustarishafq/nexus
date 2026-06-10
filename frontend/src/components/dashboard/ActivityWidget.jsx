@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import UserAvatar from '@/components/users/UserAvatar';
 
 const actionIcons = {
   login: LogIn, logout: LogOut, create: Plus, update: Pencil,
@@ -53,10 +54,23 @@ export default function ActivityWidget({ activities }) {
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <p className="text-sm leading-snug">
-                        <span className="font-medium">{log.user_name || log.user_id || 'System'}</span>
-                        {' '}<span className="text-muted-foreground">{log.description}</span>
-                      </p>
+                      {(log.user_name || log.user_id) ? (
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <UserAvatar
+                            user={{
+                              full_name: log.user_name,
+                              email: log.user_id,
+                              profile_picture: log.profile_picture,
+                            }}
+                            className="h-5 w-5"
+                            fallbackClassName="text-[9px]"
+                          />
+                          <span className="text-sm font-medium">
+                            {log.user_name || log.user_id}
+                          </span>
+                        </div>
+                      ) : null}
+                      <p className="text-sm leading-snug text-muted-foreground">{log.description}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {log.system_id && (
                           <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
