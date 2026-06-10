@@ -91,10 +91,6 @@ class ApplicationController extends Controller
             'color' => ['nullable', 'string', 'max:20'],
         ]);
 
-        if (($validated['auth_mode'] ?? 'jwt') !== 'redirect') {
-            unset($validated['open_mode']);
-        }
-
         $validated['created_by_user_id'] = $user->id;
         if ($user->role !== 'admin') {
             $validated['visibility'] = 'private';
@@ -164,11 +160,6 @@ class ApplicationController extends Controller
 
         if ($user->role !== 'admin') {
             $validated = Arr::except($validated, ['visibility']);
-        }
-
-        $nextAuthMode = $validated['auth_mode'] ?? $application->auth_mode;
-        if ($nextAuthMode !== 'redirect') {
-            unset($validated['open_mode']);
         }
 
         if (array_key_exists('private_allowed_user_emails', $validated)) {
@@ -310,6 +301,7 @@ class ApplicationController extends Controller
             'token'      => $token,
             'expires_in' => 60,
             'auth_mode'  => 'jwt',
+            'open_mode'  => $application->open_mode ?? 'embedded',
         ]);
     }
 

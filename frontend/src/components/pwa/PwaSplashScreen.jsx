@@ -64,6 +64,35 @@ export default function PwaSplashScreen() {
     };
   }, [active, dismiss, tryDismiss]);
 
+  useEffect(() => {
+    if (!active) return undefined;
+
+    const { documentElement, body } = document;
+    const prevHtmlOverflow = documentElement.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyTouchAction = body.style.touchAction;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+
+    documentElement.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.touchAction = 'none';
+    body.style.overscrollBehavior = 'none';
+
+    const preventTouchMove = (event) => {
+      event.preventDefault();
+    };
+
+    document.addEventListener('touchmove', preventTouchMove, { passive: false });
+
+    return () => {
+      documentElement.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      body.style.touchAction = prevBodyTouchAction;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      document.removeEventListener('touchmove', preventTouchMove);
+    };
+  }, [active]);
+
   const handleDotLottieRef = useCallback((dotLottie) => {
     if (!dotLottie) return;
 
@@ -80,7 +109,7 @@ export default function PwaSplashScreen() {
       {!exiting && (
         <motion.div
           key="pwa-splash"
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#01298c]"
+          className="fixed inset-0 z-[9999] flex h-[100dvh] min-h-[100dvh] w-full items-center justify-center overflow-hidden overscroll-none touch-none bg-[#01298c]"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.45, ease: 'easeInOut' }}

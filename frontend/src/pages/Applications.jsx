@@ -390,26 +390,21 @@ export default function Applications() {
     setLaunching(system.id);
 
     try {
-      const { launch_url, auth_mode, open_mode } = await db.launchSystem(system.id);
+      const { launch_url, open_mode } = await db.launchSystem(system.id);
       const resolvedOpenMode = open_mode || system.open_mode || 'embedded';
 
-      if (auth_mode === 'redirect') {
-        if (resolvedOpenMode === 'embedded') {
-          navigate(`/applications/${system.id}/view`);
-          setLaunching(null);
-          return;
-        }
+      if (resolvedOpenMode === 'embedded') {
+        navigate(`/applications/${system.id}/view`);
+        setLaunching(null);
+        return;
+      }
 
-        if (resolvedOpenMode === 'new_tab') {
-          const tab = window.open(launch_url, '_blank', 'noopener,noreferrer');
-          if (tab) {
-            tab.opener = null;
-          }
-          setLaunching(null);
-          return;
+      if (resolvedOpenMode === 'new_tab') {
+        const tab = window.open(launch_url, '_blank', 'noopener,noreferrer');
+        if (tab) {
+          tab.opener = null;
         }
-
-        window.location.href = launch_url;
+        setLaunching(null);
         return;
       }
 
@@ -444,7 +439,7 @@ export default function Applications() {
       base_url: form.get('base_url'),
       api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
       auth_mode: authMode,
-      open_mode: authMode === 'redirect' ? openMode : undefined,
+      open_mode: openMode,
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
       status: form.get('status'),
@@ -569,9 +564,7 @@ export default function Applications() {
                   )}
                 </div>
               </div>
-              {authMode === 'redirect' && (
-                <OpenModeSelector value={openMode} onChange={setOpenMode} />
-              )}
+              <OpenModeSelector value={openMode} onChange={setOpenMode} />
               {authMode === 'jwt' && (
                 <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>
