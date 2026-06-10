@@ -21,8 +21,8 @@ class PwaController extends Controller
             'start_url' => '/',
             'scope' => '/',
             'display' => 'standalone',
-            'background_color' => '#01298c',
-            'theme_color' => '#01298c',
+            'background_color' => '#022e96',
+            'theme_color' => '#022e96',
             'description' => 'Unified system access, alerts, and admin controls.',
             'icons' => [
                 // [
