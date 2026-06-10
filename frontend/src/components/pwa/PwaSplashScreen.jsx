@@ -80,7 +80,7 @@ export default function PwaSplashScreen() {
       {!exiting && (
         <motion.div
           key="pwa-splash"
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#183e8a]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#01298c]"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.45, ease: 'easeInOut' }}
