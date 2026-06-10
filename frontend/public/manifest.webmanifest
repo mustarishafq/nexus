@@ -3,7 +3,7 @@
   "short_name": "EMZI Nexus Brain",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#022e96",
   "theme_color": "#022e96",
   "icons": [

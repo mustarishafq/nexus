@@ -20,23 +20,23 @@ class PwaController extends Controller
             'id' => '/',
             'start_url' => '/',
             'scope' => '/',
-            'display' => 'standalone',
+            'display' => 'fullscreen',
             'background_color' => '#022e96',
             'theme_color' => '#022e96',
             'description' => 'Unified system access, alerts, and admin controls.',
             'icons' => [
-                // [
-                //     'src' => '/icons/pwa-icon-192x192.png',
-                //     'sizes' => '192x192',
-                //     'type' => 'image/png',
-                //     'purpose' => 'any',
-                // ],
-                // [
-                //     'src' => '/icons/pwa-icon-512x512.png',
-                //     'sizes' => '512x512',
-                //     'type' => 'image/png',
-                //     'purpose' => 'any maskable',
-                // ],
+                [
+                    'src' => '/icons/pwa-icon-192.png',
+                    'sizes' => '192x192',
+                    'type' => 'image/png',
+                    'purpose' => 'any',
+                ],
+                [
+                    'src' => '/icons/pwa-icon-512.png',
+                    'sizes' => '512x512',
+                    'type' => 'image/png',
+                    'purpose' => 'any maskable',
+                ],
                 [
                     'src' => '/icons/logo.svg',
                     'sizes' => 'any',
