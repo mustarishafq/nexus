@@ -13,6 +13,7 @@ class PwaController extends Controller
     {
         $settings = $this->currentSettings();
         $name = $settings->system_name ?: config('app.name', 'EMZI Nexus Brain');
+        $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
 
         return response()->json([
             'name' => $name,
@@ -20,28 +21,28 @@ class PwaController extends Controller
             'id' => '/',
             'start_url' => '/',
             'scope' => '/',
-            'display' => 'fullscreen',
+            'display' => 'standalone',
             'background_color' => '#022e96',
             'theme_color' => '#022e96',
             'description' => 'Unified system access, alerts, and admin controls.',
             'icons' => [
                 [
-                    'src' => '/icons/pwa-icon-192.png',
+                    'src' => "{$frontendUrl}/icons/apple-touch-icon.png",
+                    'sizes' => '180x180',
+                    'type' => 'image/png',
+                    'purpose' => 'any',
+                ],
+                [
+                    'src' => "{$frontendUrl}/icons/pwa-icon-192.png",
                     'sizes' => '192x192',
                     'type' => 'image/png',
                     'purpose' => 'any',
                 ],
                 [
-                    'src' => '/icons/pwa-icon-512.png',
+                    'src' => "{$frontendUrl}/icons/pwa-icon-512.png",
                     'sizes' => '512x512',
                     'type' => 'image/png',
                     'purpose' => 'any maskable',
-                ],
-                [
-                    'src' => '/icons/logo.svg',
-                    'sizes' => 'any',
-                    'type' => 'image/svg+xml',
-                    'purpose' => 'any',
                 ],
             ],
         ])->header('Content-Type', 'application/manifest+json');

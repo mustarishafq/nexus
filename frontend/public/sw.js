@@ -1,9 +1,10 @@
-const CACHE_NAME = 'nexus-shell-v4';
+const CACHE_NAME = 'nexus-shell-v5';
 const APP_SHELL = [
   '/',
   '/offline.html',
-  '/icons/pwa-icon-192x192.png',
-  '/icons/pwa-icon-512x512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/pwa-icon-192.png',
+  '/icons/pwa-icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -96,8 +97,8 @@ self.addEventListener('push', (event) => {
 
   const notifyOptions = {
     body,
-    icon: '/icons/pwa-icon-192x192.png',
-    badge: '/icons/pwa-icon-192x192.png',
+    icon: '/icons/pwa-icon-192.png',
+    badge: '/icons/pwa-icon-192.png',
     tag,
     renotify: Boolean(tag),
     silent: false,
@@ -123,7 +124,7 @@ self.addEventListener('push', (event) => {
         // Fallback: minimal notification without optional options that some platforms reject.
         return self.registration.showNotification(title, {
           body,
-          icon: '/icons/pwa-icon-192x192.png',
+          icon: '/icons/pwa-icon-192.png',
           data: notificationData,
         });
       });

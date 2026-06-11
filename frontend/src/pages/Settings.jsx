@@ -13,16 +13,16 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
 import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
+import {
+  canShowIosInstallPrompt,
+  IOS_INSTALL_STEPS,
+  isIosDevice,
+  isRunningStandalone,
+  supportsNativeInstallPrompt,
+} from '@/lib/pwa';
 import AdminSettings from '@/pages/AdminSettings';
 
 export default function Settings() {
-  const isRunningStandalone = () => (
-    typeof window !== 'undefined'
-    && (
-      window.matchMedia('(display-mode: standalone)').matches
-      || window.navigator.standalone === true
-    )
-  );
   const { appPublicSettings, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
@@ -43,6 +43,7 @@ export default function Settings() {
   const [installState, setInstallState] = useState({
     available: false,
     installed: isRunningStandalone(),
+    iosInstall: canShowIosInstallPrompt(),
     loading: false,
   });
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
@@ -76,6 +77,7 @@ export default function Settings() {
       setInstallState((current) => ({
         ...current,
         installed,
+        iosInstall: isIosDevice() && !installed,
       }));
 
       if (installed) {
@@ -227,6 +229,10 @@ export default function Settings() {
   };
 
   const installApp = async () => {
+    if (installState.iosInstall) {
+      return;
+    }
+
     if (!deferredInstallPrompt) {
       toast.info('Install prompt is not available yet on this browser session.');
       return;
@@ -392,19 +398,33 @@ export default function Settings() {
               <div className="text-sm text-muted-foreground">
                 {installState.installed
                   ? 'Nexus is already installed on this device.'
-                  : installState.available
-                    ? 'The browser install prompt is ready.'
-                    : 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'}
+                  : installState.iosInstall
+                    ? 'On iPhone and iPad, install Nexus from Safari using Add to Home Screen.'
+                    : installState.available
+                      ? 'The browser install prompt is ready.'
+                      : supportsNativeInstallPrompt()
+                        ? 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'
+                        : 'Use your browser menu to install this app on your device.'}
               </div>
 
-              <Button
-                type="button"
-                onClick={installApp}
-                disabled={!installState.available || installState.installed || installState.loading}
-              >
-                {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                {installState.installed ? 'Installed' : 'Install App'}
-              </Button>
+              {installState.iosInstall && !installState.installed ? (
+                <ol className="space-y-2 pl-4 text-sm text-muted-foreground list-decimal">
+                  {IOS_INSTALL_STEPS.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              ) : null}
+
+              {!installState.iosInstall ? (
+                <Button
+                  type="button"
+                  onClick={installApp}
+                  disabled={!installState.available || installState.installed || installState.loading}
+                >
+                  {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                  {installState.installed ? 'Installed' : 'Install App'}
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
 

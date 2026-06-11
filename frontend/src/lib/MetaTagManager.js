@@ -7,7 +7,7 @@ export const updateMetaTags = (config = {}) => {
   const {
     title = 'EMZI Nexus Brain',
     description = 'EMZI unified system access, simplified',
-    image = `${import.meta.env.VITE_API_BASE_URL || ''}/icons/pwa-icon-512x512.png`,
+    image = `${typeof window !== 'undefined' ? window.location.origin : ''}/icons/pwa-icon-512.png`,
     url = typeof window !== 'undefined' ? window.location.href : '',
   } = config;
 
