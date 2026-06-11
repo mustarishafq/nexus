@@ -1,6 +1,6 @@
 import db, { API_ORIGIN } from '@/api/base44Client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,9 @@ function detectEmbedBlocked(iframe) {
 
 export default function ApplicationBrowser() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const redirectTo = location.state?.redirectTo;
   const iframeRef = useRef(null);
   const [launchUrl, setLaunchUrl] = useState(null);
   const [launchError, setLaunchError] = useState(null);
@@ -61,7 +63,7 @@ export default function ApplicationBrowser() {
     setLaunchUrl(null);
     setEmbedBlocked(false);
 
-    db.launchSystem(id)
+    db.launchSystem(id, { redirect_to: redirectTo || undefined })
       .then(({ launch_url }) => {
         if (!cancelled) {
           setLaunchUrl(launch_url);
@@ -81,7 +83,7 @@ export default function ApplicationBrowser() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, redirectTo]);
 
   const checkEmbedStatus = useCallback(() => {
     if (detectEmbedBlocked(iframeRef.current)) {

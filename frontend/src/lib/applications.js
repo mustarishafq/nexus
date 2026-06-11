@@ -1,5 +1,19 @@
 const LAUNCH_ACTIONS = new Set(['login', 'view']);
 
+const NEXUS_INTERNAL_PREFIXES = [
+  '/applications',
+  '/notifications',
+  '/settings',
+  '/profile',
+  '/analytics',
+  '/calendar',
+  '/activity',
+  '/network-health',
+  '/admin',
+  '/login',
+  '/register',
+];
+
 export function getRecentApplications(applications = [], activities = [], limit = 6) {
   const bySlug = Object.fromEntries(applications.map((app) => [app.slug, app]));
   const seen = new Set();
@@ -26,26 +40,81 @@ export function getRecentApplications(applications = [], activities = [], limit 
     .map((app) => ({ ...app, lastUsed: null }));
 }
 
-export async function launchApplication(db, system, navigate) {
+export function isNexusInternalPath(actionUrl) {
+  if (!actionUrl) return false;
+
+  const trimmed = actionUrl.trim();
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    if (trimmed === '/') return true;
+    return NEXUS_INTERNAL_PREFIXES.some(
+      (prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}/`)
+    );
+  }
+
+  try {
+    return new URL(trimmed).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+export function toInternalPath(actionUrl) {
+  const trimmed = actionUrl.trim();
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
+
+  const parsed = new URL(trimmed);
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+export function findApplicationBySystemId(applications, systemId) {
+  if (!systemId || !applications?.length) return null;
+
+  return (
+    applications.find(
+      (app) => app.slug === systemId || String(app.id) === String(systemId)
+    ) || null
+  );
+}
+
+function openExternalUrl(url, { newTab = true } = {}) {
+  if (newTab) {
+    const tab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (tab) {
+      tab.opener = null;
+      return;
+    }
+  }
+
+  window.location.href = url;
+}
+
+export async function openApplicationTarget(db, system, { actionUrl, navigate } = {}) {
   if (!system?.is_enabled) {
     throw new Error('Application is not enabled.');
   }
 
-  const { launch_url, open_mode } = await db.launchSystem(system.id);
+  const redirectTo = actionUrl?.trim() || undefined;
+  const { launch_url, auth_mode, open_mode } = await db.launchSystem(system.id, {
+    redirect_to: redirectTo,
+  });
   const resolvedOpenMode = open_mode || system.open_mode || 'embedded';
+  const targetUrl = auth_mode === 'redirect' && redirectTo ? redirectTo : launch_url;
 
   if (resolvedOpenMode === 'embedded') {
-    navigate(`/applications/${system.id}/view`);
+    navigate(`/applications/${system.id}/view`, {
+      state: redirectTo ? { redirectTo } : undefined,
+    });
     return;
   }
 
   if (resolvedOpenMode === 'new_tab') {
-    const tab = window.open(launch_url, '_blank', 'noopener,noreferrer');
-    if (tab) {
-      tab.opener = null;
-    }
+    openExternalUrl(targetUrl, { newTab: true });
     return;
   }
 
-  window.location.href = launch_url;
+  openExternalUrl(targetUrl, { newTab: false });
+}
+
+export async function launchApplication(db, system, navigate) {
+  await openApplicationTarget(db, system, { navigate });
 }
