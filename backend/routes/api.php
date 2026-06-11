@@ -71,6 +71,7 @@ Route::delete('/push-subscriptions', function () {
 });
 
 Route::post('applications/reorder', [ApplicationController::class, 'reorder']);
+Route::get('applications/usage-stats', [ApplicationController::class, 'usageStats']);
 Route::apiResource('applications', ApplicationController::class);
 Route::post('applications/{application}/launch', [ApplicationController::class, 'launch']);
 Route::apiResource('access-groups', AccessGroupController::class);

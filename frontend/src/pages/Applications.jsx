@@ -40,6 +40,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { launchApplication } from '@/lib/applications';
+import { canViewApplicationUsage } from '@/lib/applicationUsage';
+import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -299,6 +301,7 @@ export default function Applications() {
   });
 
   const isAdmin = currentUser?.role === 'admin';
+  const showUsage = canViewApplicationUsage(currentUser, systems);
 
   const openReorderDialog = () => {
     setOrderedSystems([...systems]);
@@ -468,13 +471,14 @@ export default function Applications() {
           </div>
         </DialogContent>
       </Dialog>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Application
-          </h1>
-          {/* <p className="text-sm text-muted-foreground mt-1">{visibleSystems.length} systems registered</p> */}
-        </div>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 space-y-3">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Application
+            </h1>
+            <ApplicationsNav showUsage={showUsage} />
+          </div>
         <div className="flex items-center gap-2 shrink-0">
           {isAdmin && systems.length > 1 && (
             <Button
@@ -689,6 +693,7 @@ export default function Applications() {
             </form>
           </DialogContent>
           </Dialog>
+        </div>
         </div>
       </motion.div>
 

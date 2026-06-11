@@ -8,11 +8,14 @@ use App\Models\ActivityLog;
 use App\Models\Application;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\ApplicationEligibleUsers;
 use App\Support\UserApplicationAccess;
+use Carbon\Carbon;
 use Firebase\JWT\JWT;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 class ApplicationController extends Controller
@@ -198,6 +201,225 @@ class ApplicationController extends Controller
         }
 
         return response()->json(['message' => 'Order updated']);
+    }
+
+    public function usageStats(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'application_id' => ['nullable', 'integer', 'exists:applications,id'],
+        ]);
+
+        $applicationsQuery = Application::query()->orderBy('sort_order');
+
+        if ($user->role === 'admin') {
+            $applications = $applicationsQuery->get();
+        } else {
+            $applications = $applicationsQuery
+                ->where('created_by_user_id', $user->id)
+                ->get();
+        }
+
+        if ($applications->isEmpty()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $weekStart = now()->subDays(7);
+        $monthStart = now()->subDays(30);
+
+        if (! empty($validated['application_id'])) {
+            $application = $applications->firstWhere('id', (int) $validated['application_id']);
+
+            if (! $application) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $wauUsers = $this->activeUsersForSlug($application->slug, $weekStart);
+            $mauUsers = $this->activeUsersForSlug($application->slug, $monthStart);
+            $eligibleUsers = ApplicationEligibleUsers::forApplication($application);
+            $inactiveWauUsers = $this->inactiveUsersForSlug($application->slug, $eligibleUsers, $wauUsers);
+            $inactiveMauUsers = $this->inactiveUsersForSlug($application->slug, $eligibleUsers, $mauUsers);
+
+            return response()->json([
+                'application' => [
+                    'application_id' => $application->id,
+                    'slug' => $application->slug,
+                    'name' => $application->name,
+                ],
+                'wau' => count($wauUsers),
+                'mau' => count($mauUsers),
+                'wau_inactive' => count($inactiveWauUsers),
+                'mau_inactive' => count($inactiveMauUsers),
+                'eligible_users' => $eligibleUsers->count(),
+                'users' => [
+                    'wau' => $wauUsers,
+                    'mau' => $mauUsers,
+                    'inactive_wau' => $inactiveWauUsers,
+                    'inactive_mau' => $inactiveMauUsers,
+                ],
+                'period' => [
+                    'wau_days' => 7,
+                    'mau_days' => 30,
+                ],
+            ]);
+        }
+
+        $slugs = $applications->pluck('slug')->all();
+
+        $stats = ActivityLog::query()
+            ->select('system_id')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as wau', [$weekStart])
+            ->selectRaw('COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as mau', [$monthStart])
+            ->whereIn('system_id', $slugs)
+            ->whereIn('action', ['login', 'view'])
+            ->whereNotNull('user_id')
+            ->where('created_at', '>=', $monthStart)
+            ->groupBy('system_id')
+            ->get()
+            ->keyBy('system_id');
+
+        $applicationStats = $applications->map(function (Application $application) use ($stats) {
+            $row = $stats->get($application->slug);
+
+            return [
+                'application_id' => $application->id,
+                'slug' => $application->slug,
+                'name' => $application->name,
+                'wau' => (int) ($row->wau ?? 0),
+                'mau' => (int) ($row->mau ?? 0),
+            ];
+        })->values();
+
+        return response()->json([
+            'applications' => $applicationStats,
+            'period' => [
+                'wau_days' => 7,
+                'mau_days' => 30,
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function activeUsersForSlug(string $slug, Carbon $since): array
+    {
+        $rows = ActivityLog::query()
+            ->select('user_id')
+            ->selectRaw('MAX(user_name) as user_name')
+            ->selectRaw('MAX(created_at) as last_active_at')
+            ->selectRaw('MIN(created_at) as first_active_at')
+            ->selectRaw('COUNT(*) as launch_count')
+            ->where('system_id', $slug)
+            ->whereIn('action', ['login', 'view'])
+            ->whereNotNull('user_id')
+            ->where('created_at', '>=', $since)
+            ->groupBy('user_id')
+            ->orderByDesc('last_active_at')
+            ->get();
+
+        $userIds = $rows->pluck('user_id')
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $users = User::query()
+            ->whereIn('id', $userIds)
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture'])
+            ->keyBy('id');
+
+        return $rows->map(function ($row) use ($users) {
+            $profile = $users->get((int) $row->user_id);
+
+            return [
+                'user_id' => $row->user_id,
+                'full_name' => $profile?->full_name ?: $profile?->name ?: $row->user_name,
+                'email' => $profile?->email,
+                'profile_picture' => $profile?->profile_picture,
+                'last_active_at' => Carbon::parse($row->last_active_at)->toISOString(),
+                'first_active_at' => Carbon::parse($row->first_active_at)->toISOString(),
+                'launch_count' => (int) $row->launch_count,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $activeUsers
+     * @return array<int, array<string, mixed>>
+     */
+    private function inactiveUsersForSlug(string $slug, Collection $eligibleUsers, array $activeUsers): array
+    {
+        $activeIds = collect($activeUsers)
+            ->pluck('user_id')
+            ->map(fn ($id) => (string) $id)
+            ->flip();
+
+        $inactiveUsers = $eligibleUsers->filter(
+            fn (User $user) => ! $activeIds->has((string) $user->id)
+        );
+
+        if ($inactiveUsers->isEmpty()) {
+            return [];
+        }
+
+        $inactiveIds = $inactiveUsers
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->values()
+            ->all();
+
+        $historical = ActivityLog::query()
+            ->select('user_id')
+            ->selectRaw('MAX(created_at) as last_active_at')
+            ->selectRaw('MIN(created_at) as first_active_at')
+            ->selectRaw('COUNT(*) as total_launch_count')
+            ->where('system_id', $slug)
+            ->whereIn('action', ['login', 'view'])
+            ->whereNotNull('user_id')
+            ->whereIn('user_id', $inactiveIds)
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        return $inactiveUsers
+            ->map(function (User $user) use ($historical) {
+                $history = $historical->get((string) $user->id);
+
+                return [
+                    'user_id' => (string) $user->id,
+                    'full_name' => $user->full_name ?: $user->name,
+                    'email' => $user->email,
+                    'profile_picture' => $user->profile_picture,
+                    'launch_count' => 0,
+                    'never_launched' => $history === null,
+                    'last_active_at' => $history
+                        ? Carbon::parse($history->last_active_at)->toISOString()
+                        : null,
+                    'first_active_at' => $history
+                        ? Carbon::parse($history->first_active_at)->toISOString()
+                        : null,
+                    'total_launch_count' => $history ? (int) $history->total_launch_count : 0,
+                ];
+            })
+            ->sort(function (array $a, array $b) {
+                if ($a['never_launched'] !== $b['never_launched']) {
+                    return $a['never_launched'] ? 1 : -1;
+                }
+
+                if (! $a['never_launched'] && ! $b['never_launched']) {
+                    return strcmp($b['last_active_at'] ?? '', $a['last_active_at'] ?? '');
+                }
+
+                return strcasecmp($a['full_name'] ?? '', $b['full_name'] ?? '');
+            })
+            ->values()
+            ->all();
     }
 
     public function destroy(Application $application): JsonResponse

@@ -371,6 +371,11 @@ export const db = {
 		return request('/applications/reorder', { method: 'POST', body: { order } });
 	},
 
+	async getApplicationUsageStats(applicationId = null) {
+		const params = applicationId ? `?application_id=${encodeURIComponent(applicationId)}` : '';
+		return request(`/applications/usage-stats${params}`);
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */

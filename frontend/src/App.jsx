@@ -9,6 +9,7 @@ import Dashboard from '@/pages/Dashboard';
 import NotificationCenter from '@/pages/NotificationCenter';
 import ActivityTimeline from '@/pages/ActivityTimeline';
 import Applications from '@/pages/Applications';
+import ApplicationUsage from '@/pages/ApplicationUsage';
 import ApplicationBrowser from '@/pages/ApplicationBrowser';
 import BroadcastCenter from '@/pages/BroadcastCenter';
 import SystemEvents from '@/pages/SystemEvents';
@@ -58,6 +59,7 @@ const ProtectedRoutes = () => {
         <Route path="/activity" element={<ActivityTimeline />} />
         <Route path="/network-health" element={<NetworkHealthDashboard />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/applications/usage" element={<ApplicationUsage />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
