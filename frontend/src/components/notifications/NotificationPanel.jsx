@@ -1,6 +1,10 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect, useCallback } from 'react';
 
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { followNotificationAction } from '@/lib/notificationAction';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCheck, Filter, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +17,13 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all');
+  const navigate = useNavigate();
+
+  const { data: applications = [] } = useQuery({
+    queryKey: ['applications'],
+    queryFn: () => db.entities.Application.list(),
+    enabled: open,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +84,14 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     await db.entities.Notification.delete(notif.id);
     load();
   };
+
+  const activateNotification = useCallback(async (notif) => {
+    try {
+      await followNotificationAction(notif, { applications, navigate, onClose });
+    } catch (error) {
+      toast.error(error?.message || 'Unable to open notification link.');
+    }
+  }, [applications, navigate, onClose]);
 
   const filtered = notifications.filter(n => {
     if (filter === 'unread') return !n.is_read;
@@ -154,6 +173,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
                       onMarkRead={markRead}
                       onSnooze={snooze}
                       onDelete={dismiss}
+                      onActivate={activateNotification}
                     />
                   ))}
                 </div>

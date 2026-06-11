@@ -158,7 +158,8 @@ final class Nexus_Sso
             update_user_meta($user->ID, self::RETURN_TO_META_KEY, $returnTo);
         }
 
-        wp_safe_redirect(self::login_redirect_url());
+        $postLoginUrl = self::resolve_post_login_redirect();
+        wp_safe_redirect($postLoginUrl !== '' ? $postLoginUrl : self::login_redirect_url());
         exit;
     }
 
@@ -313,6 +314,36 @@ final class Nexus_Sso
             'ID' => $user->ID,
             'display_name' => $name,
         ]);
+    }
+
+    private static function resolve_post_login_redirect(): string
+    {
+        if (empty($_GET['redirect_to'])) {
+            return '';
+        }
+
+        $redirectTo = esc_url_raw(wp_unslash((string) $_GET['redirect_to']));
+        if ($redirectTo === '') {
+            return '';
+        }
+
+        if (! self::is_same_site_url($redirectTo)) {
+            return '';
+        }
+
+        return $redirectTo;
+    }
+
+    private static function is_same_site_url(string $url): bool
+    {
+        $targetHost = wp_parse_url($url, PHP_URL_HOST);
+        $siteHost = wp_parse_url(home_url('/'), PHP_URL_HOST);
+
+        if (! is_string($targetHost) || $targetHost === '' || ! is_string($siteHost) || $siteHost === '') {
+            return false;
+        }
+
+        return strcasecmp($targetHost, $siteHost) === 0;
     }
 
     private static function login_redirect_url(): string

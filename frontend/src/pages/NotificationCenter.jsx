@@ -1,7 +1,10 @@
 import db from '@/api/base44Client';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { followNotificationAction } from '@/lib/notificationAction';
 import { Bell, CheckCheck, Search, Filter, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,10 +21,16 @@ export default function NotificationCenter() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications-center'],
     queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 200),
+  });
+
+  const { data: applications = [] } = useQuery({
+    queryKey: ['applications'],
+    queryFn: () => db.entities.Application.list(),
   });
 
   // Update meta tags for sharing
@@ -44,6 +53,14 @@ export default function NotificationCenter() {
   const markRead = (notif) => updateMut.mutate({ id: notif.id, data: { is_read: true, read_at: new Date().toISOString() } });
   const snooze = (notif) => updateMut.mutate({ id: notif.id, data: { snoozed_until: new Date(Date.now() + 3600000).toISOString() } });
   const dismiss = (notif) => deleteMut.mutate(notif.id);
+
+  const activateNotification = useCallback(async (notif) => {
+    try {
+      await followNotificationAction(notif, { applications, navigate });
+    } catch (error) {
+      toast.error(error?.message || 'Unable to open notification link.');
+    }
+  }, [applications, navigate]);
 
   const markAllRead = async () => {
     const unread = notifications.filter(n => !n.is_read);
@@ -149,7 +166,14 @@ export default function NotificationCenter() {
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{date}</h3>
               <div className="bg-card rounded-2xl border border-border p-2 space-y-0.5">
                 {notifs.map(n => (
-                  <NotificationItem key={n.id} notification={n} onMarkRead={markRead} onSnooze={snooze} onDelete={dismiss} />
+                  <NotificationItem
+                    key={n.id}
+                    notification={n}
+                    onMarkRead={markRead}
+                    onSnooze={snooze}
+                    onDelete={dismiss}
+                    onActivate={activateNotification}
+                  />
                 ))}
               </div>
             </div>

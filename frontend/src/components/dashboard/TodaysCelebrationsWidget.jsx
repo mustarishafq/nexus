@@ -371,21 +371,21 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
     <div className={containerClass}>
       {isLoading ? (
         <>
-          {SectionTitle}
+          <SectionTitle />
           <p className={cn('text-sm text-muted-foreground text-center', contentPadding)}>
             Loading celebrations...
           </p>
         </>
       ) : isError ? (
         <>
-          {SectionTitle}
+          <SectionTitle />
           <p className={cn('text-sm text-destructive text-center', contentPadding)}>
             Could not load celebrations.
           </p>
         </>
       ) : !hasCelebrations ? (
         <>
-          {SectionTitle}
+          <SectionTitle />
           <p className={cn('text-sm text-muted-foreground text-center py-6', contentPadding)}>
             No birthdays or anniversaries today.
           </p>

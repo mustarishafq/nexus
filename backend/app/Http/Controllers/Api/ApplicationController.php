@@ -499,6 +499,10 @@ class ApplicationController extends Controller
         }
 
         $returnTo = rtrim((string) config('app.url'), '/') . '/applications';
+        $redirectTo = $this->validatedRedirectTo(
+            $application,
+            $request->input('redirect_to')
+        );
 
         if ($application->auth_mode === 'redirect') {
             $launchUrl = rtrim($application->base_url, '/');
@@ -541,6 +545,10 @@ class ApplicationController extends Controller
             . '/sso/nexus?token=' . urlencode($token)
             . '&return_to=' . urlencode($returnTo);
 
+        if ($redirectTo) {
+            $launchUrl .= '&redirect_to=' . urlencode($redirectTo);
+        }
+
         ActivityLog::create([
             'user_id'     => (string) $user->id,
             'user_name'   => $user->full_name ?? $user->name ?? $user->email,
@@ -557,6 +565,40 @@ class ApplicationController extends Controller
             'auth_mode'  => 'jwt',
             'open_mode'  => $application->open_mode ?? 'embedded',
         ]);
+    }
+
+    private function validatedRedirectTo(Application $application, mixed $redirectTo): ?string
+    {
+        if (! is_string($redirectTo) || trim($redirectTo) === '') {
+            return null;
+        }
+
+        $redirectTo = trim($redirectTo);
+        $baseUrl = rtrim((string) $application->base_url, '/');
+        $baseParts = parse_url($baseUrl);
+        $targetParts = parse_url($redirectTo);
+
+        if (! is_array($baseParts) || empty($baseParts['host'])) {
+            return null;
+        }
+
+        if (! is_array($targetParts)) {
+            return null;
+        }
+
+        if (empty($targetParts['host'])) {
+            $path = $targetParts['path'] ?? '/';
+            $query = isset($targetParts['query']) ? '?' . $targetParts['query'] : '';
+            $fragment = isset($targetParts['fragment']) ? '#' . $targetParts['fragment'] : '';
+
+            return $path . $query . $fragment;
+        }
+
+        if (strcasecmp((string) $targetParts['host'], (string) $baseParts['host']) !== 0) {
+            return null;
+        }
+
+        return $redirectTo;
     }
 
     private function canEditSystem(User $user, Application $application): bool

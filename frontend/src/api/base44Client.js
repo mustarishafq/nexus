@@ -367,8 +367,11 @@ export const db = {
 	 * Returns { launch_url, token, expires_in }.
 	 * Open launch_url in a new tab to auto-login the user.
 	 */
-	async launchSystem(systemId) {
-		return request(`/applications/${systemId}/launch`, { method: 'POST' });
+	async launchSystem(systemId, { redirect_to } = {}) {
+		return request(`/applications/${systemId}/launch`, {
+			method: 'POST',
+			body: redirect_to ? { redirect_to } : undefined,
+		});
 	},
 
 	async reorderApplications(order) {

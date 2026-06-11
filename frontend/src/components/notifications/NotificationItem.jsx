@@ -24,10 +24,21 @@ const categoryIcons = {
   announcement: Megaphone, other: Info,
 };
 
-export default function NotificationItem({ notification, onMarkRead, onSnooze, onDelete }) {
+export default function NotificationItem({ notification, onMarkRead, onSnooze, onDelete, onActivate }) {
   const config = typeConfig[notification.type] || typeConfig.info;
   const TypeIcon = config.icon;
   const CategoryIcon = categoryIcons[notification.category] || Info;
+  const hasAction = Boolean(notification.action_url?.trim());
+
+  const handleClick = async () => {
+    if (!notification.is_read) {
+      await onMarkRead?.(notification);
+    }
+
+    if (hasAction && onActivate) {
+      await onActivate(notification);
+    }
+  };
 
   return (
     <div
@@ -37,7 +48,7 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
           ? cn("border", config.border, "bg-muted/30 hover:bg-muted/50")
           : cn("border", config.border, config.bg, "hover:opacity-90")
       )}
-      onClick={() => !notification.is_read && onMarkRead?.(notification)}
+      onClick={handleClick}
     >
       {/* Icon */}
       <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", config.bg)}>
