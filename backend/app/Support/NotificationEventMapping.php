@@ -43,10 +43,26 @@ class NotificationEventMapping
 
     public static function normalize(?array $config): array
     {
+        return self::normalizeConfig($config, mergeFieldDefaults: true);
+    }
+
+    public static function normalizeForStorage(?array $config): array
+    {
+        return self::normalizeConfig($config, mergeFieldDefaults: false);
+    }
+
+    private static function normalizeConfig(?array $config, bool $mergeFieldDefaults): array
+    {
         $defaults = self::defaults();
 
         if (! is_array($config)) {
             return $defaults;
+        }
+
+        $fieldMappings = self::sanitizeFieldMappings($config['field_mappings'] ?? null);
+
+        if ($mergeFieldDefaults) {
+            $fieldMappings = array_merge(self::DEFAULT_FIELD_MAPPINGS, $fieldMappings);
         }
 
         return [
@@ -54,7 +70,7 @@ class NotificationEventMapping
             'webhook_secret' => filled($config['webhook_secret'] ?? null)
                 ? (string) $config['webhook_secret']
                 : null,
-            'field_mappings' => self::normalizeFieldMappings($config['field_mappings'] ?? null),
+            'field_mappings' => $fieldMappings,
             'category_prefix_rules' => self::normalizeCategoryRules($config['category_prefix_rules'] ?? null),
             'defaults' => array_merge(
                 $defaults['defaults'],
@@ -66,13 +82,13 @@ class NotificationEventMapping
     /**
      * @return array<string, array<int, string>>
      */
-    private static function normalizeFieldMappings(?array $mappings): array
+    private static function sanitizeFieldMappings(?array $mappings): array
     {
         if (! is_array($mappings)) {
-            return self::DEFAULT_FIELD_MAPPINGS;
+            return [];
         }
 
-        $normalized = self::DEFAULT_FIELD_MAPPINGS;
+        $normalized = [];
 
         foreach ($mappings as $target => $sources) {
             if (! is_string($target) || $target === '') {
@@ -90,10 +106,6 @@ class NotificationEventMapping
                     $sources,
                     static fn ($source) => is_string($source) && $source !== ''
                 ));
-
-                if ($normalized[$target] === [] && isset(self::DEFAULT_FIELD_MAPPINGS[$target])) {
-                    $normalized[$target] = self::DEFAULT_FIELD_MAPPINGS[$target];
-                }
             }
         }
 

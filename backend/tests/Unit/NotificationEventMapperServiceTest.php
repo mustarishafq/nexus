@@ -102,4 +102,24 @@ class NotificationEventMapperServiceTest extends TestCase
 
         $this->assertSame('Recovered title', $payload['title']);
     }
+
+    public function test_storage_normalization_preserves_custom_mappings_without_default_merge(): void
+    {
+        $stored = NotificationEventMapping::normalizeForStorage([
+            'auto_notify' => true,
+            'webhook_secret' => 'secret123',
+            'field_mappings' => [
+                'title' => ['data.title'],
+                'message' => ['data.message'],
+                'severity' => [],
+                'action_url' => [],
+            ],
+        ]);
+
+        $this->assertSame(['data.title'], $stored['field_mappings']['title']);
+        $this->assertSame(['data.message'], $stored['field_mappings']['message']);
+        $this->assertSame([], $stored['field_mappings']['severity']);
+        $this->assertSame([], $stored['field_mappings']['action_url']);
+        $this->assertArrayNotHasKey('user_id', $stored['field_mappings']);
+    }
 }

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import db, { API_ORIGIN } from '@/api/base44Client';
 import {
-  buildSampleEvent,
+  buildNestedSampleEvent,
   DEFAULT_NOTIFICATION_EVENT_MAPPING,
   fieldMappingsToForm,
   formToFieldMappings,
+  NESTED_PAYLOAD_FIELD_MAPPINGS,
   normalizeNotificationEventMapping,
   NOTIFICATION_FIELD_LABELS,
 } from '@/lib/notificationEventMapping';
@@ -22,22 +23,15 @@ export default function NotificationEventMappingEditor({
   applicationId,
 }) {
   const [open, setOpen] = useState(false);
-  const [mappingForm, setMappingForm] = useState(() =>
-    fieldMappingsToForm(normalizeNotificationEventMapping(value).field_mappings)
-  );
-  const [previewInput, setPreviewInput] = useState(JSON.stringify(buildSampleEvent(), null, 2));
-  const [previewOutput, setPreviewOutput] = useState('');
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
-
   const config = useMemo(
     () => normalizeNotificationEventMapping(value),
     [value]
   );
-
-  useEffect(() => {
-    setMappingForm(fieldMappingsToForm(config.field_mappings));
-  }, [config.field_mappings]);
+  const [mappingForm, setMappingForm] = useState(() => fieldMappingsToForm(config.field_mappings));
+  const [previewInput, setPreviewInput] = useState(JSON.stringify(buildNestedSampleEvent(), null, 2));
+  const [previewOutput, setPreviewOutput] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   const webhookUrl = applicationId
     ? `${API_ORIGIN}/api/applications/${applicationId}/event-webhook`
@@ -53,6 +47,13 @@ export default function NotificationEventMappingEditor({
     updateConfig({
       field_mappings: formToFieldMappings(nextForm),
     });
+  };
+
+  const applyNestedPreset = () => {
+    const nextForm = fieldMappingsToForm(NESTED_PAYLOAD_FIELD_MAPPINGS);
+    setMappingForm(nextForm);
+    updateConfig({ field_mappings: { ...NESTED_PAYLOAD_FIELD_MAPPINGS } });
+    setPreviewInput(JSON.stringify(buildNestedSampleEvent(), null, 2));
   };
 
   const copyWebhookUrl = () => {
@@ -150,18 +151,23 @@ export default function NotificationEventMappingEditor({
           ) : null}
 
           <div className="space-y-3">
-            <div>
-              <Label>Field mappings</Label>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Comma-separated source field names from your system&apos;s event JSON. First match wins.
-              </p>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label>Field mappings</Label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Use dot paths for nested payloads, e.g. <code className="bg-muted px-1 rounded">data.title</code>.
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={applyNestedPreset}>
+                Use nested preset
+              </Button>
             </div>
             <div className="grid grid-cols-1 gap-3">
               {Object.keys(DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings).map((field) => (
                 <div key={field} className="space-y-1.5">
                   <Label className="text-xs">{NOTIFICATION_FIELD_LABELS[field] || field}</Label>
                   <Input
-                    value={mappingForm[field] || ''}
+                    value={mappingForm[field] ?? ''}
                     onChange={(event) => updateFieldMapping(field, event.target.value)}
                     placeholder={DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings[field].join(', ')}
                     className="font-mono text-xs"

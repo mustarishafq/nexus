@@ -107,7 +107,7 @@ class ApplicationController extends Controller
         $validated['sort_order'] = ((int) Application::query()->max('sort_order')) + 1;
 
         if (array_key_exists('notification_config', $validated)) {
-            $validated['notification_config'] = NotificationEventMapping::normalize($validated['notification_config']);
+            $validated['notification_config'] = NotificationEventMapping::normalizeForStorage($validated['notification_config']);
         }
 
         $item = Application::create($validated);
@@ -180,7 +180,7 @@ class ApplicationController extends Controller
         }
 
         if (array_key_exists('notification_config', $validated)) {
-            $validated['notification_config'] = NotificationEventMapping::normalize($validated['notification_config']);
+            $validated['notification_config'] = NotificationEventMapping::normalizeForStorage($validated['notification_config']);
         }
 
         $application->update($validated);

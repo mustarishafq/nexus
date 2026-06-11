@@ -341,7 +341,14 @@ export default function Applications() {
 
   const createMut = useMutation({
     mutationFn: (data) => db.entities.Application.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
+    onSuccess: (created) => {
+      queryClient.setQueryData(['applications'], (current) => {
+        if (!Array.isArray(current)) return current;
+        return [...current, created];
+      });
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+      resetDialogState();
+    },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to create application');
     },
@@ -349,7 +356,14 @@ export default function Applications() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.Application.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['applications'], (current) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((app) => (app.id === updated.id ? updated : app));
+      });
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+      resetDialogState();
+    },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to update application');
     },
@@ -695,6 +709,7 @@ export default function Applications() {
                 </div>
               </div>
               <NotificationEventMappingEditor
+                key={editSystem?.id ?? 'new-application'}
                 value={notificationConfig}
                 onChange={setNotificationConfig}
                 applicationId={editSystem?.id}

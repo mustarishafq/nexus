@@ -38,53 +38,100 @@ export const NOTIFICATION_FIELD_LABELS = {
   data: 'Extra data object',
 };
 
+export const NESTED_PAYLOAD_FIELD_MAPPINGS = {
+  title: ['data.title'],
+  message: ['data.message'],
+  user_id: ['data.user_id', 'data.user.id'],
+  action_url: ['data.action_url', 'data.url', 'data.link'],
+  event_name: ['event', 'data.type', 'data.reference_type'],
+  severity: ['data.severity', 'data.level', 'data.type'],
+  data: ['data'],
+};
+
+export function parseNotificationConfig(raw) {
+  if (!raw) return null;
+
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof raw === 'object' ? raw : null;
+}
+
+function sanitizeFieldMappings(mappings) {
+  const sanitized = {};
+
+  Object.entries(mappings || {}).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      sanitized[key] = value
+        .filter((item) => typeof item === 'string' && item.trim() !== '')
+        .map((item) => item.trim());
+      return;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      sanitized[key] = [value.trim()];
+    }
+  });
+
+  return sanitized;
+}
+
 export function normalizeNotificationEventMapping(config) {
   const defaults = DEFAULT_NOTIFICATION_EVENT_MAPPING;
+  const parsed = parseNotificationConfig(config);
 
-  if (!config || typeof config !== 'object') {
-    return { ...defaults, field_mappings: { ...defaults.field_mappings } };
+  if (!parsed) {
+    return {
+      ...defaults,
+      field_mappings: { ...defaults.field_mappings },
+      category_prefix_rules: [...defaults.category_prefix_rules],
+      defaults: { ...defaults.defaults },
+    };
   }
 
-  const fieldMappings = { ...defaults.field_mappings };
-
-  if (config.field_mappings && typeof config.field_mappings === 'object') {
-    Object.entries(config.field_mappings).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        fieldMappings[key] = value.filter((item) => typeof item === 'string' && item.trim() !== '');
-      } else if (typeof value === 'string' && value.trim() !== '') {
-        fieldMappings[key] = [value.trim()];
-      }
-    });
-  }
+  const savedMappings = sanitizeFieldMappings(parsed.field_mappings);
+  const hasSavedMappings = Object.keys(savedMappings).length > 0;
 
   return {
-    auto_notify: Boolean(config.auto_notify),
-    webhook_secret: config.webhook_secret || '',
-    field_mappings: fieldMappings,
-    category_prefix_rules: Array.isArray(config.category_prefix_rules) && config.category_prefix_rules.length
-      ? config.category_prefix_rules
+    auto_notify: Boolean(parsed.auto_notify),
+    webhook_secret: parsed.webhook_secret || '',
+    field_mappings: hasSavedMappings
+      ? {
+        ...Object.fromEntries(
+          Object.keys(defaults.field_mappings).map((key) => [key, savedMappings[key] ?? []])
+        ),
+        ...savedMappings,
+      }
+      : { ...defaults.field_mappings },
+    category_prefix_rules: Array.isArray(parsed.category_prefix_rules) && parsed.category_prefix_rules.length
+      ? parsed.category_prefix_rules
       : defaults.category_prefix_rules,
     defaults: {
       ...defaults.defaults,
-      ...(config.defaults || {}),
+      ...(parsed.defaults || {}),
     },
   };
 }
 
 export function fieldMappingsToForm(fieldMappings) {
   return Object.fromEntries(
-    Object.entries(fieldMappings || {}).map(([key, value]) => [
+    Object.keys(DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings).map((key) => [
       key,
-      Array.isArray(value) ? value.join(', ') : '',
+      Array.isArray(fieldMappings?.[key]) ? fieldMappings[key].join(', ') : '',
     ])
   );
 }
 
 export function formToFieldMappings(form) {
   return Object.fromEntries(
-    Object.entries(form || {}).map(([key, value]) => [
+    Object.keys(DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings).map((key) => [
       key,
-      String(value || '')
+      String(form?.[key] || '')
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean),
@@ -103,6 +150,22 @@ export function buildSampleEvent() {
     data: {
       order_id: 1234,
       amount: 250,
+    },
+  };
+}
+
+export function buildNestedSampleEvent() {
+  return {
+    event: 'notification.created',
+    delivery_id: '13dd9cf89bc5f1f8-0',
+    fired_at: '2026-06-11T23:45:01.907473+08:00',
+    data: {
+      user_id: '69f4e55e4b11c0f3dd71110f',
+      type: 'task_review',
+      title: 'Subtask Submitted for Review',
+      message: 'EMZI Admin submitted subtask "sdsdasda" for review',
+      reference_id: '6a14165db204ec02fdde019e',
+      reference_type: 'task',
     },
   };
 }
