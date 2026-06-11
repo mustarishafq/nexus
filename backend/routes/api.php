@@ -40,6 +40,7 @@ Route::post('/network-health/logs', [NetworkHealthController::class, 'storeLog']
 Route::get('/network-health/dashboard', [NetworkHealthController::class, 'dashboard']);
 Route::get('/network-health/export', [NetworkHealthController::class, 'exportCsv']);
 Route::get('/network-health/users/{user}/history', [NetworkHealthController::class, 'userHistory']);
+Route::patch('/network-health/alerts/acknowledge-all', [NetworkHealthController::class, 'acknowledgeAllAlerts']);
 Route::patch('/network-health/alerts/{networkHealthAlert}/acknowledge', [NetworkHealthController::class, 'acknowledgeAlert']);
 
 Route::get('/dashboard/celebrations', [DashboardController::class, 'celebrations']);

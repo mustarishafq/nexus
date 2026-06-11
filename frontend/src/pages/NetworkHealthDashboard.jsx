@@ -1,10 +1,10 @@
 // @ts-nocheck
 import db from '@/api/base44Client';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, AlertTriangle, Download, Gauge, Timer, Upload, Users, Wifi,
-  CheckCircle, Filter, FileDown,
+  CheckCircle, Filter, FileDown, ChevronDown,
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -24,6 +26,13 @@ const ALERT_LABELS = {
   download: 'Low Download',
   upload: 'Low Upload',
 };
+
+const SCROLLABLE_TABLE_WRAP = '[&>div]:max-h-64 [&>div]:overflow-auto';
+const STICKY_TABLE_HEADER = 'sticky top-0 z-10 bg-card';
+
+function getClientTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
 
 function parseHourBucketUtc(value) {
   if (value == null || value === '') return null;
@@ -54,6 +63,16 @@ export default function NetworkHealthDashboard() {
   const [accessGroupId, setAccessGroupId] = useState('');
   const [browser, setBrowser] = useState('');
   const [operatingSystem, setOperatingSystem] = useState('');
+  const [timeFrom, setTimeFrom] = useState('');
+  const [timeTo, setTimeTo] = useState('');
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (isMobile) {
+      setFiltersOpen(false);
+    }
+  }, [isMobile]);
 
   const filters = useMemo(() => ({
     date_from: dateFrom,
@@ -62,7 +81,12 @@ export default function NetworkHealthDashboard() {
     ...(accessGroupId ? { access_group_id: accessGroupId } : {}),
     ...(browser ? { browser } : {}),
     ...(operatingSystem ? { operating_system: operatingSystem } : {}),
-  }), [dateFrom, dateTo, userId, accessGroupId, browser, operatingSystem]);
+    ...(timeFrom && timeTo ? {
+      time_from: timeFrom,
+      time_to: timeTo,
+      timezone: getClientTimezone(),
+    } : {}),
+  }), [dateFrom, dateTo, userId, accessGroupId, browser, operatingSystem, timeFrom, timeTo]);
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['network-health-dashboard', filters, isAdmin],
@@ -97,6 +121,16 @@ export default function NetworkHealthDashboard() {
       toast.success('Alert acknowledged');
     },
     onError: () => toast.error('Failed to acknowledge alert'),
+  });
+
+  const acknowledgeAllMut = useMutation({
+    mutationFn: () => db.networkHealth.acknowledgeAllAlerts(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['network-health-dashboard'] });
+      const count = data?.acknowledged_count ?? 0;
+      toast.success(count === 1 ? '1 alert acknowledged' : `${count} alerts acknowledged`);
+    },
+    onError: () => toast.error('Failed to acknowledge alerts'),
   });
 
   const handleExport = async () => {
@@ -149,18 +183,35 @@ export default function NetworkHealthDashboard() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className={cn(
-            'grid grid-cols-1 sm:grid-cols-2 gap-3',
-            isAdmin ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'
-          )}>
+      <Collapsible
+        open={isMobile ? filtersOpen : true}
+        onOpenChange={(open) => {
+          if (isMobile) setFiltersOpen(open);
+        }}
+      >
+        <Card>
+          <CollapsibleTrigger asChild disabled={!isMobile}>
+            <CardHeader className={cn('pb-3', isMobile && 'cursor-pointer select-none')}>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Filters
+                {isMobile && (
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 ml-auto text-muted-foreground transition-transform duration-200',
+                      filtersOpen && 'rotate-180',
+                    )}
+                  />
+                )}
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <div className={cn(
+                'grid grid-cols-1 sm:grid-cols-2 gap-3',
+                isAdmin ? 'lg:grid-cols-4 xl:grid-cols-8' : 'lg:grid-cols-3 xl:grid-cols-6'
+              )}>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Date From</label>
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -168,6 +219,19 @@ export default function NetworkHealthDashboard() {
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Date To</label>
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Time From</label>
+              <Input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Time To</label>
+              <Input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} />
+              {(timeFrom || timeTo) && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Uses your local timezone ({getClientTimezone()})
+                </p>
+              )}
             </div>
             {isAdmin && (
               <>
@@ -223,9 +287,11 @@ export default function NetworkHealthDashboard() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -286,10 +352,24 @@ export default function NetworkHealthDashboard() {
       {activeAlerts.length > 0 && (
         <Card className="border-warning/30">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2 text-warning">
-              <AlertTriangle className="w-4 h-4" />
-              {isAdmin ? `Active Alerts (${activeAlerts.length})` : `Your Active Alerts (${activeAlerts.length})`}
-            </CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-warning">
+                <AlertTriangle className="w-4 h-4" />
+                {isAdmin ? `Active Alerts (${activeAlerts.length})` : `Your Active Alerts (${activeAlerts.length})`}
+              </CardTitle>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 shrink-0"
+                  onClick={() => acknowledgeAllMut.mutate()}
+                  disabled={acknowledgeAllMut.isPending || acknowledgeMut.isPending}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Acknowledge All
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -321,7 +401,7 @@ export default function NetworkHealthDashboard() {
                       variant="outline"
                       className="gap-1"
                       onClick={() => acknowledgeMut.mutate(alert.id)}
-                      disabled={acknowledgeMut.isPending}
+                      disabled={acknowledgeMut.isPending || acknowledgeAllMut.isPending}
                     >
                       <CheckCircle className="w-3.5 h-3.5" />
                       Acknowledge
@@ -436,37 +516,39 @@ export default function NetworkHealthDashboard() {
               {isAdmin ? 'Latest Test Results' : 'Your Latest Tests'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {isAdmin && <TableHead>User</TableHead>}
-                  <TableHead>Latency</TableHead>
-                  <TableHead>Down</TableHead>
-                  <TableHead>Up</TableHead>
-                  <TableHead>Tested</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {latestResults.length === 0 ? (
+          <CardContent>
+            <div className={SCROLLABLE_TABLE_WRAP}>
+              <Table>
+                <TableHeader className={STICKY_TABLE_HEADER}>
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground">No results yet</TableCell>
+                    {isAdmin && <TableHead>User</TableHead>}
+                    <TableHead>Latency</TableHead>
+                    <TableHead>Down</TableHead>
+                    <TableHead>Up</TableHead>
+                    <TableHead>Tested</TableHead>
                   </TableRow>
-                ) : latestResults.map((row) => (
-                  <TableRow key={row.id}>
-                    {isAdmin && (
-                      <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
-                    )}
-                    <TableCell>{row.latency_ms != null ? `${row.latency_ms} ms` : '—'}</TableCell>
-                    <TableCell>{row.download_mbps != null ? `${row.download_mbps}` : '—'}</TableCell>
-                    <TableCell>{row.upload_mbps != null ? `${row.upload_mbps}` : '—'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {row.tested_at ? format(new Date(row.tested_at), 'MMM d, h:mm a') : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {latestResults.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground">No results yet</TableCell>
+                    </TableRow>
+                  ) : latestResults.map((row) => (
+                    <TableRow key={row.id}>
+                      {isAdmin && (
+                        <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                      )}
+                      <TableCell>{row.latency_ms != null ? `${row.latency_ms} ms` : '—'}</TableCell>
+                      <TableCell>{row.download_mbps != null ? `${row.download_mbps}` : '—'}</TableCell>
+                      <TableCell>{row.upload_mbps != null ? `${row.upload_mbps}` : '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {row.tested_at ? format(new Date(row.tested_at), 'MMM d, h:mm a') : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -476,33 +558,35 @@ export default function NetworkHealthDashboard() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Slowest Users (avg latency)</CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Avg Latency</TableHead>
-                      <TableHead>Last Test</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {slowestUsers.length === 0 ? (
+              <CardContent>
+                <div className={SCROLLABLE_TABLE_WRAP}>
+                  <Table>
+                    <TableHeader className={STICKY_TABLE_HEADER}>
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                        <TableHead>User</TableHead>
+                        <TableHead>Avg Latency</TableHead>
+                        <TableHead>Last Test</TableHead>
                       </TableRow>
-                    ) : slowestUsers.map((row) => (
-                      <TableRow key={row.user_id}>
-                        <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
-                        <TableCell className={cn(row.avg_latency_ms > 300 && 'text-warning font-medium')}>
-                          {row.avg_latency_ms} ms
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {slowestUsers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                        </TableRow>
+                      ) : slowestUsers.map((row) => (
+                        <TableRow key={row.user_id}>
+                          <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                          <TableCell className={cn(row.avg_latency_ms > 300 && 'text-warning font-medium')}>
+                            {row.avg_latency_ms} ms
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
 
@@ -510,33 +594,35 @@ export default function NetworkHealthDashboard() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Lowest Download Speed Users</CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Avg Download</TableHead>
-                      <TableHead>Last Test</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lowestDownloadUsers.length === 0 ? (
+              <CardContent>
+                <div className={SCROLLABLE_TABLE_WRAP}>
+                  <Table>
+                    <TableHeader className={STICKY_TABLE_HEADER}>
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                        <TableHead>User</TableHead>
+                        <TableHead>Avg Download</TableHead>
+                        <TableHead>Last Test</TableHead>
                       </TableRow>
-                    ) : lowestDownloadUsers.map((row) => (
-                      <TableRow key={row.user_id}>
-                        <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
-                        <TableCell className={cn(row.avg_download_mbps < 5 && 'text-warning font-medium')}>
-                          {row.avg_download_mbps} Mbps
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {lowestDownloadUsers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground">No data</TableCell>
+                        </TableRow>
+                      ) : lowestDownloadUsers.map((row) => (
+                        <TableRow key={row.user_id}>
+                          <TableCell className="font-medium">{row.user?.full_name || row.user?.email}</TableCell>
+                          <TableCell className={cn(row.avg_download_mbps < 5 && 'text-warning font-medium')}>
+                            {row.avg_download_mbps} Mbps
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.last_tested_at ? format(new Date(row.last_tested_at), 'MMM d, h:mm a') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </>

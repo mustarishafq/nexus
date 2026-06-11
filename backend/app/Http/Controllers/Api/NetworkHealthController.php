@@ -8,6 +8,7 @@ use App\Models\NetworkHealthLog;
 use App\Models\User;
 use App\Services\NetworkHealthAlertService;
 use App\Support\ApiTokenAuth;
+use App\Support\NetworkHealthTimeFilter;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -155,6 +156,9 @@ class NetworkHealthController extends Controller
             'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
             'browser' => ['nullable', 'string', 'max:64'],
             'operating_system' => ['nullable', 'string', 'max:64'],
+            'time_from' => ['nullable', 'date_format:H:i'],
+            'time_to' => ['nullable', 'date_format:H:i'],
+            'timezone' => ['nullable', 'timezone:all'],
         ]);
 
         if (! $isAdmin) {
@@ -178,13 +182,10 @@ class NetworkHealthController extends Controller
             ->first();
 
         $usersTestedToday = $isAdmin
-            ? NetworkHealthLog::query()
-                ->whereDate('tested_at', now()->toDateString())
+            ? (clone $this->filteredLogsQuery($validated, now()->startOfDay(), now()->endOfDay()))
                 ->distinct('user_id')
                 ->count('user_id')
-            : NetworkHealthLog::query()
-                ->where('user_id', $user->id)
-                ->whereDate('tested_at', now()->toDateString())
+            : (clone $this->filteredLogsQuery($validated, now()->startOfDay(), now()->endOfDay()))
                 ->count();
 
         $hourBucketSql = match (DB::connection()->getDriverName()) {
@@ -292,6 +293,9 @@ class NetworkHealthController extends Controller
             'filters' => [
                 'date_from' => $dateFrom->toDateString(),
                 'date_to' => $dateTo->toDateString(),
+                'time_from' => $validated['time_from'] ?? null,
+                'time_to' => $validated['time_to'] ?? null,
+                'timezone' => $validated['timezone'] ?? null,
             ],
         ]);
     }
@@ -337,6 +341,9 @@ class NetworkHealthController extends Controller
             'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
             'browser' => ['nullable', 'string', 'max:64'],
             'operating_system' => ['nullable', 'string', 'max:64'],
+            'time_from' => ['nullable', 'date_format:H:i'],
+            'time_to' => ['nullable', 'date_format:H:i'],
+            'timezone' => ['nullable', 'timezone:all'],
         ]);
 
         if (! $isAdmin) {
@@ -390,17 +397,35 @@ class NetworkHealthController extends Controller
         ]);
     }
 
+    public function acknowledgeAllAlerts(Request $request): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        $admin = ApiTokenAuth::userFromRequest($request);
+        $now = now();
+
+        $count = NetworkHealthAlert::query()
+            ->where('status', 'active')
+            ->update([
+                'status' => 'acknowledged',
+                'acknowledged_by' => $admin->id,
+                'acknowledged_at' => $now,
+            ]);
+
+        return response()->json([
+            'acknowledged_count' => $count,
+        ]);
+    }
+
     public function acknowledgeAlert(Request $request, NetworkHealthAlert $networkHealthAlert): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $admin = ApiTokenAuth::userFromRequest($request);
-
-        if (! $admin) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($admin->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
 
         $networkHealthAlert->update([
             'status' => 'acknowledged',
@@ -434,6 +459,14 @@ class NetworkHealthController extends Controller
 
         if (! empty($filters['operating_system'])) {
             $query->where('operating_system', $filters['operating_system']);
+        }
+
+        if ($timeFilter = NetworkHealthTimeFilter::fromValues(
+            $filters['time_from'] ?? null,
+            $filters['time_to'] ?? null,
+            $filters['timezone'] ?? null,
+        )) {
+            $timeFilter->apply($query, $dateFrom, $dateTo);
         }
 
         return $query;

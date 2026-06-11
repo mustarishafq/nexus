@@ -6,6 +6,7 @@ use App\Models\NetworkHealthAlert;
 use App\Models\NetworkHealthLog;
 use App\Models\User;
 use App\Services\NetworkHealthAlertService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -259,5 +260,82 @@ class NetworkHealthControllerTest extends TestCase
             'status' => 'acknowledged',
             'acknowledged_by' => $admin->id,
         ]);
+    }
+
+    public function test_acknowledge_all_alerts(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($admin);
+
+        $log = NetworkHealthLog::query()->create([
+            'user_id' => $user->id,
+            'latency_ms' => 500,
+            'tested_at' => now(),
+        ]);
+
+        $alertIds = collect(['latency', 'download', 'upload'])->map(function (string $type) use ($log, $user) {
+            return NetworkHealthAlert::query()->create([
+                'network_health_log_id' => $log->id,
+                'user_id' => $user->id,
+                'alert_type' => $type,
+                'metric_value' => 500,
+                'threshold_value' => 300,
+                'status' => 'active',
+            ])->id;
+        });
+
+        $this->withToken($token)
+            ->patchJson('/api/network-health/alerts/acknowledge-all')
+            ->assertOk()
+            ->assertJsonPath('acknowledged_count', 3);
+
+        foreach ($alertIds as $alertId) {
+            $this->assertDatabaseHas('network_health_alerts', [
+                'id' => $alertId,
+                'status' => 'acknowledged',
+                'acknowledged_by' => $admin->id,
+            ]);
+        }
+    }
+
+    public function test_dashboard_time_filter_limits_metrics(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $token = $this->issueToken($admin);
+        $day = Carbon::parse('2026-06-10 00:00:00', config('app.timezone'));
+
+        NetworkHealthLog::query()->create([
+            'user_id' => $admin->id,
+            'latency_ms' => 100,
+            'tested_at' => $day->copy()->setTime(10, 0, 0),
+        ]);
+
+        NetworkHealthLog::query()->create([
+            'user_id' => $admin->id,
+            'latency_ms' => 500,
+            'tested_at' => $day->copy()->setTime(20, 0, 0),
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/network-health/dashboard?'.http_build_query([
+                'date_from' => '2026-06-10',
+                'date_to' => '2026-06-10',
+                'time_from' => '09:00',
+                'time_to' => '17:00',
+                'timezone' => config('app.timezone'),
+            ]))
+            ->assertOk()
+            ->assertJsonPath('summary.avg_latency_ms', 100)
+            ->assertJsonPath('filters.time_from', '09:00')
+            ->assertJsonPath('filters.time_to', '17:00');
+
+        $this->withToken($token)
+            ->getJson('/api/network-health/dashboard?'.http_build_query([
+                'date_from' => '2026-06-10',
+                'date_to' => '2026-06-10',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('summary.avg_latency_ms', 300);
     }
 }

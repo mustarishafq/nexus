@@ -244,6 +244,10 @@ export const db = {
 			return request(`/network-health/alerts/${alertId}/acknowledge`, { method: 'PATCH' });
 		},
 
+		async acknowledgeAllAlerts() {
+			return request('/network-health/alerts/acknowledge-all', { method: 'PATCH' });
+		},
+
 		async exportCsv(filters = {}) {
 			const token = localStorage.getItem(AUTH_TOKEN_KEY);
 			const query = buildQuery(filters);
