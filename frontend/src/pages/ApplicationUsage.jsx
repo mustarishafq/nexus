@@ -5,11 +5,12 @@ import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Monitor, Users, Search, TrendingUp, UserX } from 'lucide-react';
+import { Monitor, Users, Search, TrendingUp, UserX, ChevronLeft, ChevronRight } from 'lucide-react';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import StatsCard from '@/components/dashboard/StatsCard';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,6 +30,8 @@ const USER_VIEW_TABS = [
   { value: 'inactive', label: 'Inactive' },
 ];
 
+const PAGE_SIZE = 20;
+
 function filterUsersBySearch(users, search) {
   const term = search.trim().toLowerCase();
   if (!term) return users;
@@ -42,12 +45,52 @@ function filterUsersBySearch(users, search) {
   });
 }
 
+function UsageUsersPagination({ page, totalPages, totalItems, pageSize, onPageChange }) {
+  if (totalItems === 0) return null;
+
+  const currentPage = Math.min(page, totalPages);
+  const rangeStart = Math.min((currentPage - 1) * pageSize + 1, totalItems);
+  const rangeEnd = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        Showing {rangeStart}-{rangeEnd} of {totalItems}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="w-4 h-4 mr-1" />
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground px-2">
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+        >
+          Next
+          <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ApplicationUsage() {
   const { user } = useAuth();
-  const [selectedAppId, setSelectedAppId] = useState('');
+  const [selectedAppId, setSelectedAppId] = useState('overall');
   const [period, setPeriod] = useState('wau');
   const [userView, setUserView] = useState('active');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const { data: systems = [], isLoading: loadingSystems } = useQuery({
     queryKey: ['applications'],
@@ -63,7 +106,10 @@ export default function ApplicationUsage() {
 
   useEffect(() => {
     if (manageableApps.length === 0) {
-      setSelectedAppId('');
+      return;
+    }
+
+    if (selectedAppId === 'overall') {
       return;
     }
 
@@ -72,20 +118,25 @@ export default function ApplicationUsage() {
     );
 
     if (!stillValid) {
-      setSelectedAppId(String(manageableApps[0].id));
+      setSelectedAppId('overall');
     }
   }, [manageableApps, selectedAppId]);
 
   const { data: usageDetail, isLoading: loadingUsage } = useQuery({
     queryKey: ['application-usage-detail', selectedAppId],
-    queryFn: () => db.getApplicationUsageStats(selectedAppId),
-    enabled: showUsage && Boolean(selectedAppId),
+    queryFn: () =>
+      db.getApplicationUsageStats(selectedAppId === 'overall' ? null : selectedAppId),
+    enabled: showUsage && manageableApps.length > 0,
     staleTime: 60_000,
   });
 
+  const isOverall = selectedAppId === 'overall' || usageDetail?.scope === 'overall';
   const selectedApp = manageableApps.find(
     (app) => String(app.id) === String(selectedAppId)
   );
+  const scopeLabel = isOverall
+    ? `All applications (${usageDetail?.applications_tracked ?? manageableApps.length})`
+    : selectedApp?.name || usageDetail?.application?.name || 'Application';
 
   const activeUsers = usageDetail?.users?.[period] || [];
   const inactiveUsers = usageDetail?.users?.[`inactive_${period}`] || [];
@@ -104,6 +155,23 @@ export default function ApplicationUsage() {
     () => filterUsersBySearch(displayedUsers, search),
     [displayedUsers, search]
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = useMemo(
+    () => filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredUsers, currentPage]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, period, userView, selectedAppId]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   useMetaTags({
     title: 'Active Users - Applications - EMZI Nexus Brain',
@@ -134,9 +202,10 @@ export default function ApplicationUsage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Select value={selectedAppId} onValueChange={setSelectedAppId} disabled={manageableApps.length === 0}>
           <SelectTrigger className="w-full sm:w-72">
-            <SelectValue placeholder="Select application" />
+            <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="overall">Overall (all applications)</SelectItem>
             {manageableApps.map((app) => (
               <SelectItem key={app.id} value={String(app.id)}>
                 {app.name}
@@ -200,7 +269,7 @@ export default function ApplicationUsage() {
             <StatsCard
               title="Eligible Users"
               value={eligibleCount}
-              subtitle="Users with access to this app"
+              subtitle={isOverall ? 'Unique users with access across all apps' : 'Users with access to this app'}
               icon={Users}
               color="bg-muted"
               index={0}
@@ -239,7 +308,7 @@ export default function ApplicationUsage() {
                   {userView === 'active' ? 'active' : 'inactive'} users
                 </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {selectedApp?.name || 'Application'} · {filteredUsers.length} user{filteredUsers.length === 1 ? '' : 's'}
+                  {scopeLabel} · {filteredUsers.length} user{filteredUsers.length === 1 ? '' : 's'}
                 </p>
               </div>
               <div className="relative w-full sm:w-72">
@@ -252,9 +321,9 @@ export default function ApplicationUsage() {
                 />
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-0 pb-0">
               {filteredUsers.length === 0 ? (
-                <div className="py-16 text-center text-sm text-muted-foreground">
+                <div className="py-16 text-center text-sm text-muted-foreground px-6">
                   {search
                     ? 'No users match your search.'
                     : userView === 'active'
@@ -262,19 +331,21 @@ export default function ApplicationUsage() {
                       : `No ${period === 'wau' ? 'weekly' : 'monthly'} inactive users — everyone with access has launched.`}
                 </div>
               ) : userView === 'active' ? (
-                <div className="rounded-xl border border-border overflow-hidden">
+                <>
+                <div className="rounded-xl border border-border overflow-hidden mx-6 mb-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>User</TableHead>
                         <TableHead className="hidden md:table-cell">Email</TableHead>
+                        {isOverall && <TableHead className="hidden lg:table-cell">Apps used</TableHead>}
                         <TableHead>Launches</TableHead>
                         <TableHead className="hidden sm:table-cell">First active</TableHead>
                         <TableHead>Last active</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredUsers.map((row) => {
+                      {paginatedUsers.map((row) => {
                         const lastActive = new Date(row.last_active_at);
                         const firstActive = new Date(row.first_active_at);
 
@@ -296,6 +367,13 @@ export default function ApplicationUsage() {
                             <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                               {row.email || '—'}
                             </TableCell>
+                            {isOverall && (
+                              <TableCell className="hidden lg:table-cell">
+                                <Badge variant="outline" className="tabular-nums">
+                                  {row.apps_used ?? 1}
+                                </Badge>
+                              </TableCell>
+                            )}
                             <TableCell>
                               <Badge variant="secondary" className="tabular-nums">
                                 {row.launch_count}
@@ -316,8 +394,17 @@ export default function ApplicationUsage() {
                     </TableBody>
                   </Table>
                 </div>
+                <UsageUsersPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredUsers.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+                </>
               ) : (
-                <div className="rounded-xl border border-border overflow-hidden">
+                <>
+                <div className="rounded-xl border border-border overflow-hidden mx-6 mb-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -329,7 +416,7 @@ export default function ApplicationUsage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredUsers.map((row) => (
+                      {paginatedUsers.map((row) => (
                         <TableRow key={row.user_id}>
                           <TableCell>
                             <div className="flex items-center gap-3 min-w-0">
@@ -382,6 +469,14 @@ export default function ApplicationUsage() {
                     </TableBody>
                   </Table>
                 </div>
+                <UsageUsersPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredUsers.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+                </>
               )}
             </CardContent>
           </Card>

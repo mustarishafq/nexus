@@ -25,6 +25,28 @@ class ApplicationEligibleUsers
     }
 
     /**
+     * Unique approved users eligible for at least one application in the set.
+     *
+     * @param  Collection<int, Application>  $applications
+     * @return Collection<int, User>
+     */
+    public static function forApplications(Collection $applications): Collection
+    {
+        $usersById = collect();
+
+        foreach ($applications as $application) {
+            foreach (self::forApplication($application) as $user) {
+                $usersById->put($user->id, $user);
+            }
+        }
+
+        return $usersById
+            ->values()
+            ->sortBy(fn (User $user) => strtolower($user->full_name ?: $user->name ?: $user->email ?: ''))
+            ->values();
+    }
+
+    /**
      * @return Collection<int, User>
      */
     private static function privateApplicationUsers(Application $application): Collection

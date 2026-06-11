@@ -239,88 +239,107 @@ class ApplicationController extends Controller
                 return response()->json(['message' => 'Forbidden'], 403);
             }
 
-            $wauUsers = $this->activeUsersForSlug($application->slug, $weekStart);
-            $mauUsers = $this->activeUsersForSlug($application->slug, $monthStart);
-            $eligibleUsers = ApplicationEligibleUsers::forApplication($application);
-            $inactiveWauUsers = $this->inactiveUsersForSlug($application->slug, $eligibleUsers, $wauUsers);
-            $inactiveMauUsers = $this->inactiveUsersForSlug($application->slug, $eligibleUsers, $mauUsers);
-
-            return response()->json([
-                'application' => [
+            return response()->json($this->buildUsageStatsPayload(
+                $applications,
+                [$application->slug],
+                ApplicationEligibleUsers::forApplication($application),
+                $weekStart,
+                $monthStart,
+                'application',
+                [
                     'application_id' => $application->id,
                     'slug' => $application->slug,
                     'name' => $application->name,
                 ],
-                'wau' => count($wauUsers),
-                'mau' => count($mauUsers),
-                'wau_inactive' => count($inactiveWauUsers),
-                'mau_inactive' => count($inactiveMauUsers),
-                'eligible_users' => $eligibleUsers->count(),
-                'users' => [
-                    'wau' => $wauUsers,
-                    'mau' => $mauUsers,
-                    'inactive_wau' => $inactiveWauUsers,
-                    'inactive_mau' => $inactiveMauUsers,
-                ],
-                'period' => [
-                    'wau_days' => 7,
-                    'mau_days' => 30,
-                ],
-            ]);
+            ));
         }
 
         $slugs = $applications->pluck('slug')->all();
 
-        $stats = ActivityLog::query()
-            ->select('system_id')
-            ->selectRaw('COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as wau', [$weekStart])
-            ->selectRaw('COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as mau', [$monthStart])
-            ->whereIn('system_id', $slugs)
-            ->whereIn('action', ['login', 'view'])
-            ->whereNotNull('user_id')
-            ->where('created_at', '>=', $monthStart)
-            ->groupBy('system_id')
-            ->get()
-            ->keyBy('system_id');
+        return response()->json($this->buildUsageStatsPayload(
+            $applications,
+            $slugs,
+            ApplicationEligibleUsers::forApplications($applications),
+            $weekStart,
+            $monthStart,
+            'overall',
+            null,
+        ));
+    }
 
-        $applicationStats = $applications->map(function (Application $application) use ($stats) {
-            $row = $stats->get($application->slug);
+    /**
+     * @param  array<int, string>  $slugs
+     * @param  array<string, mixed>|null  $application
+     */
+    private function buildUsageStatsPayload(
+        Collection $applications,
+        array $slugs,
+        Collection $eligibleUsers,
+        Carbon $weekStart,
+        Carbon $monthStart,
+        string $scope,
+        ?array $application,
+    ): array {
+        $wauUsers = $this->activeUsersForSlugs($slugs, $weekStart);
+        $mauUsers = $this->activeUsersForSlugs($slugs, $monthStart);
+        $inactiveWauUsers = $this->inactiveUsersForSlugs($slugs, $eligibleUsers, $wauUsers);
+        $inactiveMauUsers = $this->inactiveUsersForSlugs($slugs, $eligibleUsers, $mauUsers);
 
-            return [
-                'application_id' => $application->id,
-                'slug' => $application->slug,
-                'name' => $application->name,
-                'wau' => (int) ($row->wau ?? 0),
-                'mau' => (int) ($row->mau ?? 0),
-            ];
-        })->values();
-
-        return response()->json([
-            'applications' => $applicationStats,
+        $payload = [
+            'scope' => $scope,
+            'application' => $application,
+            'applications_tracked' => $applications->count(),
+            'wau' => count($wauUsers),
+            'mau' => count($mauUsers),
+            'wau_inactive' => count($inactiveWauUsers),
+            'mau_inactive' => count($inactiveMauUsers),
+            'eligible_users' => $eligibleUsers->count(),
+            'users' => [
+                'wau' => $wauUsers,
+                'mau' => $mauUsers,
+                'inactive_wau' => $inactiveWauUsers,
+                'inactive_mau' => $inactiveMauUsers,
+            ],
             'period' => [
                 'wau_days' => 7,
                 'mau_days' => 30,
             ],
-        ]);
+        ];
+
+        if ($scope === 'overall') {
+            $payload['applications'] = $applications->map(fn (Application $app) => [
+                'application_id' => $app->id,
+                'slug' => $app->slug,
+                'name' => $app->name,
+            ])->values();
+        }
+
+        return $payload;
     }
 
     /**
+     * @param  array<int, string>  $slugs
      * @return array<int, array<string, mixed>>
      */
-    private function activeUsersForSlug(string $slug, Carbon $since): array
+    private function activeUsersForSlugs(array $slugs, Carbon $since): array
     {
+        if ($slugs === []) {
+            return [];
+        }
+
         $rows = ActivityLog::query()
             ->select('user_id')
             ->selectRaw('MAX(user_name) as user_name')
             ->selectRaw('MAX(created_at) as last_active_at')
             ->selectRaw('MIN(created_at) as first_active_at')
             ->selectRaw('COUNT(*) as launch_count')
-            ->where('system_id', $slug)
+            ->selectRaw('COUNT(DISTINCT system_id) as apps_used')
+            ->whereIn('system_id', $slugs)
             ->whereIn('action', ['login', 'view'])
             ->whereNotNull('user_id')
             ->where('created_at', '>=', $since)
             ->groupBy('user_id')
-            ->orderByDesc('last_active_at')
+            ->orderByDesc('launch_count')
             ->get();
 
         $userIds = $rows->pluck('user_id')
@@ -345,16 +364,22 @@ class ApplicationController extends Controller
                 'last_active_at' => Carbon::parse($row->last_active_at)->toISOString(),
                 'first_active_at' => Carbon::parse($row->first_active_at)->toISOString(),
                 'launch_count' => (int) $row->launch_count,
+                'apps_used' => (int) $row->apps_used,
             ];
         })->values()->all();
     }
 
     /**
+     * @param  array<int, string>  $slugs
      * @param  array<int, array<string, mixed>>  $activeUsers
      * @return array<int, array<string, mixed>>
      */
-    private function inactiveUsersForSlug(string $slug, Collection $eligibleUsers, array $activeUsers): array
+    private function inactiveUsersForSlugs(array $slugs, Collection $eligibleUsers, array $activeUsers): array
     {
+        if ($slugs === [] || $eligibleUsers->isEmpty()) {
+            return [];
+        }
+
         $activeIds = collect($activeUsers)
             ->pluck('user_id')
             ->map(fn ($id) => (string) $id)
@@ -379,7 +404,7 @@ class ApplicationController extends Controller
             ->selectRaw('MAX(created_at) as last_active_at')
             ->selectRaw('MIN(created_at) as first_active_at')
             ->selectRaw('COUNT(*) as total_launch_count')
-            ->where('system_id', $slug)
+            ->whereIn('system_id', $slugs)
             ->whereIn('action', ['login', 'view'])
             ->whereNotNull('user_id')
             ->whereIn('user_id', $inactiveIds)
@@ -409,11 +434,18 @@ class ApplicationController extends Controller
             })
             ->sort(function (array $a, array $b) {
                 if ($a['never_launched'] !== $b['never_launched']) {
-                    return $a['never_launched'] ? 1 : -1;
+                    return $a['never_launched'] ? -1 : 1;
                 }
 
                 if (! $a['never_launched'] && ! $b['never_launched']) {
-                    return strcmp($b['last_active_at'] ?? '', $a['last_active_at'] ?? '');
+                    $dateCompare = strcmp($a['last_active_at'] ?? '', $b['last_active_at'] ?? '');
+                    if ($dateCompare !== 0) {
+                        return $dateCompare;
+                    }
+                }
+
+                if ($a['total_launch_count'] !== $b['total_launch_count']) {
+                    return $a['total_launch_count'] <=> $b['total_launch_count'];
                 }
 
                 return strcasecmp($a['full_name'] ?? '', $b['full_name'] ?? '');
