@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Outlet, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import BottomNav from './BottomNav';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 
@@ -11,36 +13,29 @@ export default function AppLayout() {
   const isMobile = useIsMobile();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(true);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setMobileSidebarOpen(false);
-    }
-  }, [isMobile]);
+  const showBottomNav = isMobile && !isFullBleed;
 
   const sidebarWidth = isMobile ? 0 : (collapsed ? 72 : 260);
 
   return (
     <div className="min-h-screen bg-background">
       <BirthdayCelebrationGate />
-      <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed(!collapsed)}
-        isMobile={isMobile}
-        mobileOpen={mobileSidebarOpen}
-        onMobileClose={() => setMobileSidebarOpen(false)}
-      />
-      {!isFullBleed ? (
-        <TopBar
-          sidebarWidth={sidebarWidth}
-          isMobile={isMobile}
-          onMenuToggle={() => setMobileSidebarOpen((open) => !open)}
+      {!isMobile && (
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(!collapsed)}
         />
+      )}
+      {!isFullBleed ? (
+        <TopBar sidebarWidth={sidebarWidth} isMobile={isMobile} />
       ) : null}
       <main
-        className={`min-h-screen transition-all duration-200${isFullBleed ? ' overflow-hidden' : ' pt-16'}`}
+        className={cn(
+          'min-h-screen transition-all duration-200',
+          isFullBleed ? 'overflow-hidden' : 'pt-16',
+          showBottomNav && 'pb-[calc(4rem+env(safe-area-inset-bottom))]'
+        )}
         style={{ marginLeft: sidebarWidth }}
       >
         {isFullBleed ? (
@@ -51,6 +46,7 @@ export default function AppLayout() {
           </div>
         )}
       </main>
+      {showBottomNav && <BottomNav />}
     </div>
   );
 }

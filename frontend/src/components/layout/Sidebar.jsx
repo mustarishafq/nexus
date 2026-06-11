@@ -13,9 +13,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Sidebar({
   collapsed,
   onToggle,
-  isMobile = false,
-  mobileOpen = false,
-  onMobileClose,
 }) {
   const location = useLocation();
   const { user, appPublicSettings } = useAuth();
@@ -44,7 +41,7 @@ export default function Sidebar({
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  const showCompact = !isMobile && collapsed;
+  const showCompact = collapsed;
 
   const sidebarContent = (
     <>
@@ -79,11 +76,6 @@ export default function Sidebar({
             <Link
               key={item.path}
               to={item.path}
-              onClick={() => {
-                if (isMobile) {
-                  onMobileClose?.();
-                }
-              }}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
                 isActive
@@ -116,40 +108,16 @@ export default function Sidebar({
       </nav>
 
       {/* Collapse Toggle */}
-      {!isMobile && (
-        <div className="p-3 border-t border-sidebar-border">
-          <button
-            onClick={onToggle}
-            className="w-full flex items-center justify-center p-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
+      <div className="p-3 border-t border-sidebar-border">
+        <button
+          onClick={onToggle}
+          className="w-full flex items-center justify-center p-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+      </div>
     </>
   );
-
-  if (isMobile) {
-    return (
-      <>
-        {mobileOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/40"
-            onClick={onMobileClose}
-            aria-hidden="true"
-          />
-        )}
-        <motion.aside
-          initial={false}
-          animate={{ x: mobileOpen ? 0 : -280 }}
-          transition={{ duration: 0.2, ease: 'easeInOut' }}
-          className="fixed left-0 top-0 bottom-0 z-50 w-[260px] flex flex-col bg-sidebar border-r border-sidebar-border"
-        >
-          {sidebarContent}
-        </motion.aside>
-      </>
-    );
-  }
 
   return (
     <motion.aside

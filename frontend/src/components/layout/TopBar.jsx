@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { toAbsoluteUrl } from '@/lib/media';
 
-import { Bell, Search, LogOut, User, ChevronDown, Menu } from 'lucide-react';
+import { Bell, Search, LogOut, User, ChevronDown } from 'lucide-react';
+import MobileMoreMenu from './MobileMoreMenu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 
-export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
+export default function TopBar({ sidebarWidth, isMobile }) {
   const navigate = useNavigate();
   const { user: authUser, logout } = useAuth();
   const [user, setUser] = useState(null);
@@ -54,15 +55,7 @@ export default function TopBar({ sidebarWidth, isMobile, onMenuToggle }) {
       >
         {/* Search */}
         <div className="flex items-center gap-3 w-full max-w-[65%] md:max-w-[40%]">
-          {isMobile && (
-            <button
-              onClick={onMenuToggle}
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
-              aria-label="Open sidebar"
-            >
-              <Menu className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
+          {isMobile && <MobileMoreMenu />}
           <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
