@@ -94,18 +94,18 @@ export async function openApplicationTarget(db, system, { actionUrl, navigate } 
   }
 
   const redirectTo = actionUrl?.trim() || undefined;
-  const { launch_url, auth_mode, open_mode } = await db.launchSystem(system.id, {
-    redirect_to: redirectTo,
-  });
-  const resolvedOpenMode = open_mode || system.open_mode || 'embedded';
-  const targetUrl = auth_mode === 'redirect' && redirectTo ? redirectTo : launch_url;
+  const resolvedOpenMode = system.open_mode || 'embedded';
 
   if (resolvedOpenMode === 'embedded') {
-    navigate(`/applications/${system.id}/view`, {
-      state: redirectTo ? { redirectTo } : undefined,
-    });
+    const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+    navigate(`/applications/${system.id}/view${query}`);
     return;
   }
+
+  const { launch_url, auth_mode } = await db.launchSystem(system.id, {
+    redirect_to: redirectTo,
+  });
+  const targetUrl = auth_mode === 'redirect' && redirectTo ? redirectTo : launch_url;
 
   if (resolvedOpenMode === 'new_tab') {
     openExternalUrl(targetUrl, { newTab: true });

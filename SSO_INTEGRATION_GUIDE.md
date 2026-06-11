@@ -43,8 +43,12 @@ In Nexus, open **Applications → Edit** and fill in the **API Key** field.
 Your system must expose a route that accepts the token:
 
 ```
-GET /sso/nexus?token=<JWT>&return_to=<URL>
+GET /sso/nexus?token=<JWT>&return_to=<URL>&redirect_to=<DEEP_LINK_URL>
 ```
+
+`redirect_to` is optional. When present (for example from a notification deep link), redirect
+the user to that URL **inside your app** after SSO login succeeds. Nexus also embeds the same
+value in the JWT `redirect_to` claim.
 
 > You may also accept it as `POST /sso/nexus` with a `token` body field if you
 > prefer a form POST — just ensure Nexus's `launch_url` pattern matches.
@@ -64,12 +68,14 @@ GET /sso/nexus?token=<JWT>&return_to=<URL>
    | `name`  | string | User's display name                          |
    | `sys`   | string | Slug of the application being launched  |
     | `return_to` | string | Nexus URL to redirect user to after logout |
+   | `redirect_to` | string | Optional in-app URL to open after SSO login |
    | `iat`   | int    | Issued-at timestamp (Unix seconds)           |
    | `exp`   | int    | Expiry timestamp (Unix seconds, iat + 60)    |
 
 4. **Find or provision the user** by `email`
 5. **Create a session** (set cookie / issue your own session token)
-6. **Redirect** the user to the appropriate page inside your app
+6. **Redirect** the user to `redirect_to` (query param or JWT claim) when provided,
+   otherwise your default landing page
 7. Store `return_to` in session so logout can send user back to Nexus
 
 ---
@@ -129,6 +135,13 @@ Route::get('/sso/nexus', function (Request $request) {
     );
 
     Auth::login($user);
+
+    $redirectTo = $request->query('redirect_to')
+        ?: ($payload->redirect_to ?? null);
+
+    if (is_string($redirectTo) && $redirectTo !== '') {
+        return redirect()->away($redirectTo);
+    }
 
     return redirect('/dashboard');
 });

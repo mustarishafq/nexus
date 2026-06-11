@@ -1,5 +1,5 @@
 import db, { API_ORIGIN } from '@/api/base44Client';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
@@ -40,7 +40,12 @@ export default function ApplicationBrowser() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const redirectTo = location.state?.redirectTo;
+  const redirectTo = useMemo(() => {
+    const fromQuery = new URLSearchParams(location.search).get('redirect_to');
+    if (fromQuery) return fromQuery;
+
+    return location.state?.redirectTo || undefined;
+  }, [location.search, location.state?.redirectTo]);
   const iframeRef = useRef(null);
   const [launchUrl, setLaunchUrl] = useState(null);
   const [launchError, setLaunchError] = useState(null);

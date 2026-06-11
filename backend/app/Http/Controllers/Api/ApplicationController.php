@@ -514,7 +514,9 @@ class ApplicationController extends Controller
         );
 
         if ($application->auth_mode === 'redirect') {
-            $launchUrl = rtrim($application->base_url, '/');
+            $launchUrl = $redirectTo
+                ? $this->absoluteRedirectUrl($application, $redirectTo)
+                : rtrim($application->base_url, '/');
 
             ActivityLog::create([
                 'user_id'     => (string) $user->id,
@@ -547,6 +549,10 @@ class ApplicationController extends Controller
             'sys'   => $application->slug,
             'return_to' => $returnTo,
         ];
+
+        if ($redirectTo) {
+            $payload['redirect_to'] = $redirectTo;
+        }
 
         $token = JWT::encode($payload, $application->api_key, 'HS256');
 
@@ -582,7 +588,11 @@ class ApplicationController extends Controller
             return null;
         }
 
-        $redirectTo = trim($redirectTo);
+        return $this->absoluteRedirectUrl($application, trim($redirectTo));
+    }
+
+    private function absoluteRedirectUrl(Application $application, string $redirectTo): ?string
+    {
         $baseUrl = rtrim((string) $application->base_url, '/');
         $baseParts = parse_url($baseUrl);
         $targetParts = parse_url($redirectTo);
@@ -600,7 +610,7 @@ class ApplicationController extends Controller
             $query = isset($targetParts['query']) ? '?' . $targetParts['query'] : '';
             $fragment = isset($targetParts['fragment']) ? '#' . $targetParts['fragment'] : '';
 
-            return $path . $query . $fragment;
+            return $baseUrl . $path . $query . $fragment;
         }
 
         if (strcasecmp((string) $targetParts['host'], (string) $baseParts['host']) !== 0) {

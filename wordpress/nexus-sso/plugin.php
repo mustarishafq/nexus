@@ -158,7 +158,7 @@ final class Nexus_Sso
             update_user_meta($user->ID, self::RETURN_TO_META_KEY, $returnTo);
         }
 
-        $postLoginUrl = self::resolve_post_login_redirect();
+        $postLoginUrl = self::resolve_post_login_redirect($claims);
         wp_safe_redirect($postLoginUrl !== '' ? $postLoginUrl : self::login_redirect_url());
         exit;
     }
@@ -316,13 +316,31 @@ final class Nexus_Sso
         ]);
     }
 
-    private static function resolve_post_login_redirect(): string
+    private static function resolve_post_login_redirect(array $claims = []): string
     {
-        if (empty($_GET['redirect_to'])) {
+        $redirectTo = '';
+
+        if (! empty($_GET['redirect_to'])) {
+            $redirectTo = wp_unslash((string) $_GET['redirect_to']);
+        } elseif (! empty($claims['redirect_to'])) {
+            $redirectTo = (string) $claims['redirect_to'];
+        }
+
+        return self::normalize_redirect_url($redirectTo);
+    }
+
+    private static function normalize_redirect_url(string $redirectTo): string
+    {
+        $redirectTo = trim($redirectTo);
+        if ($redirectTo === '') {
             return '';
         }
 
-        $redirectTo = esc_url_raw(wp_unslash((string) $_GET['redirect_to']));
+        if (str_starts_with($redirectTo, '/') && ! str_starts_with($redirectTo, '//')) {
+            $redirectTo = home_url($redirectTo);
+        }
+
+        $redirectTo = esc_url_raw($redirectTo);
         if ($redirectTo === '') {
             return '';
         }
