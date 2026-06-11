@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -30,7 +29,6 @@ export default function Settings() {
     in_app: true,
     email: true,
     sound: false,
-    priority_filter: 'all',
   });
   const [activeTab, setActiveTab] = useState('user');
   const [pushState, setPushState] = useState({
@@ -425,26 +423,6 @@ export default function Settings() {
                   {installState.installed ? 'Installed' : 'Install App'}
                 </Button>
               ) : null}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base">Priority Filter</CardTitle>
-              <CardDescription>Only show notifications above this priority</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select value={settings.priority_filter} onValueChange={(v) => setSettings((p) => ({ ...p, priority_filter: v }))}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  <SelectItem value="medium">Medium & Above</SelectItem>
-                  <SelectItem value="high">High & Above</SelectItem>
-                  <SelectItem value="critical">Critical Only</SelectItem>
-                </SelectContent>
-              </Select>
             </CardContent>
           </Card>
 

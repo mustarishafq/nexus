@@ -43,8 +43,14 @@ export default function Dashboard() {
   });
 
   const { data: activities = [] } = useQuery({
-    queryKey: ['activities-dash'],
-    queryFn: () => db.entities.ActivityLog.list('-created_date', 20),
+    queryKey: ['activities-dash', user?.id],
+    queryFn: () =>
+      db.entities.ActivityLog.filter(
+        { user_id: String(user.id) },
+        '-created_date',
+        20
+      ),
+    enabled: Boolean(user?.id),
   });
 
   useMetaTags({

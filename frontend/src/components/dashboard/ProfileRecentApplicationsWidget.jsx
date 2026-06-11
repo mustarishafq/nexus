@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Monitor } from 'lucide-react';
+import { ArrowRight, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getRecentApplications, launchApplication } from '@/lib/applications';
 import { toAbsoluteUrl } from '@/lib/media';
@@ -90,8 +90,8 @@ export default function ProfileRecentApplicationsWidget({
         </div>
         {applications.length > 0 ? (
           <Link to="/applications">
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
-              View all
+            <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+              View all <ArrowRight className="w-3 h-3" />
             </Button>
           </Link>
         ) : null}

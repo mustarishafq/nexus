@@ -1,17 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User } from 'lucide-react';
+import { Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import {
   formatBirthdayLabel,
   formatMemberSince,
+  formatTenure,
   getProfileCompleteness,
 } from '@/lib/profile';
 
-export default function ProfileAboutCard({ user }) {
-  const { percent } = getProfileCompleteness(user);
+export default function ProfileAboutCard({ user, showCompleteLink = true, showChecklist = false }) {
+  const { percent, checks } = getProfileCompleteness(user);
   const groups = (user?.access_group_names || []).filter(Boolean);
   const memberSince = formatMemberSince(user?.joined_at);
   const birthday = formatBirthdayLabel(user?.date_of_birth);
@@ -40,6 +42,9 @@ export default function ProfileAboutCard({ user }) {
             <div>
               <p className="text-xs text-muted-foreground">Member since</p>
               <p className="font-medium">{memberSince}</p>
+              {formatTenure(user?.joined_at) ? (
+                <p className="text-xs text-muted-foreground mt-0.5">{formatTenure(user.joined_at)} with the team</p>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -81,7 +86,23 @@ export default function ProfileAboutCard({ user }) {
             <span className="text-sm font-bold text-primary tabular-nums">{percent}%</span>
           </div>
           <Progress value={percent} className="h-2" />
-          {percent < 100 ? (
+          {showChecklist ? (
+            <ul className="space-y-1.5 pt-1">
+              {checks.map((item) => (
+                <li key={item.key} className="flex items-center gap-2 text-xs">
+                  {item.done ? (
+                    <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                  ) : (
+                    <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                  )}
+                  <span className={cn(item.done ? 'text-muted-foreground' : 'text-foreground font-medium')}>
+                    {item.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {showCompleteLink && percent < 100 ? (
             <Link to="/profile" className="block mt-2">
               <Button variant="outline" size="sm" className="w-full gap-2 h-8 text-xs">
                 Complete profile
