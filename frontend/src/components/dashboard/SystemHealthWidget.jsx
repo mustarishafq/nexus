@@ -20,7 +20,7 @@ export default function SystemHealthWidget({ systems }) {
         {systems.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">No applications</p>
         ) : (
-          <div className="max-h-64 overflow-y-auto space-y-3 pr-1 -mr-1">
+          <div className="max-h-64 overflow-y-auto space-y-3 scrollbar-on-hover -mr-5 pr-5">
           {systems.map(system => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
