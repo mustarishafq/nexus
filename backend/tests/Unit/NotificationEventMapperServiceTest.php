@@ -83,4 +83,23 @@ class NotificationEventMapperServiceTest extends TestCase
             'message' => 'No title provided',
         ]);
     }
+
+    public function test_falls_back_to_default_title_paths_when_mapping_is_empty(): void
+    {
+        $application = Application::factory()->create([
+            'slug' => 'fallback-title',
+            'notification_config' => NotificationEventMapping::normalize([
+                'field_mappings' => [
+                    'title' => [],
+                ],
+            ]),
+        ]);
+
+        $payload = app(NotificationEventMapperService::class)->map($application, [
+            'title' => 'Recovered title',
+            'event' => 'system.health',
+        ]);
+
+        $this->assertSame('Recovered title', $payload['title']);
+    }
 }

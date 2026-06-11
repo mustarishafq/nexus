@@ -90,6 +90,10 @@ class NotificationEventMapping
                     $sources,
                     static fn ($source) => is_string($source) && $source !== ''
                 ));
+
+                if ($normalized[$target] === [] && isset(self::DEFAULT_FIELD_MAPPINGS[$target])) {
+                    $normalized[$target] = self::DEFAULT_FIELD_MAPPINGS[$target];
+                }
             }
         }
 

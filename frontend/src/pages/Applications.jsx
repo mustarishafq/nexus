@@ -46,6 +46,7 @@ import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 
 const API_BASE_URL = API_ORIGIN;
 
@@ -243,6 +244,7 @@ export default function Applications() {
   const [apiKey, setApiKey] = useState('');
   const [authMode, setAuthMode] = useState('jwt');
   const [openMode, setOpenMode] = useState('embedded');
+  const [status, setStatus] = useState('online');
   const [visibility, setVisibility] = useState('private');
   const [privateAllowedEmails, setPrivateAllowedEmails] = useState([]);
   const [privateUsersPickerOpen, setPrivateUsersPickerOpen] = useState(false);
@@ -285,6 +287,7 @@ export default function Applications() {
     setApiKey(system?.api_key || '');
     setAuthMode(system?.auth_mode || 'jwt');
     setOpenMode(system?.open_mode || 'embedded');
+    setStatus(system?.status || 'online');
     setVisibility(system?.visibility || 'private');
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
@@ -329,6 +332,7 @@ export default function Applications() {
     setApiKey('');
     setAuthMode('jwt');
     setOpenMode('embedded');
+    setStatus('online');
     setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
     setPrivateAllowedEmails([]);
     setPrivateUsersPickerOpen(false);
@@ -338,11 +342,17 @@ export default function Applications() {
   const createMut = useMutation({
     mutationFn: (data) => db.entities.Application.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
+    onError: (error) => {
+      toast.error(error?.data?.message || error.message || 'Failed to create application');
+    },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.Application.update(id, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
+    onError: (error) => {
+      toast.error(error?.data?.message || error.message || 'Failed to update application');
+    },
   });
 
   const deleteMut = useMutation({
@@ -446,7 +456,7 @@ export default function Applications() {
       open_mode: openMode,
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
-      status: form.get('status'),
+      status,
       color: form.get('color'),
       icon_url: logoUrl || undefined,
       notification_config: notificationConfig,
@@ -510,7 +520,7 @@ export default function Applications() {
               <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
             <DialogTrigger asChild>
               <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" />
@@ -692,7 +702,7 @@ export default function Applications() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select name="status" defaultValue={editSystem?.status || 'online'}>
+                  <Select value={status} onValueChange={setStatus}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="online">Online</SelectItem>

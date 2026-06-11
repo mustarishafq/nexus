@@ -14,21 +14,40 @@ class NotificationEventMapperService
         $config = NotificationEventMapping::normalize($application->notification_config);
         $fieldMappings = $config['field_mappings'];
 
-        $title = $this->resolveField($event, $fieldMappings['title'] ?? ['title', 'subject']);
+        $title = $this->resolveField(
+            $event,
+            $this->pathsFor($fieldMappings, 'title', ['title', 'subject'])
+        );
         if (! filled($title)) {
             throw new InvalidArgumentException('Event is missing title');
         }
 
         $eventName = strtolower((string) $this->resolveField(
             $event,
-            $fieldMappings['event_name'] ?? ['event']
+            $this->pathsFor($fieldMappings, 'event_name', ['event'])
         ));
-        $severity = $this->resolveSeverity($event, $fieldMappings['severity'] ?? ['severity', 'level']);
+        $severity = $this->resolveSeverity(
+            $event,
+            $this->pathsFor($fieldMappings, 'severity', ['severity', 'level'])
+        );
 
-        $message = $this->resolveField($event, $fieldMappings['message'] ?? ['message', 'body']);
-        $userId = $this->resolveField($event, $fieldMappings['user_id'] ?? ['user_id']);
-        $actionUrl = $this->resolveField($event, $fieldMappings['action_url'] ?? ['action_url', 'url', 'link']);
-        $data = $this->resolveData($event, $fieldMappings['data'] ?? ['data'], $eventName);
+        $message = $this->resolveField(
+            $event,
+            $this->pathsFor($fieldMappings, 'message', ['message', 'body'])
+        );
+        $userId = $this->resolveField(
+            $event,
+            $this->pathsFor($fieldMappings, 'user_id', ['user_id'])
+        );
+        $actionUrl = $this->resolveField(
+            $event,
+            $this->pathsFor($fieldMappings, 'action_url', ['action_url', 'url', 'link'])
+        );
+        $data = $this->resolveData(
+            $event,
+            $this->pathsFor($fieldMappings, 'data', ['data']),
+            $eventName
+        );
 
         $defaults = $config['defaults'];
 
@@ -74,6 +93,18 @@ class NotificationEventMapperService
         $config = NotificationEventMapping::normalize($application->notification_config);
 
         return (bool) $config['auto_notify'];
+    }
+
+    /**
+     * @param  array<string, array<int, string>>  $fieldMappings
+     * @param  array<int, string>  $fallback
+     * @return array<int, string>
+     */
+    private function pathsFor(array $fieldMappings, string $field, array $fallback): array
+    {
+        $paths = $fieldMappings[$field] ?? $fallback;
+
+        return $paths === [] ? $fallback : $paths;
     }
 
     /**
