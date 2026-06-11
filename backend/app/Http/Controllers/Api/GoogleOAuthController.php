@@ -187,6 +187,6 @@ class GoogleOAuthController extends Controller
             return $configured;
         }
 
-        return rtrim((string) config('app.url'), '/') . '/admin/calendar';
+        return rtrim((string) config('app.url'), '/') . '/calendar';
     }
 }

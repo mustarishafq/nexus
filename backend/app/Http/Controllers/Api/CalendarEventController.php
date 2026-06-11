@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\CalendarEvent;
+use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
@@ -24,9 +25,14 @@ class CalendarEventController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
         $query = $this->applyIndexQuery(
             $request,
-            CalendarEvent::query(),
+            $this->scopedEventsQuery($user),
             ['is_all_day', 'created_by'],
             'start_at'
         );
@@ -39,7 +45,6 @@ class CalendarEventController extends Controller
         }
 
         if ($to) {
-            // Include the entire day for the 'to' date
             $query->where('start_at', '<=', Carbon::parse($to)->endOfDay());
         }
 
@@ -48,6 +53,11 @@ class CalendarEventController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -55,15 +65,12 @@ class CalendarEventController extends Controller
             'start_at' => ['required', 'date'],
             'end_at' => ['required', 'date', 'after_or_equal:start_at'],
             'is_all_day' => ['sometimes', 'boolean'],
-            'created_by' => ['nullable', 'string', 'max:255'],
             'attendee_emails' => ['nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
         ]);
 
-        $user = ApiTokenAuth::userFromRequest($request);
-        if ($user) {
-            $validated['created_by'] = $user->email;
-        }
+        $validated['created_by'] = $user->email;
+        $validated['attendee_emails'] = $this->normalizeAttendeeEmails($validated['attendee_emails'] ?? null);
 
         $payload = $this->withGoogleCalendarUrl($validated);
 
@@ -77,13 +84,31 @@ class CalendarEventController extends Controller
         return response()->json($item->fresh(), 201);
     }
 
-    public function show(CalendarEvent $calendarEvent): JsonResponse
+    public function show(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (! $this->userCanViewEvent($user, $calendarEvent)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         return response()->json($calendarEvent);
     }
 
     public function update(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (! $this->userCanManageEvent($user, $calendarEvent)) {
+            return response()->json(['message' => 'You can only edit events you created.'], 403);
+        }
+
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
@@ -91,10 +116,13 @@ class CalendarEventController extends Controller
             'start_at' => ['sometimes', 'date'],
             'end_at' => ['sometimes', 'date'],
             'is_all_day' => ['sometimes', 'boolean'],
-            'created_by' => ['sometimes', 'nullable', 'string', 'max:255'],
             'attendee_emails' => ['sometimes', 'nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
         ]);
+
+        if (array_key_exists('attendee_emails', $validated)) {
+            $validated['attendee_emails'] = $this->normalizeAttendeeEmails($validated['attendee_emails']);
+        }
 
         $startAt = array_key_exists('start_at', $validated) ? $validated['start_at'] : $calendarEvent->start_at;
         $endAt = array_key_exists('end_at', $validated) ? $validated['end_at'] : $calendarEvent->end_at;
@@ -117,13 +145,102 @@ class CalendarEventController extends Controller
         return response()->json($calendarEvent->fresh());
     }
 
-    public function destroy(CalendarEvent $calendarEvent): JsonResponse
+    public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (! $this->userCanManageEvent($user, $calendarEvent)) {
+            return response()->json(['message' => 'You can only delete events you created.'], 403);
+        }
+
         $this->googleCalendarService->deleteEvent($calendarEvent);
 
         $calendarEvent->delete();
 
         return response()->json(null, 204);
+    }
+
+    protected function requireUser(Request $request): User|JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        return $user;
+    }
+
+    protected function scopedEventsQuery(User $user)
+    {
+        if ($user->role === 'admin') {
+            return CalendarEvent::query();
+        }
+
+        $email = strtolower(trim((string) $user->email));
+
+        return CalendarEvent::query()->where(function ($query) use ($email) {
+            $query
+                ->whereRaw('LOWER(created_by) = ?', [$email])
+                ->orWhereJsonContains('attendee_emails', $email)
+                ->orWhere(function ($legacyAttendees) use ($email) {
+                    $legacyAttendees
+                        ->whereNotNull('attendee_emails')
+                        ->where('attendee_emails', '!=', '[]')
+                        ->whereRaw('LOWER(CAST(attendee_emails AS CHAR)) LIKE ?', ['%"'.$email.'"%']);
+                });
+        });
+    }
+
+    protected function userCanViewEvent(User $user, CalendarEvent $calendarEvent): bool
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        $email = strtolower(trim((string) $user->email));
+
+        if ($email !== '' && strtolower(trim((string) $calendarEvent->created_by)) === $email) {
+            return true;
+        }
+
+        $attendees = collect($calendarEvent->attendee_emails ?? [])
+            ->map(fn ($value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->all();
+
+        return in_array($email, $attendees, true);
+    }
+
+    protected function userCanManageEvent(User $user, CalendarEvent $calendarEvent): bool
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        $email = strtolower(trim((string) $user->email));
+        $ownerEmail = strtolower(trim((string) $calendarEvent->created_by));
+
+        return $email !== '' && $ownerEmail !== '' && $email === $ownerEmail;
+    }
+
+    protected function normalizeAttendeeEmails(?array $emails): ?array
+    {
+        if ($emails === null) {
+            return null;
+        }
+
+        $normalized = collect($emails)
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return count($normalized) > 0 ? $normalized : null;
     }
 
     protected function syncToGoogle(CalendarEvent $calendarEvent): void
@@ -184,7 +301,7 @@ class CalendarEventController extends Controller
             'location' => $location,
         ];
 
-        if (!empty($data['attendee_emails']) && is_array($data['attendee_emails'])) {
+        if (! empty($data['attendee_emails']) && is_array($data['attendee_emails'])) {
             $params['add'] = implode(',', $data['attendee_emails']);
         }
 

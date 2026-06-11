@@ -9,9 +9,11 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+const DISPLAY_LIMIT = 4;
+
 export default function WeeklyCalendarWidget({ embedded = false }) {
   const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
 
   const fromDate = format(weekStart, 'yyyy-MM-dd');
@@ -25,119 +27,35 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
         'start_at',
         100
       ),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  const eventsGroupedByDay = useMemo(() => {
-    const grouped = {};
-
-    weekEvents.forEach((event) => {
-      const eventDate = parseISO(event.start_at);
-      const dateKey = format(eventDate, 'yyyy-MM-dd');
-
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(event);
-    });
-
-    // Sort events within each day
-    Object.keys(grouped).forEach((date) => {
-      grouped[date].sort(
-        (a, b) => new Date(a.start_at) - new Date(b.start_at)
-      );
-    });
-
-    return grouped;
-  }, [weekEvents]);
-
-  const todayEvents = useMemo(() => {
-    const todayKey = format(today, 'yyyy-MM-dd');
-    return eventsGroupedByDay[todayKey] || [];
-  }, [eventsGroupedByDay, today]);
+  const displayEvents = useMemo(
+    () =>
+      [...weekEvents]
+        .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+        .slice(0, DISPLAY_LIMIT),
+    [weekEvents]
+  );
 
   const eventCount = weekEvents.length;
-  const todayEventCount = todayEvents.length;
+  const hiddenCount = Math.max(0, eventCount - DISPLAY_LIMIT);
 
   const containerClass = embedded
     ? 'bg-transparent border-0 rounded-none'
     : 'bg-card rounded-2xl border border-border';
 
-  const content = (
-    <>
-      <div className="flex items-center justify-between p-5 pb-3">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold text-sm">This Week</h3>
-        </div>
-        <Link to="/admin/calendar">
-          <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
-            View all <ArrowRight className="w-3 h-3" />
-          </Button>
-        </Link>
-      </div>
-
-      <div className="px-5">
-        <p className="text-xs text-muted-foreground">
-          {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
-        </p>
-      </div>
-
-      <div className={cn('px-3 pb-3 pt-2')}>
-          {eventCount === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              No events scheduled this week
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {/* Today's Events Section */}
-              {todayEventCount > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="default" className="bg-red-500 hover:bg-red-600">
-                      Today
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {todayEventCount} event{todayEventCount !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {todayEvents.map((event) => (
-                      <TodayEventCard key={event.id} event={event} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Other Days' Events */}
-              {weekEvents
-                .filter((e) => !isToday(parseISO(e.start_at)))
-                .slice(0, 3)
-                .map((event) => (
-                  <EventRow key={event.id} event={event} />
-                ))}
-
-              {/* Show more indicator */}
-              {eventCount > (todayEventCount > 0 ? 4 : 3) && (
-                <p className="text-xs text-muted-foreground pt-2">
-                  +{eventCount - (todayEventCount > 0 ? 4 : 3)} more event
-                  {eventCount - (todayEventCount > 0 ? 4 : 3) !== 1 ? 's' : ''}
-                </p>
-              )}
-            </div>
-          )}
-      </div>
-    </>
-  );
+  const contentPadding = embedded ? 'px-5 pb-5' : 'px-5 pb-5';
 
   if (isLoading) {
     return (
       <div className={containerClass}>
-        <div className="flex items-center gap-2 p-5 pb-3">
-          <CalendarIcon className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold text-sm">This Week</h3>
-        </div>
-        <p className={cn('text-sm text-muted-foreground text-center py-6', embedded ? 'px-5 pb-5' : 'px-3 pb-3')}>
+        <WidgetHeader
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          eventCount={0}
+        />
+        <p className={cn('text-sm text-muted-foreground text-center py-8', contentPadding)}>
           Loading events...
         </p>
       </div>
@@ -147,81 +65,170 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className={containerClass}>
-        {content}
+        <WidgetHeader
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          eventCount={eventCount}
+        />
+
+        <div className={contentPadding}>
+          {eventCount === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/60">
+                <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">Nothing scheduled</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your week is clear so far
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {displayEvents.map((event, index) => (
+                <EventItem key={event.id} event={event} index={index} />
+              ))}
+
+              {hiddenCount > 0 ? (
+                <Link
+                  to="/calendar"
+                  className="mt-2 flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                >
+                  +{hiddenCount} more event{hiddenCount !== 1 ? 's' : ''}
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
     </motion.div>
   );
 }
 
-function TodayEventCard({ event }) {
+function WidgetHeader({ weekStart, weekEnd, eventCount }) {
+  return (
+    <div className="flex items-start justify-between p-5 pb-4">
+      <div className="flex items-start gap-3 min-w-0">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <CalendarIcon className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-sm">This Week</h3>
+            {eventCount > 0 ? (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
+                {eventCount}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
+          </p>
+        </div>
+      </div>
+      <Link to="/calendar" className="shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          View all
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function EventDateBadge({ date }) {
+  const today = isToday(date);
+
+  return (
+    <div
+      className={cn(
+        'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl',
+        today
+          ? 'bg-primary text-primary-foreground shadow-sm'
+          : 'border border-border/70 bg-muted/30'
+      )}
+    >
+      <span
+        className={cn(
+          'text-[10px] font-semibold uppercase leading-none',
+          today ? 'text-primary-foreground/80' : 'text-muted-foreground'
+        )}
+      >
+        {format(date, 'MMM')}
+      </span>
+      <span className="mt-0.5 text-sm font-bold leading-none">{format(date, 'd')}</span>
+    </div>
+  );
+}
+
+function EventItem({ event, index }) {
   const startTime = parseISO(event.start_at);
   const endTime = parseISO(event.end_at);
+  const today = isToday(startTime);
+  const subtitle = event.description || event.location;
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      className={cn(
-        'p-3 rounded-lg border-2 border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900',
-        'hover:shadow-md transition-shadow'
-      )}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
     >
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <p className="font-medium text-sm line-clamp-1">{event.title}</p>
-          {event.description && (
-            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-              {event.description}
-            </p>
-          )}
-          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+      <Link
+        to="/calendar"
+        className={cn(
+          'group flex gap-3 rounded-xl p-3 transition-colors hover:bg-muted/40',
+          today && 'bg-primary/[0.04] hover:bg-primary/[0.07]'
+        )}
+      >
+        <EventDateBadge date={startTime} />
+
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="line-clamp-1 text-sm font-semibold leading-tight group-hover:text-primary transition-colors">
+                  {event.title}
+                </p>
+                {today ? (
+                  <Badge className="h-4 px-1.5 text-[9px] font-semibold bg-primary/90 hover:bg-primary">
+                    Today
+                  </Badge>
+                ) : null}
+              </div>
+              {subtitle ? (
+                <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{subtitle}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             {event.is_all_day ? (
-              <span>All day</span>
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-0.5 font-medium">
+                All day
+              </span>
             ) : (
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>
-                  {format(startTime, 'HH:mm')} – {format(endTime, 'HH:mm')}
-                </span>
-              </div>
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Clock className="h-3 w-3 shrink-0 opacity-70" />
+                {format(startTime, 'HH:mm')}
+                <span className="opacity-50">–</span>
+                {format(endTime, 'HH:mm')}
+              </span>
             )}
-            {event.location && (
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                <span>{event.location}</span>
-              </div>
-            )}
+            {event.location && event.description ? (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0 opacity-70" />
+                <span className="line-clamp-1">{event.location}</span>
+              </span>
+            ) : null}
           </div>
         </div>
-      </div>
+
+        <ArrowRight className="mt-3 h-3.5 w-3.5 shrink-0 text-muted-foreground/0 transition-all group-hover:text-muted-foreground" />
+      </Link>
     </motion.div>
-  );
-}
-
-function EventRow({ event }) {
-  const eventDate = parseISO(event.start_at);
-  const startTime = eventDate;
-
-  return (
-    <div className="flex gap-2 py-2 text-sm border-b border-border/50 last:border-0">
-      <div className="w-12 flex-shrink-0 text-right">
-        <div className="font-medium text-xs">
-          {format(eventDate, 'MMM d')}
-        </div>
-        {!event.is_all_day && (
-          <div className="text-xs text-muted-foreground">
-            {format(startTime, 'HH:mm')}
-          </div>
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm line-clamp-1">{event.title}</p>
-        {event.location && (
-          <p className="text-xs text-muted-foreground line-clamp-1">
-            {event.location}
-          </p>
-        )}
-      </div>
-    </div>
   );
 }

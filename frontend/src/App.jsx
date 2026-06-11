@@ -63,7 +63,8 @@ const ProtectedRoutes = () => {
         <Route path="/admin/broadcast" element={<BroadcastCenter />} />
         <Route path="/admin/events" element={<SystemEvents />} />
         <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
-        <Route path="/admin/calendar" element={<AdminCalendar />} />
+        <Route path="/calendar" element={<AdminCalendar />} />
+        <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
         <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />

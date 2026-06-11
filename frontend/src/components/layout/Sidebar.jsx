@@ -35,10 +35,10 @@ export default function Sidebar({
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/activity', icon: Activity, label: 'Activity Feed' },
     { path: '/network-health', icon: Wifi, label: 'Network Health' },
+    { path: '/calendar', icon: Calendar, label: 'Calendar' },
     ...(user?.role === 'admin' ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
       { path: '/admin/events', icon: Shield, label: 'System Events' },
-      { path: '/admin/calendar', icon: Calendar, label: 'Calendar' },
       { path: '/admin/users', icon: Users, label: 'User Management' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' },

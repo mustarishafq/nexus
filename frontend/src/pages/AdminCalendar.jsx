@@ -1,6 +1,6 @@
 // @ts-nocheck
 import db from '@/api/base44Client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calendar as CalendarIcon, Plus, MapPin, ExternalLink, Clock, ChevronsUpDown, Check, X } from 'lucide-react';
@@ -29,15 +29,41 @@ import {
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 
 function toDateTimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function canManageEvent(event, user) {
+  if (!user?.email || !event) {
+    return false;
+  }
+
+  if (user.role === 'admin') {
+    return true;
+  }
+
+  return normalizeEmail(event.created_by) === normalizeEmail(user.email);
+}
+
+function isInvitedEvent(event, user) {
+  if (!user?.email || !event || canManageEvent(event, user)) {
+    return false;
+  }
+
+  const attendees = Array.isArray(event.attendee_emails) ? event.attendee_emails : [];
+
+  return attendees.some((email) => normalizeEmail(email) === normalizeEmail(user.email));
+}
+
 export default function AdminCalendar() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [editingId, setEditingId] = useState(null);
   const [inviteePickerOpen, setInviteePickerOpen] = useState(false);
@@ -53,52 +79,6 @@ export default function AdminCalendar() {
   const [isAllDay, setIsAllDay] = useState(false);
 
   const queryClient = useQueryClient();
-
-  const { data: oauthStatus, isLoading: loadingOAuthStatus } = useQuery({
-    queryKey: ['google-oauth-status'],
-    queryFn: () => db.googleOAuth.status(),
-  });
-
-  const connectOAuthMut = useMutation({
-    mutationFn: () => db.googleOAuth.connect(),
-    onSuccess: (data) => {
-      if (data?.auth_url) {
-        window.location.href = data.auth_url;
-      }
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Unable to start Google connection');
-    },
-  });
-
-  const disconnectOAuthMut = useMutation({
-    mutationFn: () => db.googleOAuth.disconnect(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-oauth-status'] });
-      toast.success('Google account disconnected');
-    },
-  });
-
-  useEffect(() => {
-    const oauthFlag = searchParams.get('google_oauth');
-
-    if (!oauthFlag) {
-      return;
-    }
-
-    if (oauthFlag === 'connected') {
-      toast.success('Google account connected successfully');
-      queryClient.invalidateQueries({ queryKey: ['google-oauth-status'] });
-    } else if (oauthFlag === 'error') {
-      const reason = searchParams.get('reason') || 'unknown_error';
-      toast.error(`Google connection failed: ${reason}`);
-    }
-
-    const next = new URLSearchParams(searchParams);
-    next.delete('google_oauth');
-    next.delete('reason');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, queryClient]);
 
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['calendar-events'],
@@ -129,44 +109,44 @@ export default function AdminCalendar() {
     return map;
   }, [userOptions]);
 
+  const handleMutationError = (error) => {
+    toast.error(error?.data?.message || error?.message || 'Something went wrong');
+  };
+
   const createMut = useMutation({
     mutationFn: (payload) => db.entities.CalendarEvent.create(payload),
-    onSuccess: (event) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events-week'] });
       resetForm();
-
-      if (event?.google_sync_status === 'failed') {
-        toast.error(`Event saved, but Google sync failed: ${event.google_sync_error || 'Unknown error'}`);
-      } else {
-        toast.success('Event created and synced to Google Calendar');
-      }
+      toast.success('Event created');
     },
+    onError: handleMutationError,
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, payload }) => db.entities.CalendarEvent.update(id, payload),
-    onSuccess: (event) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events-week'] });
       resetForm();
-
-      if (event?.google_sync_status === 'failed') {
-        toast.error(`Event updated, but Google sync failed: ${event.google_sync_error || 'Unknown error'}`);
-      } else {
-        toast.success('Event updated and synced to Google Calendar');
-      }
+      toast.success('Event updated');
     },
+    onError: handleMutationError,
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => db.entities.CalendarEvent.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events-week'] });
       if (editingId) {
         resetForm();
       }
       setPendingDeleteEvent(null);
       toast.success('Event deleted');
     },
+    onError: handleMutationError,
   });
 
   const eventDates = useMemo(() => {
@@ -244,6 +224,11 @@ export default function AdminCalendar() {
   };
 
   const startEdit = (event) => {
+    if (!canManageEvent(event, user)) {
+      toast.error('You can only edit events you created.');
+      return;
+    }
+
     const attendeeList = Array.isArray(event.attendee_emails) ? event.attendee_emails : [];
     const selected = [];
     const custom = [];
@@ -323,7 +308,7 @@ export default function AdminCalendar() {
   };
 
   const confirmDelete = () => {
-    if (!pendingDeleteEvent) {
+    if (!pendingDeleteEvent || !canManageEvent(pendingDeleteEvent, user)) {
       return;
     }
 
@@ -336,40 +321,12 @@ export default function AdminCalendar() {
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <CalendarIcon className="w-6 h-6 text-primary" /> Admin Calendar
+          <CalendarIcon className="w-6 h-6 text-primary" /> Calendar
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Add events for the team and generate Google Calendar invites instantly.
+          Create your own events and view invitations shared with you.
         </p>
       </motion.div>
-
-      <Card className="rounded-2xl">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">Google Calendar Connection</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {loadingOAuthStatus
-                ? 'Checking connection status...'
-                : oauthStatus?.connected
-                  ? 'Connected with OAuth. Attendee invites can be sent by Google Calendar.'
-                  : 'Not connected. Connect Google account to enable attendee invites.'}
-            </p>
-          </div>
-          {oauthStatus?.connected ? (
-            <Button
-              variant="outline"
-              onClick={() => disconnectOAuthMut.mutate()}
-              disabled={disconnectOAuthMut.isPending}
-            >
-              {disconnectOAuthMut.isPending ? 'Disconnecting...' : 'Disconnect Google'}
-            </Button>
-          ) : (
-            <Button onClick={() => connectOAuthMut.mutate()} disabled={connectOAuthMut.isPending}>
-              {connectOAuthMut.isPending ? 'Connecting...' : 'Connect Google Account'}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <Card className="xl:col-span-2 rounded-2xl">
@@ -531,49 +488,71 @@ export default function AdminCalendar() {
               ) : selectedDayEvents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No events on this date.</p>
               ) : (
-                selectedDayEvents.map((event) => (
-                  <div key={event.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-sm">{event.title}</p>
-                      {event.is_all_day ? <Badge variant="secondary">All day</Badge> : null}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 space-y-1">
-                      <p className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {format(parseISO(event.start_at), 'MMM d, yyyy h:mm a')} - {format(parseISO(event.end_at), 'h:mm a')}
-                      </p>
-                      {event.location ? (
+                selectedDayEvents.map((event) => {
+                  const manageable = canManageEvent(event, user);
+                  const invited = isInvitedEvent(event, user);
+
+                  return (
+                    <div
+                      key={event.id}
+                      className={cn(
+                        'rounded-lg border p-3',
+                        invited && 'bg-muted/20'
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-sm">{event.title}</p>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {invited ? <Badge variant="outline">Invited</Badge> : null}
+                          {event.is_all_day ? <Badge variant="secondary">All day</Badge> : null}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 space-y-1">
                         <p className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" /> {event.location}
+                          <Clock className="w-3 h-3" />
+                          {format(parseISO(event.start_at), 'MMM d, yyyy h:mm a')} - {format(parseISO(event.end_at), 'h:mm a')}
                         </p>
+                        {event.location ? (
+                          <p className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {event.location}
+                          </p>
+                        ) : null}
+                        {event.description ? (
+                          <p className="line-clamp-2">{event.description}</p>
+                        ) : null}
+                        {event.created_by ? (
+                          <p>Organized by {event.created_by}</p>
+                        ) : null}
+                      </div>
+                      {event.google_calendar_url ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-8 text-xs gap-1"
+                          onClick={() => window.open(event.google_calendar_url, '_blank', 'noopener,noreferrer')}
+                        >
+                          <ExternalLink className="w-3 h-3" /> Add to Google Calendar
+                        </Button>
+                      ) : null}
+                      {manageable ? (
+                        <div className="flex gap-2 mt-2">
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => startEdit(event)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs text-destructive"
+                            onClick={() => setPendingDeleteEvent(event)}
+                            disabled={deleteMut.isPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       ) : null}
                     </div>
-                    {event.google_calendar_url ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 h-8 text-xs gap-1"
-                        onClick={() => window.open(event.google_calendar_url, '_blank', 'noopener,noreferrer')}
-                      >
-                        <ExternalLink className="w-3 h-3" /> Open Google Calendar Invite
-                      </Button>
-                    ) : null}
-                    <div className="flex gap-2 mt-2">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => startEdit(event)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs text-destructive"
-                        onClick={() => setPendingDeleteEvent(event)}
-                        disabled={deleteMut.isPending}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -583,26 +562,37 @@ export default function AdminCalendar() {
                 {upcomingEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No upcoming events yet.</p>
                 ) : (
-                  upcomingEvents.map((event) => (
-                    <div key={event.id} className="flex items-center justify-between gap-2 text-sm">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(parseISO(event.start_at), 'EEE, MMM d h:mm a')}
-                        </p>
+                  upcomingEvents.map((event) => {
+                    const invited = isInvitedEvent(event, user);
+
+                    return (
+                      <div key={event.id} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium truncate">{event.title}</p>
+                            {invited ? (
+                              <Badge variant="outline" className="h-5 text-[10px] shrink-0">
+                                Invited
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {format(parseISO(event.start_at), 'EEE, MMM d h:mm a')}
+                          </p>
+                        </div>
+                        {event.google_calendar_url ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => window.open(event.google_calendar_url, '_blank', 'noopener,noreferrer')}
+                          >
+                            Add
+                          </Button>
+                        ) : null}
                       </div>
-                      {event.google_calendar_url ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7"
-                          onClick={() => window.open(event.google_calendar_url, '_blank', 'noopener,noreferrer')}
-                        >
-                          Invite
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -616,8 +606,8 @@ export default function AdminCalendar() {
             <AlertDialogTitle>Delete this event?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDeleteEvent
-                ? `"${pendingDeleteEvent.title}" will be removed from this system and Google Calendar.`
-                : 'This event will be removed from this system and Google Calendar.'}
+                ? `"${pendingDeleteEvent.title}" will be permanently removed.`
+                : 'This event will be permanently removed.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
