@@ -2,7 +2,7 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 
-import { User, Lock, Mail, Save, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { User, Lock, Mail, Save, Loader2, Eye, EyeOff, ShieldCheck, Cake, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,13 +12,21 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
+import { formatDateForInput } from '@/lib/utils';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
+import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 
 export default function Profile() {
   const { user: authUser, checkUserAuth } = useAuth();
   const isAdmin = authUser?.role === 'admin';
 
-  const [profileForm, setProfileForm] = useState({ name: '', full_name: '', email: '' });
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    full_name: '',
+    email: '',
+    date_of_birth: '',
+    joined_at: '',
+  });
   const [profileSaving, setProfileSaving] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({
@@ -37,9 +45,13 @@ export default function Profile() {
         name: u.name || '',
         full_name: u.full_name || '',
         email: u.email || '',
+        date_of_birth: formatDateForInput(u.date_of_birth),
+        joined_at: formatDateForInput(u.joined_at),
       });
     }).catch(() => {});
   }, []);
+
+  const today = formatDateForInput(new Date());
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -48,6 +60,8 @@ export default function Profile() {
       await db.auth.updateMe({
         name: profileForm.name,
         full_name: profileForm.full_name,
+        date_of_birth: profileForm.date_of_birth || null,
+        joined_at: profileForm.joined_at || null,
       });
       await checkUserAuth();
       toast.success('Profile updated successfully.');
@@ -110,10 +124,17 @@ export default function Profile() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Personal Information</CardTitle>
-            <CardDescription>Update your display name. Email address cannot be changed.</CardDescription>
+            <CardDescription>Update your personal details. Email address cannot be changed.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleProfileSave} className="space-y-4">
+              <CoverPhotoUploader
+                coverPicture={authUser?.cover_picture}
+                onUpdated={checkUserAuth}
+              />
+
+              <Separator />
+
               <ProfilePictureUploader
                 profilePicture={authUser?.profile_picture}
                 displayName={profileForm.full_name || authUser?.full_name}
@@ -145,6 +166,36 @@ export default function Profile() {
                 />
                 <p className="text-xs text-muted-foreground">Contact an administrator to change your email address.</p>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="date_of_birth" className="flex items-center gap-1.5">
+                    <Cake className="w-3.5 h-3.5 text-muted-foreground" /> Date of Birth
+                  </Label>
+                  <Input
+                    id="date_of_birth"
+                    type="date"
+                    max={today}
+                    value={profileForm.date_of_birth}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="joined_at" className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Joined Date
+                  </Label>
+                  <Input
+                    id="joined_at"
+                    type="date"
+                    max={today}
+                    value={profileForm.joined_at}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, joined_at: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Used for birthdays and service anniversaries on the dashboard.
+              </p>
 
               <div className="flex justify-end pt-2">
                 <Button type="submit" disabled={profileSaving}>

@@ -10,7 +10,7 @@ export default function AppLayout() {
   useNetworkHealthMonitor();
   const isMobile = useIsMobile();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
 

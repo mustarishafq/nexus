@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { launchApplication } from '@/lib/applications';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -390,27 +391,10 @@ export default function Applications() {
     setLaunching(system.id);
 
     try {
-      const { launch_url, open_mode } = await db.launchSystem(system.id);
-      const resolvedOpenMode = open_mode || system.open_mode || 'embedded';
-
-      if (resolvedOpenMode === 'embedded') {
-        navigate(`/applications/${system.id}/view`);
-        setLaunching(null);
-        return;
-      }
-
-      if (resolvedOpenMode === 'new_tab') {
-        const tab = window.open(launch_url, '_blank', 'noopener,noreferrer');
-        if (tab) {
-          tab.opener = null;
-        }
-        setLaunching(null);
-        return;
-      }
-
-      window.location.href = launch_url;
+      await launchApplication(db, system, navigate);
     } catch (err) {
       alert(err.message);
+    } finally {
       setLaunching(null);
     }
   };

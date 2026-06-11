@@ -16,11 +16,12 @@ export default function SystemHealthWidget({ systems }) {
         <Monitor className="w-4 h-4 text-primary" />
         <h3 className="font-semibold text-sm">System Health</h3>
       </div>
-      <div className="px-5 pb-5 space-y-3">
+      <div className="px-5 pb-5">
         {systems.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">No applications</p>
         ) : (
-          systems.map(system => {
+          <div className="max-h-64 overflow-y-auto space-y-3 pr-1 -mr-1">
+          {systems.map(system => {
             const config = statusConfig[system.status] || statusConfig.online;
             const StatusIcon = config.icon;
             return (
@@ -39,7 +40,8 @@ export default function SystemHealthWidget({ systems }) {
                 </span>
               </div>
             );
-          })
+          })}
+          </div>
         )}
       </div>
     </div>

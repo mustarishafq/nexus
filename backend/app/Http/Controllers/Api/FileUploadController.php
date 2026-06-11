@@ -18,7 +18,7 @@ class FileUploadController extends Controller
 
         $folder = $validated['folder'] ?? 'uploads';
 
-        if ($folder === 'profile-pictures') {
+        if (in_array($folder, ['profile-pictures', 'cover-pictures'], true)) {
             $request->validate([
                 'file' => ['image', 'mimes:jpeg,jpg,png,webp,gif'],
             ]);

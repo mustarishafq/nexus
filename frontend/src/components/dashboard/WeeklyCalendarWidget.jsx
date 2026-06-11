@@ -3,14 +3,13 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { format, isToday, parseISO, startOfWeek, endOfWeek } from 'date-fns';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-export default function WeeklyCalendarWidget() {
+export default function WeeklyCalendarWidget({ embedded = false }) {
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
@@ -60,47 +59,31 @@ export default function WeeklyCalendarWidget() {
   const eventCount = weekEvents.length;
   const todayEventCount = todayEvents.length;
 
-  if (isLoading) {
-    return (
-      <div className="bg-card rounded-2xl border border-border">
-        <div className="flex items-center justify-between p-5 pb-3">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4 text-primary" />
-            <h3 className="font-semibold text-sm">This Week</h3>
-          </div>
+  const containerClass = embedded
+    ? 'bg-transparent border-0 rounded-none'
+    : 'bg-card rounded-2xl border border-border';
+
+  const content = (
+    <>
+      <div className="flex items-center justify-between p-5 pb-3">
+        <div className="flex items-center gap-2">
+          <CalendarIcon className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-sm">This Week</h3>
         </div>
-        <div className="px-3 pb-3">
-          <p className="text-sm text-muted-foreground">Loading events...</p>
-        </div>
+        <Link to="/admin/calendar">
+          <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+            View all <ArrowRight className="w-3 h-3" />
+          </Button>
+        </Link>
       </div>
-    );
-  }
 
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="bg-card rounded-2xl border border-border">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-3">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4 text-primary" />
-            <h3 className="font-semibold text-sm">This Week</h3>
-          </div>
-          <Link to="/admin/calendar">
-            <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </Button>
-          </Link>
-        </div>
+      <div className="px-5">
+        <p className="text-xs text-muted-foreground">
+          {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
+        </p>
+      </div>
 
-        {/* Date range subtitle */}
-        <div className="px-5">
-          <p className="text-xs text-muted-foreground">
-            {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
-          </p>
-        </div>
-
-        {/* Content */}
-        <div className="px-3 pb-3 pt-2">
+      <div className={cn('px-3 pb-3 pt-2')}>
           {eventCount === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
               No events scheduled this week
@@ -143,7 +126,28 @@ export default function WeeklyCalendarWidget() {
               )}
             </div>
           )}
+      </div>
+    </>
+  );
+
+  if (isLoading) {
+    return (
+      <div className={containerClass}>
+        <div className="flex items-center gap-2 p-5 pb-3">
+          <CalendarIcon className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-sm">This Week</h3>
         </div>
+        <p className={cn('text-sm text-muted-foreground text-center py-6', embedded ? 'px-5 pb-5' : 'px-3 pb-3')}>
+          Loading events...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className={containerClass}>
+        {content}
       </div>
     </motion.div>
   );
