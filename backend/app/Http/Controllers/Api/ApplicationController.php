@@ -9,6 +9,7 @@ use App\Models\Application;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationEligibleUsers;
+use App\Support\NotificationEventMapping;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
@@ -105,6 +106,10 @@ class ApplicationController extends Controller
 
         $validated['sort_order'] = ((int) Application::query()->max('sort_order')) + 1;
 
+        if (array_key_exists('notification_config', $validated)) {
+            $validated['notification_config'] = NotificationEventMapping::normalize($validated['notification_config']);
+        }
+
         $item = Application::create($validated);
 
         return response()->json($item->load('creator'), 201);
@@ -172,6 +177,10 @@ class ApplicationController extends Controller
         $nextVisibility = $validated['visibility'] ?? $application->visibility;
         if ($nextVisibility !== 'private') {
             $validated['private_allowed_user_emails'] = null;
+        }
+
+        if (array_key_exists('notification_config', $validated)) {
+            $validated['notification_config'] = NotificationEventMapping::normalize($validated['notification_config']);
         }
 
         $application->update($validated);

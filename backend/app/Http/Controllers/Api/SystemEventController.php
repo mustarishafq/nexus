@@ -4,10 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
+use App\Models\Application;
 use App\Models\SystemEvent;
+use App\Services\NotificationEventMapperService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
+use Throwable;
 
 class SystemEventController extends Controller
 {
@@ -36,6 +41,8 @@ class SystemEventController extends Controller
         ]);
 
         $item = SystemEvent::create($validated);
+
+        $this->maybeCreateNotification($item, $validated);
 
         return response()->json($item, 201);
     }
@@ -66,5 +73,37 @@ class SystemEventController extends Controller
         $systemEvent->delete();
 
         return response()->json(status: 204);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function maybeCreateNotification(SystemEvent $item, array $validated): void
+    {
+        $application = Application::query()
+            ->where('slug', $item->system_id)
+            ->first();
+
+        if (! $application) {
+            return;
+        }
+
+        $mapper = app(NotificationEventMapperService::class);
+
+        if (! $mapper->shouldAutoNotify($application)) {
+            return;
+        }
+
+        $source = array_merge(
+            (array) ($validated['payload'] ?? []),
+            Arr::except($validated, ['payload', 'status'])
+        );
+
+        try {
+            $mapper->createNotification($application, $source);
+            $item->update(['status' => 'processed']);
+        } catch (InvalidArgumentException|Throwable) {
+            $item->update(['status' => 'failed']);
+        }
     }
 }

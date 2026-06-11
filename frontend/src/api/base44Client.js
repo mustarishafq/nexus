@@ -383,6 +383,13 @@ export const db = {
 		return request(`/applications/usage-stats${params}`);
 	},
 
+	async previewApplicationEventMapping(applicationId, event) {
+		return request(`/applications/${applicationId}/event-webhook/preview`, {
+			method: 'POST',
+			body: event,
+		});
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */

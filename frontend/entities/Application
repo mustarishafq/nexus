@@ -69,7 +69,7 @@
     },
     "notification_config": {
       "type": "string",
-      "description": "JSON config for notification channels"
+      "description": "JSON config for mapping external events to notification payloads"
     },
     "color": {
       "type": "string",

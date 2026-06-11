@@ -41,7 +41,9 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { cn } from '@/lib/utils';
 import { launchApplication } from '@/lib/applications';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
+import { normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
+import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -250,6 +252,7 @@ export default function Applications() {
   const [pendingDeleteSystem, setPendingDeleteSystem] = useState(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [copiedDeleteName, setCopiedDeleteName] = useState(false);
+  const [notificationConfig, setNotificationConfig] = useState(() => normalizeNotificationEventMapping());
   const queryClient = useQueryClient();
 
   const generateApiKey = () => {
@@ -284,6 +287,7 @@ export default function Applications() {
     setOpenMode(system?.open_mode || 'embedded');
     setVisibility(system?.visibility || 'private');
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
+    setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
     setDialogOpen(true);
   };
 
@@ -318,14 +322,27 @@ export default function Applications() {
     queryFn: () => db.entities.User.list('-created_date', 500),
     staleTime: 60000,
   });
+  const resetDialogState = () => {
+    setDialogOpen(false);
+    setEditSystem(null);
+    setLogoUrl('');
+    setApiKey('');
+    setAuthMode('jwt');
+    setOpenMode('embedded');
+    setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
+    setPrivateAllowedEmails([]);
+    setPrivateUsersPickerOpen(false);
+    setNotificationConfig(normalizeNotificationEventMapping());
+  };
+
   const createMut = useMutation({
     mutationFn: (data) => db.entities.Application.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.Application.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); setDialogOpen(false); setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['applications'] }); resetDialogState(); },
   });
 
   const deleteMut = useMutation({
@@ -432,6 +449,7 @@ export default function Applications() {
       status: form.get('status'),
       color: form.get('color'),
       icon_url: logoUrl || undefined,
+      notification_config: notificationConfig,
     };
     if (editSystem) {
       updateMut.mutate({ id: editSystem.id, data });
@@ -492,7 +510,7 @@ export default function Applications() {
               <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
             <DialogTrigger asChild>
               <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" />
@@ -666,6 +684,11 @@ export default function Applications() {
                   </label>
                 </div>
               </div>
+              <NotificationEventMappingEditor
+                value={notificationConfig}
+                onChange={setNotificationConfig}
+                applicationId={editSystem?.id}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
