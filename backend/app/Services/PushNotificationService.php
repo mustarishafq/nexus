@@ -189,8 +189,12 @@ class PushNotificationService
 
     private function subscriptionsForNotification(Notification $notification): Collection
     {
-        if ($notification->is_broadcast || empty($notification->user_id)) {
+        if ($notification->is_broadcast) {
             return DB::table('push_subscriptions')->orderByDesc('created_at')->get();
+        }
+
+        if (empty($notification->user_id)) {
+            return collect();
         }
 
         return DB::table('push_subscriptions')

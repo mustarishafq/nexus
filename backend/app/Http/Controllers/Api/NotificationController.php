@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
+use App\Models\User;
+use App\Support\ApiTokenAuth;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,10 +18,19 @@ class NotificationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $query = Notification::query();
+        $this->scopeToAuthenticatedUser($query, $user, $request);
+
         $query = $this->applyIndexQuery(
             $request,
-            Notification::query(),
-            ['user_id', 'system_id', 'type', 'priority', 'category', 'is_read', 'is_broadcast']
+            $query,
+            ['system_id', 'type', 'priority', 'category', 'is_read', 'is_broadcast']
         );
 
         if ($request->boolean('exclude_broadcasts')) {
@@ -78,13 +90,21 @@ class NotificationController extends Controller
         return response()->json($item, 201);
     }
 
-    public function show(Notification $notification): JsonResponse
+    public function show(Request $request, Notification $notification): JsonResponse
     {
+        if ($response = $this->authorizeNotification($request, $notification)) {
+            return $response;
+        }
+
         return response()->json($notification);
     }
 
     public function update(Request $request, Notification $notification): JsonResponse
     {
+        if ($response = $this->authorizeNotification($request, $notification)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'user_id' => ['sometimes', 'nullable', 'string', 'max:255'],
             'system_id' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -126,10 +146,70 @@ class NotificationController extends Controller
         return response()->json($notification->fresh());
     }
 
-    public function destroy(Notification $notification): JsonResponse
+    public function destroy(Request $request, Notification $notification): JsonResponse
     {
+        if ($response = $this->authorizeNotification($request, $notification)) {
+            return $response;
+        }
+
         $notification->delete();
 
         return response()->json(status: 204);
+    }
+
+    private function authenticatedUser(Request $request): ?User
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user || ! $user->is_approved) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    private function scopeToAuthenticatedUser(Builder $query, User $user, Request $request): void
+    {
+        $query->where(function (Builder $inner) use ($user, $request) {
+            $inner->where(function (Builder $personal) use ($user) {
+                $personal
+                    ->where('is_broadcast', false)
+                    ->whereIn('user_id', $this->userIdentifiers($user));
+            });
+
+            if (! $request->boolean('exclude_broadcasts')) {
+                $inner->orWhere('is_broadcast', true);
+            }
+        });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function userIdentifiers(User $user): array
+    {
+        return array_values(array_unique(array_filter([
+            (string) $user->id,
+            $user->email,
+        ])));
+    }
+
+    private function authorizeNotification(Request $request, Notification $notification): ?JsonResponse
+    {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($notification->is_broadcast) {
+            return null;
+        }
+
+        if (! in_array((string) $notification->user_id, $this->userIdentifiers($user), true)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return null;
     }
 }
