@@ -118,6 +118,30 @@ class NotificationEventMapperServiceTest extends TestCase
         $this->assertFalse($mapper->shouldAutoNotify($disabled));
     }
 
+    public function test_maps_bare_reference_type_to_category(): void
+    {
+        $application = Application::factory()->create([
+            'slug' => 'task-manager',
+            'notification_config' => NotificationEventMapping::normalize([
+                'field_mappings' => [
+                    'title' => ['data.title'],
+                    'message' => ['data.message'],
+                    'event_name' => ['data.reference_type'],
+                ],
+            ]),
+        ]);
+
+        $payload = app(NotificationEventMapperService::class)->map($application, [
+            'data' => [
+                'title' => 'Subtask Submitted for Review',
+                'message' => 'EMZI Admin submitted subtask for review',
+                'reference_type' => 'task',
+            ],
+        ]);
+
+        $this->assertSame('task', $payload['category']);
+    }
+
     public function test_storage_normalization_preserves_custom_mappings_without_default_merge(): void
     {
         $stored = NotificationEventMapping::normalizeForStorage([

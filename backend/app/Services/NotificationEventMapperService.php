@@ -243,7 +243,16 @@ class NotificationEventMapperService
         foreach ($rules as $rule) {
             $prefix = strtolower($rule['prefix']);
 
-            if ($prefix !== '' && str_starts_with($eventName, $prefix)) {
+            if ($prefix === '') {
+                continue;
+            }
+
+            $barePrefix = rtrim($prefix, '.');
+
+            if (
+                str_starts_with($eventName, $prefix)
+                || ($barePrefix !== '' && $eventName === $barePrefix)
+            ) {
                 return $rule['category'];
             }
         }
