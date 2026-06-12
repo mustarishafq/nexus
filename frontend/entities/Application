@@ -28,6 +28,18 @@
       ],
       "default": "online"
     },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "production",
+        "staging",
+        "beta",
+        "alpha",
+        "development"
+      ],
+      "default": "production",
+      "description": "Deployment stage (production, staging, beta, etc.)"
+    },
     "api_key": {
       "type": "string"
     },

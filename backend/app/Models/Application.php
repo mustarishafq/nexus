@@ -17,6 +17,7 @@ class Application extends Model
         'base_url',
         'icon_url',
         'status',
+        'environment',
         'api_key',
         'auth_mode',
         'open_mode',

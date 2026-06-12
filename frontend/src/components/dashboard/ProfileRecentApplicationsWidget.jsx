@@ -4,92 +4,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ApplicationCard from '@/components/applications/ApplicationCard';
 import { getRecentApplications, launchApplication } from '@/lib/applications';
-import { toAbsoluteUrl } from '@/lib/media';
-import { cn } from '@/lib/utils';
 
-function ApplicationLaunchTile({ app, launching, onLaunch, readOnly = false }) {
-  const isLaunching = launching === app.id;
-
-  if (readOnly) {
-    return (
-      <div
-        className={cn(
-          'relative flex flex-col items-center rounded-xl border border-border/70 bg-muted/20 p-3 text-center',
-          !app.is_enabled && 'opacity-60'
-        )}
-      >
-        <div className="relative mb-2.5">
-          {app.icon_url ? (
-            <img
-              src={toAbsoluteUrl(app.icon_url)}
-              alt={app.name}
-              className="h-12 w-12 rounded-xl object-cover shadow-sm"
-            />
-          ) : (
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white shadow-sm"
-              style={{ backgroundColor: app.color || '#6366f1' }}
-            >
-              {app.name?.[0]?.toUpperCase()}
-            </div>
-          )}
-        </div>
-        <p className="line-clamp-2 w-full text-xs font-semibold leading-tight">{app.name}</p>
-        {app.lastUsed ? (
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            {formatDistanceToNow(new Date(app.lastUsed), { addSuffix: true })}
-          </p>
-        ) : (
-          <p className="mt-1 text-[10px] text-muted-foreground">Recently used</p>
-        )}
-      </div>
-    );
+function getFooterSubtitle(app, readOnly) {
+  if (app.lastUsed) {
+    return formatDistanceToNow(new Date(app.lastUsed), { addSuffix: true });
   }
 
-  return (
-    <button
-      type="button"
-      onClick={() => onLaunch(app)}
-      disabled={!app.is_enabled || isLaunching}
-      className={cn(
-        'group relative flex flex-col items-center rounded-xl border border-border/70 bg-muted/20 p-3 text-center transition-all',
-        app.is_enabled
-          ? 'cursor-pointer hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm'
-          : 'cursor-not-allowed opacity-60'
-      )}
-    >
-      <div className="relative mb-2.5">
-        {app.icon_url ? (
-          <img
-            src={toAbsoluteUrl(app.icon_url)}
-            alt={app.name}
-            className="h-12 w-12 rounded-xl object-cover shadow-sm transition-shadow group-hover:shadow-md"
-          />
-        ) : (
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white shadow-sm transition-shadow group-hover:shadow-md"
-            style={{ backgroundColor: app.color || '#6366f1' }}
-          >
-            {app.name?.[0]?.toUpperCase()}
-          </div>
-        )}
-        {isLaunching ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          </div>
-        ) : null}
-      </div>
-      <p className="line-clamp-2 w-full text-xs font-semibold leading-tight">{app.name}</p>
-      {app.lastUsed ? (
-        <p className="mt-1 text-[10px] text-muted-foreground">
-          {formatDistanceToNow(new Date(app.lastUsed), { addSuffix: true })}
-        </p>
-      ) : (
-        <p className="mt-1 text-[10px] text-muted-foreground">Tap to open</p>
-      )}
-    </button>
-  );
+  return readOnly ? 'Recently used' : 'Tap to open';
 }
 
 export default function ProfileRecentApplicationsWidget({
@@ -138,15 +61,23 @@ export default function ProfileRecentApplicationsWidget({
           No applications available yet. Ask an admin to grant access.
         </p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-5 pb-5">
-          {recentApplications.map((app) => (
-            <ApplicationLaunchTile
+        <div className="grid grid-cols-3 gap-3 px-5 pb-5 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {recentApplications.map((app, index) => (
+            <div
               key={app.id}
-              app={app}
-              launching={launching}
-              onLaunch={handleLaunch}
-              readOnly={readOnly}
-            />
+              className="rounded-xl border border-border bg-card p-2 shadow-sm transition-shadow hover:shadow-md sm:p-2.5"
+            >
+              <ApplicationCard
+                system={app}
+                index={index}
+                canManageSystem={false}
+                launching={launching}
+                onLaunch={readOnly ? undefined : handleLaunch}
+                footerSubtitle={getFooterSubtitle(app, readOnly)}
+                readOnly={readOnly}
+                footerOutside
+              />
+            </div>
           ))}
         </div>
       )}

@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Trash2, Pencil, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
+import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,10 +42,17 @@ import { cn } from '@/lib/utils';
 import { launchApplication } from '@/lib/applications';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
 import { normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
+import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
+import {
+  DEFAULT_BRAND_COLOR,
+  extractDominantColorFromFile,
+  extractDominantColorFromImage,
+} from '@/lib/imageColor';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
+import { APPLICATION_ENVIRONMENTS } from '@/lib/applicationEnvironment';
 import { toast } from 'sonner';
 
 const API_BASE_URL = API_ORIGIN;
@@ -241,10 +248,12 @@ export default function Applications() {
   const [editSystem, setEditSystem] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
+  const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [apiKey, setApiKey] = useState('');
   const [authMode, setAuthMode] = useState('jwt');
   const [openMode, setOpenMode] = useState('embedded');
   const [status, setStatus] = useState('online');
+  const [environment, setEnvironment] = useState('production');
   const [visibility, setVisibility] = useState('private');
   const [privateAllowedEmails, setPrivateAllowedEmails] = useState([]);
   const [privateUsersPickerOpen, setPrivateUsersPickerOpen] = useState(false);
@@ -276,22 +285,41 @@ export default function Applications() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const { file_url } = await db.integrations.Core.UploadFile({ file });
-    setLogoUrl(file_url);
-    setUploadingLogo(false);
+
+    try {
+      const extractedColor = await extractDominantColorFromFile(file);
+      setBrandColor(extractedColor);
+    } catch {
+      // Keep the current brand color if extraction fails.
+    }
+
+    try {
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      setLogoUrl(file_url);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const openDialog = (system = null) => {
     setEditSystem(system);
     setLogoUrl(system?.icon_url || '');
+    setBrandColor(system?.color || DEFAULT_BRAND_COLOR);
     setApiKey(system?.api_key || '');
     setAuthMode(system?.auth_mode || 'jwt');
     setOpenMode(system?.open_mode || 'embedded');
     setStatus(system?.status || 'online');
+    setEnvironment(system?.environment || 'production');
     setVisibility(system?.visibility || 'private');
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
     setDialogOpen(true);
+
+    if (system?.icon_url) {
+      extractDominantColorFromImage(system.icon_url)
+        .then(setBrandColor)
+        .catch(() => {});
+    }
   };
 
   const { data: currentUser } = useQuery({
@@ -329,10 +357,12 @@ export default function Applications() {
     setDialogOpen(false);
     setEditSystem(null);
     setLogoUrl('');
+    setBrandColor(DEFAULT_BRAND_COLOR);
     setApiKey('');
     setAuthMode('jwt');
     setOpenMode('embedded');
     setStatus('online');
+    setEnvironment('production');
     setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
     setPrivateAllowedEmails([]);
     setPrivateUsersPickerOpen(false);
@@ -471,7 +501,8 @@ export default function Applications() {
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
       status,
-      color: form.get('color'),
+      environment,
+      color: brandColor,
       icon_url: logoUrl || undefined,
       notification_config: notificationConfig,
     };
@@ -534,7 +565,7 @@ export default function Applications() {
               <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setEnvironment('production'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
             <DialogTrigger asChild>
               <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" />
@@ -728,8 +759,35 @@ export default function Applications() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Environment</Label>
+                  <Select value={environment} onValueChange={setEnvironment}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {APPLICATION_ENVIRONMENTS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Marks non-production apps with a badge on the grid.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label>Brand Color</Label>
-                  <Input name="color" defaultValue={editSystem?.color || '#6366f1'} type="color" className="h-9" />
+                  <Input
+                    name="color"
+                    value={brandColor}
+                    onChange={(event) => setBrandColor(event.target.value)}
+                    type="color"
+                    className="h-9"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Auto-detected from the uploaded logo. Override here if needed.
+                  </p>
                 </div>
               </div>
               </div>
@@ -761,95 +819,29 @@ export default function Applications() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-7 lg:gap-4">
           {systems.map((system, i) => {
-            const config = statusConfig[system.status] || statusConfig.online;
-            const StatusIcon = config.icon;
             const canManageSystem = currentUser?.role === 'admin' || Number(system.created_by_user_id) === Number(currentUser?.id);
-            const visibilityLabel = system.visibility === 'public'
-              ? `Public${system.created_by_credit ? ` by ${system.created_by_credit}` : ''}`
-              : 'Private';
 
             return (
-              <motion.div
+              <div
                 key={system.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className={cn(
-                  'bg-card rounded-2xl border overflow-hidden transition-all group relative flex h-full flex-col',
-                  config.border,
-                  system.is_enabled
-                    ? 'cursor-pointer hover:shadow-xl sm:hover:-translate-y-0.5'
-                    : 'opacity-60 cursor-not-allowed'
-                )}
-                onClick={() => handleLaunch(system)}
+                className="rounded-xl border border-border bg-card p-2 shadow-sm transition-shadow hover:shadow-md sm:p-2.5"
               >
-                <Badge className={cn('absolute top-3 right-3 text-[10px] z-10', config.bg, config.color, 'border-0')}>
-                  <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
-                </Badge>
-
-                <div className="flex flex-1 min-w-0 flex-col items-center pt-8 pb-4 px-5">
-                  <div className="relative mb-3">
-                    {system.icon_url ? (
-                      <img
-                        src={toAbsoluteUrl(system.icon_url)}
-                        alt={system.name}
-                        className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:shadow-lg transition-shadow"
-                      />
-                    ) : (
-                      <div
-                        className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-md group-hover:shadow-lg transition-shadow"
-                        style={{ backgroundColor: system.color || '#6366f1' }}
-                      >
-                        {system.name?.[0]?.toUpperCase()}
-                      </div>
-                    )}
-                    {launching === system.id && (
-                      <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
-                  </div>
-                  <h3 className="font-semibold text-sm text-center leading-tight line-clamp-2 w-full">{system.name}</h3>
-                  <p className="text-xs text-muted-foreground text-center line-clamp-2 mt-0.5 w-full">
-                    {system.description?.trim() || 'No description provided'}
-                  </p>
-                </div>
-
-                {system.is_enabled && launching !== system.id && (
-                  <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none" />
-                )}
-
-                <div className="mt-auto flex items-center justify-between gap-2 border-t border-border bg-muted/30 px-4 py-2.5">
-                  <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1" title={visibilityLabel}>
-                    {visibilityLabel}
-                  </span>
-                  {canManageSystem && (
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <Badge variant="outline" className="text-[9px] h-5 mr-1">{system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}</Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 sm:h-6 sm:w-6 touch-manipulation"
-                        title="Edit"
-                        onClick={(e) => { e.stopPropagation(); openDialog(system); }}
-                      >
-                        <Pencil className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 sm:h-6 sm:w-6 text-destructive touch-manipulation"
-                        title="Delete"
-                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmName(''); setPendingDeleteSystem(system); }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+                <ApplicationCard
+                  system={system}
+                  index={i}
+                  canManageSystem={canManageSystem}
+                  launching={launching}
+                  footerOutside
+                  onLaunch={handleLaunch}
+                  onEdit={openDialog}
+                  onDelete={(selectedSystem) => {
+                    setDeleteConfirmName('');
+                    setPendingDeleteSystem(selectedSystem);
+                  }}
+                />
+              </div>
             );
           })}
         </div>
