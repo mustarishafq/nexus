@@ -51,7 +51,7 @@ export default function AppLayout() {
         className={cn(
           'min-h-screen transition-all duration-200',
           isFullBleed ? 'overflow-hidden' : 'pt-16',
-          !isFullBleed && broadcastStripVisible && 'pt-[7rem]',
+          !isFullBleed && broadcastStripVisible && 'pt-[calc(4rem+1.75rem)] sm:pt-24',
           showBottomNav && 'pb-[calc(4rem+env(safe-area-inset-bottom))]'
         )}
         style={{ marginLeft: sidebarWidth }}
