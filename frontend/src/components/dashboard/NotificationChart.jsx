@@ -1,21 +1,10 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { BarChart3 } from 'lucide-react';
+import { buildNotificationChartData } from '@/lib/notificationVisuals';
 
 export default function NotificationChart({ notifications }) {
-  // Group by type
-  const typeCounts = { info: 0, success: 0, warning: 0, error: 0, critical: 0 };
-  notifications.forEach(n => {
-    if (typeCounts[n.type] !== undefined) typeCounts[n.type]++;
-  });
-
-  const data = [
-    { name: 'Info', count: typeCounts.info, fill: 'hsl(210 100% 52%)' },
-    { name: 'Success', count: typeCounts.success, fill: 'hsl(160 84% 39%)' },
-    { name: 'Warning', count: typeCounts.warning, fill: 'hsl(38 92% 50%)' },
-    { name: 'Error', count: typeCounts.error, fill: 'hsl(0 84% 60%)' },
-    { name: 'Critical', count: typeCounts.critical, fill: 'hsl(330 80% 55%)' },
-  ];
+  const data = buildNotificationChartData(notifications);
 
   return (
     <div className="bg-card rounded-2xl border border-border p-5">
@@ -37,7 +26,11 @@ export default function NotificationChart({ notifications }) {
                 fontSize: '12px'
               }}
             />
-            <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" />
+            <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+              {data.map((entry) => (
+                <Cell key={entry.type} fill={entry.fill} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>

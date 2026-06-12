@@ -139,6 +139,92 @@ export function formToFieldMappings(form) {
   );
 }
 
+export function pathsFromFormValue(formValue) {
+  return String(formValue || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function formValueFromPaths(paths) {
+  return paths.filter(Boolean).join(', ');
+}
+
+export function appendMappingPath(formValue, path) {
+  const paths = pathsFromFormValue(formValue);
+  if (paths.includes(path)) return formValueFromPaths(paths);
+  return formValueFromPaths([...paths, path]);
+}
+
+export function removeMappingPath(formValue, path) {
+  return formValueFromPaths(pathsFromFormValue(formValue).filter((item) => item !== path));
+}
+
+export function formatPayloadValuePreview(value) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') {
+    return value.length > 48 ? `"${value.slice(0, 45)}…"` : `"${value}"`;
+  }
+  if (typeof value === 'object') {
+    return Array.isArray(value) ? `[${value.length} items]` : '{…}';
+  }
+  return String(value);
+}
+
+/**
+ * Flatten a webhook payload into draggable dot-path entries.
+ * Objects are included as mappable paths; scalars are leaf nodes.
+ */
+export function flattenPayloadPaths(value, prefix = '', depth = 0) {
+  if (depth > 8) return [];
+
+  const entries = [];
+
+  if (value !== null && typeof value === 'object') {
+    if (prefix) {
+      entries.push({
+        path: prefix,
+        value,
+        valueType: Array.isArray(value) ? 'array' : 'object',
+        isLeaf: false,
+      });
+    }
+
+    const items = Array.isArray(value)
+      ? value.map((item, index) => [String(index), item])
+      : Object.entries(value);
+
+    items.forEach(([key, child]) => {
+      const childPath = prefix ? `${prefix}.${key}` : key;
+      entries.push(...flattenPayloadPaths(child, childPath, depth + 1));
+    });
+
+    return entries;
+  }
+
+  if (prefix) {
+    entries.push({
+      path: prefix,
+      value,
+      valueType: value === null ? 'null' : typeof value,
+      isLeaf: true,
+    });
+  }
+
+  return entries;
+}
+
+export function parseSamplePayload(raw) {
+  if (!raw?.trim()) return { data: null, error: null };
+
+  try {
+    return { data: JSON.parse(raw), error: null };
+  } catch (error) {
+    return { data: null, error: error.message || 'Invalid JSON' };
+  }
+}
+
 export function buildSampleEvent() {
   return {
     event: 'order.created',

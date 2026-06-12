@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { getNotificationTypeVisual } from '@/lib/notificationVisuals';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 
@@ -159,14 +160,14 @@ const statusConfig = {
   acknowledged: { icon: Info, color: 'text-info', bg: 'bg-info/10' },
 };
 
-const typeConfig = {
-  info: { icon: Info, color: 'text-info' },
-  warning: { icon: AlertTriangle, color: 'text-warning' },
-  error: { icon: XCircle, color: 'text-destructive' },
-  critical: { icon: AlertOctagon, color: 'text-critical' },
+const systemEventTypeVisuals = {
   health_check: { icon: CheckCircle, color: 'text-success' },
   webhook: { icon: Shield, color: 'text-primary' },
 };
+
+function getSystemEventTypeVisual(eventType) {
+  return systemEventTypeVisuals[eventType] || getNotificationTypeVisual(eventType);
+}
 
 export default function SystemEvents() {
   const [search, setSearch] = useState('');
@@ -258,7 +259,7 @@ export default function SystemEvents() {
               <tbody>
                 {filtered.map((event, i) => {
                   const sc = statusConfig[event.status] || statusConfig.pending;
-                  const tc = typeConfig[event.event_type] || typeConfig.info;
+                  const tc = getSystemEventTypeVisual(event.event_type);
                   const StatusIcon = sc.icon;
                   const TypeIcon = tc.icon;
                   return (

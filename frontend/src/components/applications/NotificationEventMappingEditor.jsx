@@ -2,20 +2,19 @@ import React, { useMemo, useState } from 'react';
 import db, { API_ORIGIN } from '@/api/base44Client';
 import {
   buildNestedSampleEvent,
-  DEFAULT_NOTIFICATION_EVENT_MAPPING,
   fieldMappingsToForm,
   formToFieldMappings,
   NESTED_PAYLOAD_FIELD_MAPPINGS,
   normalizeNotificationEventMapping,
-  NOTIFICATION_FIELD_LABELS,
 } from '@/lib/notificationEventMapping';
 import { Bell, ChevronDown, ChevronUp, Copy, Check, Sparkles } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import NotificationPreview from '@/components/notifications/NotificationPreview';
+import NotificationFieldMappingBuilder from '@/components/applications/mapping/NotificationFieldMappingBuilder';
 
 export default function NotificationEventMappingEditor({
   value,
@@ -30,6 +29,14 @@ export default function NotificationEventMappingEditor({
   const [mappingForm, setMappingForm] = useState(() => fieldMappingsToForm(config.field_mappings));
   const [previewInput, setPreviewInput] = useState(JSON.stringify(buildNestedSampleEvent(), null, 2));
   const [previewOutput, setPreviewOutput] = useState('');
+  const previewPayload = useMemo(() => {
+    if (!previewOutput) return null;
+    try {
+      return JSON.parse(previewOutput);
+    } catch {
+      return null;
+    }
+  }, [previewOutput]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
 
@@ -41,8 +48,7 @@ export default function NotificationEventMappingEditor({
     onChange(normalizeNotificationEventMapping({ ...config, ...patch }));
   };
 
-  const updateFieldMapping = (field, rawValue) => {
-    const nextForm = { ...mappingForm, [field]: rawValue };
+  const updateFieldMapping = (nextForm) => {
     setMappingForm(nextForm);
     updateConfig({
       field_mappings: formToFieldMappings(nextForm),
@@ -150,32 +156,13 @@ export default function NotificationEventMappingEditor({
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <Label>Field mappings</Label>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Use dot paths for nested payloads, e.g. <code className="bg-muted px-1 rounded">data.title</code>.
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={applyNestedPreset}>
-                Use nested preset
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 gap-3">
-              {Object.keys(DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings).map((field) => (
-                <div key={field} className="space-y-1.5">
-                  <Label className="text-xs">{NOTIFICATION_FIELD_LABELS[field] || field}</Label>
-                  <Input
-                    value={mappingForm[field] ?? ''}
-                    onChange={(event) => updateFieldMapping(field, event.target.value)}
-                    placeholder={DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings[field].join(', ')}
-                    className="font-mono text-xs"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+          <NotificationFieldMappingBuilder
+            mappingForm={mappingForm}
+            onMappingChange={updateFieldMapping}
+            samplePayload={previewInput}
+            onSamplePayloadChange={setPreviewInput}
+            onApplyNestedPreset={applyNestedPreset}
+          />
 
           <div className="space-y-2 rounded-lg border border-border/70 bg-background/80 p-3">
             <div className="flex items-center gap-2">
@@ -183,21 +170,18 @@ export default function NotificationEventMappingEditor({
               <Label>Preview mapping</Label>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Paste a sample event from your system and preview the Nexus notification payload.
+              Test the mapping against the sample payload above.
             </p>
-            <Textarea
-              value={previewInput}
-              onChange={(event) => setPreviewInput(event.target.value)}
-              rows={8}
-              className="font-mono text-xs"
-            />
             <Button type="button" variant="outline" size="sm" onClick={runPreview} disabled={previewLoading}>
               {previewLoading ? 'Previewing...' : 'Preview payload'}
             </Button>
-            {previewOutput ? (
-              <pre className="rounded-md bg-muted/60 border border-border p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                {previewOutput}
-              </pre>
+            {previewPayload ? (
+              <>
+                <NotificationPreview payload={previewPayload} />
+                <pre className="rounded-md bg-muted/60 border border-border p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                  {previewOutput}
+                </pre>
+              </>
             ) : null}
           </div>
         </div>

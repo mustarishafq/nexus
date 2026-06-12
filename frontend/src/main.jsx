@@ -16,11 +16,14 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type !== 'PUSH_RECEIVED') return;
       const payload = event.data.payload || {};
-      const title = payload.title || 'EMZI Nexus Brain';
-      const body = payload.message || payload.body || 'You have a new notification.';
-      // Dynamically import sonner so this module stays side-effect-free.
       import('sonner').then(({ toast }) => {
-        toast(title, { description: body });
+        import('@/lib/notificationVisuals').then(({ showPushNotificationToast }) => {
+          showPushNotificationToast(payload, toast);
+        }).catch(() => {
+          toast(payload.title || 'EMZI Nexus Brain', {
+            description: payload.message || payload.body || 'You have a new notification.',
+          });
+        });
       }).catch(() => {});
     });
   });

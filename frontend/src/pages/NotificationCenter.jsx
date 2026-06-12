@@ -5,13 +5,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { followNotificationAction } from '@/lib/notificationAction';
-import { Bell, CheckCheck, Search, Filter, Trash2 } from 'lucide-react';
+import { Bell, CheckCheck, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import NotificationItem from '@/components/notifications/NotificationItem';
+import {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_TYPES,
+  getNotificationCategoryVisual,
+  getNotificationTypeVisual,
+} from '@/lib/notificationVisuals';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { buildSystemStatusDescription } from '@/lib/MetaTagManager';
 
@@ -121,11 +127,11 @@ export default function NotificationCenter() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="info">Info</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="warning">Warning</SelectItem>
-              <SelectItem value="error">Error</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
+              {NOTIFICATION_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {getNotificationTypeVisual(type).label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -134,15 +140,11 @@ export default function NotificationCenter() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="booking">Booking</SelectItem>
-              <SelectItem value="hr">HR</SelectItem>
-              <SelectItem value="inventory">Inventory</SelectItem>
-              <SelectItem value="finance">Finance</SelectItem>
-              <SelectItem value="security">Security</SelectItem>
-              <SelectItem value="system">System</SelectItem>
-              <SelectItem value="task">Task</SelectItem>
-              <SelectItem value="approval">Approval</SelectItem>
-              <SelectItem value="announcement">Announcement</SelectItem>
+              {NOTIFICATION_CATEGORIES.filter((c) => c !== 'other').map((category) => (
+                <SelectItem key={category} value={category}>
+                  {getNotificationCategoryVisual(category).label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
