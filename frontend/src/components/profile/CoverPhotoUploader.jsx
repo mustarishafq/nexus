@@ -201,10 +201,10 @@ export default function CoverPhotoUploader({
         { percentages: croppedAreaPercent, pixels: croppedAreaPixels },
         { maxWidth: COVER_PHOTO_MAX_WIDTH }
       );
-      const file = new File([blob], 'cover-photo.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'cover-photo-new.jpg', { type: 'image/jpeg' });
       const { file_url } = await db.integrations.Core.UploadFile({
         file,
-        folder: 'cover-pictures',
+        folder: 'cover-pictures-new',
       });
       await db.auth.updateMe({ cover_picture: file_url });
       await onUpdated?.();

@@ -8,7 +8,7 @@ import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
-const DEFAULT_COVER = '/icons/cover-photo.png';
+const DEFAULT_COVER = '/icons/cover-photo-new.png';
 
 function CoverPhotoImage({ coverPicture, userReady }) {
   const [loaded, setLoaded] = useState(false);
