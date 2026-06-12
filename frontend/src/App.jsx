@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -16,7 +16,10 @@ import SystemEvents from '@/pages/SystemEvents';
 import AdminCalendar from '@/pages/AdminCalendar';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
-import UserDashboard from '@/pages/UserDashboard';
+import CompanyFeed from '@/pages/CompanyFeed';
+import Messages from '@/pages/Messages';
+import PersonProfile from '@/pages/PersonProfile';
+import People from '@/pages/People';
 import UserManagement from '@/pages/UserManagement';
 import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
 import Analytics from '@/pages/Analytics';
@@ -28,6 +31,11 @@ import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
+
+function LegacyUserDashboardRedirect() {
+  const { userId } = useParams();
+  return <Navigate to={`/people/${userId}`} replace />;
+}
 
 const ProtectedRoutes = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError, forcePasswordChange } = useAuth();
@@ -57,7 +65,12 @@ const ProtectedRoutes = () => {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/users/:userId/dashboard" element={<UserDashboard />} />
+        <Route path="/feed" element={<CompanyFeed />} />
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/messages/:conversationId" element={<Messages />} />
+        <Route path="/people" element={<People />} />
+        <Route path="/people/:userId" element={<PersonProfile />} />
+        <Route path="/users/:userId/dashboard" element={<LegacyUserDashboardRedirect />} />
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
         <Route path="/network-health" element={<NetworkHealthDashboard />} />

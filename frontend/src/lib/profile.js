@@ -4,9 +4,37 @@ const PROFILE_CHECKS = [
   { key: 'photo', label: 'Profile photo' },
   { key: 'cover', label: 'Cover photo' },
   { key: 'name', label: 'Display name' },
+  { key: 'bio', label: 'Bio' },
+  { key: 'department', label: 'Department' },
   { key: 'birthday', label: 'Birthday' },
   { key: 'tenure', label: 'Joined date' },
 ];
+
+export function normalizeSkills(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean).slice(0, 10);
+  }
+
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+export function formatSkillsInput(skills) {
+  return normalizeSkills(skills).join(', ');
+}
+
+export function skillsAreEqual(a, b) {
+  const left = normalizeSkills(a);
+  const right = normalizeSkills(b);
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
 
 export function getProfileCompleteness(user) {
   if (!user) {
@@ -17,6 +45,8 @@ export function getProfileCompleteness(user) {
     { key: 'photo', label: 'Profile photo', done: Boolean(user.profile_picture) },
     { key: 'cover', label: 'Cover photo', done: Boolean(user.cover_picture) },
     { key: 'name', label: 'Display name', done: Boolean(user.full_name?.trim()) },
+    { key: 'bio', label: 'Bio', done: Boolean(user.bio?.trim()) },
+    { key: 'department', label: 'Department', done: Boolean(user.department?.trim()) },
     { key: 'birthday', label: 'Birthday', done: Boolean(user.date_of_birth) },
     { key: 'tenure', label: 'Joined date', done: Boolean(user.joined_at) },
   ];

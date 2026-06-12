@@ -37,6 +37,14 @@ class NotificationController extends Controller
             $query->where('is_broadcast', false);
         }
 
+        if ($request->boolean('exclude_direct_messages')) {
+            $query->where(function (Builder $inner) {
+                $inner->whereNull('data')
+                    ->orWhereNull('data->kind')
+                    ->orWhere('data->kind', '!=', 'direct_message');
+            });
+        }
+
         if ($request->boolean('active_broadcast_only')) {
             $now = now();
 

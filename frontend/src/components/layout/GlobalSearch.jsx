@@ -78,7 +78,7 @@ export default function GlobalSearch({ open, onOpenChange }) {
   const handleSelectUser = useCallback(
     (userId) => {
       onOpenChange(false);
-      navigate(`/users/${userId}/dashboard`);
+      navigate(`/people/${userId}`);
     },
     [navigate, onOpenChange]
   );
@@ -130,7 +130,9 @@ export default function GlobalSearch({ open, onOpenChange }) {
                   <UserAvatar user={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{user.full_name || user.name || 'User'}</p>
-                    {user.email ? (
+                    {user.department ? (
+                      <p className="truncate text-xs text-muted-foreground">{user.department}</p>
+                    ) : user.email ? (
                       <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                     ) : null}
                   </div>

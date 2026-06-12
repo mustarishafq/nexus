@@ -52,7 +52,7 @@ class UserSearchControllerTest extends TestCase
             ->assertJsonPath('0.full_name', 'Alice Anderson');
     }
 
-    public function test_dashboard_preview_returns_public_profile_and_activities(): void
+    public function test_profile_returns_public_profile(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);
         $target = User::factory()->create([
@@ -62,20 +62,20 @@ class UserSearchControllerTest extends TestCase
         $token = $this->issueToken($viewer);
 
         $this->withToken($token)
-            ->getJson("/api/users/{$target->id}/dashboard-preview")
+            ->getJson("/api/users/{$target->id}/profile")
             ->assertOk()
             ->assertJsonPath('user.full_name', 'Preview Target')
-            ->assertJsonStructure(['user', 'activities']);
+            ->assertJsonStructure(['user']);
     }
 
-    public function test_dashboard_preview_rejects_unapproved_user(): void
+    public function test_profile_rejects_unapproved_user(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);
         $target = User::factory()->create(['is_approved' => false]);
         $token = $this->issueToken($viewer);
 
         $this->withToken($token)
-            ->getJson("/api/users/{$target->id}/dashboard-preview")
+            ->getJson("/api/users/{$target->id}/profile")
             ->assertNotFound();
     }
 }

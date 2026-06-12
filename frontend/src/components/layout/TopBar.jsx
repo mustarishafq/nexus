@@ -44,7 +44,11 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
 
   const loadUnreadCount = async () => {
     try {
-      const notifs = await db.entities.Notification.filter({ is_read: false, exclude_broadcasts: true }, '-created_date', 100);
+      const notifs = await db.entities.Notification.filter(
+        { is_read: false, exclude_broadcasts: true, exclude_direct_messages: true },
+        '-created_date',
+        100
+      );
       setUnreadCount(Array.isArray(notifs) ? notifs.length : 0);
     } catch {
       setUnreadCount(0);

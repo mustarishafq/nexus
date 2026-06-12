@@ -1,6 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle } from 'lucide-react';
+import {
+  Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle,
+  Briefcase, MessageSquare,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -10,11 +13,13 @@ import {
   formatMemberSince,
   formatTenure,
   getProfileCompleteness,
+  normalizeSkills,
 } from '@/lib/profile';
 
 export default function ProfileAboutCard({ user, showCompleteLink = true, showChecklist = false }) {
   const { percent, checks } = getProfileCompleteness(user);
   const groups = (user?.access_group_names || []).filter(Boolean);
+  const skills = normalizeSkills(user?.skills);
   const memberSince = formatMemberSince(user?.joined_at);
   const birthday = formatBirthdayLabel(user?.date_of_birth);
 
@@ -26,6 +31,33 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
       </div>
 
       <div className="px-5 pb-5 space-y-4">
+        {user?.bio ? (
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Bio</p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{user.bio}</p>
+          </div>
+        ) : null}
+
+        {user?.ask_me_about ? (
+          <div className="flex items-start gap-3 text-sm">
+            <MessageSquare className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Ask me about</p>
+              <p className="font-medium">{user.ask_me_about}</p>
+            </div>
+          </div>
+        ) : null}
+
+        {user?.department ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Briefcase className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Department</p>
+              <p className="font-medium">{user.department}</p>
+            </div>
+          </div>
+        ) : null}
+
         {user?.email ? (
           <div className="flex items-start gap-3 text-sm">
             <Mail className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -55,6 +87,22 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
             <div>
               <p className="text-xs text-muted-foreground">Birthday</p>
               <p className="font-medium">{birthday}</p>
+            </div>
+          </div>
+        ) : null}
+
+        {skills.length > 0 ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Sparkles className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground mb-2">Skills & interests</p>
+              <div className="flex flex-wrap gap-1.5">
+                {skills.map((skill) => (
+                  <Badge key={skill} variant="secondary" className="text-[10px] font-medium">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}

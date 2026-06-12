@@ -31,7 +31,12 @@ export default function NotificationCenter() {
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications-center'],
-    queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 200),
+    queryFn: () =>
+      db.entities.Notification.filter(
+        { exclude_broadcasts: true, exclude_direct_messages: true },
+        '-created_date',
+        200
+      ),
   });
 
   const { data: applications = [] } = useQuery({

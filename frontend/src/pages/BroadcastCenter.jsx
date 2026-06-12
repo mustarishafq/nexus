@@ -292,8 +292,9 @@ export default function BroadcastCenter() {
                       key={broadcast.id}
                       className={cn(
                         'flex items-start gap-3 p-3 rounded-xl border transition-colors',
-                        priorityRowBg[broadcastPriority] || priorityRowBg.medium,
-                        isEditing && 'ring-2 ring-primary/30'
+                        isEditing
+                          ? 'border-primary/40 bg-primary/[0.03]'
+                          : priorityRowBg[broadcastPriority] || priorityRowBg.medium
                       )}
                     >
                       <div
@@ -305,17 +306,49 @@ export default function BroadcastCenter() {
                         <Icon className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold">{broadcast.title}</p>
-                          <Badge variant="outline" className="text-[10px] capitalize">
-                            {broadcastPriority}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] capitalize">
-                            {status}
-                          </Badge>
-                          {isEditing ? (
-                            <Badge className="text-[10px]">Editing</Badge>
-                          ) : null}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <p className="text-sm font-semibold">{broadcast.title}</p>
+                            <Badge variant="outline" className="text-[10px] capitalize">
+                              {broadcastPriority}
+                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] capitalize">
+                              {status}
+                            </Badge>
+                            {isEditing ? (
+                              <Badge className="text-[10px]">Editing</Badge>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-background/70 p-0.5 shadow-sm">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                'h-7 w-7 focus-visible:ring-0 focus-visible:ring-offset-0',
+                                isEditing
+                                  ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              )}
+                              title="Edit broadcast"
+                              aria-pressed={isEditing}
+                              onClick={() => startEdit(broadcast)}
+                              disabled={isSaving || deleteMut.isPending}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:ring-0 focus-visible:ring-offset-0"
+                              title="Delete broadcast"
+                              onClick={() => setPendingDelete(broadcast)}
+                              disabled={isSaving || deleteMut.isPending}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {broadcast.message || 'No message'}
@@ -329,28 +362,6 @@ export default function BroadcastCenter() {
                             ? ` • until ${new Date(broadcast.broadcast_ends_at).toLocaleString()}`
                             : ''}
                         </p>
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-xs gap-1"
-                            onClick={() => startEdit(broadcast)}
-                            disabled={isSaving || deleteMut.isPending}
-                          >
-                            <Pencil className="w-3 h-3" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-xs gap-1 text-destructive hover:text-destructive"
-                            onClick={() => setPendingDelete(broadcast)}
-                            disabled={isSaving || deleteMut.isPending}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                          </Button>
-                        </div>
                       </div>
                     </div>
                   );

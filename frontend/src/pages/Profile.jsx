@@ -17,12 +17,15 @@ import {
   ArrowRight,
   Settings,
   LogOut,
+  Briefcase,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -30,15 +33,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { formatDateForInput } from '@/lib/utils';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { formatBirthdayLabel, formatTenure } from '@/lib/profile';
+import { formatBirthdayLabel, formatTenure, normalizeSkills, skillsAreEqual } from '@/lib/profile';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
+import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
+import TagInput from '@/components/profile/TagInput';
 
 function buildProfileForm(user) {
   return {
     name: user?.name || '',
     full_name: user?.full_name || '',
     email: user?.email || '',
+    bio: user?.bio || '',
+    department_id: user?.department_id ?? null,
+    department_name: user?.department || '',
+    skills: normalizeSkills(user?.skills),
+    ask_me_about: user?.ask_me_about || '',
     date_of_birth: formatDateForInput(user?.date_of_birth),
     joined_at: formatDateForInput(user?.joined_at),
   };
@@ -49,6 +59,10 @@ function profileFormIsDirty(form, user) {
 
   return (
     form.full_name !== (user.full_name || '') ||
+    form.bio !== (user.bio || '') ||
+    form.department_id !== (user.department_id ?? null) ||
+    !skillsAreEqual(form.skills, user.skills) ||
+    form.ask_me_about !== (user.ask_me_about || '') ||
     form.date_of_birth !== formatDateForInput(user.date_of_birth) ||
     form.joined_at !== formatDateForInput(user.joined_at)
   );
@@ -87,7 +101,7 @@ export default function Profile() {
     if (user) {
       setProfileForm(buildProfileForm(user));
     }
-  }, [user?.id, user?.full_name, user?.date_of_birth, user?.joined_at]);
+  }, [user?.id, user?.full_name, user?.bio, user?.department_id, user?.department, user?.skills, user?.ask_me_about, user?.date_of_birth, user?.joined_at]);
 
   useMetaTags({
     title: `${user?.full_name || 'Profile'} - EMZI Nexus Brain`,
@@ -101,6 +115,7 @@ export default function Profile() {
 
   const refreshUser = () => {
     queryClient.invalidateQueries({ queryKey: ['current-user'] });
+    queryClient.invalidateQueries({ queryKey: ['people-directory'] });
     checkUserAuth();
   };
 
@@ -119,6 +134,10 @@ export default function Profile() {
       await db.auth.updateMe({
         name: profileForm.name,
         full_name: profileForm.full_name,
+        bio: profileForm.bio.trim() || null,
+        department_id: profileForm.department_id,
+        skills: profileForm.skills,
+        ask_me_about: profileForm.ask_me_about.trim() || null,
         date_of_birth: profileForm.date_of_birth || null,
         joined_at: profileForm.joined_at || null,
       });
@@ -258,7 +277,7 @@ export default function Profile() {
                   <CardHeader>
                     <CardTitle className="text-base">Personal Information</CardTitle>
                     <CardDescription>
-                      Update your name and dates used for celebrations on the dashboard. Photos can be changed in the banner above.
+                      Update your name, work details, and dates used for celebrations on the dashboard. Photos can be changed in the banner above.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -272,6 +291,65 @@ export default function Profile() {
                             setProfileForm((p) => ({ ...p, full_name: e.target.value, name: e.target.value }))
                           }
                           placeholder="Your full name"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bio">Bio</Label>
+                        <Textarea
+                          id="bio"
+                          value={profileForm.bio}
+                          onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value }))}
+                          placeholder="Tell colleagues a little about yourself..."
+                          rows={4}
+                          maxLength={500}
+                        />
+                        <p className="text-xs text-muted-foreground">{profileForm.bio.length}/500 characters</p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="department" className="flex items-center gap-1.5">
+                          <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+                          Department
+                        </Label>
+                        <DepartmentCombobox
+                          id="department"
+                          value={profileForm.department_id}
+                          label={profileForm.department_name}
+                          onChange={(departmentId, departmentName = '') =>
+                            setProfileForm((p) => ({
+                              ...p,
+                              department_id: departmentId,
+                              department_name: departmentName,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="skills" className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+                          Skills & interests
+                        </Label>
+                        <TagInput
+                          id="skills"
+                          value={profileForm.skills}
+                          onChange={(skills) => setProfileForm((p) => ({ ...p, skills }))}
+                          placeholder="Add a skill or interest"
+                          maxTags={10}
+                          maxLength={50}
+                        />
+                        <p className="text-xs text-muted-foreground">Press Enter to add each tag (up to 10).</p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ask_me_about">Ask me about</Label>
+                        <Input
+                          id="ask_me_about"
+                          value={profileForm.ask_me_about}
+                          onChange={(e) => setProfileForm((p) => ({ ...p, ask_me_about: e.target.value }))}
+                          placeholder="e.g. onboarding, CRM workflows, team events"
+                          maxLength={200}
                         />
                       </div>
 

@@ -15,6 +15,7 @@ export default function AppLayout() {
   const location = useLocation();
   const [broadcastStripVisible, setBroadcastStripVisible] = useState(false);
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
+  const isAnalyticsPage = location.pathname === '/analytics';
   const showBottomNav = !isFullBleed;
 
   const handleBroadcastStripVisibility = useCallback((visible) => {
@@ -37,14 +38,20 @@ export default function AppLayout() {
       ) : null}
       <main
         className={cn(
-          'min-h-screen transition-all duration-200',
-          isFullBleed ? 'overflow-hidden' : 'pt-16',
+          'transition-all duration-200',
+          isFullBleed ? 'min-h-screen overflow-hidden' : 'pt-16',
+          isAnalyticsPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
+          !isFullBleed && !isAnalyticsPage && 'min-h-screen',
           !isFullBleed && broadcastStripVisible && 'pt-[calc(4rem+1.75rem)] sm:pt-21',
           showBottomNav && 'pb-[calc(4.75rem+env(safe-area-inset-bottom))]'
         )}
       >
         {isFullBleed ? (
           <Outlet />
+        ) : isAnalyticsPage ? (
+          <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 pt-4 sm:pt-6 max-w-[1600px] mx-auto w-full">
+            <Outlet />
+          </div>
         ) : (
           <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
             <Outlet />

@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
+use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
-use App\Models\ActivityLog;
+use App\Models\Department;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
@@ -16,12 +17,13 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     use AppliesIndexQuery;
+    use ResolvesDepartmentInput;
 
     public function index(Request $request): JsonResponse
     {
         $users = $this->applyIndexQuery(
             $request,
-            User::query()->with('accessGroups'),
+            User::query()->with(['accessGroups', 'department']),
             ['role', 'email']
         )->get();
 
@@ -46,20 +48,97 @@ class UserController extends Controller
         $like = '%'.$term.'%';
 
         $users = User::query()
+            ->with('department')
             ->where('is_approved', true)
             ->where(function ($query) use ($like) {
                 $query->where('full_name', 'like', $like)
                     ->orWhere('name', 'like', $like)
-                    ->orWhere('email', 'like', $like);
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('bio', 'like', $like)
+                    ->orWhere('location', 'like', $like)
+                    ->orWhere('ask_me_about', 'like', $like)
+                    ->orWhereHas('department', fn ($builder) => $builder->where('name', 'like', $like));
             })
             ->orderBy('full_name')
             ->limit($limit)
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location']);
 
         return response()->json($users);
     }
 
-    public function dashboardPreview(Request $request, User $user): JsonResponse
+    public function directory(Request $request): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'q' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+            'access_group_id' => ['sometimes', 'nullable', 'integer', 'exists:access_groups,id'],
+            'sort' => ['sometimes', 'string', Rule::in(['full_name', '-full_name', 'joined_at', '-joined_at'])],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $term = trim((string) ($validated['q'] ?? ''));
+        $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
+        $accessGroupId = isset($validated['access_group_id']) ? (int) $validated['access_group_id'] : null;
+        $sort = $validated['sort'] ?? 'full_name';
+        $limit = (int) ($validated['limit'] ?? 50);
+
+        $query = User::query()
+            ->with(['accessGroups', 'department'])
+            ->where('is_approved', true);
+
+        if ($term !== '') {
+            $like = '%'.$term.'%';
+            $query->where(function ($builder) use ($like) {
+                $builder->where('full_name', 'like', $like)
+                    ->orWhere('name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('bio', 'like', $like)
+                    ->orWhere('location', 'like', $like)
+                    ->orWhere('ask_me_about', 'like', $like)
+                    ->orWhereHas('department', fn ($departmentQuery) => $departmentQuery->where('name', 'like', $like));
+            });
+        }
+
+        if ($departmentId !== null) {
+            $query->where('department_id', $departmentId);
+        }
+
+        if ($accessGroupId !== null) {
+            $query->whereHas('accessGroups', fn ($builder) => $builder->where('access_groups.id', $accessGroupId));
+        }
+
+        $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
+        $column = ltrim($sort, '-');
+        $query->orderBy($column, $direction)->orderBy('full_name');
+
+        $users = $query->limit($limit)->get();
+
+        $departments = Department::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->values();
+
+        $accessGroups = AccessGroup::query()
+            ->whereHas('users', fn ($builder) => $builder->where('is_approved', true))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->values();
+
+        return response()->json([
+            'users' => $users->map(fn (User $user) => $this->publicUserProfile($user))->values(),
+            'departments' => $departments,
+            'access_groups' => $accessGroups,
+            'total' => $users->count(),
+        ]);
+    }
+
+    public function profile(Request $request, User $user): JsonResponse
     {
         $viewer = $this->authenticatedUser($request);
 
@@ -71,19 +150,10 @@ class UserController extends Controller
             return response()->json(['message' => 'User not found.'], 404);
         }
 
-        $user->load('accessGroups');
-
-        $activities = ActivityLog::query()
-            ->where('user_id', (string) $user->id)
-            ->orderByDesc('created_at')
-            ->limit(20)
-            ->get()
-            ->map(fn (ActivityLog $log) => $log->toArray())
-            ->values();
+        $user->load(['accessGroups', 'department']);
 
         return response()->json([
             'user' => $this->publicUserProfile($user),
-            'activities' => $activities,
         ]);
     }
 
@@ -402,6 +472,13 @@ class UserController extends Controller
             'password' => ['sometimes', 'string', 'min:8'],
             'date_of_birth' => ['sometimes', 'nullable', 'date'],
             'joined_at' => ['sometimes', 'nullable', 'date'],
+            'bio' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'location' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'skills' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'skills.*' => ['string', 'max:50'],
+            'ask_me_about' => ['sometimes', 'nullable', 'string', 'max:200'],
         ]);
 
         $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;
@@ -412,13 +489,14 @@ class UserController extends Controller
             $validated['password'] = Hash::make($validated['password']);
         }
 
+        $validated = $this->resolveDepartmentFields($validated);
         $user->update($validated);
 
         if ($groupIds !== null) {
             $user->accessGroups()->sync($groupIds);
         }
 
-        return response()->json($user->fresh()->load('accessGroups'));
+        return response()->json($user->fresh()->load(['accessGroups', 'department']));
     }
 
     private function authenticatedUser(Request $request): ?User

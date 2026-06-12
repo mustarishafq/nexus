@@ -42,7 +42,7 @@ class PushNotificationService
                 return;
             }
 
-            $payload = json_encode([
+            $payload = [
                 'id' => $notification->id,
                 'title' => $notification->title,
                 'message' => $notification->message,
@@ -53,64 +53,16 @@ class PushNotificationService
                 'system_id' => $notification->system_id,
                 'is_broadcast' => (bool) $notification->is_broadcast,
                 'created_at' => $notification->created_at?->toISOString(),
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            ];
 
-            if ($payload === false) {
-                return;
-            }
-
-            $webPush = new WebPush([
-                'VAPID' => [
-                    'subject' => config('services.web_push.subject'),
-                    'publicKey' => config('services.web_push.public_key'),
-                    'privateKey' => config('services.web_push.private_key'),
-                ],
-            ]);
-
-            foreach ($subscriptions as $subscription) {
-                $webPush->queueNotification(
-                    Subscription::create([
-                        'endpoint' => $subscription->endpoint,
-                        'keys' => [
-                            'p256dh' => $subscription->public_key,
-                            'auth' => $subscription->auth_token,
-                        ],
-                        'contentEncoding' => $subscription->content_encoding,
-                    ]),
-                    $payload,
-                    [
-                        'TTL' => 2419200,
-                        'contentType' => 'application/json',
-                        'topic' => (string) $notification->id,
-                    ]
-                );
-            }
-
-            $webPush->flushPooled(function (MessageSentReport $report) use (&$successCount, &$failureCount): void {
-                if ($report->isSuccess()) {
-                    $successCount++;
-                    return;
-                }
-
-                $failureCount++;
-
-                if ($this->shouldDeleteSubscription($report)) {
-                    DB::table('push_subscriptions')->where('endpoint', $report->getEndpoint())->delete();
-                    return;
-                }
-
-                Log::warning('Push notification delivery failed.', [
-                    'endpoint' => $report->getEndpoint(),
-                    'reason' => $report->getReason(),
-                ]);
-            });
-
-            Log::info('Push notification delivery summary.', [
-                'notification_id' => $notification->id,
-                'subscriptions_attempted' => $subscriptions->count(),
-                'success_count' => $successCount,
-                'failure_count' => $failureCount,
-            ]);
+            $this->deliverPayload(
+                $subscriptions,
+                $payload,
+                (string) $notification->id,
+                $successCount,
+                $failureCount,
+                ['notification_id' => $notification->id]
+            );
         } catch (Throwable $exception) {
             Log::warning('Push notification pipeline failed.', [
                 'notification_id' => $notification->id,
@@ -119,6 +71,121 @@ class PushNotificationService
 
             $this->sendFallbackWithoutPayload($notification, $subscriptions, $exception);
         }
+    }
+
+    /**
+     * Send a web push directly to a user without creating an in-app Notification record.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function sendToUser(int|string $userId, array $payload, ?string $topic = null): void
+    {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
+        $subscriptions = DB::table('push_subscriptions')
+            ->where('user_id', (string) $userId)
+            ->orderByDesc('created_at')
+            ->get();
+
+        if ($subscriptions->isEmpty()) {
+            return;
+        }
+
+        $successCount = 0;
+        $failureCount = 0;
+        $resolvedTopic = $topic ?? (string) ($payload['id'] ?? uniqid('push-', true));
+
+        try {
+            $this->deliverPayload(
+                $subscriptions,
+                $payload,
+                $resolvedTopic,
+                $successCount,
+                $failureCount,
+                ['user_id' => (string) $userId, 'topic' => $resolvedTopic]
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Direct push delivery failed.', [
+                'user_id' => (string) $userId,
+                'topic' => $resolvedTopic,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $logContext
+     */
+    private function deliverPayload(
+        Collection $subscriptions,
+        array $payload,
+        string $topic,
+        int &$successCount,
+        int &$failureCount,
+        array $logContext = [],
+    ): void {
+        $encodedPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($encodedPayload === false) {
+            return;
+        }
+
+        $webPush = new WebPush([
+            'VAPID' => [
+                'subject' => config('services.web_push.subject'),
+                'publicKey' => config('services.web_push.public_key'),
+                'privateKey' => config('services.web_push.private_key'),
+            ],
+        ]);
+
+        foreach ($subscriptions as $subscription) {
+            $webPush->queueNotification(
+                Subscription::create([
+                    'endpoint' => $subscription->endpoint,
+                    'keys' => [
+                        'p256dh' => $subscription->public_key,
+                        'auth' => $subscription->auth_token,
+                    ],
+                    'contentEncoding' => $subscription->content_encoding,
+                ]),
+                $encodedPayload,
+                [
+                    'TTL' => 2419200,
+                    'contentType' => 'application/json',
+                    'topic' => $topic,
+                ]
+            );
+        }
+
+        $webPush->flushPooled(function (MessageSentReport $report) use (&$successCount, &$failureCount): void {
+            if ($report->isSuccess()) {
+                $successCount++;
+
+                return;
+            }
+
+            $failureCount++;
+
+            if ($this->shouldDeleteSubscription($report)) {
+                DB::table('push_subscriptions')->where('endpoint', $report->getEndpoint())->delete();
+
+                return;
+            }
+
+            Log::warning('Push notification delivery failed.', [
+                'endpoint' => $report->getEndpoint(),
+                'reason' => $report->getReason(),
+            ]);
+        });
+
+        Log::info('Push notification delivery summary.', array_merge($logContext, [
+            'subscriptions_attempted' => $subscriptions->count(),
+            'success_count' => $successCount,
+            'failure_count' => $failureCount,
+        ]));
     }
 
     private function sendFallbackWithoutPayload(Notification $notification, Collection $subscriptions, Throwable $exception): void

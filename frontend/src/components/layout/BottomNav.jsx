@@ -12,7 +12,7 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0 });
 
   const { data: metabaseDashboards = [] } = useQuery({
     queryKey: ['metabase-dashboards'],
@@ -32,21 +32,28 @@ export default function BottomNav() {
   }, [isMobile, user?.role, metabaseDashboards.length]);
 
   useEffect(() => {
-    const loadUnreadCount = async () => {
+    const loadBadgeCounts = async () => {
       try {
-        const notifs = await db.entities.Notification.filter(
-          { is_read: false, exclude_broadcasts: true },
-          '-created_date',
-          100
-        );
-        setUnreadCount(Array.isArray(notifs) ? notifs.length : 0);
+        const [notifs, inbox] = await Promise.all([
+          db.entities.Notification.filter(
+            { is_read: false, exclude_broadcasts: true, exclude_direct_messages: true },
+            '-created_date',
+            100
+          ),
+          db.messages.listConversations(),
+        ]);
+
+        setBadgeCounts({
+          notifications: Array.isArray(notifs) ? notifs.length : 0,
+          messages: Number(inbox?.unread_total) || 0,
+        });
       } catch {
-        setUnreadCount(0);
+        setBadgeCounts({ notifications: 0, messages: 0 });
       }
     };
 
-    loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 15000);
+    loadBadgeCounts();
+    const interval = setInterval(loadBadgeCounts, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -55,7 +62,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-40 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
       aria-label="Main navigation"
     >
-      <div className="flex justify-center px-3 sm:px-6">
+      <div className="flex justify-center px-3 sm:px-4">
         <div
           className={cn(
             'flex h-16 items-stretch px-1',
@@ -67,7 +74,7 @@ export default function BottomNav() {
         >
           {navItems.map((item) => {
             const isActive = item.match(location.pathname);
-            const badgeCount = item.showBadge ? unreadCount : 0;
+            const badgeCount = item.badge ? badgeCounts[item.badge] ?? 0 : 0;
 
             return (
               <Link

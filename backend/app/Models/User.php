@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -23,6 +24,11 @@ class User extends Authenticatable
         'full_name',
         'profile_picture',
         'cover_picture',
+        'bio',
+        'department_id',
+        'location',
+        'skills',
+        'ask_me_about',
         'email',
         'password',
         'role',
@@ -63,9 +69,15 @@ class User extends Authenticatable
             'is_approved' => 'boolean',
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
+            'skills' => 'array',
             'date_of_birth' => 'date',
             'joined_at' => 'date',
         ];
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
     }
 
     public function accessGroups(): BelongsToMany
@@ -128,6 +140,13 @@ class User extends Authenticatable
     public function toArray(): array
     {
         $array = parent::toArray();
+
+        $department = $this->relationLoaded('department')
+            ? $this->getRelation('department')
+            : $this->department()->first();
+
+        $array['department'] = $department?->name;
+        $array['department_id'] = $this->department_id;
 
         if ($this->date_of_birth) {
             $array['date_of_birth'] = $this->date_of_birth->toDateString();

@@ -302,6 +302,69 @@ export const db = {
 		},
 	},
 
+	feed: {
+		async list({ limit } = {}) {
+			const queryString = buildQuery({ limit });
+			return request(`/feed${queryString}`);
+		},
+
+		async createPost({ body = '', image_url = null } = {}) {
+			return request('/posts', { method: 'POST', body: { body, image_url } });
+		},
+
+		async deletePost(postId) {
+			return request(`/posts/${postId}`, { method: 'DELETE' });
+		},
+
+		async listComments(postId) {
+			return request(`/posts/${postId}/comments`);
+		},
+
+		async createComment(postId, body) {
+			return request(`/posts/${postId}/comments`, { method: 'POST', body: { body } });
+		},
+
+		async deleteComment(commentId) {
+			return request(`/post-comments/${commentId}`, { method: 'DELETE' });
+		},
+
+		async reactToPost(postId, reaction) {
+			return request(`/posts/${postId}/reactions`, { method: 'POST', body: { reaction } });
+		},
+
+		async removeReaction(postId) {
+			return request(`/posts/${postId}/reactions`, { method: 'DELETE' });
+		},
+	},
+
+	messages: {
+		async listConversations() {
+			return request('/conversations');
+		},
+
+		async startConversation(recipientUserId) {
+			return request('/conversations', {
+				method: 'POST',
+				body: { recipient_user_id: recipientUserId },
+			});
+		},
+
+		async getThread(conversationId) {
+			return request(`/conversations/${conversationId}/messages`);
+		},
+
+		async sendMessage(conversationId, body) {
+			return request(`/conversations/${conversationId}/messages`, {
+				method: 'POST',
+				body: { body },
+			});
+		},
+
+		async markRead(conversationId) {
+			return request(`/conversations/${conversationId}/read`, { method: 'PATCH' });
+		},
+	},
+
 	googleOAuth: {
 		async status() {
 			return request('/google/oauth/status');
@@ -409,8 +472,25 @@ export const db = {
 		return Array.isArray(payload) ? payload : [];
 	},
 
-	async getUserDashboardPreview(userId) {
-		return request(`/users/${userId}/dashboard-preview`);
+	async getPeopleDirectory(filters = {}) {
+		const queryString = buildQuery(filters);
+		return request(`/users/directory${queryString}`);
+	},
+
+	async listDepartments() {
+		const payload = await request('/departments');
+		return Array.isArray(payload) ? payload : [];
+	},
+
+	async createDepartment(name) {
+		return request('/departments', {
+			method: 'POST',
+			body: { name },
+		});
+	},
+
+	async getUserProfile(userId) {
+		return request(`/users/${userId}/profile`);
 	},
 
 	async uploadUsersCsv(file, path) {

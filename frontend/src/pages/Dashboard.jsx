@@ -6,8 +6,7 @@ import RecentNotificationsWidget from '@/components/dashboard/RecentNotification
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
-import ProfileAnnouncementsWidget from '@/components/dashboard/ProfileAnnouncementsWidget';
-import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
+import CompanyFeedWidget from '@/components/dashboard/CompanyFeedWidget';
 import ProfileRecentApplicationsWidget from '@/components/dashboard/ProfileRecentApplicationsWidget';
 import TodaysCelebrationsWidget from '@/components/dashboard/TodaysCelebrationsWidget';
 import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
@@ -30,10 +29,13 @@ export default function Dashboard() {
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications-dash'],
-    queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 50),
+    queryFn: () =>
+      db.entities.Notification.filter(
+        { exclude_broadcasts: true, exclude_direct_messages: true },
+        '-created_date',
+        50
+      ),
   });
-
-  const { data: activeBroadcasts = [] } = useActiveBroadcasts();
 
   const { data: systems = [] } = useQuery({
     queryKey: ['applications'],
@@ -53,7 +55,7 @@ export default function Dashboard() {
 
   useMetaTags({
     title: `${user?.full_name || 'Dashboard'} - EMZI Nexus Brain`,
-    description: `${notifications.filter((n) => !n.is_read).length} unread notifications · ${activeBroadcasts.length} active broadcasts`,
+    description: `${notifications.filter((n) => !n.is_read).length} unread notifications`,
   });
 
   const refreshUser = () => {
@@ -94,7 +96,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="order-2 xl:order-none">
-            <ProfileAnnouncementsWidget broadcasts={activeBroadcasts} isAdmin={user?.role === 'admin'} />
+            <CompanyFeedWidget />
           </div>
           <div className="order-4 xl:order-none">
             <ProfileRecentApplicationsWidget applications={systems} activities={activities} />

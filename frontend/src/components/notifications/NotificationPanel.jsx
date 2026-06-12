@@ -27,9 +27,8 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const query = filter === 'unread'
-      ? { is_read: false, exclude_broadcasts: true }
-      : { exclude_broadcasts: true };
+    const baseQuery = { exclude_broadcasts: true, exclude_direct_messages: true };
+    const query = filter === 'unread' ? { ...baseQuery, is_read: false } : baseQuery;
     const data = await db.entities.Notification.filter(query, '-created_date', 50);
     setNotifications(data);
     setLoading(false);
