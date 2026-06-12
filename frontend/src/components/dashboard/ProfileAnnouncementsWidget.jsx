@@ -20,7 +20,9 @@ function BroadcastFeedPost({ broadcast }) {
             </Badge>
           </div>
           {broadcast.message ? (
-            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{broadcast.message}</p>
+            <div className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+              {broadcast.message}
+            </div>
           ) : null}
           <p className="text-[11px] text-muted-foreground mt-2">
             Posted {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}

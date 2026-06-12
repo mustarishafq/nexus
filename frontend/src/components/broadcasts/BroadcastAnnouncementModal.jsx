@@ -36,30 +36,32 @@ function BroadcastAnnouncementCard({ broadcast }) {
   return (
     <article
       className={cn(
-        'rounded-xl border bg-card/80 p-4 shadow-sm',
+        'rounded-lg border bg-card/80 p-3',
         priority === 'critical' && 'ring-1 ring-critical/30',
         priority === 'high' && 'ring-1 ring-warning/30'
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', visual.bg)}>
-          <Icon className={cn('h-5 w-5', visual.color)} />
+      <div className="flex items-start gap-2.5">
+        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', visual.bg)}>
+          <Icon className={cn('h-4 w-4', visual.color)} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold leading-snug">{broadcast.title}</h3>
-            <Badge variant="outline" className="h-5 text-[10px] capitalize">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="text-sm font-semibold leading-snug">{broadcast.title}</h3>
+            <Badge variant="outline" className="h-4 px-1.5 text-[10px] capitalize">
               {priority}
             </Badge>
           </div>
-          {broadcast.message ? (
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{broadcast.message}</p>
-          ) : null}
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Posted {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}
-          </p>
         </div>
       </div>
+      {broadcast.message ? (
+        <div className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+          {broadcast.message}
+        </div>
+      ) : null}
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Posted {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}
+      </p>
     </article>
   );
 }
@@ -74,41 +76,41 @@ export default function BroadcastAnnouncementModal({ open, onOpenChange, broadca
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-hidden border-primary/25 p-0 sm:max-w-2xl">
+      <DialogContent className="grid max-h-[min(36rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-primary/20 p-0 sm:max-w-md">
         <div
           className={cn(
-            'border-b bg-gradient-to-b px-6 pb-5 pt-6',
+            'border-b bg-gradient-to-b px-4 py-3',
             priorityAccent[topPriority] || priorityAccent.medium
           )}
         >
-          <DialogHeader className="space-y-3 text-left">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 ring-4 ring-primary/10">
-                <Megaphone className="h-6 w-6 text-primary" />
+          <DialogHeader className="space-y-1 text-left">
+            <div className="flex items-center gap-2.5 pr-6">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                <Megaphone className="h-4 w-4 text-primary" />
               </div>
-              <div>
-                <DialogTitle className="text-2xl tracking-tight">
+              <div className="min-w-0">
+                <DialogTitle className="text-base">
                   {broadcasts.length === 1 ? 'Important Announcement' : `${broadcasts.length} Active Announcements`}
                 </DialogTitle>
-                <DialogDescription className="text-sm">
-                  Please review before continuing — these updates are live across Nexus.
+                <DialogDescription className="text-xs">
+                  Review before continuing — live across Nexus.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
         </div>
 
-        <div className="max-h-[50vh] space-y-3 overflow-y-auto px-6 py-4">
+        <div className="min-h-0 space-y-2 overflow-y-auto px-4 py-3">
           {broadcasts.map((broadcast) => (
             <BroadcastAnnouncementCard key={broadcast.id} broadcast={broadcast} />
           ))}
         </div>
 
-        <DialogFooter className="border-t border-border/60 px-6 py-4 sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            You can review announcements again from your dashboard.
+        <DialogFooter className="gap-2 border-t border-border/60 px-4 py-3 sm:items-center sm:justify-between">
+          <p className="hidden text-[11px] text-muted-foreground sm:block">
+            Review again from your dashboard.
           </p>
-          <Button size="lg" className="min-w-[10rem]" onClick={handleAcknowledge}>
+          <Button size="sm" className="w-full sm:w-auto sm:min-w-[7rem]" onClick={handleAcknowledge}>
             Got it
           </Button>
         </DialogFooter>

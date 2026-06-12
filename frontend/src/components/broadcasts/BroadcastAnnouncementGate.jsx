@@ -4,23 +4,31 @@ import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import { acknowledgeBroadcasts, getUnacknowledgedBroadcasts } from '@/lib/broadcast';
 import BroadcastAnnouncementModal from './BroadcastAnnouncementModal';
 
+const EMPTY_BROADCASTS = [];
+
+function getBroadcastIds(broadcasts) {
+  return broadcasts.map((broadcast) => String(broadcast.id)).join(',');
+}
+
 export default function BroadcastAnnouncementGate() {
   const { user } = useAuth();
-  const { data: broadcasts = [] } = useActiveBroadcasts({ enabled: Boolean(user?.id) });
+  const { data } = useActiveBroadcasts({ enabled: Boolean(user?.id) });
   const [open, setOpen] = useState(false);
-  const [pendingBroadcasts, setPendingBroadcasts] = useState([]);
+  const [pendingBroadcasts, setPendingBroadcasts] = useState(EMPTY_BROADCASTS);
 
   useEffect(() => {
-    if (!user?.id || broadcasts.length === 0) {
-      setPendingBroadcasts([]);
+    if (!user?.id || !data?.length) {
+      setPendingBroadcasts((prev) => (prev.length === 0 ? prev : EMPTY_BROADCASTS));
       setOpen(false);
       return;
     }
 
-    const unacknowledged = getUnacknowledgedBroadcasts(user.id, broadcasts);
-    setPendingBroadcasts(unacknowledged);
+    const unacknowledged = getUnacknowledgedBroadcasts(user.id, data);
+    const nextIds = getBroadcastIds(unacknowledged);
+
+    setPendingBroadcasts((prev) => (getBroadcastIds(prev) === nextIds ? prev : unacknowledged));
     setOpen(unacknowledged.length > 0);
-  }, [user?.id, broadcasts]);
+  }, [user?.id, data]);
 
   if (!user) return null;
 
