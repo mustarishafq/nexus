@@ -34,10 +34,6 @@ function BroadcastFeedPost({ broadcast }) {
 export default function ProfileAnnouncementsWidget({ broadcasts = [], isAdmin = false }) {
   const recentBroadcasts = broadcasts.slice(0, 3);
 
-  if (recentBroadcasts.length === 0) {
-    return null;
-  }
-
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">
       <div className="flex items-center justify-between p-5 pb-3">
@@ -53,11 +49,26 @@ export default function ProfileAnnouncementsWidget({ broadcasts = [], isAdmin = 
           </Link>
         ) : null}
       </div>
-      <div>
-        {recentBroadcasts.map((broadcast) => (
-          <BroadcastFeedPost key={broadcast.id} broadcast={broadcast} />
-        ))}
-      </div>
+      {recentBroadcasts.length === 0 ? (
+        <div className="px-5 pb-5 text-sm text-muted-foreground">
+          No active announcements right now.
+          {isAdmin ? (
+            <span>
+              {' '}
+              <Link to="/admin/broadcast" className="text-primary hover:underline">
+                Send one from Broadcast Center
+              </Link>
+              .
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <div>
+          {recentBroadcasts.map((broadcast) => (
+            <BroadcastFeedPost key={broadcast.id} broadcast={broadcast} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

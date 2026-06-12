@@ -144,3 +144,35 @@
 .scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
   background: hsl(var(--muted-foreground) / 0.3);
 }
+
+@keyframes broadcast-ticker-rtl {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.broadcast-ticker-viewport {
+  height: 100%;
+}
+
+.broadcast-ticker-viewport--scroll {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 16px,
+    black calc(100% - 16px),
+    transparent
+  );
+}
+
+.broadcast-ticker-track {
+  animation: broadcast-ticker-rtl linear infinite;
+  will-change: transform;
+}
+
+.broadcast-ticker-viewport--scroll .broadcast-ticker-track:hover {
+  animation-play-state: paused;
+}

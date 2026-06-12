@@ -50,6 +50,7 @@ export default function CoverPhotoUploader({
   onUpdated,
   variant = 'profile',
   className,
+  readOnly = false,
 }) {
   const fileInputRef = useRef(null);
   const cropContainerRef = useRef(null);
@@ -324,6 +325,10 @@ export default function CoverPhotoUploader({
   );
 
   if (variant === 'overlay') {
+    if (readOnly) {
+      return null;
+    }
+
     return (
       <>
         <div className={cn('absolute top-2 right-2 sm:top-3 sm:right-3 z-10 flex gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity', className)}>

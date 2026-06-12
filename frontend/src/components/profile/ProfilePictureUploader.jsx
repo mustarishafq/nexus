@@ -26,6 +26,7 @@ export default function ProfilePictureUploader({
   variant = 'profile',
   className,
   avatarClassName,
+  readOnly = false,
 }) {
   const fileInputRef = useRef(null);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
@@ -188,57 +189,65 @@ export default function ProfilePictureUploader({
             </AvatarFallback>
           </Avatar>
 
-          <button
-            type="button"
-            className="absolute inset-0 hidden sm:flex items-center justify-center rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || removing}
-            aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
-          >
-            {uploading ? (
-              <Loader2 className="w-6 h-6 animate-spin text-foreground" />
-            ) : (
-              <Camera className="w-6 h-6 text-foreground" />
-            )}
-          </button>
+          {!readOnly ? (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 hidden sm:flex items-center justify-center rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || removing}
+                aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
+              >
+                {uploading ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
+                ) : (
+                  <Camera className="w-6 h-6 text-foreground" />
+                )}
+              </button>
 
-          <button
-            type="button"
-            className="absolute bottom-0 left-0 sm:hidden flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background shadow-md text-muted-foreground"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || removing}
-            aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
-          >
-            {uploading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Camera className="w-3.5 h-3.5" />
-            )}
-          </button>
+              <button
+                type="button"
+                className="absolute bottom-0 left-0 sm:hidden flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background shadow-md text-muted-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || removing}
+                aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
+              >
+                {uploading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+              </button>
 
-          {profilePicture ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              className="absolute bottom-0 right-0 h-8 w-8 sm:h-9 sm:w-9 rounded-full shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-              onClick={handleRemove}
-              disabled={uploading || removing}
-              aria-label="Remove profile photo"
-            >
-              {removing ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> : <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
-            </Button>
+              {profilePicture ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="absolute bottom-0 right-0 h-8 w-8 sm:h-9 sm:w-9 rounded-full shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                  onClick={handleRemove}
+                  disabled={uploading || removing}
+                  aria-label="Remove profile photo"
+                >
+                  {removing ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> : <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                </Button>
+              ) : null}
+            </>
           ) : null}
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-        {cropDialog}
+        {!readOnly ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            {cropDialog}
+          </>
+        ) : null}
       </>
     );
   }

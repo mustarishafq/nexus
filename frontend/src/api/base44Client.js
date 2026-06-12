@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { clearBirthdayShownKeys } from '@/lib/birthday';
+import { clearBroadcastAckKeys } from '@/lib/broadcast';
 
 export const API_ORIGIN = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
@@ -180,6 +181,7 @@ export const db = {
 
 			localStorage.removeItem(AUTH_TOKEN_KEY);
 			clearBirthdayShownKeys();
+			clearBroadcastAckKeys();
 			if (redirectTo) {
 				window.location.href = redirectTo;
 			}
@@ -399,6 +401,16 @@ export const db = {
 
 	async assignAccessGroupsCsv(file) {
 		return this.uploadUsersCsv(file, '/users/assign-access-groups-csv');
+	},
+
+	async searchUsers(query, limit = 10) {
+		const queryString = buildQuery({ q: query, limit });
+		const payload = await request(`/users/search${queryString}`);
+		return Array.isArray(payload) ? payload : [];
+	},
+
+	async getUserDashboardPreview(userId) {
+		return request(`/users/${userId}/dashboard-preview`);
 	},
 
 	async uploadUsersCsv(file, path) {

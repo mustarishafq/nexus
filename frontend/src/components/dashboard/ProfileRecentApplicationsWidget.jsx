@@ -8,8 +8,44 @@ import { getRecentApplications, launchApplication } from '@/lib/applications';
 import { toAbsoluteUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 
-function ApplicationLaunchTile({ app, launching, onLaunch }) {
+function ApplicationLaunchTile({ app, launching, onLaunch, readOnly = false }) {
   const isLaunching = launching === app.id;
+
+  if (readOnly) {
+    return (
+      <div
+        className={cn(
+          'relative flex flex-col items-center rounded-xl border border-border/70 bg-muted/20 p-3 text-center',
+          !app.is_enabled && 'opacity-60'
+        )}
+      >
+        <div className="relative mb-2.5">
+          {app.icon_url ? (
+            <img
+              src={toAbsoluteUrl(app.icon_url)}
+              alt={app.name}
+              className="h-12 w-12 rounded-xl object-cover shadow-sm"
+            />
+          ) : (
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white shadow-sm"
+              style={{ backgroundColor: app.color || '#6366f1' }}
+            >
+              {app.name?.[0]?.toUpperCase()}
+            </div>
+          )}
+        </div>
+        <p className="line-clamp-2 w-full text-xs font-semibold leading-tight">{app.name}</p>
+        {app.lastUsed ? (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {formatDistanceToNow(new Date(app.lastUsed), { addSuffix: true })}
+          </p>
+        ) : (
+          <p className="mt-1 text-[10px] text-muted-foreground">Recently used</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <button
@@ -59,6 +95,7 @@ function ApplicationLaunchTile({ app, launching, onLaunch }) {
 export default function ProfileRecentApplicationsWidget({
   applications = [],
   activities = [],
+  readOnly = false,
 }) {
   const navigate = useNavigate();
   const [launching, setLaunching] = useState(null);
@@ -88,7 +125,7 @@ export default function ProfileRecentApplicationsWidget({
           <Monitor className="w-4 h-4 text-primary" />
           <h3 className="font-semibold text-sm">Recent Applications</h3>
         </div>
-        {applications.length > 0 ? (
+        {applications.length > 0 && !readOnly ? (
           <Link to="/applications">
             <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
               View all <ArrowRight className="w-3 h-3" />
@@ -108,6 +145,7 @@ export default function ProfileRecentApplicationsWidget({
               app={app}
               launching={launching}
               onLaunch={handleLaunch}
+              readOnly={readOnly}
             />
           ))}
         </div>

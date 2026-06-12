@@ -7,6 +7,7 @@ import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import ProfileAnnouncementsWidget from '@/components/dashboard/ProfileAnnouncementsWidget';
+import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import ProfileRecentApplicationsWidget from '@/components/dashboard/ProfileRecentApplicationsWidget';
 import TodaysCelebrationsWidget from '@/components/dashboard/TodaysCelebrationsWidget';
 import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
@@ -32,10 +33,7 @@ export default function Dashboard() {
     queryFn: () => db.entities.Notification.filter({ exclude_broadcasts: true }, '-created_date', 50),
   });
 
-  const { data: activeBroadcasts = [] } = useQuery({
-    queryKey: ['active-broadcasts-dash'],
-    queryFn: () => db.entities.Broadcast.filter({ active_only: true }, '-created_date', 10),
-  });
+  const { data: activeBroadcasts = [] } = useActiveBroadcasts();
 
   const { data: systems = [] } = useQuery({
     queryKey: ['applications'],
@@ -90,16 +88,16 @@ export default function Dashboard() {
         </div>
 
         <div className="max-xl:contents xl:col-span-6 xl:flex xl:flex-col xl:gap-6">
-          <div className="order-2 xl:order-none">
+          <div className="order-3 xl:order-none">
             <div className="bg-card rounded-2xl border border-border overflow-hidden">
               <WeeklyCalendarWidget embedded />
             </div>
           </div>
+          <div className="order-2 xl:order-none">
+            <ProfileAnnouncementsWidget broadcasts={activeBroadcasts} isAdmin={user?.role === 'admin'} />
+          </div>
           <div className="order-4 xl:order-none">
             <ProfileRecentApplicationsWidget applications={systems} activities={activities} />
-          </div>
-          <div className="order-5 xl:order-none">
-            <ProfileAnnouncementsWidget broadcasts={activeBroadcasts} isAdmin={user?.role === 'admin'} />
           </div>
         </div>
 

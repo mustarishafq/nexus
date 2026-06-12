@@ -55,9 +55,11 @@ Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
 
 Route::get('/users', [UserController::class, 'index']);
+Route::get('/users/search', [UserController::class, 'search']);
 Route::post('/users', [UserController::class, 'store']);
 Route::post('/users/import-csv', [UserController::class, 'importCsv']);
 Route::post('/users/assign-access-groups-csv', [UserController::class, 'assignAccessGroupsCsv']);
+Route::get('/users/{user}/dashboard-preview', [UserController::class, 'dashboardPreview']);
 Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
 

@@ -16,6 +16,7 @@ import {
   Bell,
   ArrowRight,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,7 +55,7 @@ function profileFormIsDirty(form, user) {
 }
 
 export default function Profile() {
-  const { user: authUser, checkUserAuth } = useAuth();
+  const { user: authUser, checkUserAuth, logout } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -197,6 +198,37 @@ export default function Profile() {
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
                   </Button>
                 </Link>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="order-4 xl:order-none"
+          >
+            <Card className="rounded-2xl border-destructive/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+                  <LogOut className="w-4 h-4" />
+                  Sign out
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  End your session on this device
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => logout()}
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  Sign out
+                </Button>
               </CardContent>
             </Card>
           </motion.div>

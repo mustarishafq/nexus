@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
+import { clearBroadcastAckKeys } from '@/lib/broadcast';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ export default function Login() {
         password: form.get('password'),
       });
       clearBirthdayShownKeys();
+      clearBroadcastAckKeys();
       await checkUserAuth();
       navigate('/', { replace: true });
     } catch (err) {

@@ -16,6 +16,7 @@ import SystemEvents from '@/pages/SystemEvents';
 import AdminCalendar from '@/pages/AdminCalendar';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
+import UserDashboard from '@/pages/UserDashboard';
 import UserManagement from '@/pages/UserManagement';
 import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
 import Analytics from '@/pages/Analytics';
@@ -55,6 +56,7 @@ const ProtectedRoutes = () => {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/users/:userId/dashboard" element={<UserDashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/activity" element={<ActivityTimeline />} />
         <Route path="/network-health" element={<NetworkHealthDashboard />} />

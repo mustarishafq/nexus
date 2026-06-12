@@ -1,6 +1,7 @@
 import db from '@/api/base44Client';
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
+import { clearBroadcastAckKeys } from '@/lib/broadcast';
 
 const AuthContext = createContext();
 
@@ -103,6 +104,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = (shouldRedirect = true) => {
     clearBirthdayShownKeys();
+    clearBroadcastAckKeys();
     setUser(null);
     setIsAuthenticated(false);
     setForcePasswordChange(false);

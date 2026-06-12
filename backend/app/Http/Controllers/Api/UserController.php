@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
+use App\Models\ActivityLog;
 use App\Models\User;
+use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,6 +26,65 @@ class UserController extends Controller
         )->get();
 
         return response()->json($users);
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:1', 'max:100'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $term = trim($validated['q']);
+        $limit = (int) ($validated['limit'] ?? 10);
+        $like = '%'.$term.'%';
+
+        $users = User::query()
+            ->where('is_approved', true)
+            ->where(function ($query) use ($like) {
+                $query->where('full_name', 'like', $like)
+                    ->orWhere('name', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            })
+            ->orderBy('full_name')
+            ->limit($limit)
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role']);
+
+        return response()->json($users);
+    }
+
+    public function dashboardPreview(Request $request, User $user): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $user->is_approved) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        $user->load('accessGroups');
+
+        $activities = ActivityLog::query()
+            ->where('user_id', (string) $user->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (ActivityLog $log) => $log->toArray())
+            ->values();
+
+        return response()->json([
+            'user' => $this->publicUserProfile($user),
+            'activities' => $activities,
+        ]);
     }
 
     public function show(User $user): JsonResponse
@@ -358,5 +419,29 @@ class UserController extends Controller
         }
 
         return response()->json($user->fresh()->load('accessGroups'));
+    }
+
+    private function authenticatedUser(Request $request): ?User
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user || ! $user->is_approved) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicUserProfile(User $user): array
+    {
+        return $user->makeHidden([
+            'password',
+            'remember_token',
+            'notification_settings',
+            'force_password_change',
+        ])->toArray();
     }
 }

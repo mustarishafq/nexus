@@ -43,7 +43,7 @@ function CoverPhotoImage({ coverPicture, userReady }) {
   );
 }
 
-export default function ProfileDashboardHero({ user, onUserUpdated }) {
+export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = false }) {
   const todayLabel = format(new Date(), 'EEEE, MMMM d');
   const userReady = user != null;
 
@@ -60,6 +60,7 @@ export default function ProfileDashboardHero({ user, onUserUpdated }) {
           variant="overlay"
           coverPicture={user?.cover_picture}
           onUpdated={onUserUpdated}
+          readOnly={readOnly}
         />
       </div>
 
@@ -70,6 +71,7 @@ export default function ProfileDashboardHero({ user, onUserUpdated }) {
             profilePicture={user?.profile_picture}
             displayName={user?.full_name}
             onUpdated={onUserUpdated}
+            readOnly={readOnly}
             className="-mt-[5.5rem] sm:-mt-20 lg:-mt-[5.5rem] mx-auto sm:mx-0 self-center sm:self-start"
             avatarClassName="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 border-[5px]"
           />
