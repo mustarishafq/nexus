@@ -6,6 +6,9 @@ import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
 import BroadcastAnnouncementGate from '@/components/broadcasts/BroadcastAnnouncementGate';
+import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
+import NotificationToastGate from '@/components/notifications/NotificationToastGate';
+import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
 import GlobalBroadcastStrip from '@/components/broadcasts/GlobalBroadcastStrip';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 
@@ -26,6 +29,9 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       <BirthdayCelebrationGate />
       <BroadcastAnnouncementGate />
+      <WebPushPromptGate />
+      <NotificationToastGate />
+      <NotificationAudioUnlock />
       {!isFullBleed ? (
         <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">
           <TopBar embedded sidebarWidth={0} isMobile={isMobile} />

@@ -76,7 +76,7 @@ export default function AdminSettings({ embedded = false }) {
 
   if (user?.role !== 'admin') {
     return (
-      <Card className="rounded-2xl max-w-2xl">
+      <Card className="rounded-2xl w-full">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" /> Admin access required
@@ -88,7 +88,7 @@ export default function AdminSettings({ embedded = false }) {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 w-full">
       {!embedded ? (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

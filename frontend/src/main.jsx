@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
+import { showNotificationAlert } from '@/lib/notificationAlerts'
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -15,16 +16,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     // while the app is in the foreground).
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type !== 'PUSH_RECEIVED') return;
-      const payload = event.data.payload || {};
-      import('sonner').then(({ toast }) => {
-        import('@/lib/notificationVisuals').then(({ showPushNotificationToast }) => {
-          showPushNotificationToast(payload, toast);
-        }).catch(() => {
-          toast(payload.title || 'EMZI Nexus Brain', {
-            description: payload.message || payload.body || 'You have a new notification.',
-          });
-        });
-      }).catch(() => {});
+      showNotificationAlert(event.data.payload || {});
     });
   });
 }

@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
-import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
+import { useWebPush } from '@/hooks/useWebPush';
+import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
+import { playNotificationSound, unlockNotificationAudio } from '@/lib/notificationSound';
 import {
   canShowIosInstallPrompt,
   IOS_INSTALL_STEPS,
@@ -32,13 +34,7 @@ export default function Settings() {
     sound: false,
   });
   const [activeTab, setActiveTab] = useState('user');
-  const [pushState, setPushState] = useState({
-    loading: false,
-    subscribed: false,
-    supported: false,
-    permission: 'default',
-    synced: false,
-  });
+  const { pushState, subscribe, unsubscribe } = useWebPush(appPublicSettings?.web_push_public_key);
   const [installState, setInstallState] = useState({
     available: false,
     installed: isRunningStandalone(),
@@ -49,19 +45,17 @@ export default function Settings() {
 
   useEffect(() => {
     db.auth.me().then((u) => {
-      if (u.notification_settings) {
-        if (typeof u.notification_settings === 'string') {
-          setSettings((prev) => ({ ...prev, ...JSON.parse(u.notification_settings || '{}') }));
-        } else {
-          setSettings((prev) => ({ ...prev, ...(u.notification_settings || {}) }));
-        }
-      }
+      if (!u.notification_settings) return;
+
+      const loaded = typeof u.notification_settings === 'string'
+        ? JSON.parse(u.notification_settings || '{}')
+        : (u.notification_settings || {});
+
+      const next = { in_app: true, email: true, sound: false, ...loaded };
+      setSettings(next);
+      syncNotificationSettingsCache(next);
     }).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    refreshPushState();
-  }, [appPublicSettings]);
 
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
@@ -118,112 +112,27 @@ export default function Settings() {
     };
   }, []);
 
-  const refreshPushState = async () => {
-    const supported = isWebPushSupported();
-
-    if (!supported) {
-      setPushState({
-        loading: false,
-        subscribed: false,
-        supported: false,
-        permission: 'unsupported',
-        synced: false,
-      });
-      return;
-    }
-
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const browserSubscription = await registration.pushManager.getSubscription();
-      const storedSubscriptions = await db.pushSubscriptions.list();
-      const synced = Boolean(browserSubscription && Array.isArray(storedSubscriptions)
-        && storedSubscriptions.some((item) => item.endpoint === browserSubscription.endpoint));
-
-      setPushState({
-        loading: false,
-        subscribed: Boolean(browserSubscription),
-        supported: true,
-        permission: Notification.permission,
-        synced,
-      });
-    } catch {
-      setPushState((current) => ({
-        ...current,
-        loading: false,
-        supported: true,
-        permission: Notification.permission,
-      }));
-    }
-  };
-
   const subscribeToPush = async () => {
-    if (!isWebPushSupported()) {
-      toast.error('Web push is not supported in this browser');
-      return;
-    }
-
-    const publicKey = appPublicSettings?.web_push_public_key;
-    if (!publicKey) {
-      toast.error('Web push is not configured by the administrator');
-      return;
-    }
-
-    setPushState((current) => ({ ...current, loading: true }));
-
-    try {
-      const permission = Notification.permission === 'granted'
-        ? 'granted'
-        : await Notification.requestPermission();
-
-      if (permission !== 'granted') {
-        throw new Error('Notification permission was not granted');
-      }
-
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-
-      await db.pushSubscriptions.upsert({
-        ...subscription.toJSON(),
-        userAgent: navigator.userAgent,
-      });
-
+    const result = await subscribe();
+    if (result.success) {
       toast.success('Web push enabled');
-      await refreshPushState();
-    } catch (error) {
-      toast.error(error?.message || 'Unable to enable web push');
-      await refreshPushState();
+      return;
     }
+    toast.error(result.error || 'Unable to enable web push');
   };
 
   const unsubscribeFromPush = async () => {
-    if (!isWebPushSupported()) {
+    const result = await unsubscribe();
+    if (result.success) {
+      toast.success('Web push disabled');
       return;
     }
-
-    setPushState((current) => ({ ...current, loading: true }));
-
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-
-      if (subscription) {
-        await db.pushSubscriptions.remove({ endpoint: subscription.endpoint });
-        await subscription.unsubscribe();
-      }
-
-      toast.success('Web push disabled');
-      await refreshPushState();
-    } catch (error) {
-      toast.error(error?.message || 'Unable to disable web push');
-      await refreshPushState();
-    }
+    toast.error(result.error || 'Unable to disable web push');
   };
 
   const save = async () => {
     await db.auth.updateMe({ notification_settings: settings });
+    syncNotificationSettingsCache(settings);
     toast.success('Settings saved');
   };
 
@@ -268,7 +177,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 w-full">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <SettingsIcon className="w-6 h-6 text-primary" /> Settings
@@ -330,7 +239,14 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">Show notifications in the app</p>
                   </div>
                 </div>
-                <Switch checked={settings.in_app} onCheckedChange={(v) => setSettings((p) => ({ ...p, in_app: v }))} />
+                <Switch
+                  checked={settings.in_app}
+                  onCheckedChange={(v) => setSettings((p) => {
+                    const next = { ...p, in_app: v };
+                    syncNotificationSettingsCache(next);
+                    return next;
+                  })}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -343,7 +259,14 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">Receive email for important alerts</p>
                   </div>
                 </div>
-                <Switch checked={settings.email} onCheckedChange={(v) => setSettings((p) => ({ ...p, email: v }))} />
+                <Switch
+                  checked={settings.email}
+                  onCheckedChange={(v) => setSettings((p) => {
+                    const next = { ...p, email: v };
+                    syncNotificationSettingsCache(next);
+                    return next;
+                  })}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -356,7 +279,20 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">Play sound for new notifications</p>
                   </div>
                 </div>
-                <Switch checked={settings.sound} onCheckedChange={(v) => setSettings((p) => ({ ...p, sound: v }))} />
+                <Switch
+                  checked={settings.sound}
+                  onCheckedChange={(v) => {
+                    setSettings((p) => {
+                      const next = { ...p, sound: v };
+                      syncNotificationSettingsCache(next);
+                      return next;
+                    });
+
+                    if (v) {
+                      void unlockNotificationAudio().then(() => playNotificationSound());
+                    }
+                  }}
+                />
               </div>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import db from '@/api/base44Client';
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
+import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
 
 const AuthContext = createContext();
 
@@ -72,6 +73,7 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true);
       const currentUser = await db.auth.me();
+      syncNotificationSettingsCache(currentUser?.notification_settings);
       setUser(currentUser);
       setIsAuthenticated(true);
       
