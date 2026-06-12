@@ -153,7 +153,7 @@ export function GlobalSearchTrigger({ onClick, className }) {
       type="button"
       onClick={onClick}
       className={cn(
-        'relative flex w-full items-center rounded-md bg-muted/50 pl-9 pr-3 h-9 text-sm text-left text-muted-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        'relative flex w-full items-center rounded-lg bg-muted/50 pl-9 pr-3 h-10 text-sm text-left text-muted-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         className
       )}
     >

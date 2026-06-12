@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import {
-  Activity, Calendar, Wifi, Settings, Megaphone, Shield, Users, Menu,
+  Activity, Calendar, Wifi, Settings, Megaphone, Shield, Users, Menu, Moon,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
+import { glassPanelStyles } from './glassStyles';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
@@ -38,8 +40,8 @@ export default function MobileMoreMenu() {
         className={cn(
           'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
           isActive
-            ? 'bg-primary/10 text-primary'
-            : 'text-foreground hover:bg-muted'
+            ? 'bg-primary/15 text-primary'
+            : 'text-foreground hover:bg-foreground/5'
         )}
       >
         <item.icon className="h-5 w-5 shrink-0" />
@@ -58,8 +60,15 @@ export default function MobileMoreMenu() {
           <Menu className="w-5 h-5 text-muted-foreground" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[280px] p-0">
-        <SheetHeader className="border-b border-border px-4 py-4 text-left">
+      <SheetContent
+        side="left"
+        overlayClassName="bg-black/25 backdrop-blur-sm"
+        className={cn(
+          'flex w-[280px] flex-col border-r p-0 shadow-2xl',
+          glassPanelStyles
+        )}
+      >
+        <SheetHeader className="border-b border-border/50 px-4 py-4 text-left">
           <div className="flex items-center gap-3">
             <img src="/icons/logo.png" alt="Logo" className="h-9 w-9 rounded-xl shrink-0" />
             <SheetTitle className="text-base font-bold tracking-tight">
@@ -78,6 +87,20 @@ export default function MobileMoreMenu() {
             </>
           )}
         </nav>
+        <div className="mt-auto border-t border-border/50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <Moon className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Dark Mode</p>
+                <p className="text-xs text-muted-foreground">Light or dark theme</p>
+              </div>
+            </div>
+            <ThemeToggle variant="switch" />
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
 
 export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
@@ -60,19 +61,20 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
         style={embedded ? undefined : { left: sidebarWidth }}
       >
         {/* Search */}
-        <div className={cn(
-          'flex items-center gap-3 w-full',
-          isMobile ? 'max-w-full' : 'max-w-[65%] md:max-w-[40%]'
-        )}>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {isMobile && <MobileMoreMenu />}
-          <div className="relative flex-1">
+          <div className="relative min-w-0 flex-1">
             <GlobalSearchTrigger onClick={() => setSearchOpen(true)} />
           </div>
         </div>
 
-        {/* Right side — desktop only; mobile uses bottom nav for notifications & profile */}
-        {!isMobile ? (
+        {isMobile ? (
+          <div className="ml-3 flex shrink-0 items-center">
+            <ThemeToggle />
+          </div>
+        ) : (
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <button
               onClick={() => setPanelOpen(!panelOpen)}
               className="relative p-2 rounded-lg hover:bg-muted transition-colors"
@@ -114,7 +116,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        ) : null}
+        )}
       </header>
 
       {/* Notification Panel Overlay */}

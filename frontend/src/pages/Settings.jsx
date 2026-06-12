@@ -2,7 +2,8 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -288,6 +289,29 @@ export default function Settings() {
         </TabsList>
 
         <TabsContent value="user" className="space-y-6">
+          <Card className="rounded-2xl">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Moon className="w-4 h-4 text-primary" /> Appearance
+              </CardTitle>
+              <CardDescription>Choose light or dark mode for the interface</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Sun className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Dark Mode</Label>
+                    <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
+                  </div>
+                </div>
+                <ThemeToggle variant="switch" />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-2xl">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">

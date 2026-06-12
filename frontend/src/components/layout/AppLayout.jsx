@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
@@ -14,12 +13,10 @@ export default function AppLayout() {
   useNetworkHealthMonitor();
   const isMobile = useIsMobile();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(true);
   const [broadcastStripVisible, setBroadcastStripVisible] = useState(false);
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
-  const showBottomNav = isMobile && !isFullBleed;
+  const showBottomNav = !isFullBleed;
 
-  const sidebarWidth = isMobile ? 0 : (collapsed ? 72 : 260);
   const handleBroadcastStripVisibility = useCallback((visible) => {
     setBroadcastStripVisible(visible);
   }, []);
@@ -28,18 +25,9 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       <BirthdayCelebrationGate />
       <BroadcastAnnouncementGate />
-      {!isMobile && (
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={() => setCollapsed(!collapsed)}
-        />
-      )}
       {!isFullBleed ? (
-        <div
-          className="fixed top-0 right-0 z-30 flex flex-col transition-all duration-200"
-          style={{ left: sidebarWidth }}
-        >
-          <TopBar embedded sidebarWidth={sidebarWidth} isMobile={isMobile} />
+        <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">
+          <TopBar embedded sidebarWidth={0} isMobile={isMobile} />
           <GlobalBroadcastStrip
             embedded
             isMobile={isMobile}
@@ -52,9 +40,8 @@ export default function AppLayout() {
           'min-h-screen transition-all duration-200',
           isFullBleed ? 'overflow-hidden' : 'pt-16',
           !isFullBleed && broadcastStripVisible && 'pt-[calc(4rem+1.75rem)] sm:pt-21',
-          showBottomNav && 'pb-[calc(4rem+env(safe-area-inset-bottom))]'
+          showBottomNav && 'pb-[calc(4.75rem+env(safe-area-inset-bottom))]'
         )}
-        style={{ marginLeft: sidebarWidth }}
       >
         {isFullBleed ? (
           <Outlet />

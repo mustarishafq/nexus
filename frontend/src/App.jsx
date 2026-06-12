@@ -27,6 +27,7 @@ import ForcedPasswordChange from '@/pages/ForcedPasswordChange';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 const ProtectedRoutes = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError, forcePasswordChange } = useAuth();
@@ -34,7 +35,7 @@ const ProtectedRoutes = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -82,22 +83,24 @@ const ProtectedRoutes = () => {
 function App() {
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <PwaSplashScreen />
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
-        </Router>
-        <PwaInstallPrompt />
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <PwaSplashScreen />
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/*" element={<ProtectedRoutes />} />
+            </Routes>
+          </Router>
+          <PwaInstallPrompt />
+          <Toaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

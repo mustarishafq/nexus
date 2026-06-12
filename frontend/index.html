@@ -33,6 +33,13 @@
     <meta property="twitter:image" content="/icons/banner.svg" id="twitter-image" />
     
     <title id="page-title">EMZI Nexus Brain</title>
+    <script>
+      try {
+        if (localStorage.getItem('nexus-theme') === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

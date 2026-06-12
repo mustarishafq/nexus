@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -48,7 +49,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      <div className="absolute top-4 right-4 z-20 lg:top-6 lg:right-6">
+        <ThemeToggle className="text-white lg:text-foreground hover:bg-white/10 lg:hover:bg-muted" />
+      </div>
       {/* Desktop: Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[hsl(206,92%,15%)] flex-col justify-between p-12">
         {/* Gradient overlays */}
@@ -117,7 +121,7 @@ export default function Login() {
           </div>
 
           {/* Mobile/Tablet: White card container */}
-          <div className="lg:hidden bg-white rounded-3xl p-8 space-y-6 shadow-2xl">
+          <div className="lg:hidden bg-card rounded-3xl p-8 space-y-6 shadow-2xl">
             
             {/* Header */}
             <div className="space-y-2 text-center">
