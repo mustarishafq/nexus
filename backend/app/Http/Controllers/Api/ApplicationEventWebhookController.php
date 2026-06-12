@@ -28,8 +28,25 @@ class ApplicationEventWebhookController extends Controller
             return response()->json(['message' => 'Invalid JSON body'], 400);
         }
 
+        $mapper = app(NotificationEventMapperService::class);
+
+        if (! $mapper->shouldAutoNotify($application)) {
+            SystemEvent::create([
+                'system_id' => $application->slug,
+                'event_type' => 'webhook',
+                'title' => $this->eventTitle($event),
+                'payload' => $event,
+                'status' => 'acknowledged',
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'notification' => null,
+                'message' => 'Event received. Auto-create notifications is disabled.',
+            ], 202);
+        }
+
         try {
-            $mapper = app(NotificationEventMapperService::class);
             $notification = $mapper->createNotification($application, $event);
 
             SystemEvent::create([
@@ -116,5 +133,21 @@ class ApplicationEventWebhookController extends Controller
             'medium' => 5,
             default => 3,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    private function eventTitle(array $event): string
+    {
+        foreach (['title', 'subject'] as $key) {
+            $value = $event[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return 'Webhook event';
     }
 }

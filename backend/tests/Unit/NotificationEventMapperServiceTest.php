@@ -103,6 +103,21 @@ class NotificationEventMapperServiceTest extends TestCase
         $this->assertSame('Recovered title', $payload['title']);
     }
 
+    public function test_should_auto_notify_respects_application_config(): void
+    {
+        $mapper = app(NotificationEventMapperService::class);
+
+        $enabled = Application::factory()->create([
+            'notification_config' => NotificationEventMapping::normalize(['auto_notify' => true]),
+        ]);
+        $disabled = Application::factory()->create([
+            'notification_config' => NotificationEventMapping::normalize(['auto_notify' => false]),
+        ]);
+
+        $this->assertTrue($mapper->shouldAutoNotify($enabled));
+        $this->assertFalse($mapper->shouldAutoNotify($disabled));
+    }
+
     public function test_storage_normalization_preserves_custom_mappings_without_default_merge(): void
     {
         $stored = NotificationEventMapping::normalizeForStorage([
