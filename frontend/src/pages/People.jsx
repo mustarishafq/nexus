@@ -80,7 +80,7 @@ export default function People() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, team, skills, or bio..."
+              placeholder="Search by display name, full name, team, skills, or bio..."
               className="pl-9"
             />
           </div>

@@ -67,6 +67,7 @@ const ProtectedRoutes = () => {
         <Route path="/" element={<Dashboard />} />
         <Route path="/feed" element={<CompanyFeed />} />
         <Route path="/messages" element={<Messages />} />
+        <Route path="/messages/new/:userId" element={<Messages />} />
         <Route path="/messages/:conversationId" element={<Messages />} />
         <Route path="/people" element={<People />} />
         <Route path="/people/:userId" element={<PersonProfile />} />

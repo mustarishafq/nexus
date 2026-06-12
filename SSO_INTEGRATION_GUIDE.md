@@ -65,7 +65,7 @@ value in the JWT `redirect_to` claim.
    |---------|--------|----------------------------------------------|
    | `sub`   | string | Nexus user ID                                |
    | `email` | string | User's email address (use this to look up)   |
-   | `name`  | string | User's display name                          |
+   | `name`  | string | User's SSO display name (`users.name` in Nexus, not `full_name`) |
    | `sys`   | string | Slug of the application being launched  |
     | `return_to` | string | Nexus URL to redirect user to after logout |
    | `redirect_to` | string | Optional in-app URL to open after SSO login |

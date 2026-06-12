@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
+import { getDisplayName } from '@/lib/profile';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import CompanyFeedWidget from '@/components/dashboard/CompanyFeedWidget';
 import ProfileRecentApplicationsWidget from '@/components/dashboard/ProfileRecentApplicationsWidget';
@@ -54,12 +55,12 @@ export default function Dashboard() {
   });
 
   useMetaTags({
-    title: `${user?.full_name || 'Dashboard'} - EMZI Nexus Brain`,
+    title: `${getDisplayName(user, 'Dashboard')} - EMZI Nexus Brain`,
     description: `${notifications.filter((n) => !n.is_read).length} unread notifications`,
   });
 
-  const refreshUser = () => {
-    queryClient.invalidateQueries({ queryKey: ['current-user'] });
+  const refreshUser = async () => {
+    await queryClient.refetchQueries({ queryKey: ['current-user'] });
   };
 
   const markRead = async (notif) => {

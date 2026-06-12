@@ -547,7 +547,7 @@ class ApplicationController extends Controller
             'exp'   => $now + 60,
             'sub'   => (string) $user->id,
             'email' => $user->email,
-            'name'  => $user->full_name ?? $user->name ?? '',
+            'name'  => $user->name ?? '',
             'sys'   => $application->slug,
             'return_to' => $returnTo,
         ];

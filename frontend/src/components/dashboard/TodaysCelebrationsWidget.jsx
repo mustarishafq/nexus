@@ -6,6 +6,7 @@ import { Cake, Award, PartyPopper, SmilePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -149,7 +150,7 @@ function CelebrationFeedCard({
           fallbackClassName={cn('text-xs font-bold', accentStyles.avatar)}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight truncate">{person.full_name || person.email}</p>
+          <p className="text-sm font-semibold leading-tight truncate">{getDisplayName(person, person.email)}</p>
           <div className="mt-1 flex items-center">
             <Badge variant="outline" className={cn('text-[10px] px-2 py-0 h-5', accentStyles.badge)}>
               {badge}

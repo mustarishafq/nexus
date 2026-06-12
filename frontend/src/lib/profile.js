@@ -1,9 +1,15 @@
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
+export function getDisplayName(user, fallback = 'User') {
+  if (!user) return fallback;
+  return user.name?.trim() || user.full_name?.trim() || user.email || fallback;
+}
+
 const PROFILE_CHECKS = [
   { key: 'photo', label: 'Profile photo' },
   { key: 'cover', label: 'Cover photo' },
   { key: 'name', label: 'Display name' },
+  { key: 'full_name', label: 'Full name' },
   { key: 'bio', label: 'Bio' },
   { key: 'department', label: 'Department' },
   { key: 'birthday', label: 'Birthday' },
@@ -44,7 +50,8 @@ export function getProfileCompleteness(user) {
   const checks = [
     { key: 'photo', label: 'Profile photo', done: Boolean(user.profile_picture) },
     { key: 'cover', label: 'Cover photo', done: Boolean(user.cover_picture) },
-    { key: 'name', label: 'Display name', done: Boolean(user.full_name?.trim()) },
+    { key: 'name', label: 'Display name', done: Boolean(user.name?.trim()) },
+    { key: 'full_name', label: 'Full name', done: Boolean(user.full_name?.trim()) },
     { key: 'bio', label: 'Bio', done: Boolean(user.bio?.trim()) },
     { key: 'department', label: 'Department', done: Boolean(user.department?.trim()) },
     { key: 'birthday', label: 'Birthday', done: Boolean(user.date_of_birth) },

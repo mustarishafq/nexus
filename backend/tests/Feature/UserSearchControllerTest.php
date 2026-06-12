@@ -30,7 +30,8 @@ class UserSearchControllerTest extends TestCase
         $token = $this->issueToken($viewer);
 
         User::factory()->create([
-            'full_name' => 'Alice Anderson',
+            'name' => 'Alice Anderson',
+            'full_name' => 'Alice Marie Anderson',
             'email' => 'alice@example.com',
             'is_approved' => true,
         ]);
@@ -49,14 +50,53 @@ class UserSearchControllerTest extends TestCase
             ->getJson('/api/users/search?q=alice')
             ->assertOk()
             ->assertJsonCount(1)
-            ->assertJsonPath('0.full_name', 'Alice Anderson');
+            ->assertJsonPath('0.name', 'Alice Anderson');
+    }
+
+    public function test_search_matches_full_name_when_display_name_differs(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($viewer);
+
+        User::factory()->create([
+            'name' => 'Alex',
+            'full_name' => 'Alexander Hamilton',
+            'email' => 'alex@example.com',
+            'is_approved' => true,
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/users/search?q=Hamilton')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.name', 'Alex');
+    }
+
+    public function test_directory_matches_full_name_when_display_name_differs(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($viewer);
+
+        User::factory()->create([
+            'name' => 'Alex',
+            'full_name' => 'Alexander Hamilton',
+            'email' => 'alex@example.com',
+            'is_approved' => true,
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/users/directory?q=Hamilton')
+            ->assertOk()
+            ->assertJsonPath('users.0.name', 'Alex')
+            ->assertJsonCount(1, 'users');
     }
 
     public function test_profile_returns_public_profile(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);
         $target = User::factory()->create([
-            'full_name' => 'Preview Target',
+            'name' => 'Preview Target',
+            'full_name' => 'Preview Target Legal',
             'is_approved' => true,
         ]);
         $token = $this->issueToken($viewer);
@@ -64,7 +104,8 @@ class UserSearchControllerTest extends TestCase
         $this->withToken($token)
             ->getJson("/api/users/{$target->id}/profile")
             ->assertOk()
-            ->assertJsonPath('user.full_name', 'Preview Target')
+            ->assertJsonPath('user.name', 'Preview Target')
+            ->assertJsonMissingPath('user.full_name')
             ->assertJsonStructure(['user']);
     }
 

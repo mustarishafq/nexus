@@ -30,7 +30,7 @@ class FeedNotificationService
             return;
         }
 
-        $commenterName = $commenter->full_name ?: $commenter->name ?: 'Someone';
+        $commenterName = $commenter->displayName();
         $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', $body) ?? $body);
         $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
 

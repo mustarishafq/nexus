@@ -307,6 +307,7 @@ export default function UserManagement() {
     const searchValue = search.trim().toLowerCase();
     const matchesSearch = !searchValue
       || user.full_name?.toLowerCase().includes(searchValue)
+      || user.name?.toLowerCase().includes(searchValue)
       || user.email?.toLowerCase().includes(searchValue);
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all'
@@ -831,6 +832,7 @@ export default function UserManagement() {
     setEditUser(user);
     setEditForm({
       full_name: user.full_name || '',
+      name: user.name || '',
       role: user.role || 'user',
       is_approved: Boolean(user.is_approved),
       access_group_ids: new Set(getUserGroupIds(user)),
@@ -847,7 +849,7 @@ export default function UserManagement() {
     try {
       const updateData = {
         full_name: editForm.full_name,
-        name: editForm.full_name,
+        name: editForm.name,
         role: editForm.role,
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
@@ -1517,6 +1519,15 @@ export default function UserManagement() {
                   placeholder="Jane Doe"
                   required
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Display Name</Label>
+                <Input
+                  value={editForm.name || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Jane"
+                />
+                <p className="text-xs text-muted-foreground">Shown in Nexus and sent via SSO.</p>
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>

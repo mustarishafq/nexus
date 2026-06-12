@@ -57,7 +57,7 @@ class DashboardController extends Controller
             return array_merge(
                 [
                     'id' => $user->id,
-                    'full_name' => $user->full_name ?: $user->name,
+                    'name' => $user->displayName(),
                     'email' => $user->email,
                     'profile_picture' => $user->profile_picture,
                     'date_of_birth' => $user->date_of_birth?->toDateString(),
@@ -71,7 +71,7 @@ class DashboardController extends Controller
             return array_merge(
                 [
                     'id' => $user->id,
-                    'full_name' => $user->full_name ?: $user->name,
+                    'name' => $user->displayName(),
                     'email' => $user->email,
                     'profile_picture' => $user->profile_picture,
                     'joined_at' => $user->joined_at?->toDateString(),

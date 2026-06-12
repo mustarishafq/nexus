@@ -30,6 +30,41 @@ class UserController extends Controller
         return response()->json($users);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicUserProfile(User $user): array
+    {
+        $array = $user->makeHidden([
+            'password',
+            'remember_token',
+            'notification_settings',
+            'force_password_change',
+            'full_name',
+        ])->toArray();
+
+        $array['name'] = $user->displayName();
+
+        return $array;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicUserSummary(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->displayName(),
+            'email' => $user->email,
+            'profile_picture' => $user->profile_picture,
+            'role' => $user->role,
+            'department_id' => $user->department_id,
+            'department' => $user->department?->name,
+            'location' => $user->location,
+        ];
+    }
+
     public function search(Request $request): JsonResponse
     {
         $viewer = $this->authenticatedUser($request);
@@ -45,25 +80,19 @@ class UserController extends Controller
 
         $term = trim($validated['q']);
         $limit = (int) ($validated['limit'] ?? 10);
-        $like = '%'.$term.'%';
 
         $users = User::query()
             ->with('department')
             ->where('is_approved', true)
-            ->where(function ($query) use ($like) {
-                $query->where('full_name', 'like', $like)
-                    ->orWhere('name', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('bio', 'like', $like)
-                    ->orWhere('location', 'like', $like)
-                    ->orWhere('ask_me_about', 'like', $like)
-                    ->orWhereHas('department', fn ($builder) => $builder->where('name', 'like', $like));
-            })
+            ->matchingSearch($term)
+            ->orderBy('name')
             ->orderBy('full_name')
             ->limit($limit)
             ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location']);
 
-        return response()->json($users);
+        return response()->json(
+            $users->map(fn (User $user) => $this->publicUserSummary($user))->values()
+        );
     }
 
     public function directory(Request $request): JsonResponse
@@ -93,16 +122,7 @@ class UserController extends Controller
             ->where('is_approved', true);
 
         if ($term !== '') {
-            $like = '%'.$term.'%';
-            $query->where(function ($builder) use ($like) {
-                $builder->where('full_name', 'like', $like)
-                    ->orWhere('name', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('bio', 'like', $like)
-                    ->orWhere('location', 'like', $like)
-                    ->orWhere('ask_me_about', 'like', $like)
-                    ->orWhereHas('department', fn ($departmentQuery) => $departmentQuery->where('name', 'like', $like));
-            });
+            $query->matchingSearch($term);
         }
 
         if ($departmentId !== null) {
@@ -180,7 +200,7 @@ class UserController extends Controller
         unset($validated['access_group_ids']);
 
         $user = User::create([
-            'name'                   => $validated['full_name'],
+            'name'                   => '',
             'full_name'              => $validated['full_name'],
             'email'                  => $validated['email'] ?? null,
             'password'               => Hash::make($validated['password']),
@@ -279,7 +299,7 @@ class UserController extends Controller
 
                     // Add to batch
                     $batch[] = [
-                        'name'                   => $record['full_name'],
+                        'name'                   => '',
                         'full_name'              => $record['full_name'],
                         'email'                  => $email,
                         'password'               => Hash::make($password),
@@ -510,16 +530,4 @@ class UserController extends Controller
         return $user;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function publicUserProfile(User $user): array
-    {
-        return $user->makeHidden([
-            'password',
-            'remember_token',
-            'notification_settings',
-            'force_password_change',
-        ])->toArray();
-    }
 }

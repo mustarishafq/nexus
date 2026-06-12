@@ -17,7 +17,7 @@ trait SerializesFeedAuthors
 
         return [
             'id' => $user->id,
-            'full_name' => $user->full_name ?: $user->name,
+            'name' => $user->displayName(),
             'profile_picture' => $user->profile_picture,
             'department' => $user->department?->name,
         ];

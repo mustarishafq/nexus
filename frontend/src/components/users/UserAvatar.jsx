@@ -1,9 +1,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toAbsoluteUrl } from '@/lib/media';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 
 export default function UserAvatar({ user, className, fallbackClassName }) {
-  const displayName = user?.full_name || user?.email || '';
+  const displayName = getDisplayName(user, '');
   const initial = displayName?.[0]?.toUpperCase() || '?';
 
   return (

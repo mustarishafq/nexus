@@ -1,7 +1,7 @@
 export const MENTION_TOKEN_REGEX = /@\[(\d+)\|([^\]]+)\]/g;
 
 export function buildMentionToken(user) {
-  const name = (user?.full_name || user?.name || 'User').replace(/\]/g, '');
+  const name = (user?.name?.trim() || user?.full_name?.trim() || 'User').replace(/\]/g, '');
   return `@[${user.id}|${name}]`;
 }
 

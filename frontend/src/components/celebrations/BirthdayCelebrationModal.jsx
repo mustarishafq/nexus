@@ -6,7 +6,7 @@ import { fireBirthdayConfetti } from '@/lib/confettiBurst';
 import { getBirthdayAge } from '@/lib/birthday';
 
 export default function BirthdayCelebrationModal({ open, onOpenChange, user }) {
-  const name = user?.full_name || user?.name || user?.email || 'there';
+  const name = user?.name?.trim() || user?.full_name?.trim() || user?.email || 'there';
   const age = getBirthdayAge(user?.date_of_birth);
 
   useEffect(() => {

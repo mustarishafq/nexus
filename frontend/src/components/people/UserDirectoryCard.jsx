@@ -1,31 +1,19 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { Briefcase, MessageCircle, Sparkles } from 'lucide-react';
 import db from '@/api/base44Client';
+import { Briefcase, MessageCircle, Sparkles } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatTenure } from '@/lib/profile';
-import { toast } from 'sonner';
+import { formatTenure, getDisplayName } from '@/lib/profile';
 
 export default function UserDirectoryCard({ user, className }) {
   const navigate = useNavigate();
-  const displayName = user?.full_name || user?.name || 'User';
+  const displayName = getDisplayName(user);
   const skills = Array.isArray(user?.skills) ? user.skills.filter(Boolean).slice(0, 4) : [];
   const groups = (user?.access_group_names || []).filter(Boolean).slice(0, 2);
   const tenure = formatTenure(user?.joined_at);
-
-  const startConversation = useMutation({
-    mutationFn: () => db.messages.startConversation(user.id),
-    onSuccess: (payload) => {
-      navigate(`/messages/${payload.conversation.id}`);
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Could not start conversation.');
-    },
-  });
 
   return (
     <article
@@ -96,8 +84,18 @@ export default function UserDirectoryCard({ user, className }) {
           variant="default"
           size="sm"
           className="h-8 flex-1 text-xs"
-          disabled={startConversation.isPending}
-          onClick={() => startConversation.mutate()}
+          onClick={async () => {
+            try {
+              const payload = await db.messages.startConversation(user.id);
+              if (payload?.conversation?.id) {
+                navigate(`/messages/${payload.conversation.id}`);
+                return;
+              }
+            } catch {
+              // Fall through to compose view.
+            }
+            navigate(`/messages/new/${user.id}`);
+          }}
         >
           <MessageCircle className="mr-2 h-3.5 w-3.5" />
           Message

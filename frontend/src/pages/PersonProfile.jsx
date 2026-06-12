@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
 import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
@@ -9,8 +9,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
-import { formatTenure } from '@/lib/profile';
-import { toast } from 'sonner';
+import { formatTenure, getDisplayName } from '@/lib/profile';
 
 export default function PersonProfile() {
   const { userId } = useParams();
@@ -32,18 +31,8 @@ export default function PersonProfile() {
   const user = data?.user;
   const tenure = formatTenure(user?.joined_at);
 
-  const startConversation = useMutation({
-    mutationFn: () => db.messages.startConversation(user.id),
-    onSuccess: (payload) => {
-      navigate(`/messages/${payload.conversation.id}`);
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Could not start conversation.');
-    },
-  });
-
   useMetaTags({
-    title: user?.full_name ? `${user.full_name} - People` : 'Colleague Profile',
+    title: user ? `${getDisplayName(user)} - People` : 'Colleague Profile',
     description: user?.bio || user?.department || 'View colleague profile on EMZI Nexus Brain',
   });
 
@@ -82,8 +71,18 @@ export default function PersonProfile() {
           type="button"
           size="sm"
           className="h-8"
-          disabled={startConversation.isPending}
-          onClick={() => startConversation.mutate()}
+          onClick={async () => {
+            try {
+              const payload = await db.messages.startConversation(user.id);
+              if (payload?.conversation?.id) {
+                navigate(`/messages/${payload.conversation.id}`);
+                return;
+              }
+            } catch {
+              // Fall through to compose view.
+            }
+            navigate(`/messages/new/${user.id}`);
+          }}
         >
           <MessageCircle className="mr-2 h-3.5 w-3.5" />
           Message

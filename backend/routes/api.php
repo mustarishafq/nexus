@@ -66,6 +66,7 @@ Route::post('/conversations', [ConversationController::class, 'store']);
 Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
 Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
 Route::patch('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
+Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
 Route::get('/google/oauth/status', [GoogleOAuthController::class, 'status']);
 Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);

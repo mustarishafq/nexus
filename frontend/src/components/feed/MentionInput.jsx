@@ -253,7 +253,7 @@ export default function MentionInput({
                   >
                     <UserAvatar user={user} className="h-7 w-7" fallbackClassName="text-[10px]" />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{user.full_name || user.name}</p>
+                      <p className="truncate text-sm font-medium">{user.name || user.full_name || 'User'}</p>
                       {user.department ? (
                         <p className="truncate text-[11px] text-muted-foreground">{user.department}</p>
                       ) : null}

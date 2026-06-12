@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 
 export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
@@ -96,15 +97,15 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage
                     src={toAbsoluteUrl(user?.profile_picture)}
-                    alt={user?.full_name || 'User'}
+                    alt={getDisplayName(user)}
                     className="rounded-lg"
                   />
                   <AvatarFallback className="rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-                    {user?.full_name?.[0]?.toUpperCase() || 'U'}
+                    {getDisplayName(user, 'U')[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium leading-none">{user?.full_name || 'User'}</p>
+                  <p className="text-sm font-medium leading-none">{getDisplayName(user)}</p>
                   <p className="text-xs text-muted-foreground">{user?.role || 'user'}</p>
                 </div>
                 <ChevronDown className="w-3 h-3 text-muted-foreground hidden md:block" />

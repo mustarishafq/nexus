@@ -11,6 +11,7 @@ import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostReactions from '@/components/feed/PostReactions';
 import { toast } from 'sonner';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
 
@@ -136,7 +137,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                           to={`/people/${comment.author?.id}`}
                           className="truncate text-xs font-semibold hover:text-primary hover:underline"
                         >
-                          {comment.author?.full_name || 'User'}
+                          {getDisplayName(comment.author)}
                         </Link>
                         <span className="shrink-0 text-[10px] text-muted-foreground">
                           {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
@@ -168,7 +169,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                           to={`/people/${comment.author?.id}`}
                           className="text-xs font-semibold hover:text-primary hover:underline"
                         >
-                          {comment.author?.full_name || 'User'}
+                          {getDisplayName(comment.author)}
                         </Link>
                         <span className="text-[10px] text-muted-foreground">
                           {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
@@ -267,7 +268,7 @@ function PostFeedItem({ item, compact = false }) {
                 to={`/people/${item.author?.id}`}
                 className="text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
               >
-                {item.author?.full_name || 'User'}
+                {getDisplayName(item.author)}
               </Link>
               {item.author?.department ? (
                 <p className="mt-0.5 max-md:truncate text-xs text-muted-foreground">

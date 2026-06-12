@@ -25,8 +25,13 @@ class ConversationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        Conversation::query()
+            ->whereDoesntHave('messages')
+            ->delete();
+
         $conversations = Conversation::query()
             ->whereHas('participants', fn ($query) => $query->where('users.id', $viewer->id))
+            ->whereHas('messages')
             ->with([
                 'participants.department',
                 'messages' => fn ($query) => $query->latest()->limit(1)->with('sender.department'),
@@ -54,6 +59,7 @@ class ConversationController extends Controller
 
         $validated = $request->validate([
             'recipient_user_id' => ['required', 'integer', 'exists:users,id'],
+            'body' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
         if ((int) $validated['recipient_user_id'] === $viewer->id) {
@@ -61,6 +67,7 @@ class ConversationController extends Controller
         }
 
         $recipient = User::query()
+            ->with('department')
             ->where('is_approved', true)
             ->find($validated['recipient_user_id']);
 
@@ -68,15 +75,55 @@ class ConversationController extends Controller
             return response()->json(['message' => 'Recipient not found.'], 404);
         }
 
-        $conversation = $this->findOrCreateDirectConversation($viewer, $recipient);
-        $conversation->load([
-            'participants.department',
-            'messages' => fn ($query) => $query->latest()->limit(1)->with('sender.department'),
-        ]);
+        $body = trim((string) ($validated['body'] ?? ''));
+        $existing = $this->findDirectConversation($viewer, $recipient);
+
+        if ($body !== '') {
+            $conversation = $existing ?? $this->createDirectConversation($viewer, $recipient);
+            $conversation->load('participants');
+
+            $message = DB::transaction(function () use ($conversation, $viewer, $body) {
+                $message = $conversation->messages()->create([
+                    'sender_user_id' => $viewer->id,
+                    'body' => $body,
+                ]);
+
+                $conversation->update(['last_message_at' => now()]);
+                $conversation->participants()->updateExistingPivot($viewer->id, ['last_read_at' => now()]);
+
+                return $message;
+            });
+
+            $message->load('sender.department');
+
+            app(DirectMessageNotifier::class)->notifyRecipient($viewer, $recipient, $conversation, $message);
+
+            $conversation->load([
+                'participants.department',
+                'messages' => fn ($query) => $query->latest()->limit(1)->with('sender.department'),
+            ]);
+
+            return response()->json([
+                'conversation' => $this->serializeConversation($conversation, $viewer),
+                'message' => $this->serializeMessage($message, $viewer),
+            ], $existing ? 200 : 201);
+        }
+
+        if ($existing && $existing->messages()->exists()) {
+            $existing->load([
+                'participants.department',
+                'messages' => fn ($query) => $query->latest()->limit(1)->with('sender.department'),
+            ]);
+
+            return response()->json([
+                'conversation' => $this->serializeConversation($existing, $viewer),
+            ]);
+        }
 
         return response()->json([
-            'conversation' => $this->serializeConversation($conversation, $viewer),
-        ], 201);
+            'conversation' => null,
+            'recipient_user' => $this->serializeFeedAuthor($recipient),
+        ]);
     }
 
     public function messages(Request $request, Conversation $conversation): JsonResponse
@@ -160,18 +207,30 @@ class ConversationController extends Controller
         ]);
     }
 
-    private function findOrCreateDirectConversation(User $viewer, User $recipient): Conversation
+    public function destroy(Request $request, Conversation $conversation): JsonResponse
     {
-        $existing = Conversation::query()
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer || ! $this->participant($conversation, $viewer)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $conversation->delete();
+
+        return response()->json(null, 204);
+    }
+
+    private function findDirectConversation(User $viewer, User $recipient): ?Conversation
+    {
+        return Conversation::query()
             ->where('type', 'direct')
             ->whereHas('participants', fn ($query) => $query->where('users.id', $viewer->id))
             ->whereHas('participants', fn ($query) => $query->where('users.id', $recipient->id))
             ->first();
+    }
 
-        if ($existing) {
-            return $existing;
-        }
-
+    private function createDirectConversation(User $viewer, User $recipient): Conversation
+    {
         return DB::transaction(function () use ($viewer, $recipient) {
             $conversation = Conversation::create([
                 'type' => 'direct',

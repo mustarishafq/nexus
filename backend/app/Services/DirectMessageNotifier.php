@@ -14,7 +14,7 @@ class DirectMessageNotifier
             return;
         }
 
-        $senderName = $sender->full_name ?: $sender->name ?: 'Someone';
+        $senderName = $sender->displayName();
         $preview = mb_strlen($message->body) > 120 ? mb_substr($message->body, 0, 117).'...' : $message->body;
 
         // Unread counts drive the Messages badge. Push-only delivery avoids duplicate

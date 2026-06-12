@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
 import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -69,7 +70,7 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
           <ProfilePictureUploader
             variant="overlay"
             profilePicture={user?.profile_picture}
-            displayName={user?.full_name}
+            displayName={getDisplayName(user, '')}
             onUpdated={onUserUpdated}
             readOnly={readOnly}
             className="-mt-[5.5rem] sm:-mt-20 lg:-mt-[5.5rem] mx-auto sm:mx-0 self-center sm:self-start"
@@ -79,7 +80,7 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
           <div className="flex-1 min-w-0 w-full sm:w-auto sm:pb-1">
             <div className="flex flex-col items-center gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start sm:gap-2">
               <h1 className="text-lg sm:text-3xl font-bold tracking-tight leading-tight">
-                {user?.full_name || 'Your Profile'}
+                {getDisplayName(user, 'Your Profile')}
               </h1>
               {user?.role === 'admin' ? (
                 <Badge className="gap-1 shrink-0 h-5 text-[10px] sm:h-auto sm:text-xs">

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -73,6 +74,34 @@ class User extends Authenticatable
             'date_of_birth' => 'date',
             'joined_at' => 'date',
         ];
+    }
+
+    public function displayName(): string
+    {
+        $name = trim((string) ($this->name ?: $this->full_name ?: $this->email ?: ''));
+
+        return $name !== '' ? $name : 'User';
+    }
+
+    public function scopeMatchingSearch(Builder $query, string $term): Builder
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return $query;
+        }
+
+        $like = '%'.$term.'%';
+
+        return $query->where(function (Builder $builder) use ($like) {
+            $builder->where('name', 'like', $like)
+                ->orWhere('full_name', 'like', $like)
+                ->orWhere('email', 'like', $like)
+                ->orWhere('bio', 'like', $like)
+                ->orWhere('location', 'like', $like)
+                ->orWhere('ask_me_about', 'like', $like)
+                ->orWhere('skills', 'like', $like)
+                ->orWhereHas('department', fn (Builder $departmentQuery) => $departmentQuery->where('name', 'like', $like));
+        });
     }
 
     public function department(): BelongsTo

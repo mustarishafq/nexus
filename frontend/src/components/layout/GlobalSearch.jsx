@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Loader2, Search } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
+import { getDisplayName } from '@/lib/profile';
 import { Badge } from '@/components/ui/badge';
 import {
   CommandDialog,
@@ -89,9 +90,9 @@ export default function GlobalSearch({ open, onOpenChange }) {
   }, [navigate, onOpenChange]);
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search people">
+    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search people" shouldFilter={false}>
       <CommandInput
-        placeholder="Search people by name or email..."
+        placeholder="Search by display name, full name, email..."
         value={query}
         onValueChange={setQuery}
       />
@@ -123,13 +124,13 @@ export default function GlobalSearch({ open, onOpenChange }) {
               {results.map((user) => (
                 <CommandItem
                   key={user.id}
-                  value={`${user.full_name || user.name || ''} ${user.email || ''} ${user.id}`}
+                  value={`${getDisplayName(user, '')} ${user.email || ''} ${user.id}`}
                   onSelect={() => handleSelectUser(user.id)}
                   className="gap-3"
                 >
                   <UserAvatar user={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{user.full_name || user.name || 'User'}</p>
+                    <p className="truncate font-medium">{getDisplayName(user)}</p>
                     {user.department ? (
                       <p className="truncate text-xs text-muted-foreground">{user.department}</p>
                     ) : user.email ? (

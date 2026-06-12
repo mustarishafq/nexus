@@ -33,7 +33,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { formatDateForInput } from '@/lib/utils';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { formatBirthdayLabel, formatTenure, normalizeSkills, skillsAreEqual } from '@/lib/profile';
+import { formatBirthdayLabel, formatTenure, getDisplayName, normalizeSkills, skillsAreEqual } from '@/lib/profile';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
@@ -58,6 +58,7 @@ function profileFormIsDirty(form, user) {
   if (!user) return false;
 
   return (
+    form.name !== (user.name || '') ||
     form.full_name !== (user.full_name || '') ||
     form.bio !== (user.bio || '') ||
     form.department_id !== (user.department_id ?? null) ||
@@ -101,10 +102,10 @@ export default function Profile() {
     if (user) {
       setProfileForm(buildProfileForm(user));
     }
-  }, [user?.id, user?.full_name, user?.bio, user?.department_id, user?.department, user?.skills, user?.ask_me_about, user?.date_of_birth, user?.joined_at]);
+  }, [user?.id, user?.name, user?.full_name, user?.bio, user?.department_id, user?.department, user?.skills, user?.ask_me_about, user?.date_of_birth, user?.joined_at]);
 
   useMetaTags({
-    title: `${user?.full_name || 'Profile'} - EMZI Nexus Brain`,
+    title: `${getDisplayName(user, 'Profile')} - EMZI Nexus Brain`,
     description: 'Manage your personal information and account security',
   });
 
@@ -113,10 +114,13 @@ export default function Profile() {
   const birthdayPreview = formatBirthdayLabel(profileForm.date_of_birth);
   const tenurePreview = formatTenure(profileForm.joined_at);
 
-  const refreshUser = () => {
-    queryClient.invalidateQueries({ queryKey: ['current-user'] });
+  const refreshUser = async (updatedUser) => {
+    if (updatedUser) {
+      queryClient.setQueryData(['current-user'], updatedUser);
+    }
+    await checkUserAuth();
+    await queryClient.refetchQueries({ queryKey: ['current-user'] });
     queryClient.invalidateQueries({ queryKey: ['people-directory'] });
-    checkUserAuth();
   };
 
   const handleTabChange = (value) => {
@@ -131,7 +135,7 @@ export default function Profile() {
     e.preventDefault();
     setProfileSaving(true);
     try {
-      await db.auth.updateMe({
+      const updatedUser = await db.auth.updateMe({
         name: profileForm.name,
         full_name: profileForm.full_name,
         bio: profileForm.bio.trim() || null,
@@ -141,7 +145,8 @@ export default function Profile() {
         date_of_birth: profileForm.date_of_birth || null,
         joined_at: profileForm.joined_at || null,
       });
-      await refreshUser();
+      await refreshUser(updatedUser);
+      setProfileForm(buildProfileForm(updatedUser));
       toast.success('Profile updated successfully.');
     } catch (err) {
       toast.error(err?.message || 'Failed to update profile.');
@@ -282,16 +287,28 @@ export default function Profile() {
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleProfileSave} className="space-y-5">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="full_name">Full Name</Label>
-                        <Input
-                          id="full_name"
-                          value={profileForm.full_name}
-                          onChange={(e) =>
-                            setProfileForm((p) => ({ ...p, full_name: e.target.value, name: e.target.value }))
-                          }
-                          placeholder="Your full name"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="full_name">Full Name</Label>
+                          <Input
+                            id="full_name"
+                            value={profileForm.full_name}
+                            onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))}
+                            placeholder="Your full name"
+                          />
+                          <p className="text-xs text-muted-foreground">Legal name. Visible to admins in user management.</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="name">Display Name</Label>
+                          <Input
+                            id="name"
+                            value={profileForm.name}
+                            onChange={(e) => setProfileForm((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Alex"
+                          />
+                          <p className="text-xs text-muted-foreground">Shown in Nexus and sent to connected apps via SSO.</p>
+                        </div>
                       </div>
 
                       <div className="space-y-1.5">

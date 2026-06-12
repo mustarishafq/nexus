@@ -50,7 +50,7 @@ class MentionService
             ->where('is_approved', true)
             ->get(['id', 'full_name', 'name']);
 
-        $authorName = $author->full_name ?: $author->name ?: 'Someone';
+        $authorName = $author->displayName();
         $preview = trim(preg_replace(self::TOKEN_PATTERN, '@$2', $body) ?? $body);
         $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
 

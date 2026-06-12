@@ -342,10 +342,13 @@ export const db = {
 			return request('/conversations');
 		},
 
-		async startConversation(recipientUserId) {
+		async startConversation(recipientUserId, body) {
 			return request('/conversations', {
 				method: 'POST',
-				body: { recipient_user_id: recipientUserId },
+				body: {
+					recipient_user_id: recipientUserId,
+					...(body ? { body } : {}),
+				},
 			});
 		},
 
@@ -362,6 +365,10 @@ export const db = {
 
 		async markRead(conversationId) {
 			return request(`/conversations/${conversationId}/read`, { method: 'PATCH' });
+		},
+
+		async deleteConversation(conversationId) {
+			return request(`/conversations/${conversationId}`, { method: 'DELETE' });
 		},
 	},
 
