@@ -55,7 +55,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-40 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
       aria-label="Main navigation"
     >
-      <div className="flex justify-center px-4 sm:px-6">
+      <div className="flex justify-center px-3 sm:px-6">
         <div
           className={cn(
             'flex h-16 items-stretch px-1',

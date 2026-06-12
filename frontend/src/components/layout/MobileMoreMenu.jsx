@@ -62,6 +62,7 @@ export default function MobileMoreMenu() {
       </SheetTrigger>
       <SheetContent
         side="left"
+        hideCloseButton
         overlayClassName="bg-black/25 backdrop-blur-sm"
         className={cn(
           'flex w-[280px] flex-col border-r p-0 shadow-2xl',

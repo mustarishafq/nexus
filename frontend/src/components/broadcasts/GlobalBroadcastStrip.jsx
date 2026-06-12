@@ -185,7 +185,7 @@ export default function GlobalBroadcastStrip({
           <div
             ref={trackRef}
             className={cn(
-              'flex items-center whitespace-nowrap px-3 text-[10px] leading-none sm:text-[11px]',
+              'flex items-center whitespace-nowrap px-3 text-[11px] leading-none sm:text-[11px]',
               shouldScroll ? 'broadcast-ticker-track w-max' : 'w-full justify-center'
             )}
             style={shouldScroll ? { animationDuration: `${duration}s` } : undefined}
