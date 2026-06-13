@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
@@ -9,6 +9,7 @@ import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import useDominantImageColor from '@/hooks/useDominantImageColor';
 import { getEnvironmentBadge } from '@/lib/applicationEnvironment';
 import { toAbsoluteUrl } from '@/lib/media';
+import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping';
 
 const hoverRevealClass =
   'opacity-0 transition-all duration-300 ease-out group-hover:opacity-100 group-focus-within:opacity-100';
@@ -34,6 +35,7 @@ export default function ApplicationCard({
   const brandColor = system.icon_url ? extractedColor : (system.color || DEFAULT_BRAND_COLOR);
   const isOnline = system.status === 'online';
   const environmentBadge = getEnvironmentBadge(system.environment);
+  const notificationsEnabled = applicationNotificationsEnabled(system);
   const isInteractive = !readOnly && system.is_enabled && onLaunch;
   const footerDetail = footerSubtitle ?? (system.description?.trim() || 'No description provided');
   const showOverlayFooter = !footerOutside;
@@ -88,10 +90,23 @@ export default function ApplicationCard({
         />
       )}
 
+      {notificationsEnabled && (
+        <span
+          className="pointer-events-none absolute bottom-2 left-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+          title="Notifications enabled"
+        >
+          <Bell className="h-2.5 w-2.5 text-amber-300" aria-hidden />
+          <span className="sr-only">Notifications enabled</span>
+        </span>
+      )}
+
       {isOnline && system.is_enabled && (
-        <span className="pointer-events-none absolute bottom-2 right-2 z-[1] flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+        <span
+          className="pointer-events-none absolute bottom-2 right-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+          title="Active"
+        >
+          <Activity className="h-2.5 w-2.5 text-emerald-400" aria-hidden />
+          <span className="sr-only">Active</span>
         </span>
       )}
 

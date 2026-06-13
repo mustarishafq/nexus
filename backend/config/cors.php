@@ -2,13 +2,14 @@
 
 return [
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_values(array_filter([
         env('APP_URL'),
-    ],
+        env('FRONTEND_URL'),
+    ])),
 
     'allowed_origins_patterns' => [
         '/^http:\/\/localhost(:\d+)?$/',

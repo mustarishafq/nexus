@@ -1,8 +1,8 @@
 import db from '@/api/base44Client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Search, CheckCircle, Clock, XCircle, AlertTriangle, Info, AlertOctagon, BookOpen, ChevronDown, ChevronUp, Terminal, Copy, Check } from 'lucide-react';
+import { Shield, Search, CheckCircle, Clock, XCircle, AlertTriangle, Info, AlertOctagon, BookOpen, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Terminal, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -169,10 +169,13 @@ function getSystemEventTypeVisual(eventType) {
   return systemEventTypeVisuals[eventType] || getNotificationTypeVisual(eventType);
 }
 
+const PAGE_SIZE = 20;
+
 export default function SystemEvents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const { data: events = [], isLoading } = useQuery({
@@ -191,6 +194,20 @@ export default function SystemEvents() {
     if (search && !e.title?.toLowerCase().includes(search.toLowerCase()) && !e.system_id?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedEvents = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   return (
     <div className="space-y-6">
@@ -257,7 +274,7 @@ export default function SystemEvents() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((event, i) => {
+                {paginatedEvents.map((event) => {
                   const sc = statusConfig[event.status] || statusConfig.pending;
                   const tc = getSystemEventTypeVisual(event.event_type);
                   const StatusIcon = sc.icon;
@@ -315,6 +332,20 @@ export default function SystemEvents() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filtered.length)}-{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">Page {currentPage} of {totalPages}</span>
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
           </div>
         </div>
       )}

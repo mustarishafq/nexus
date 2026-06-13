@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
+import { Bell, Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +41,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { cn } from '@/lib/utils';
 import { launchApplication } from '@/lib/applications';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
-import { normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
+import { applicationNotificationsEnabled, normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
 import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
@@ -126,9 +126,16 @@ function SortableReorderRow({ system }) {
           {system.description?.trim() || 'No description provided'}
         </p>
       </div>
-      <Badge className={cn('text-[10px] shrink-0', config.bg, config.color, 'border-0')}>
-        <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
-      </Badge>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {applicationNotificationsEnabled(system) ? (
+          <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+            <Bell className="w-2.5 h-2.5" /> Notifications
+          </Badge>
+        ) : null}
+        <Badge className={cn('text-[10px]', config.bg, config.color, 'border-0')}>
+          <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
+        </Badge>
+      </div>
     </div>
   );
 }

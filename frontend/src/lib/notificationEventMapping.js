@@ -118,6 +118,10 @@ export function normalizeNotificationEventMapping(config) {
   };
 }
 
+export function applicationNotificationsEnabled(application) {
+  return normalizeNotificationEventMapping(application?.notification_config).auto_notify;
+}
+
 export function fieldMappingsToForm(fieldMappings) {
   return Object.fromEntries(
     Object.keys(DEFAULT_NOTIFICATION_EVENT_MAPPING.field_mappings).map((key) => [

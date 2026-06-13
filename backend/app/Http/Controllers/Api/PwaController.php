@@ -18,9 +18,9 @@ class PwaController extends Controller
         return response()->json([
             'name' => $name,
             'short_name' => $name,
-            'id' => '/',
-            'start_url' => '/',
-            'scope' => '/',
+            'id' => "{$frontendUrl}/",
+            'start_url' => "{$frontendUrl}/",
+            'scope' => "{$frontendUrl}/",
             'display' => 'standalone',
             'background_color' => '#022e96',
             'theme_color' => '#022e96',
