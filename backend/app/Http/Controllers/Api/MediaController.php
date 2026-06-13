@@ -19,10 +19,19 @@ class MediaController extends Controller
         try {
             abort_unless(Storage::disk('public')->exists($path), 404);
 
-            return Storage::disk('public')->response(
-                $path,
-                headers: ['Cache-Control' => 'public, max-age=31536000, immutable']
-            );
+            $headers = ['Cache-Control' => 'public, max-age=31536000, immutable'];
+            $origin = $request->headers->get('Origin');
+            $allowedOrigins = array_values(array_filter([
+                env('APP_URL'),
+                env('FRONTEND_URL'),
+            ]));
+
+            if ($origin && in_array($origin, $allowedOrigins, true)) {
+                $headers['Access-Control-Allow-Origin'] = $origin;
+                $headers['Vary'] = 'Origin';
+            }
+
+            return Storage::disk('public')->response($path, headers: $headers);
         } catch (PathTraversalDetected) {
             abort(404);
         }

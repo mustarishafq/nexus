@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_BRAND_COLOR, extractBackgroundColorFromImage } from '@/lib/imageColor';
-import { toAbsoluteUrl } from '@/lib/media';
 
 export default function useDominantImageColor(imageUrl, fallbackColor = DEFAULT_BRAND_COLOR) {
   const [color, setColor] = useState(fallbackColor || DEFAULT_BRAND_COLOR);
@@ -13,7 +12,7 @@ export default function useDominantImageColor(imageUrl, fallbackColor = DEFAULT_
 
     let cancelled = false;
 
-    extractBackgroundColorFromImage(toAbsoluteUrl(imageUrl))
+    extractBackgroundColorFromImage(imageUrl)
       .then((extractedColor) => {
         if (!cancelled) {
           setColor(extractedColor);

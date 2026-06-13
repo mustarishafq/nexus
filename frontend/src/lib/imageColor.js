@@ -1,4 +1,4 @@
-import { toCorsSafeUrl } from '@/lib/media';
+import { toCorsSafeUrl, isCorsSafeForCanvas } from '@/lib/media';
 
 export const DEFAULT_BRAND_COLOR = '#6366f1';
 
@@ -9,12 +9,18 @@ function rgbToHex(r, g, b) {
 }
 
 function loadImage(src) {
+  const safeSrc = toCorsSafeUrl(src);
+
+  if (!isCorsSafeForCanvas(safeSrc)) {
+    return Promise.reject(new Error('Image URL is not available for canvas extraction.'));
+  }
+
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', () => reject(new Error('Failed to load image')));
     image.crossOrigin = 'anonymous';
-    image.src = src;
+    image.src = safeSrc;
   });
 }
 
