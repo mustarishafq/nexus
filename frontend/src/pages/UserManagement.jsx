@@ -1505,105 +1505,107 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
+            <DialogTitle className="text-left pr-6">Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
           </DialogHeader>
           {editUser && (
-            <form onSubmit={handleEditUser} className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input
-                  value={editForm.full_name || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
-                  placeholder="Jane Doe"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={editForm.name || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g. Jane"
-                />
-                <p className="text-xs text-muted-foreground">Shown in Nexus and sent via SSO.</p>
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={editUser.email || ''} disabled className="bg-muted/40" />
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {editForm.role !== 'admin' && (
+            <form onSubmit={handleEditUser} className="flex flex-1 min-h-0 flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
                 <div className="space-y-2">
-                  <Label>Access Groups</Label>
-                  <GroupMultiSelect
-                    groups={accessGroups}
-                    selectedIds={editForm.access_group_ids || new Set()}
-                    onToggle={(id) => setEditForm((prev) => {
-                      const next = new Set(prev.access_group_ids || []);
-                      if (next.has(id)) next.delete(id);
-                      else next.add(id);
-                      return { ...prev, access_group_ids: next };
-                    })}
-                  />
-                  <p className="text-xs text-muted-foreground">Assign at least one group to grant app access. Multiple groups combine their app access.</p>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={editForm.is_approved ? 'approved' : 'pending'}
-                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, is_approved: value === 'approved' }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>New Password (optional)</Label>
-                <Input
-                  type="password"
-                  minLength={8}
-                  value={editForm.password || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="Leave blank to keep current password"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Date of Birth</Label>
+                  <Label>Full Name</Label>
                   <Input
-                    type="date"
-                    value={editForm.date_of_birth || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+                    value={editForm.full_name || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                    placeholder="Jane Doe"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Joined Date</Label>
+                  <Label>Display Name</Label>
                   <Input
-                    type="date"
-                    value={editForm.joined_at || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, joined_at: e.target.value }))}
+                    value={editForm.name || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. Jane"
+                  />
+                  <p className="text-xs text-muted-foreground">Shown in Nexus and sent via SSO.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={editUser.email || ''} disabled className="bg-muted/40" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editForm.role !== 'admin' && (
+                  <div className="space-y-2">
+                    <Label>Access Groups</Label>
+                    <GroupMultiSelect
+                      groups={accessGroups}
+                      selectedIds={editForm.access_group_ids || new Set()}
+                      onToggle={(id) => setEditForm((prev) => {
+                        const next = new Set(prev.access_group_ids || []);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return { ...prev, access_group_ids: next };
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">Assign at least one group to grant app access. Multiple groups combine their app access.</p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={editForm.is_approved ? 'approved' : 'pending'}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, is_approved: value === 'approved' }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>New Password (optional)</Label>
+                  <Input
+                    type="password"
+                    minLength={8}
+                    value={editForm.password || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Leave blank to keep current password"
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Date of Birth</Label>
+                    <Input
+                      type="date"
+                      value={editForm.date_of_birth || ''}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Joined Date</Label>
+                    <Input
+                      type="date"
+                      value={editForm.joined_at || ''}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, joined_at: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Used for today&apos;s birthdays and service anniversaries on the dashboard.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Used for today&apos;s birthdays and service anniversaries on the dashboard.
-              </p>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
                 <Button type="submit" disabled={editSaving}>
                   {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
