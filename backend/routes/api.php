@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
+use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
@@ -36,6 +37,7 @@ Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback'])
 
 Route::get('/app-settings', [AppSettingController::class, 'publicShow']);
 Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
+Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*');
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);

@@ -1,4 +1,4 @@
-import { toAbsoluteUrl } from '@/lib/media';
+import { toCorsSafeUrl } from '@/lib/media';
 
 export const DEFAULT_BRAND_COLOR = '#6366f1';
 
@@ -66,7 +66,7 @@ function readBackgroundColorFromImage(image) {
 }
 
 export async function extractBackgroundColorFromImage(source) {
-  const absoluteSource = typeof source === 'string' ? toAbsoluteUrl(source) : source;
+  const absoluteSource = typeof source === 'string' ? toCorsSafeUrl(source) : source;
   const cacheKey = typeof absoluteSource === 'string' ? `${absoluteSource}:bg-v2` : null;
 
   if (cacheKey && colorCache.has(cacheKey)) {

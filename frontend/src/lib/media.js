@@ -27,13 +27,33 @@ export function toAbsoluteUrl(url) {
   return url.startsWith('/') ? `${API_ORIGIN}${url}` : `${API_ORIGIN}/${url}`;
 }
 
+function toMediaApiPath(url) {
+  const absoluteUrl = toAbsoluteUrl(url);
+
+  if (!API_ORIGIN || !absoluteUrl.startsWith(`${API_ORIGIN}/storage/`)) {
+    return absoluteUrl;
+  }
+
+  const relativePath = absoluteUrl.slice(`${API_ORIGIN}/storage/`.length);
+  return `${API_ORIGIN}/api/media/${relativePath}`;
+}
+
+export function toCorsSafeUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+
+  return toMediaApiPath(url);
+}
+
 function createImage(url) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', (error) => reject(error));
     image.setAttribute('crossOrigin', 'anonymous');
-    image.src = url;
+    image.src = toCorsSafeUrl(url);
   });
 }
 

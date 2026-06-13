@@ -1,3 +1,8 @@
+<IfModule mod_headers.c>
+    # Fallback CORS for /storage when files are served directly by Apache.
+    Header always set Access-Control-Allow-Origin "%{HTTP:Origin}e" "expr=%{REQUEST_URI} =~ m#^/storage/# && (%{HTTP:Origin} == 'https://emzinexus.com' || %{HTTP:Origin} =~ m#^https?://localhost(:\d+)?$# || %{HTTP:Origin} =~ m#^https?://127\.0\.0\.1(:\d+)?$#)"
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
