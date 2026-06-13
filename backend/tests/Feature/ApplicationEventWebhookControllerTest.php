@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Application;
 use App\Models\Notification;
 use App\Models\SystemEvent;
+use App\Models\User;
 use App\Support\NotificationEventMapping;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,6 +13,14 @@ use Tests\TestCase;
 class ApplicationEventWebhookControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function issueToken(User $user): string
+    {
+        $token = str_repeat('p', 80);
+        $user->forceFill(['remember_token' => hash('sha256', $token)])->save();
+
+        return $token;
+    }
 
     public function test_webhook_skips_notification_when_auto_notify_disabled(): void
     {
@@ -62,5 +71,34 @@ class ApplicationEventWebhookControllerTest extends TestCase
             'system_id' => $application->slug,
             'status' => 'processed',
         ]);
+    }
+
+    public function test_preview_accepts_inline_notification_config(): void
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'notification_config' => NotificationEventMapping::normalize([
+                'field_mappings' => [
+                    'title' => ['title'],
+                    'event_name' => ['event'],
+                ],
+            ]),
+        ]);
+
+        $this->postJson("/api/applications/{$application->id}/event-webhook/preview", [
+            'event' => [
+                'category' => 'system',
+                'title' => 'Test notification',
+            ],
+            'notification_config' => NotificationEventMapping::normalize([
+                'field_mappings' => [
+                    'title' => ['title'],
+                    'event_name' => ['category'],
+                ],
+            ]),
+        ], ['Authorization' => "Bearer {$token}"])
+            ->assertOk()
+            ->assertJsonPath('payload.category', 'system');
     }
 }

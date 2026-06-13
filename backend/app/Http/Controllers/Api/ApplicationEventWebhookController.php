@@ -83,14 +83,27 @@ class ApplicationEventWebhookController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $event = $request->all();
+        $configOverride = $request->input('notification_config');
+        $event = $request->input('event');
+
+        if (! is_array($event)) {
+            $event = $request->except('notification_config');
+        }
 
         if (! is_array($event) || $event === []) {
             return response()->json(['message' => 'Invalid JSON body'], 400);
         }
 
+        if ($configOverride !== null && ! is_array($configOverride)) {
+            return response()->json(['message' => 'Invalid notification_config'], 400);
+        }
+
         try {
-            $payload = app(NotificationEventMapperService::class)->map($application, $event);
+            $payload = app(NotificationEventMapperService::class)->map(
+                $application,
+                $event,
+                is_array($configOverride) ? $configOverride : null
+            );
 
             return response()->json(['payload' => $payload]);
         } catch (InvalidArgumentException $exception) {

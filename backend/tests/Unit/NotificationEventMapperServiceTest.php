@@ -142,6 +142,46 @@ class NotificationEventMapperServiceTest extends TestCase
         $this->assertSame('task', $payload['category']);
     }
 
+    public function test_maps_bare_system_category_from_event_name_field(): void
+    {
+        $application = Application::factory()->create([
+            'slug' => 'nexusbooking',
+            'notification_config' => NotificationEventMapping::normalize([
+                'field_mappings' => [
+                    'title' => ['title'],
+                    'message' => ['body'],
+                    'event_name' => ['category'],
+                    'severity' => ['type'],
+                ],
+            ]),
+        ]);
+
+        $payload = app(NotificationEventMapperService::class)->map($application, [
+            'category' => 'system',
+            'type' => 'info',
+            'title' => 'Test notification',
+            'body' => 'This is a test webhook delivery from BookHub.',
+        ]);
+
+        $this->assertSame('system', $payload['category']);
+        $this->assertSame('info', $payload['type']);
+    }
+
+    public function test_maps_system_prefix_event_to_system_category(): void
+    {
+        $application = Application::factory()->create([
+            'slug' => 'ops',
+            'notification_config' => NotificationEventMapping::defaults(),
+        ]);
+
+        $payload = app(NotificationEventMapperService::class)->map($application, [
+            'event' => 'system.health',
+            'title' => 'System healthy',
+        ]);
+
+        $this->assertSame('system', $payload['category']);
+    }
+
     public function test_storage_normalization_preserves_custom_mappings_without_default_merge(): void
     {
         $stored = NotificationEventMapping::normalizeForStorage([

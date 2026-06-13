@@ -17,6 +17,7 @@ export const DEFAULT_NOTIFICATION_EVENT_MAPPING = {
     { prefix: 'inventory.', category: 'inventory' },
     { prefix: 'finance.', category: 'finance' },
     { prefix: 'security.', category: 'security' },
+    { prefix: 'system.', category: 'system' },
     { prefix: 'approval.', category: 'approval' },
     { prefix: 'task.', category: 'task' },
   ],

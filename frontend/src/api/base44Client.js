@@ -455,10 +455,12 @@ export const db = {
 		return request(`/applications/usage-stats${params}`);
 	},
 
-	async previewApplicationEventMapping(applicationId, event) {
+	async previewApplicationEventMapping(applicationId, event, notificationConfig = null) {
 		return request(`/applications/${applicationId}/event-webhook/preview`, {
 			method: 'POST',
-			body: event,
+			body: notificationConfig
+				? { event, notification_config: notificationConfig }
+				: event,
 		});
 	},
 

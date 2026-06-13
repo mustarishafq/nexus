@@ -85,7 +85,7 @@ export default function NotificationEventMappingEditor({
 
     setPreviewLoading(true);
     try {
-      const result = await db.previewApplicationEventMapping(applicationId, event);
+      const result = await db.previewApplicationEventMapping(applicationId, event, config);
       setPreviewOutput(JSON.stringify(result?.payload || {}, null, 2));
     } catch (error) {
       toast.error(error?.data?.message || error.message || 'Preview failed');

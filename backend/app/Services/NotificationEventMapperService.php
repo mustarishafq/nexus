@@ -9,9 +9,24 @@ use InvalidArgumentException;
 
 class NotificationEventMapperService
 {
-    public function map(Application $application, array $event): array
+    private const VALID_CATEGORIES = [
+        'booking',
+        'hr',
+        'inventory',
+        'finance',
+        'security',
+        'system',
+        'task',
+        'approval',
+        'announcement',
+        'other',
+    ];
+
+    public function map(Application $application, array $event, ?array $configOverride = null): array
     {
-        $config = NotificationEventMapping::normalize($application->notification_config);
+        $config = NotificationEventMapping::normalize(
+            $configOverride ?? $application->notification_config
+        );
         $fieldMappings = $config['field_mappings'];
 
         $title = $this->resolveField(
@@ -257,17 +272,10 @@ class NotificationEventMapperService
             }
         }
 
-        return in_array($fallback, [
-            'booking',
-            'hr',
-            'inventory',
-            'finance',
-            'security',
-            'system',
-            'task',
-            'approval',
-            'announcement',
-            'other',
-        ], true) ? $fallback : 'system';
+        if (in_array($eventName, self::VALID_CATEGORIES, true)) {
+            return $eventName;
+        }
+
+        return in_array($fallback, self::VALID_CATEGORIES, true) ? $fallback : 'other';
     }
 }
