@@ -27,55 +27,12 @@ export function toAbsoluteUrl(url) {
   return url.startsWith('/') ? `${API_ORIGIN}${url}` : `${API_ORIGIN}/${url}`;
 }
 
-function toMediaApiPath(url) {
-  const absoluteUrl = toAbsoluteUrl(url);
-  const storageMarker = '/storage/';
-  const storageIndex = absoluteUrl.indexOf(storageMarker);
-
-  if (storageIndex === -1) {
-    return absoluteUrl;
-  }
-
-  const relativePath = absoluteUrl.slice(storageIndex + storageMarker.length);
-  const origin = API_ORIGIN || absoluteUrl.slice(0, storageIndex);
-
-  if (!origin || !relativePath) {
-    return absoluteUrl;
-  }
-
-  return `${origin}/api/media/${relativePath}`;
-}
-
-export function isCorsSafeForCanvas(url) {
-  if (!url || url.startsWith('data:') || url.startsWith('blob:')) {
-    return true;
-  }
-
-  return url.includes('/api/media/');
-}
-
-export function toCorsSafeUrl(url) {
-  if (!url) return '';
-  if (url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
-  }
-
-  return toMediaApiPath(url);
-}
-
 function createImage(url) {
-  const safeUrl = toCorsSafeUrl(url);
-
-  if (!isCorsSafeForCanvas(safeUrl)) {
-    return Promise.reject(new Error('Image URL is not available for canvas extraction.'));
-  }
-
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', (error) => reject(error));
-    image.setAttribute('crossOrigin', 'anonymous');
-    image.src = safeUrl;
+    image.src = url;
   });
 }
 

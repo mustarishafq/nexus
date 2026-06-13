@@ -1,26 +1,15 @@
-import { toCorsSafeUrl, isCorsSafeForCanvas } from '@/lib/media';
-
 export const DEFAULT_BRAND_COLOR = '#6366f1';
-
-const colorCache = new Map();
 
 function rgbToHex(r, g, b) {
   return `#${[r, g, b].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function loadImage(src) {
-  const safeSrc = toCorsSafeUrl(src);
-
-  if (!isCorsSafeForCanvas(safeSrc)) {
-    return Promise.reject(new Error('Image URL is not available for canvas extraction.'));
-  }
-
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', () => reject(new Error('Failed to load image')));
-    image.crossOrigin = 'anonymous';
-    image.src = safeSrc;
+    image.src = src;
   });
 }
 
@@ -71,28 +60,7 @@ function readBackgroundColorFromImage(image) {
   return DEFAULT_BRAND_COLOR;
 }
 
-export async function extractBackgroundColorFromImage(source) {
-  const absoluteSource = typeof source === 'string' ? toCorsSafeUrl(source) : source;
-  const cacheKey = typeof absoluteSource === 'string' ? `${absoluteSource}:bg-v2` : null;
-
-  if (cacheKey && colorCache.has(cacheKey)) {
-    return colorCache.get(cacheKey);
-  }
-
-  const image = typeof absoluteSource === 'string'
-    ? await loadImage(absoluteSource)
-    : absoluteSource;
-
-  const color = readBackgroundColorFromImage(image);
-
-  if (cacheKey) {
-    colorCache.set(cacheKey, color);
-  }
-
-  return color;
-}
-
-export async function extractBackgroundColorFromFile(file) {
+export async function extractDominantColorFromFile(file) {
   const objectUrl = URL.createObjectURL(file);
 
   try {
@@ -101,12 +69,4 @@ export async function extractBackgroundColorFromFile(file) {
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
-}
-
-export async function extractDominantColorFromImage(source) {
-  return extractBackgroundColorFromImage(source);
-}
-
-export async function extractDominantColorFromFile(file) {
-  return extractBackgroundColorFromFile(file);
 }

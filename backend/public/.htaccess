@@ -1,8 +1,3 @@
-<IfModule mod_headers.c>
-    # Fallback CORS for /storage when files are served directly by Apache.
-    Header always set Access-Control-Allow-Origin "%{HTTP:Origin}e" "expr=%{REQUEST_URI} =~ m#^/storage/# && (%{HTTP:Origin} == 'https://emzinexus.com' || %{HTTP:Origin} =~ m#^https?://localhost(:\d+)?$# || %{HTTP:Origin} =~ m#^https?://127\.0\.0\.1(:\d+)?$#)"
-</IfModule>
-
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
@@ -22,10 +17,6 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
-
-    # Serve /storage through Laravel so CORS headers are applied.
-    RewriteCond %{REQUEST_URI} ^/storage/
-    RewriteRule ^ index.php [L]
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
