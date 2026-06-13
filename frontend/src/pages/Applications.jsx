@@ -48,7 +48,6 @@ import NotificationEventMappingEditor from '@/components/applications/Notificati
 import {
   DEFAULT_BRAND_COLOR,
   extractDominantColorFromFile,
-  extractDominantColorFromImage,
 } from '@/lib/imageColor';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -321,12 +320,6 @@ export default function Applications() {
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
     setDialogOpen(true);
-
-    if (system?.icon_url) {
-      extractDominantColorFromImage(system.icon_url)
-        .then(setBrandColor)
-        .catch(() => {});
-    }
   };
 
   const { data: currentUser } = useQuery({

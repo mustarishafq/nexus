@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
 import { cn } from '@/lib/utils';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
-import useDominantImageColor from '@/hooks/useDominantImageColor';
 import { getEnvironmentBadge } from '@/lib/applicationEnvironment';
 import { toAbsoluteUrl } from '@/lib/media';
 import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping';
@@ -28,11 +27,7 @@ export default function ApplicationCard({
   footerOutside = false,
 }) {
   const logoUrl = system.icon_url ? toAbsoluteUrl(system.icon_url) : null;
-  const extractedColor = useDominantImageColor(
-    system.icon_url,
-    system.color || DEFAULT_BRAND_COLOR
-  );
-  const brandColor = system.icon_url ? extractedColor : (system.color || DEFAULT_BRAND_COLOR);
+  const brandColor = system.color || DEFAULT_BRAND_COLOR;
   const isOnline = system.status === 'online';
   const environmentBadge = getEnvironmentBadge(system.environment);
   const notificationsEnabled = applicationNotificationsEnabled(system);
