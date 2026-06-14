@@ -16,6 +16,7 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
+import { glassPanelStyles } from './glassStyles';
 
 export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const navigate = useNavigate();
@@ -60,7 +61,8 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
     <>
       <header
         className={cn(
-          'h-16 bg-card/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-6 transition-all duration-200',
+          glassPanelStyles,
+          'h-16 border-b flex items-center justify-between px-6 transition-all duration-200',
           embedded ? 'w-full' : 'fixed top-0 right-0 z-30'
         )}
         style={embedded ? undefined : { left: sidebarWidth }}
