@@ -3,8 +3,8 @@ import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, Filter, ChevronLeft, ChevronRight, ChevronDown, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, ChevronDown, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,9 +31,9 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn, formatDateForInput } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -184,7 +184,6 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 }
 
 export default function UserManagement() {
-  const isMobile = useIsMobile();
   const [approvingUser, setApprovingUser] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -225,6 +224,7 @@ export default function UserManagement() {
   });
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
+  const [activeSection, setActiveSection] = useState('users');
   const csvRef = useRef(null);
   const assignGroupsCsvRef = useRef(null);
   const queryClient = useQueryClient();
@@ -737,16 +737,9 @@ export default function UserManagement() {
   const renderUserActionsMenu = (user, align = 'end') => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size={isMobile ? 'icon' : 'sm'} className={cn(isMobile ? 'h-9 w-9' : 'gap-1 h-9')}>
-          {isMobile ? (
-            <MoreHorizontal className="w-4 h-4" />
-          ) : (
-            <>
-              Actions
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-            </>
-          )}
-          {isMobile ? <span className="sr-only">User actions</span> : null}
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreHorizontal className="w-4 h-4" />
+          <span className="sr-only">User actions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-52">
@@ -1026,7 +1019,27 @@ export default function UserManagement() {
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" /> User Management
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Create access groups, assign users, and manage approvals.</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage users, access groups, and analytics dashboards.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <span><span className="font-semibold text-foreground">{stats.total}</span> users</span>
+            <span className="hidden sm:inline text-border">·</span>
+            <span><span className="font-semibold text-foreground">{stats.approved}</span> approved</span>
+            {stats.pending > 0 ? (
+              <>
+                <span className="hidden sm:inline text-border">·</span>
+                <button
+                  type="button"
+                  className="font-semibold text-amber-500 hover:text-amber-400 transition-colors"
+                  onClick={() => {
+                    setActiveSection('users');
+                    setStatusFilter('pending');
+                  }}
+                >
+                  {stats.pending} pending approval
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
@@ -1061,240 +1074,72 @@ export default function UserManagement() {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Users', value: stats.total },
-          { label: 'Approved', value: stats.approved },
-          { label: 'Pending', value: stats.pending },
-          { label: 'Access Groups', value: accessGroups.length },
-        ].map((item, index) => (
-          <motion.div
-            key={item.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.04 }}
-          >
-            <Card className="rounded-2xl border-border/70">
-              <CardContent className="p-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight">{item.value}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
+        <TabsList className="h-10 w-full sm:w-auto">
+          <TabsTrigger value="users" className="gap-2 flex-1 sm:flex-none">
+            <UsersIcon className="w-4 h-4" />
+            Users
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{stats.total}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="gap-2 flex-1 sm:flex-none">
+            <Layers className="w-4 h-4" />
+            Access Groups
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{accessGroups.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-2 flex-1 sm:flex-none">
+            <BarChart3 className="w-4 h-4" />
+            Analytics
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{metabaseDashboards.length}</Badge>
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="users" className="mt-0">
       <Card className="rounded-2xl border-border/70">
         <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Layers className="w-4 h-4 text-primary" /> Access Groups
-              </CardTitle>
-              <CardDescription>Define which public apps each group can access, then assign users to a group.</CardDescription>
-            </div>
-            <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openGroupDialog()}>
-              <Plus className="w-4 h-4" /> Create Group
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loadingGroups ? (
-            <div className="flex justify-center py-8">
-              <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
-            </div>
-          ) : accessGroups.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              No access groups yet. Create one to manage application access in bulk.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {accessGroups.map((group) => {
-                const appCount = (group.allowed_system_slugs || []).length;
-                const memberCount = group.users_count ?? group.user_count ?? getUsersInGroup(group.id).length;
-
-                return (
-                  <div key={group.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{group.name}</p>
-                        {group.description ? (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{group.description}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openGroupDialog(group)}>
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => setPendingDeleteGroup(group)}
-                          disabled={deleteGroupMut.isPending && String(pendingDeleteGroup?.id) === String(group.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="text-xs">{appCount} app{appCount === 1 ? '' : 's'}</Badge>
-                      <Badge variant="outline" className="text-xs">{memberCount} user{memberCount === 1 ? '' : 's'}</Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-border/70">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-primary" /> Metabase Dashboards
-              </CardTitle>
-              <CardDescription>
-                Add public Metabase embed links. Assign by access group or to specific individuals, and organize with categories.
-              </CardDescription>
-            </div>
-            <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openDashboardDialog()}>
-              <Plus className="w-4 h-4" /> Add Dashboard
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loadingDashboards ? (
-            <div className="flex justify-center py-8">
-              <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
-            </div>
-          ) : metabaseDashboards.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              No Metabase dashboards yet. Add a public Metabase link and assign access groups to control visibility.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {metabaseDashboards.map((dashboard) => {
-                const groupNames = getDashboardGroupNames(dashboard);
-                const userNames = getDashboardUserNames(dashboard);
-                const assignmentLabel = getDashboardAssignmentLabel(dashboard);
-
-                return (
-                  <div key={dashboard.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{dashboard.name}</p>
-                        {dashboard.category ? (
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{dashboard.category}</p>
-                        ) : null}
-                        <a
-                          href={dashboard.public_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 truncate hover:text-primary"
-                        >
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{dashboard.public_url}</span>
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDashboardDialog(dashboard)}>
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => setPendingDeleteDashboard(dashboard)}
-                          disabled={deleteDashboardMut.isPending && String(pendingDeleteDashboard?.id) === String(dashboard.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant={dashboard.is_enabled ? 'default' : 'outline'} className="text-xs">
-                        {dashboard.is_enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">{assignmentLabel}</Badge>
-                      <Badge variant="secondary" className="text-xs">Order {dashboard.sort_order ?? 0}</Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {dashboard.assignment_type === 'individual' && !dashboard.owner_user_id ? (
-                        userNames.length === 0 ? (
-                          <Badge variant="outline" className="text-xs">No users</Badge>
-                        ) : userNames.map((name) => (
-                          <Badge key={`${dashboard.id}-${name}`} variant="outline" className="text-xs">{name}</Badge>
-                        ))
-                      ) : dashboard.owner_user_id ? (
-                        <Badge variant="outline" className="text-xs">User-managed</Badge>
-                      ) : groupNames.length === 0 ? (
-                        <Badge variant="outline" className="text-xs">No groups</Badge>
-                      ) : groupNames.map((name) => (
-                        <Badge key={`${dashboard.id}-${name}`} variant="outline" className="text-xs">{name}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-border/70">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <UsersIcon className="w-4 h-4 text-primary" /> User Directory
-              </CardTitle>
+          <div className="flex flex-col gap-3">
+            <div className="lg:hidden">
               <CardDescription>{filteredUsers.length} matching users out of {users.length}</CardDescription>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[220px] flex-1 lg:flex-none lg:w-72">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search name or email"
-                  className="pl-9"
+                  className="pl-9 w-full"
                 />
               </div>
 
-              <div className="min-w-[150px]">
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="gap-2">
-                    <Filter className="w-4 h-4" />
-                    <SelectValue placeholder="Role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All roles</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <div className="min-w-[150px]">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="gap-2">
-                    <Filter className="w-4 h-4" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <Button variant="ghost" onClick={clearFilters} disabled={!search && roleFilter === 'all' && statusFilter === 'all'}>
-                Clear
-              </Button>
+              {(search || roleFilter !== 'all' || statusFilter !== 'all') ? (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear
+                </Button>
+              ) : null}
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -1352,9 +1197,8 @@ export default function UserManagement() {
                     <TableHead className="pl-6">User</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Access Group</TableHead>
-                    <TableHead className="hidden lg:table-cell">Analytics</TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="hidden xl:table-cell">Access</TableHead>
+                    <TableHead className="text-right pr-6 w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1363,27 +1207,32 @@ export default function UserManagement() {
                       <TableCell className="pl-6">
                         <div className="flex items-center gap-3">
                           <UserAvatar user={user} />
-                          <div>
-                            <p className="font-medium leading-none">{user.full_name || user.email}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{user.email}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium leading-none truncate">{user.full_name || user.email}</p>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">{user.email}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
                           {user.role || 'user'}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.is_approved ? 'default' : 'outline'} className="text-xs">
+                        <Badge
+                          variant={user.is_approved ? 'default' : 'outline'}
+                          className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
+                        >
                           {user.is_approved ? 'approved' : 'pending'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <p className="text-sm text-muted-foreground">{getUserAccessLabel(user)}</p>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <p className="text-sm text-muted-foreground">{getUserAnalyticsLabel(user)}</p>
+                      <TableCell className="hidden xl:table-cell max-w-[240px]">
+                        <p className="text-sm text-muted-foreground truncate" title={getUserAccessLabel(user)}>
+                          {getUserAccessLabel(user)}
+                        </p>
+                        {getUserAnalyticsLabel(user) !== 'None' ? (
+                          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{getUserAnalyticsLabel(user)}</p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="pr-6">
                         <div className="flex justify-end">
@@ -1425,6 +1274,194 @@ export default function UserManagement() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="groups" className="mt-0">
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardDescription className="text-sm">
+                  Control which apps each group can access, then assign users to groups.
+                </CardDescription>
+                <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openGroupDialog()}>
+                  <Plus className="w-4 h-4" /> Create Group
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingGroups ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : accessGroups.length === 0 ? (
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  No access groups yet. Create one to manage application access in bulk.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="pl-6">Group</TableHead>
+                        <TableHead className="hidden sm:table-cell">Apps</TableHead>
+                        <TableHead>Members</TableHead>
+                        <TableHead className="text-right pr-6 w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {accessGroups.map((group) => {
+                        const appCount = (group.allowed_system_slugs || []).length;
+                        const memberCount = group.users_count ?? group.user_count ?? getUsersInGroup(group.id).length;
+
+                        return (
+                          <TableRow key={group.id}>
+                            <TableCell className="pl-6">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{group.name}</p>
+                                {group.description ? (
+                                  <p className="text-xs text-muted-foreground truncate max-w-xs">{group.description}</p>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                              {appCount} app{appCount === 1 ? '' : 's'}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {memberCount} user{memberCount === 1 ? '' : 's'}
+                            </TableCell>
+                            <TableCell className="pr-6">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openGroupDialog(group)}>
+                                  <Edit className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => setPendingDeleteGroup(group)}
+                                  disabled={deleteGroupMut.isPending && String(pendingDeleteGroup?.id) === String(group.id)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-0">
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardDescription className="text-sm">
+                  Metabase dashboards shown on each user&apos;s Analytics page.
+                </CardDescription>
+                <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openDashboardDialog()}>
+                  <Plus className="w-4 h-4" /> Add Dashboard
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingDashboards ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : metabaseDashboards.length === 0 ? (
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  No dashboards yet. Add a public Metabase link and assign who can see it.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="pl-6">Dashboard</TableHead>
+                        <TableHead className="hidden md:table-cell">Category</TableHead>
+                        <TableHead>Assignment</TableHead>
+                        <TableHead className="hidden sm:table-cell">Status</TableHead>
+                        <TableHead className="text-right pr-6 w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metabaseDashboards.map((dashboard) => {
+                        const groupNames = getDashboardGroupNames(dashboard);
+                        const userNames = getDashboardUserNames(dashboard);
+                        const assignmentLabel = getDashboardAssignmentLabel(dashboard);
+
+                        let assignmentDetail = assignmentLabel;
+                        if (dashboard.owner_user_id) {
+                          assignmentDetail = assignmentLabel;
+                        } else if (dashboard.assignment_type === 'individual') {
+                          assignmentDetail = userNames.length > 0
+                            ? `${userNames.length} user${userNames.length === 1 ? '' : 's'}`
+                            : 'No users';
+                        } else {
+                          assignmentDetail = groupNames.length > 0
+                            ? groupNames.join(', ')
+                            : 'No groups';
+                        }
+
+                        return (
+                          <TableRow key={dashboard.id}>
+                            <TableCell className="pl-6">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="font-medium truncate">{dashboard.name}</p>
+                                <a
+                                  href={dashboard.public_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="shrink-0 text-muted-foreground hover:text-primary"
+                                  title="Open dashboard"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {dashboard.category?.trim() || '—'}
+                            </TableCell>
+                            <TableCell className="max-w-[200px]">
+                              <p className="text-sm truncate" title={assignmentDetail}>{assignmentDetail}</p>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              <Badge variant={dashboard.is_enabled ? 'default' : 'outline'} className="text-xs">
+                                {dashboard.is_enabled ? 'Enabled' : 'Disabled'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="pr-6">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDashboardDialog(dashboard)}>
+                                  <Edit className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => setPendingDeleteDashboard(dashboard)}
+                                  disabled={deleteDashboardMut.isPending && String(pendingDeleteDashboard?.id) === String(dashboard.id)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={groupDialogOpen} onOpenChange={(open) => !open && closeGroupDialog()}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
@@ -1653,6 +1690,7 @@ export default function UserManagement() {
                     value={editForm.manager_id}
                     excludeUserId={editUser.id}
                     selectedLabel={editForm.manager_name}
+                    users={users}
                     onChange={(managerId) => setEditForm((prev) => ({ ...prev, manager_id: managerId }))}
                   />
                 </div>

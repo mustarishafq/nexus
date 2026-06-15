@@ -8,25 +8,87 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/profile';
 
-export default function ManagerCombobox({ value, onChange, excludeUserId, id, selectedLabel }) {
+function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+function sortByDisplayName(a, b) {
+  return getDisplayName(a).localeCompare(getDisplayName(b));
+}
+
+function matchesLocalSearch(user, term) {
+  const haystack = [
+    user.name,
+    user.full_name,
+    user.email,
+    user.job_title,
+    user.department,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(term);
+}
+
+export default function ManagerCombobox({
+  value,
+  onChange,
+  excludeUserId,
+  id,
+  selectedLabel,
+  users: usersProp,
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search.trim());
   const listRef = useRef(null);
+  const useLocalUsers = Array.isArray(usersProp);
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ['manager-picker-users', search],
-    queryFn: () => db.searchUsers(search.trim() || 'a', 100),
+  const { data: directoryData, isLoading: directoryLoading } = useQuery({
+    queryKey: ['manager-picker-directory', debouncedSearch],
+    queryFn: () =>
+      db.getPeopleDirectory({
+        limit: 100,
+        sort: 'full_name',
+        ...(debouncedSearch ? { q: debouncedSearch } : {}),
+      }),
     staleTime: 30_000,
-    enabled: open,
+    enabled: open && !useLocalUsers,
   });
 
-  const options = useMemo(
-    () => users.filter((user) => String(user.id) !== String(excludeUserId)),
-    [users, excludeUserId]
-  );
+  const options = useMemo(() => {
+    const source = useLocalUsers
+      ? usersProp
+      : (Array.isArray(directoryData?.users) ? directoryData.users : []);
 
-  const selected = options.find((user) => String(user.id) === String(value));
-  const displayLabel = selected ? getDisplayName(selected) : selectedLabel || (value ? 'Selected manager' : 'Select manager');
+    const term = search.trim().toLowerCase();
+    const filtered = source.filter((user) => {
+      if (String(user.id) === String(excludeUserId)) {
+        return false;
+      }
+      if (useLocalUsers && term) {
+        return matchesLocalSearch(user, term);
+      }
+      return true;
+    });
+
+    return [...filtered].sort(sortByDisplayName);
+  }, [usersProp, useLocalUsers, directoryData?.users, excludeUserId, search]);
+
+  const selected = options.find((user) => String(user.id) === String(value))
+    || (useLocalUsers ? usersProp.find((user) => String(user.id) === String(value)) : null);
+  const displayLabel = selected
+    ? getDisplayName(selected)
+    : selectedLabel || (value ? 'Selected manager' : 'Select manager');
+  const isLoading = !useLocalUsers && directoryLoading;
 
   useEffect(() => {
     if (!open) {
