@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Broadcast;
 use App\Models\Notification;
+use App\Support\BroadcastAudience;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -257,7 +259,23 @@ class PushNotificationService
     private function subscriptionsForNotification(Notification $notification): Collection
     {
         if ($notification->is_broadcast) {
-            return DB::table('push_subscriptions')->orderByDesc('created_at')->get();
+            $query = DB::table('push_subscriptions')->orderByDesc('created_at');
+
+            if ($notification->broadcast_id) {
+                $broadcast = Broadcast::query()->find($notification->broadcast_id);
+
+                if ($broadcast && $broadcast->audience_type !== Broadcast::AUDIENCE_ALL) {
+                    $userIds = BroadcastAudience::eligibleUserIds($broadcast);
+
+                    if ($userIds->isEmpty()) {
+                        return collect();
+                    }
+
+                    $query->whereIn('user_id', $userIds->all());
+                }
+            }
+
+            return $query->get();
         }
 
         if (empty($notification->user_id)) {

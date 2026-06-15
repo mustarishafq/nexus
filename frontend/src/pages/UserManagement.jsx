@@ -3,14 +3,14 @@ import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, ChevronDown, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +39,34 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
-import { EMPLOYMENT_TYPE_LABELS } from '@/lib/profile';
+import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload } from '@/lib/profile';
+import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
+
+function CsvImportOption({ icon: Icon, title, description, onUpload, onTemplate, disabled = false }) {
+  return (
+    <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+          <Icon className="w-4 h-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-tight">{title}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" className="flex-1 h-9" onClick={onUpload} disabled={disabled}>
+          <Upload className="w-3.5 h-3.5 mr-1.5" />
+          Upload CSV
+        </Button>
+        <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={onTemplate}>
+          <Download className="w-3.5 h-3.5 mr-1.5" />
+          Template
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function GroupMultiSelect({ groups, selectedIds, onToggle, emptyLabel = 'No access groups yet.' }) {
   if (groups.length === 0) {
@@ -188,6 +215,8 @@ export default function UserManagement() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingHr, setImportingHr] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [assigningGroups, setAssigningGroups] = useState(false);
   const [newUserRole, setNewUserRole] = useState('user');
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
@@ -226,6 +255,7 @@ export default function UserManagement() {
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const [activeSection, setActiveSection] = useState('users');
   const csvRef = useRef(null);
+  const hrOnboardingCsvRef = useRef(null);
   const assignGroupsCsvRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -843,6 +873,7 @@ export default function UserManagement() {
       department_name: user.department || '',
       manager_id: user.manager_id ?? null,
       manager_name: user.manager?.name || user.manager?.full_name || '',
+      ...buildHrProfileForm(user),
     });
   };
 
@@ -864,6 +895,7 @@ export default function UserManagement() {
         employment_type: editForm.employment_type || null,
         department_id: editForm.department_id,
         manager_id: editForm.manager_id,
+        ...buildHrProfilePayload(editForm),
       };
       if (editForm.password) {
         updateData.password = editForm.password;
@@ -939,6 +971,38 @@ export default function UserManagement() {
     if (file) handleAssignGroupsCsvUpload(file);
   };
 
+  const handleHrOnboardingFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleHrOnboardingCsvUpload(file);
+  };
+
+  const handleHrOnboardingCsvUpload = async (file) => {
+    if (!file || !/\.csv$/i.test(file.name)) {
+      toast.error('Please upload a valid CSV file');
+      return;
+    }
+    setImportingHr(true);
+    try {
+      const result = await db.importHrOnboardingCsv(file);
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      const created = Number(result?.created?.length || 0);
+      const updated = Number(result?.updated?.length || 0);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      queryClient.invalidateQueries({ queryKey: ['org-chart'] });
+      queryClient.invalidateQueries({ queryKey: ['access-groups'] });
+      toast.success(`HR import complete: ${created} created, ${updated} updated${errors.length ? ` (${errors.length} skipped)` : ''}`);
+      if (errors.length) {
+        errors.forEach((err) => toast.error(err, { duration: 6000 }));
+      }
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'HR onboarding import failed');
+    } finally {
+      setImportingHr(false);
+      if (hrOnboardingCsvRef.current) hrOnboardingCsvRef.current.value = '';
+    }
+  };
+
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -968,6 +1032,42 @@ export default function UserManagement() {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'users-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadHrOnboardingSampleCsv = () => {
+    const headers = [
+      'email', 'full_name', 'name', 'password', 'role', 'is_approved',
+      'job_title', 'department', 'manager_email', 'employee_id', 'employment_type', 'joined_at', 'date_of_birth',
+      'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'gender',
+      'current_address', 'home_phone', 'ic_number', 'epf_number', 'socso_number', 'income_tax_number',
+      'work_phone', 'personal_phone', 'personal_phone_visible',
+      'emergency_contact_name', 'next_of_kin_relationship', 'emergency_contact_phone',
+      'next_of_kin_ic_number', 'next_of_kin_nationality', 'next_of_kin_occupation', 'next_of_kin_address',
+      'spouse_full_name', 'spouse_ic_number', 'spouse_phone', 'spouse_occupation', 'spouse_employer_name', 'spouse_employer_address',
+      'access_groups', 'skills',
+    ];
+    const sample = [
+      headers.join(','),
+      [
+        'jane.doe@example.com', 'Jane Doe', 'Jane', 'Password@123', 'user', 'true',
+        'Online Sales Executive', 'Customer Success Management', 'manager@example.com', 'EMP-001', 'full_time', '2023-07-24', '1990-01-15',
+        'Selangor', 'Malaysian', 'islam', 'malay', 'single', 'female',
+        'C-1-11 Kenanga Apartment, Taman Putra Perdana, 47130 Puchong Selangor', '03-12345678', '900101-01-1234', '12345678', 'SOC123', 'IG123456',
+        '+60192704323', '+601999990607', 'false',
+        'John Doe Sr', 'Father', '+60123456789', '630510-71-6305', 'Malaysian', 'Retired', 'Same as employee address',
+        '', '', '', '', '',
+        'R&F', 'Sales,CRM',
+      ].join(','),
+    ].join('\n');
+    const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'hr-onboarding-import-template.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1012,6 +1112,8 @@ export default function UserManagement() {
     .filter((user) => user.role !== 'admin')
     .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
 
+  const importBusy = importing || importingHr || assigningGroups;
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -1043,31 +1145,18 @@ export default function UserManagement() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
+          <input ref={hrOnboardingCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleHrOnboardingFileSelect} />
           <input ref={assignGroupsCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleAssignGroupsFileSelect} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5" disabled={importing || assigningGroups}>
-                <Upload className="w-4 h-4" />
-                {importing || assigningGroups ? 'Importing...' : 'Import CSV'}
-                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => csvRef.current?.click()} disabled={importing || assigningGroups}>
-                <Upload className="w-4 h-4" /> Import new users
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={downloadSampleCsv}>
-                <Download className="w-4 h-4" /> User import template
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => assignGroupsCsvRef.current?.click()} disabled={importing || assigningGroups}>
-                <Layers className="w-4 h-4" /> Assign access groups
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={downloadAssignGroupsSampleCsv}>
-                <Download className="w-4 h-4" /> Access group template
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={importBusy}
+            onClick={() => setImportDialogOpen(true)}
+          >
+            <Upload className="w-4 h-4" />
+            {importBusy ? 'Importing...' : 'Import'}
+          </Button>
           <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
             <UserPlus className="w-4 h-4" /> Create User
           </Button>
@@ -1560,7 +1649,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle className="text-left pr-6">Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
           </DialogHeader>
@@ -1727,6 +1816,13 @@ export default function UserManagement() {
                 <p className="text-xs text-muted-foreground -mt-2">
                   Work details power colleague profiles and the department org chart.
                 </p>
+
+                <Separator />
+
+                <ProfileHrDetailsForm
+                  value={editForm}
+                  onChange={(next) => setEditForm((prev) => ({ ...prev, ...next }))}
+                />
               </div>
               <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
@@ -1993,6 +2089,52 @@ export default function UserManagement() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
+            <DialogTitle>Import from CSV</DialogTitle>
+            <DialogDescription className="text-xs">
+              Choose an import type, upload your file, or download a template first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
+            <CsvImportOption
+              icon={UserPlus}
+              title="New users"
+              description="Create accounts with name, email, password, and role."
+              disabled={importBusy}
+              onUpload={() => {
+                setImportDialogOpen(false);
+                csvRef.current?.click();
+              }}
+              onTemplate={downloadSampleCsv}
+            />
+            <CsvImportOption
+              icon={Briefcase}
+              title="HR onboarding"
+              description="Create or update full employee records — work details, IDs, next of kin, and more."
+              disabled={importBusy}
+              onUpload={() => {
+                setImportDialogOpen(false);
+                hrOnboardingCsvRef.current?.click();
+              }}
+              onTemplate={downloadHrOnboardingSampleCsv}
+            />
+            <CsvImportOption
+              icon={Layers}
+              title="Access groups"
+              description="Assign existing users to groups in bulk by email."
+              disabled={importBusy}
+              onUpload={() => {
+                setImportDialogOpen(false);
+                assignGroupsCsvRef.current?.click();
+              }}
+              onTemplate={downloadAssignGroupsSampleCsv}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

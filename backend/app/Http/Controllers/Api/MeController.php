@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
+use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use App\Support\SyncUserProfileRecords;
@@ -15,6 +16,7 @@ use Illuminate\Validation\ValidationException;
 class MeController extends Controller
 {
     use ResolvesDepartmentInput;
+    use ValidatesHrProfileFields;
 
     public function show(Request $request): JsonResponse
     {
@@ -55,7 +57,7 @@ class MeController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'profile_picture' => ['sometimes', 'nullable', 'string', 'max:2048'],
@@ -90,7 +92,7 @@ class MeController extends Controller
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'current_password' => ['sometimes', 'string'],
             'new_password' => ['sometimes', 'required_with:current_password', 'string', 'min:8', 'confirmed'],
-        ]);
+        ], $this->hrProfileValidationRules()));
 
         if (isset($validated['new_password'])) {
             // If not forcing password change, require current password validation
@@ -116,6 +118,7 @@ class MeController extends Controller
                 'skills',
             ])
             ->toArray();
+        $profileData = $this->normalizeHrProfilePayload($profileData);
         $profileData = $this->resolveDepartmentFields($profileData);
 
         $user->fill($profileData)->save();

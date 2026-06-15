@@ -9,6 +9,7 @@ use App\Models\Broadcast;
 use App\Models\Post;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\BroadcastAudience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,9 +29,11 @@ class FeedController extends Controller
 
         $validated = $request->validate([
             'limit' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'focus_post' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         $limit = (int) ($validated['limit'] ?? 30);
+        $focusPostId = isset($validated['focus_post']) ? (int) $validated['focus_post'] : null;
 
         $posts = Post::query()
             ->with(['author.department', 'reactions'])
@@ -40,7 +43,7 @@ class FeedController extends Controller
             ->get()
             ->map(fn (Post $post) => $this->serializePost($post, $viewer));
 
-        $broadcasts = $this->activeBroadcastsQuery()
+        $broadcasts = $this->activeBroadcastsQuery($viewer)
             ->latest()
             ->limit($limit)
             ->get()
@@ -53,10 +56,43 @@ class FeedController extends Controller
             ->take($limit)
             ->values();
 
+        if ($focusPostId) {
+            $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer);
+        }
+
         return response()->json([
             'items' => $items,
             'total' => $items->count(),
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $items
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function ensurePostInFeedItems($items, int $postId, User $viewer)
+    {
+        $alreadyPresent = $items->contains(
+            fn (array $item) => ($item['type'] ?? null) === 'post' && (int) $item['id'] === $postId
+        );
+
+        if ($alreadyPresent) {
+            return $items;
+        }
+
+        $post = Post::query()
+            ->with(['author.department', 'reactions'])
+            ->withCount('comments')
+            ->find($postId);
+
+        if (! $post) {
+            return $items;
+        }
+
+        return $items
+            ->push($this->serializePost($post, $viewer))
+            ->sortByDesc(fn (array $item) => $item['created_date'])
+            ->values();
     }
 
     /**
@@ -75,11 +111,11 @@ class FeedController extends Controller
         ];
     }
 
-    private function activeBroadcastsQuery(): Builder
+    private function activeBroadcastsQuery(User $viewer): Builder
     {
         $now = now();
 
-        return Broadcast::query()
+        $query = Broadcast::query()
             ->where(function ($inner) use ($now) {
                 $inner->whereNull('broadcast_starts_at')
                     ->orWhere('broadcast_starts_at', '<=', $now);
@@ -88,6 +124,8 @@ class FeedController extends Controller
                 $inner->whereNull('broadcast_ends_at')
                     ->orWhere('broadcast_ends_at', '>=', $now);
             });
+
+        return BroadcastAudience::scopeVisibleToUser($query, $viewer);
     }
 
     private function authenticatedUser(Request $request): ?User

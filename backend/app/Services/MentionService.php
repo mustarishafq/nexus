@@ -37,7 +37,8 @@ class MentionService
         string $body,
         string $contextLabel,
         string $actionUrl,
-        array $excludeUserIds = []
+        array $excludeUserIds = [],
+        array $extraData = []
     ): void {
         $mentionedIds = array_diff($this->extractUserIds($body), $excludeUserIds, [$author->id]);
 
@@ -66,10 +67,10 @@ class MentionService
                 'is_broadcast' => false,
                 'action_url' => $actionUrl,
                 'delivery_channels' => ['in_app'],
-                'data' => [
+                'data' => array_merge([
                     'kind' => 'mention',
                     'author_user_id' => $author->id,
-                ],
+                ], $extraData),
             ]);
 
             app(PushNotificationService::class)->sendNotification($notification);

@@ -9,6 +9,7 @@ use App\Models\PostComment;
 use App\Models\User;
 use App\Services\FeedNotificationService;
 use App\Services\MentionService;
+use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,7 +62,9 @@ class PostCommentController extends Controller
             $viewer,
             $body,
             'comment',
-            '/feed'
+            FeedLinks::post($post->id, expandComments: true),
+            [],
+            ['post_id' => $post->id]
         );
 
         app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);

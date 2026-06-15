@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
+use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
 use App\Models\Department;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\SyncUserProfileRecords;
+use App\Support\UserHrCsvImporter;
 use App\Support\UserProfileSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +22,7 @@ class UserController extends Controller
 {
     use AppliesIndexQuery;
     use ResolvesDepartmentInput;
+    use ValidatesHrProfileFields;
 
     public function index(Request $request): JsonResponse
     {
@@ -406,6 +409,29 @@ class UserController extends Controller
     }
 
     /**
+     * Bulk HR onboarding: create new users or update existing users matched by email.
+     */
+    public function importHrOnboardingCsv(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
+        ]);
+
+        try {
+            $result = (new UserHrCsvImporter())->import($request->file('file')->getRealPath());
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json([
+                'created' => [],
+                'updated' => [],
+                'errors' => ['Import failed: '.$e->getMessage()],
+                'count' => 0,
+            ], 500);
+        }
+    }
+
+    /**
      * Bulk-assign access groups to existing users from a CSV upload.
      * Expected columns: email, access_group
      * access_group values are matched to access group names.
@@ -543,7 +569,7 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
@@ -584,7 +610,7 @@ class UserController extends Controller
             'work_history.*.date_from' => ['sometimes', 'nullable', 'string', 'max:20'],
             'work_history.*.date_to' => ['sometimes', 'nullable', 'string', 'max:20'],
             'work_history.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
-        ]);
+        ], $this->hrProfileValidationRules()));
 
         if (array_key_exists('manager_id', $validated) && $this->wouldCreateManagerCycle($user, $validated['manager_id'])) {
             return response()->json([
@@ -607,6 +633,7 @@ class UserController extends Controller
         }
 
         $validated = $this->resolveDepartmentFields($validated);
+        $validated = $this->normalizeHrProfilePayload($validated);
         $user->update($validated);
 
         if ($educationHistory !== null) {

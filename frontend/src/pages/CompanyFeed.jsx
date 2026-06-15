@@ -1,25 +1,68 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Newspaper } from 'lucide-react';
 import db from '@/api/base44Client';
-import { Button } from '@/components/ui/button';
 import { FeedComposer, FeedItem } from '@/components/feed/FeedItems';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { feedPostElementId, parseFeedFocusParams } from '@/lib/feedLinks';
 import { motion } from 'framer-motion';
 
 export default function CompanyFeed() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusTarget = useMemo(() => parseFeedFocusParams(searchParams), [searchParams]);
+  const lastFocusedKeyRef = useRef(null);
+
   useMetaTags({
     title: 'Company Feed - EMZI Nexus Brain',
     description: 'Announcements and team updates across your organization',
   });
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['company-feed'],
-    queryFn: () => db.feed.list({ limit: 30 }),
+    queryKey: ['company-feed', focusTarget?.postId ?? null],
+    queryFn: () => db.feed.list({
+      limit: 30,
+      ...(focusTarget?.postId ? { focusPost: focusTarget.postId } : {}),
+    }),
     staleTime: 20_000,
   });
 
   const items = Array.isArray(data?.items) ? data.items : [];
+
+  useEffect(() => {
+    if (!focusTarget?.postId || isLoading) {
+      return;
+    }
+
+    const focusKey = `${focusTarget.postId}:${focusTarget.expandComments ? '1' : '0'}`;
+    if (lastFocusedKeyRef.current === focusKey) {
+      return;
+    }
+
+    const element = document.getElementById(feedPostElementId(focusTarget.postId));
+    if (!element) {
+      return;
+    }
+
+    lastFocusedKeyRef.current = focusKey;
+
+    window.requestAnimationFrame(() => {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
+
+      window.setTimeout(() => {
+        element.classList.remove('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
+      }, 2400);
+    });
+
+    if (searchParams.get('post') || searchParams.get('comments')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('post');
+      next.delete('comments');
+      setSearchParams(next, { replace: true });
+      lastFocusedKeyRef.current = null;
+    }
+  }, [focusTarget, isLoading, items, searchParams, setSearchParams]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
@@ -58,7 +101,17 @@ export default function CompanyFeed() {
             </p>
           </div>
         ) : (
-          items.map((item) => <FeedItem key={`${item.type}-${item.id}`} item={item} />)
+          items.map((item) => (
+            <FeedItem
+              key={`${item.type}-${item.id}`}
+              item={item}
+              initialExpanded={
+                item.type === 'post'
+                && focusTarget?.expandComments
+                && String(item.id) === String(focusTarget.postId)
+              }
+            />
+          ))
         )}
       </motion.div>
     </div>

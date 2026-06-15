@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Megaphone, Send, AlertTriangle, Info, AlertOctagon, Pencil, Trash2 } from 'lucide-react';
+import { Megaphone, Send, AlertTriangle, Info, AlertOctagon, Pencil, Trash2, Check, X, Users, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import UserAvatar from '@/components/users/UserAvatar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,12 +75,134 @@ function getBroadcastStatus(broadcast) {
   return 'active';
 }
 
+function DepartmentMultiSelect({ departments, selectedIds, onToggle }) {
+  if (departments.length === 0) {
+    return <p className="text-sm text-muted-foreground">No departments available yet.</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-auto pr-1">
+      {departments.map((department) => {
+        const checked = selectedIds.has(String(department.id));
+        return (
+          <button
+            key={department.id}
+            type="button"
+            onClick={() => onToggle(String(department.id))}
+            className={cn(
+              'flex items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm transition-all',
+              checked
+                ? 'border-primary/30 bg-primary/10 text-primary'
+                : 'border-border bg-muted/40 text-muted-foreground'
+            )}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            <p className="font-medium truncate flex-1">{department.name}</p>
+            {checked ? <Check className="w-4 h-4 shrink-0" /> : <X className="w-4 h-4 shrink-0" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder = 'Search user by name or email...' }) {
+  const selectedUsers = users.filter((user) => selectedIds.has(String(user.id)));
+
+  return (
+    <div className="space-y-3">
+      {selectedUsers.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {selectedUsers.map((user) => (
+            <div
+              key={user.id}
+              className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary"
+            >
+              <UserAvatar user={user} className="h-8 w-8" fallbackClassName="bg-primary/15 text-xs" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{user.full_name || user.email}</p>
+                <p className="text-xs opacity-70 truncate">{user.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggle(String(user.id))}
+                className="shrink-0 rounded-md p-0.5 hover:bg-primary/15"
+                title="Remove user"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Command className="rounded-xl border border-border">
+        <CommandInput placeholder={placeholder} />
+        <CommandList className="max-h-52">
+          <CommandEmpty>No user found.</CommandEmpty>
+          {users.map((user) => {
+            const checked = selectedIds.has(String(user.id));
+            return (
+              <CommandItem
+                key={user.id}
+                value={`${user.full_name || ''} ${user.email || ''}`}
+                onSelect={() => onToggle(String(user.id))}
+                className="gap-3"
+              >
+                <UserAvatar user={user} className="h-8 w-8" fallbackClassName="bg-muted text-xs text-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{user.full_name || user.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                </div>
+                <Check className={cn('w-4 h-4 shrink-0', checked ? 'opacity-100 text-primary' : 'opacity-0')} />
+              </CommandItem>
+            );
+          })}
+        </CommandList>
+      </Command>
+    </div>
+  );
+}
+
+function getAudienceLabel(broadcast, users = [], departments = []) {
+  const audienceType = broadcast.audience_type || 'all';
+
+  if (audienceType === 'all') {
+    return 'All users';
+  }
+
+  if (audienceType === 'department') {
+    const names = (broadcast.department_ids || [])
+      .map((id) => departments.find((item) => String(item.id) === String(id))?.name)
+      .filter(Boolean);
+    return names.length ? `Departments: ${names.join(', ')}` : 'Departments';
+  }
+
+  const count = (broadcast.user_ids || []).length;
+  if (count === 0) return 'Selected users';
+
+  const names = (broadcast.user_ids || [])
+    .slice(0, 2)
+    .map((id) => users.find((item) => String(item.id) === String(id)))
+    .filter(Boolean)
+    .map((item) => item.full_name || item.email);
+
+  if (count <= 2) {
+    return names.length ? names.join(', ') : `${count} users`;
+  }
+
+  return `${names.join(', ')} +${count - 2} more`;
+}
+
 export default function BroadcastCenter() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [priority, setPriority] = useState('medium');
   const [broadcastStartsAt, setBroadcastStartsAt] = useState('');
   const [broadcastEndsAt, setBroadcastEndsAt] = useState('');
+  const [audienceType, setAudienceType] = useState('all');
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const queryClient = useQueryClient();
@@ -80,6 +210,16 @@ export default function BroadcastCenter() {
   const { data: broadcasts = [] } = useQuery({
     queryKey: ['broadcasts'],
     queryFn: () => db.entities.Broadcast.list('-created_date', 50),
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['broadcast-users'],
+    queryFn: () => db.entities.User.list('-created_date', 500),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => db.listDepartments(),
   });
 
   const invalidateBroadcasts = () => {
@@ -93,6 +233,9 @@ export default function BroadcastCenter() {
     setPriority('medium');
     setBroadcastStartsAt('');
     setBroadcastEndsAt('');
+    setAudienceType('all');
+    setSelectedUserIds(new Set());
+    setSelectedDepartmentIds(new Set());
     setEditingId(null);
   };
 
@@ -103,15 +246,49 @@ export default function BroadcastCenter() {
     setPriority(broadcast.priority || 'medium');
     setBroadcastStartsAt(toDatetimeLocalValue(broadcast.broadcast_starts_at));
     setBroadcastEndsAt(toDatetimeLocalValue(broadcast.broadcast_ends_at));
+    setAudienceType(broadcast.audience_type || 'all');
+    setSelectedUserIds(new Set((broadcast.user_ids || []).map(String)));
+    setSelectedDepartmentIds(new Set((broadcast.department_ids || []).map(String)));
   };
 
-  const buildPayload = () => ({
-    title: title.trim(),
-    message,
-    priority,
-    broadcast_starts_at: broadcastStartsAt ? new Date(broadcastStartsAt).toISOString() : null,
-    broadcast_ends_at: broadcastEndsAt ? new Date(broadcastEndsAt).toISOString() : null,
-  });
+  const toggleUser = (userId) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const toggleDepartment = (departmentId) => {
+    setSelectedDepartmentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(departmentId)) next.delete(departmentId);
+      else next.add(departmentId);
+      return next;
+    });
+  };
+
+  const buildPayload = () => {
+    const payload = {
+      title: title.trim(),
+      message,
+      priority,
+      audience_type: audienceType,
+      broadcast_starts_at: broadcastStartsAt ? new Date(broadcastStartsAt).toISOString() : null,
+      broadcast_ends_at: broadcastEndsAt ? new Date(broadcastEndsAt).toISOString() : null,
+    };
+
+    if (audienceType === 'individual') {
+      payload.user_ids = Array.from(selectedUserIds).map(Number);
+    }
+
+    if (audienceType === 'department') {
+      payload.department_ids = Array.from(selectedDepartmentIds).map(Number);
+    }
+
+    return payload;
+  };
 
   const sendMut = useMutation({
     mutationFn: (data) => db.entities.Broadcast.create(data),
@@ -160,6 +337,16 @@ export default function BroadcastCenter() {
       return;
     }
 
+    if (audienceType === 'individual' && selectedUserIds.size === 0) {
+      toast.error('Select at least one user');
+      return;
+    }
+
+    if (audienceType === 'department' && selectedDepartmentIds.size === 0) {
+      toast.error('Select at least one department');
+      return;
+    }
+
     const payload = buildPayload();
 
     if (editingId) {
@@ -183,7 +370,7 @@ export default function BroadcastCenter() {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Megaphone className="w-6 h-6 text-primary" /> Broadcast Center
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Send, edit, and manage announcements for all users</p>
+        <p className="text-sm text-muted-foreground mt-1">Send targeted announcements to all users, departments, or individuals</p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -225,6 +412,45 @@ export default function BroadcastCenter() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Audience</Label>
+              <Select value={audienceType} onValueChange={setAudienceType}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All users</SelectItem>
+                  <SelectItem value="department">Departments</SelectItem>
+                  <SelectItem value="individual">Individual users</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {audienceType === 'department' ? (
+              <div className="space-y-2">
+                <Label className="text-xs">Select Departments</Label>
+                <DepartmentMultiSelect
+                  departments={departments}
+                  selectedIds={selectedDepartmentIds}
+                  onToggle={toggleDepartment}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only users in the selected departments will see this broadcast.
+                </p>
+              </div>
+            ) : null}
+            {audienceType === 'individual' ? (
+              <div className="space-y-2">
+                <Label className="text-xs">Select Users</Label>
+                <SearchableUserMultiSelect
+                  users={users}
+                  selectedIds={selectedUserIds}
+                  onToggle={toggleUser}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only the selected users will see this broadcast.
+                </p>
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-xs">Show From (optional)</Label>
@@ -314,6 +540,14 @@ export default function BroadcastCenter() {
                             </Badge>
                             <Badge variant="secondary" className="text-[10px] capitalize">
                               {status}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] gap-1">
+                              {(broadcast.audience_type || 'all') === 'all' ? (
+                                <Users className="w-3 h-3" />
+                              ) : (
+                                <Building2 className="w-3 h-3" />
+                              )}
+                              {getAudienceLabel(broadcast, users, departments)}
                             </Badge>
                             {isEditing ? (
                               <Badge className="text-[10px]">Editing</Badge>

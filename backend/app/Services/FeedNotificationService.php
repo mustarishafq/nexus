@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Post;
 use App\Models\User;
 use App\Services\PushNotificationService;
+use App\Support\FeedLinks;
 
 class FeedNotificationService
 {
@@ -43,7 +44,7 @@ class FeedNotificationService
             'category' => 'other',
             'is_read' => false,
             'is_broadcast' => false,
-            'action_url' => '/feed',
+            'action_url' => FeedLinks::post($post->id, expandComments: true),
             'delivery_channels' => ['in_app'],
             'data' => [
                 'kind' => 'post_comment',

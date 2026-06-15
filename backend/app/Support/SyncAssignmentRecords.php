@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AccessGroup;
 use App\Models\Application;
+use App\Models\Broadcast;
 use App\Models\CalendarEvent;
 use App\Models\MetabaseDashboard;
 use App\Models\UserSystemAccess;
@@ -104,6 +105,34 @@ class SyncAssignmentRecords
         }
 
         $dashboard->assignedUsers()->sync(self::normalizeIds($userIds));
+    }
+
+    /**
+     * @param  array<int, int|string>|null  $userIds
+     */
+    public static function syncBroadcastUsers(Broadcast $broadcast, ?array $userIds): void
+    {
+        $broadcast->assignedUsers()->detach();
+
+        if ($userIds === null || $userIds === []) {
+            return;
+        }
+
+        $broadcast->assignedUsers()->sync(self::normalizeIds($userIds));
+    }
+
+    /**
+     * @param  array<int, int|string>|null  $departmentIds
+     */
+    public static function syncBroadcastDepartments(Broadcast $broadcast, ?array $departmentIds): void
+    {
+        $broadcast->assignedDepartments()->detach();
+
+        if ($departmentIds === null || $departmentIds === []) {
+            return;
+        }
+
+        $broadcast->assignedDepartments()->sync(self::normalizeIds($departmentIds));
     }
 
     /**

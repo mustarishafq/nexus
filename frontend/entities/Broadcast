@@ -18,6 +18,27 @@
       ],
       "default": "medium"
     },
+    "audience_type": {
+      "type": "string",
+      "enum": [
+        "all",
+        "department",
+        "individual"
+      ],
+      "default": "all"
+    },
+    "user_ids": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "department_ids": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
     "broadcast_starts_at": {
       "type": "string",
       "format": "date-time"

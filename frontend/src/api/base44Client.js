@@ -303,8 +303,8 @@ export const db = {
 	},
 
 	feed: {
-		async list({ limit } = {}) {
-			const queryString = buildQuery({ limit });
+		async list({ limit, focusPost } = {}) {
+			const queryString = buildQuery({ limit, focus_post: focusPost });
 			return request(`/feed${queryString}`);
 		},
 
@@ -469,6 +469,10 @@ export const db = {
 	 */
 	async importUsersCsv(file) {
 		return this.uploadUsersCsv(file, '/users/import-csv');
+	},
+
+	async importHrOnboardingCsv(file) {
+		return this.uploadUsersCsv(file, '/users/import-hr-onboarding-csv');
 	},
 
 	async assignAccessGroupsCsv(file) {

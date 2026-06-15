@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle,
-  Briefcase, MessageSquare, Phone, Users, GitBranch,
+  Briefcase, MessageSquare, Phone, Users, GitBranch, ChevronDown,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,9 +17,13 @@ import {
   getDisplayName,
   getOrgChartHref,
 } from '@/lib/profile';
+import { formatPhoneNumber, phoneTelHref } from '@/lib/phone';
 
 export default function ProfileAboutCard({ user, showCompleteLink = true, showChecklist = false }) {
-  const { percent, checks } = getProfileCompleteness(user);
+  const [checklistExpanded, setChecklistExpanded] = useState(false);
+  const { percent, doneCount, totalCount, checks } = getProfileCompleteness(user);
+  const incompleteChecks = checks.filter((item) => !item.done);
+  const visibleChecks = checklistExpanded ? incompleteChecks : incompleteChecks.slice(0, 3);
   const groups = (user?.access_group_names || []).filter(Boolean);
   const skills = normalizeSkills(user?.skills);
   const memberSince = formatMemberSince(user?.joined_at);
@@ -93,8 +97,8 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
             <Phone className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground">Work phone</p>
-              <a href={`tel:${user.work_phone}`} className="font-medium hover:text-primary">
-                {user.work_phone}
+              <a href={phoneTelHref(user.work_phone)} className="font-medium hover:text-primary">
+                {formatPhoneNumber(user.work_phone)}
               </a>
             </div>
           </div>
@@ -105,8 +109,8 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
             <Phone className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground">Personal phone</p>
-              <a href={`tel:${user.personal_phone}`} className="font-medium hover:text-primary">
-                {user.personal_phone}
+              <a href={phoneTelHref(user.personal_phone)} className="font-medium hover:text-primary">
+                {formatPhoneNumber(user.personal_phone)}
               </a>
             </div>
           </div>
@@ -188,21 +192,37 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
             <span className="text-sm font-bold text-primary tabular-nums">{percent}%</span>
           </div>
           <Progress value={percent} className="h-2" />
-          {showChecklist ? (
-            <ul className="space-y-1.5 pt-1">
-              {checks.map((item) => (
-                <li key={item.key} className="flex items-center gap-2 text-xs">
-                  {item.done ? (
-                    <Check className="w-3.5 h-3.5 text-primary shrink-0" />
-                  ) : (
-                    <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-                  )}
-                  <span className={cn(item.done ? 'text-muted-foreground' : 'text-foreground font-medium')}>
-                    {item.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {showChecklist && percent < 100 ? (
+            <div className="space-y-2 pt-1">
+              <p className="text-xs text-muted-foreground">
+                {doneCount} of {totalCount} sections complete
+              </p>
+              {incompleteChecks.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {visibleChecks.map((item) => (
+                    <li key={item.key} className="flex items-center gap-2 text-xs">
+                      <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                      <span className="text-foreground font-medium">{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {incompleteChecks.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setChecklistExpanded((prev) => !prev)}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  {checklistExpanded ? 'Show less' : `Show all ${incompleteChecks.length} remaining`}
+                  <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', checklistExpanded && 'rotate-180')} />
+                </button>
+              ) : null}
+            </div>
+          ) : showChecklist && percent === 100 ? (
+            <p className="text-xs text-muted-foreground pt-1 flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+              All profile sections complete
+            </p>
           ) : null}
           {showCompleteLink && percent < 100 ? (
             <Link to="/profile" className="block mt-2">

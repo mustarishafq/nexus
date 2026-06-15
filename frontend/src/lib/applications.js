@@ -1,19 +1,5 @@
 const LAUNCH_ACTIONS = new Set(['login', 'view']);
 
-const NEXUS_INTERNAL_PREFIXES = [
-  '/applications',
-  '/notifications',
-  '/settings',
-  '/profile',
-  '/analytics',
-  '/calendar',
-  '/activity',
-  '/network-health',
-  '/admin',
-  '/login',
-  '/register',
-];
-
 export function getRecentApplications(applications = [], activities = [], limit = 6) {
   const bySlug = Object.fromEntries(applications.map((app) => [app.slug, app]));
   const seen = new Set();
@@ -44,11 +30,9 @@ export function isNexusInternalPath(actionUrl) {
   if (!actionUrl) return false;
 
   const trimmed = actionUrl.trim();
+  // Any app-relative path is a Nexus SPA route.
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    if (trimmed === '/') return true;
-    return NEXUS_INTERNAL_PREFIXES.some(
-      (prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}/`)
-    );
+    return true;
   }
 
   try {

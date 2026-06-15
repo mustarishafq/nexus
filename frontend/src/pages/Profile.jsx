@@ -31,20 +31,36 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { formatDateForInput } from '@/lib/utils';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { formatBirthdayLabel, formatTenure, getDisplayName, normalizeSkills, skillsAreEqual, normalizeEducationHistory, normalizeWorkHistory, educationHistoryIsEqual, workHistoryIsEqual, GENDER_OPTIONS, getOrgChartHref } from '@/lib/profile';
+import {
+  formatBirthdayLabel,
+  formatTenure,
+  getDisplayName,
+  getOrgChartHref,
+  normalizeSkills,
+  skillsAreEqual,
+  normalizeEducationHistory,
+  normalizeWorkHistory,
+  educationHistoryIsEqual,
+  workHistoryIsEqual,
+  buildHrProfileForm,
+  buildHrProfilePayload,
+  hrProfileFormIsDirty,
+} from '@/lib/profile';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import TagInput from '@/components/profile/TagInput';
 import ProfileHistoryEditor from '@/components/profile/ProfileHistoryEditor';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
+import PhoneInput from '@/components/profile/PhoneInput';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 const EDUCATION_FIELDS = [
   { key: 'institution', label: 'Institution', placeholder: 'e.g. University of Malaya' },
@@ -79,11 +95,9 @@ function buildProfileForm(user) {
     work_phone: user?.work_phone || '',
     personal_phone: user?.personal_phone || '',
     personal_phone_visible: Boolean(user?.personal_phone_visible),
-    emergency_contact_name: user?.emergency_contact_name || '',
-    emergency_contact_phone: user?.emergency_contact_phone || '',
-    gender: user?.gender || '',
     education_history: normalizeEducationHistory(user?.education_history),
     work_history: normalizeWorkHistory(user?.work_history),
+    ...buildHrProfileForm(user),
   };
 }
 
@@ -102,11 +116,9 @@ function profileFormIsDirty(form, user) {
     form.work_phone !== (user.work_phone || '') ||
     form.personal_phone !== (user.personal_phone || '') ||
     form.personal_phone_visible !== Boolean(user.personal_phone_visible) ||
-    form.emergency_contact_name !== (user.emergency_contact_name || '') ||
-    form.emergency_contact_phone !== (user.emergency_contact_phone || '') ||
-    form.gender !== (user.gender || '') ||
     !educationHistoryIsEqual(form.education_history, user.education_history) ||
-    !workHistoryIsEqual(form.work_history, user.work_history)
+    !workHistoryIsEqual(form.work_history, user.work_history) ||
+    hrProfileFormIsDirty(form, user)
   );
 }
 
@@ -145,7 +157,7 @@ export default function Profile() {
     if (user) {
       setProfileForm(buildProfileForm(user));
     }
-  }, [user?.id, user?.name, user?.full_name, user?.bio, user?.department_id, user?.department, user?.skills, user?.ask_me_about, user?.date_of_birth, user?.joined_at, user?.work_phone, user?.personal_phone, user?.personal_phone_visible, user?.emergency_contact_name, user?.emergency_contact_phone, user?.gender, user?.education_history, user?.work_history]);
+  }, [user]);
 
   useMetaTags({
     title: `${getDisplayName(user, 'Profile')} - EMZI Nexus Brain`,
@@ -201,14 +213,12 @@ export default function Profile() {
         ask_me_about: profileForm.ask_me_about.trim() || null,
         date_of_birth: profileForm.date_of_birth || null,
         joined_at: profileForm.joined_at || null,
-        work_phone: profileForm.work_phone.trim() || null,
-        personal_phone: profileForm.personal_phone.trim() || null,
+        work_phone: normalizePhoneNumber(profileForm.work_phone) || null,
+        personal_phone: normalizePhoneNumber(profileForm.personal_phone) || null,
         personal_phone_visible: profileForm.personal_phone_visible,
-        emergency_contact_name: profileForm.emergency_contact_name.trim() || null,
-        emergency_contact_phone: profileForm.emergency_contact_phone.trim() || null,
-        gender: profileForm.gender || null,
         education_history: normalizeEducationHistory(profileForm.education_history),
         work_history: normalizeWorkHistory(profileForm.work_history),
+        ...buildHrProfilePayload(profileForm),
       });
       await refreshUser(updatedUser);
       setProfileForm(buildProfileForm(updatedUser));
@@ -397,7 +407,7 @@ export default function Profile() {
                         </TabsTrigger>
                         <TabsTrigger value="private" className="flex-1 min-w-[5.5rem] gap-1.5 text-xs sm:text-sm">
                           <HeartPulse className="w-3.5 h-3.5" />
-                          Private
+                          HR & private
                         </TabsTrigger>
                       </TabsList>
 
@@ -553,22 +563,20 @@ export default function Profile() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                               <Label htmlFor="work_phone">Work phone</Label>
-                              <Input
+                              <PhoneInput
                                 id="work_phone"
                                 value={profileForm.work_phone}
-                                onChange={(e) => setProfileForm((p) => ({ ...p, work_phone: e.target.value }))}
-                                placeholder="e.g. +60312345678"
-                                maxLength={30}
+                                onChange={(value) => setProfileForm((p) => ({ ...p, work_phone: value }))}
+                                placeholder="e.g. +60 19-270 4323"
                               />
                             </div>
                             <div className="space-y-1.5">
                               <Label htmlFor="personal_phone">Personal phone</Label>
-                              <Input
+                              <PhoneInput
                                 id="personal_phone"
                                 value={profileForm.personal_phone}
-                                onChange={(e) => setProfileForm((p) => ({ ...p, personal_phone: e.target.value }))}
-                                placeholder="e.g. +60123456789"
-                                maxLength={30}
+                                onChange={(value) => setProfileForm((p) => ({ ...p, personal_phone: value }))}
+                                placeholder="e.g. +60 12-345 6789"
                               />
                             </div>
                           </div>
@@ -658,64 +666,10 @@ export default function Profile() {
                         </TabsContent>
 
                         <TabsContent value="private" className="mt-0 space-y-5">
-                          <div>
-                            <h3 className="text-sm font-medium flex items-center gap-2">
-                              <HeartPulse className="w-4 h-4 text-primary" />
-                              Private details
-                            </h3>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Only you and admins can see this information.
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label htmlFor="emergency_contact_name">Emergency contact name</Label>
-                              <Input
-                                id="emergency_contact_name"
-                                value={profileForm.emergency_contact_name}
-                                onChange={(e) =>
-                                  setProfileForm((p) => ({ ...p, emergency_contact_name: e.target.value }))
-                                }
-                                placeholder="Contact person"
-                                maxLength={150}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label htmlFor="emergency_contact_phone">Emergency contact phone</Label>
-                              <Input
-                                id="emergency_contact_phone"
-                                value={profileForm.emergency_contact_phone}
-                                onChange={(e) =>
-                                  setProfileForm((p) => ({ ...p, emergency_contact_phone: e.target.value }))
-                                }
-                                placeholder="e.g. +60123456789"
-                                maxLength={30}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label htmlFor="gender">Gender</Label>
-                            <Select
-                              value={profileForm.gender || 'unset'}
-                              onValueChange={(value) =>
-                                setProfileForm((p) => ({ ...p, gender: value === 'unset' ? '' : value }))
-                              }
-                            >
-                              <SelectTrigger id="gender">
-                                <SelectValue placeholder="Select gender" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unset">Not specified</SelectItem>
-                                {GENDER_OPTIONS.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <ProfileHrDetailsForm
+                            value={profileForm}
+                            onChange={(next) => setProfileForm((prev) => ({ ...prev, ...next }))}
+                          />
                         </TabsContent>
 
                         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border/80 pt-4">

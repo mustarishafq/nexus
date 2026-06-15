@@ -7,6 +7,38 @@ use App\Models\User;
 class UserProfileSerializer
 {
     /**
+     * @var list<string>
+     */
+    public const PRIVATE_USER_ATTRIBUTES = [
+        'full_name',
+        'gender',
+        'place_of_birth',
+        'nationality',
+        'religion',
+        'race',
+        'marital_status',
+        'current_address',
+        'home_phone',
+        'ic_number',
+        'epf_number',
+        'socso_number',
+        'income_tax_number',
+        'emergency_contact_name',
+        'emergency_contact_phone',
+        'next_of_kin_relationship',
+        'next_of_kin_ic_number',
+        'next_of_kin_nationality',
+        'next_of_kin_occupation',
+        'next_of_kin_address',
+        'spouse_details',
+        'children',
+        'employee_id',
+        'employment_type',
+        'personal_phone',
+        'personal_phone_visible',
+    ];
+
+    /**
      * @return array<string, mixed>
      */
     public static function managerSummary(?User $manager): ?array
@@ -50,14 +82,7 @@ class UserProfileSerializer
             'remember_token',
             'notification_settings',
             'force_password_change',
-            'full_name',
-            'emergency_contact_name',
-            'emergency_contact_phone',
-            'gender',
-            'employee_id',
-            'employment_type',
-            'personal_phone',
-            'personal_phone_visible',
+            ...self::PRIVATE_USER_ATTRIBUTES,
         ])->toArray();
 
         $array['name'] = $user->displayName();

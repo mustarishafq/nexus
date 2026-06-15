@@ -10,16 +10,17 @@ import {
   normalizeEducationHistory,
   normalizeWorkHistory,
 } from '@/lib/profile';
+import { formatPhoneNumber, phoneTelHref } from '@/lib/phone';
 
 function ContactRow({ icon: Icon, label, value, href }) {
   if (!value) return null;
 
   const content = href ? (
     <a href={href} className="font-medium hover:text-primary break-all">
-      {value}
+      {formatPhoneNumber(value)}
     </a>
   ) : (
-    <p className="font-medium break-all">{value}</p>
+    <p className="font-medium break-all">{formatPhoneNumber(value)}</p>
   );
 
   return (
@@ -105,13 +106,13 @@ export default function ProfileStaffDetails({ user }) {
               icon={Phone}
               label="Work phone"
               value={user?.work_phone}
-              href={user?.work_phone ? `tel:${user.work_phone}` : null}
+              href={phoneTelHref(user?.work_phone)}
             />
             <ContactRow
               icon={Phone}
               label="Personal phone"
               value={user?.personal_phone}
-              href={user?.personal_phone ? `tel:${user.personal_phone}` : null}
+              href={phoneTelHref(user?.personal_phone)}
             />
           </div>
         </div>

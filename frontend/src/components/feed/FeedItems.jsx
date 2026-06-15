@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { Camera, ImageIcon, Loader2, Megaphone, MessageCircle, Send, Trash2, X } from 'lucide-react';
@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
+import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
 
 function BroadcastFeedItem({ item, compact = false }) {
   return (
@@ -232,9 +233,15 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
   );
 }
 
-function PostFeedItem({ item, compact = false }) {
+function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded);
+
+  useEffect(() => {
+    if (initialExpanded) {
+      setExpanded(true);
+    }
+  }, [initialExpanded]);
 
   const deletePost = useMutation({
     mutationFn: () => db.feed.deletePost(item.id),
@@ -251,8 +258,9 @@ function PostFeedItem({ item, compact = false }) {
 
   return (
     <article
+      id={feedPostElementId(item.id)}
       className={cn(
-        'group border-b border-border/50 last:border-b-0',
+        'group scroll-mt-24 border-b border-border/50 transition-shadow last:border-b-0',
         compact ? 'px-3 py-3 md:px-5 md:py-4' : 'px-3 py-4 md:px-5 md:py-5'
       )}
     >
@@ -342,7 +350,7 @@ function PostFeedItem({ item, compact = false }) {
                 </button>
                 {compact ? (
                   <Link
-                    to="/feed"
+                    to={feedPostPath(item.id, { expandComments: expanded })}
                     className="text-[11px] font-medium text-primary/80 hover:text-primary hover:underline"
                   >
                     Open in feed
@@ -367,12 +375,12 @@ function PostFeedItem({ item, compact = false }) {
   );
 }
 
-export function FeedItem({ item, compact = false }) {
+export function FeedItem({ item, compact = false, initialExpanded = false }) {
   if (item.type === 'broadcast') {
     return <BroadcastFeedItem item={item} compact={compact} />;
   }
 
-  return <PostFeedItem item={item} compact={compact} />;
+  return <PostFeedItem item={item} compact={compact} initialExpanded={initialExpanded} />;
 }
 
 export function FeedComposer({ className }) {

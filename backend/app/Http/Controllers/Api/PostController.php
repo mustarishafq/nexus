@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Models\User;
 use App\Services\MentionService;
+use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,7 +49,9 @@ class PostController extends Controller
                 $viewer,
                 $body,
                 'post',
-                '/feed'
+                FeedLinks::post($post->id),
+                [],
+                ['post_id' => $post->id]
             );
         }
 

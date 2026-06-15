@@ -82,6 +82,7 @@ Route::get('/users', [UserController::class, 'index']);
 Route::get('/users/search', [UserController::class, 'search']);
 Route::post('/users', [UserController::class, 'store']);
 Route::post('/users/import-csv', [UserController::class, 'importCsv']);
+Route::post('/users/import-hr-onboarding-csv', [UserController::class, 'importHrOnboardingCsv']);
 Route::post('/users/assign-access-groups-csv', [UserController::class, 'assignAccessGroupsCsv']);
 Route::get('/users/{user}/profile', [UserController::class, 'profile']);
 Route::get('/users/{user}', [UserController::class, 'show']);

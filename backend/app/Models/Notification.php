@@ -21,6 +21,7 @@ class Notification extends Model
         'is_read',
         'read_at',
         'is_broadcast',
+        'broadcast_id',
         'broadcast_starts_at',
         'broadcast_ends_at',
         'snoozed_until',
