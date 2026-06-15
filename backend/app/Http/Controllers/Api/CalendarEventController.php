@@ -8,6 +8,7 @@ use App\Models\CalendarEvent;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,7 +49,7 @@ class CalendarEventController extends Controller
             $query->where('start_at', '<=', Carbon::parse($to)->endOfDay());
         }
 
-        return response()->json($query->get());
+        return response()->json($query->with('attendees')->get());
     }
 
     public function store(Request $request): JsonResponse
@@ -70,18 +71,26 @@ class CalendarEventController extends Controller
         ]);
 
         $validated['created_by'] = $user->email;
-        $validated['attendee_emails'] = $this->normalizeAttendeeEmails($validated['attendee_emails'] ?? null);
+        $attendeeEmails = $this->normalizeAttendeeEmails($validated['attendee_emails'] ?? null);
+        unset($validated['attendee_emails']);
 
-        $payload = $this->withGoogleCalendarUrl($validated);
-
-        $item = CalendarEvent::create(array_merge($payload, [
-            'google_sync_status' => 'pending',
-            'google_sync_error' => null,
+        $payload = $this->withGoogleCalendarUrl(array_merge($validated, [
+            'attendee_emails' => $attendeeEmails,
         ]));
+
+        $item = CalendarEvent::create(array_merge(
+            collect($payload)->except(['attendee_emails'])->all(),
+            [
+                'google_sync_status' => 'pending',
+                'google_sync_error' => null,
+            ]
+        ));
+
+        SyncAssignmentRecords::syncCalendarEventAttendees($item, $attendeeEmails);
 
         $this->syncToGoogle($item);
 
-        return response()->json($item->fresh(), 201);
+        return response()->json($item->fresh()->load('attendees'), 201);
     }
 
     public function show(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -95,7 +104,7 @@ class CalendarEventController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json($calendarEvent);
+        return response()->json($calendarEvent->load('attendees'));
     }
 
     public function update(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -120,9 +129,11 @@ class CalendarEventController extends Controller
             'attendee_emails.*' => ['email:rfc'],
         ]);
 
+        $attendeeEmails = null;
         if (array_key_exists('attendee_emails', $validated)) {
-            $validated['attendee_emails'] = $this->normalizeAttendeeEmails($validated['attendee_emails']);
+            $attendeeEmails = $this->normalizeAttendeeEmails($validated['attendee_emails']);
         }
+        unset($validated['attendee_emails']);
 
         $startAt = array_key_exists('start_at', $validated) ? $validated['start_at'] : $calendarEvent->start_at;
         $endAt = array_key_exists('end_at', $validated) ? $validated['end_at'] : $calendarEvent->end_at;
@@ -136,13 +147,20 @@ class CalendarEventController extends Controller
             ], 422);
         }
 
-        $payload = $this->withGoogleCalendarUrl($validated, $calendarEvent);
+        $payload = $this->withGoogleCalendarUrl(
+            array_merge($validated, $attendeeEmails !== null ? ['attendee_emails' => $attendeeEmails] : []),
+            $calendarEvent
+        );
 
-        $calendarEvent->update($payload);
+        $calendarEvent->update(collect($payload)->except(['attendee_emails'])->all());
+
+        if ($attendeeEmails !== null) {
+            SyncAssignmentRecords::syncCalendarEventAttendees($calendarEvent, $attendeeEmails);
+        }
 
         $this->syncToGoogle($calendarEvent);
 
-        return response()->json($calendarEvent->fresh());
+        return response()->json($calendarEvent->fresh()->load('attendees'));
     }
 
     public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -182,16 +200,10 @@ class CalendarEventController extends Controller
 
         $email = strtolower(trim((string) $user->email));
 
-        return CalendarEvent::query()->where(function ($query) use ($email) {
+        return CalendarEvent::query()->with('attendees')->where(function ($query) use ($email) {
             $query
                 ->whereRaw('LOWER(created_by) = ?', [$email])
-                ->orWhereJsonContains('attendee_emails', $email)
-                ->orWhere(function ($legacyAttendees) use ($email) {
-                    $legacyAttendees
-                        ->whereNotNull('attendee_emails')
-                        ->where('attendee_emails', '!=', '[]')
-                        ->whereRaw('LOWER(CAST(attendee_emails AS CHAR)) LIKE ?', ['%"'.$email.'"%']);
-                });
+                ->orWhereHas('attendees', fn ($attendeeQuery) => $attendeeQuery->where('email', $email));
         });
     }
 
@@ -207,7 +219,8 @@ class CalendarEventController extends Controller
             return true;
         }
 
-        $attendees = collect($calendarEvent->attendee_emails ?? [])
+        $calendarEvent->loadMissing('attendees');
+        $attendees = collect($calendarEvent->attendeeEmailList())
             ->map(fn ($value) => strtolower(trim((string) $value)))
             ->filter()
             ->all();

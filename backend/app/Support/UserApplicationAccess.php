@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\AccessGroup;
 use App\Models\User;
 use App\Models\UserSystemAccess;
 
@@ -21,22 +22,29 @@ class UserApplicationAccess
 
         $groups = $user->relationLoaded('accessGroups')
             ? $user->accessGroups
-            : $user->accessGroups()->get();
+            : $user->accessGroups()->with('allowedApplications')->get();
 
         if ($groups->isNotEmpty()) {
             $slugs = [];
 
             foreach ($groups as $group) {
-                $slugs = array_merge($slugs, self::normalizeSlugs($group->allowed_system_slugs));
+                if (! $group->relationLoaded('allowedApplications')) {
+                    $group->load('allowedApplications');
+                }
+
+                $slugs = array_merge($slugs, $group->allowedApplications->pluck('slug')->all());
             }
 
             return array_values(array_unique($slugs));
         }
 
-        $accessRecord = UserSystemAccess::query()->where('user_email', $user->email)->first();
+        $accessRecord = UserSystemAccess::query()
+            ->with('allowedApplications')
+            ->where('user_email', $user->email)
+            ->first();
 
         if ($accessRecord) {
-            return self::normalizeSlugs($accessRecord->allowed_system_slugs);
+            return $accessRecord->allowedApplications->pluck('slug')->values()->all();
         }
 
         return [];

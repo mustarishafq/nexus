@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle,
-  Briefcase, MessageSquare,
+  Briefcase, MessageSquare, Phone, Users, GitBranch,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import {
   formatTenure,
   getProfileCompleteness,
   normalizeSkills,
+  getDisplayName,
+  getOrgChartHref,
 } from '@/lib/profile';
 
 export default function ProfileAboutCard({ user, showCompleteLink = true, showChecklist = false }) {
@@ -48,12 +50,64 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
           </div>
         ) : null}
 
+        {user?.job_title ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Briefcase className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Job title</p>
+              <p className="font-medium">{user.job_title}</p>
+            </div>
+          </div>
+        ) : null}
+
         {user?.department ? (
           <div className="flex items-start gap-3 text-sm">
             <Briefcase className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Department</p>
               <p className="font-medium">{user.department}</p>
+              <Link to={getOrgChartHref(user.department_id)} className="mt-2 inline-block">
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                  <GitBranch className="w-3.5 h-3.5" />
+                  View org chart
+                </Button>
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {user?.manager ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Users className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Reports to</p>
+              <Link to={`/people/${user.manager.id}`} className="font-medium hover:text-primary">
+                {getDisplayName(user.manager)}
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {user?.work_phone ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Phone className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Work phone</p>
+              <a href={`tel:${user.work_phone}`} className="font-medium hover:text-primary">
+                {user.work_phone}
+              </a>
+            </div>
+          </div>
+        ) : null}
+
+        {user?.personal_phone ? (
+          <div className="flex items-start gap-3 text-sm">
+            <Phone className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Personal phone</p>
+              <a href={`tel:${user.personal_phone}`} className="font-medium hover:text-primary">
+                {user.personal_phone}
+              </a>
             </div>
           </div>
         ) : null}

@@ -93,7 +93,12 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
                 </Badge>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{user?.email}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+              {[user?.job_title, user?.department].filter(Boolean).join(' · ') || user?.email}
+            </p>
+            {user?.job_title && user?.email ? (
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{user.email}</p>
+            ) : null}
             <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">{todayLabel}</p>
           </div>
         </div>

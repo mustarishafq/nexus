@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\MetabaseDashboard;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,7 @@ class MetabaseDashboardController extends Controller
         if ($request->boolean('admin') && $user->role === 'admin') {
             $items = $this->applyIndexQuery(
                 $request,
-                $query,
+                $query->with(['assignedAccessGroups', 'assignedUsers']),
                 ['name', 'sort_order', 'is_enabled', 'assignment_type', 'category'],
                 'sort_order'
             )->get();
@@ -48,17 +49,13 @@ class MetabaseDashboardController extends Controller
 
                 $outer->orWhere(function ($inner) use ($user) {
                     $inner->where('assignment_type', MetabaseDashboard::ASSIGNMENT_INDIVIDUAL)
-                        ->whereJsonContains('user_ids', (int) $user->id);
+                        ->whereHas('assignedUsers', fn ($assigned) => $assigned->where('users.id', $user->id));
                 });
 
                 if ($userGroupIds !== []) {
                     $outer->orWhere(function ($inner) use ($userGroupIds) {
                         $inner->where('assignment_type', MetabaseDashboard::ASSIGNMENT_GROUP)
-                            ->where(function ($groups) use ($userGroupIds) {
-                                foreach ($userGroupIds as $groupId) {
-                                    $groups->orWhereJsonContains('access_group_ids', $groupId);
-                                }
-                            });
+                            ->whereHas('assignedAccessGroups', fn ($assigned) => $assigned->whereIn('access_groups.id', $userGroupIds));
                     });
                 }
             });
@@ -66,7 +63,7 @@ class MetabaseDashboardController extends Controller
 
         $items = $this->applyIndexQuery(
             $request,
-            $query,
+            $query->with(['assignedAccessGroups', 'assignedUsers']),
             ['name', 'sort_order', 'category'],
             'sort_order'
         )->get();
@@ -100,6 +97,9 @@ class MetabaseDashboardController extends Controller
             ]);
 
             $validated = $this->normalizeAdminPayload($validated);
+            $accessGroupIds = $validated['access_group_ids'] ?? null;
+            $userIds = $validated['user_ids'] ?? null;
+            unset($validated['access_group_ids'], $validated['user_ids']);
         } else {
             $validated = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
@@ -110,15 +110,23 @@ class MetabaseDashboardController extends Controller
 
             $validated['assignment_type'] = MetabaseDashboard::ASSIGNMENT_INDIVIDUAL;
             $validated['owner_user_id'] = $user->id;
-            $validated['access_group_ids'] = null;
-            $validated['user_ids'] = null;
             $validated['is_enabled'] = true;
             $validated['category'] = $this->normalizeCategory($validated['category'] ?? null);
+            $accessGroupIds = null;
+            $userIds = null;
         }
 
         $dashboard = MetabaseDashboard::create($validated);
 
-        return response()->json($dashboard, 201);
+        if ($user->role === 'admin') {
+            if ($validated['assignment_type'] === MetabaseDashboard::ASSIGNMENT_GROUP) {
+                SyncAssignmentRecords::syncMetabaseDashboardAccessGroups($dashboard, $accessGroupIds ?? []);
+            } else {
+                SyncAssignmentRecords::syncMetabaseDashboardUsers($dashboard, $userIds ?? []);
+            }
+        }
+
+        return response()->json($dashboard->fresh()->load(['assignedAccessGroups', 'assignedUsers']), 201);
     }
 
     public function show(Request $request, MetabaseDashboard $metabaseDashboard): JsonResponse
@@ -133,7 +141,7 @@ class MetabaseDashboardController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json($metabaseDashboard);
+        return response()->json($metabaseDashboard->load(['assignedAccessGroups', 'assignedUsers']));
     }
 
     public function update(Request $request, MetabaseDashboard $metabaseDashboard): JsonResponse
@@ -143,6 +151,10 @@ class MetabaseDashboardController extends Controller
         if (! $user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
+
+        $accessGroupIds = null;
+        $userIds = null;
+        $shouldSyncAssignments = false;
 
         if ($user->role === 'admin') {
             if ($metabaseDashboard->owner_user_id !== null) {
@@ -160,8 +172,10 @@ class MetabaseDashboardController extends Controller
 
                 $metabaseDashboard->update($validated);
 
-                return response()->json($metabaseDashboard->fresh());
+                return response()->json($metabaseDashboard->fresh()->load(['assignedAccessGroups', 'assignedUsers']));
             }
+
+            $metabaseDashboard->load(['assignedAccessGroups', 'assignedUsers']);
 
             $validated = $request->validate([
                 'name' => ['sometimes', 'string', 'max:255'],
@@ -199,14 +213,21 @@ class MetabaseDashboardController extends Controller
                 }
             }
 
-            $validated = $this->normalizeAdminPayload(
+            $normalized = $this->normalizeAdminPayload(
                 array_merge([
                     'assignment_type' => $metabaseDashboard->assignment_type,
-                    'access_group_ids' => $metabaseDashboard->access_group_ids,
-                    'user_ids' => $metabaseDashboard->user_ids,
+                    'access_group_ids' => $metabaseDashboard->accessGroupIdList(),
+                    'user_ids' => $metabaseDashboard->assignedUserIdList(),
                     'category' => $metabaseDashboard->category,
                 ], $validated)
             );
+
+            $accessGroupIds = $normalized['access_group_ids'] ?? null;
+            $userIds = $normalized['user_ids'] ?? null;
+            unset($normalized['access_group_ids'], $normalized['user_ids']);
+
+            $validated = $normalized;
+            $shouldSyncAssignments = true;
         } else {
             if ((int) $metabaseDashboard->owner_user_id !== (int) $user->id) {
                 return response()->json(['message' => 'Forbidden'], 403);
@@ -226,7 +247,17 @@ class MetabaseDashboardController extends Controller
 
         $metabaseDashboard->update($validated);
 
-        return response()->json($metabaseDashboard->fresh());
+        if ($shouldSyncAssignments) {
+            if (($validated['assignment_type'] ?? $metabaseDashboard->assignment_type) === MetabaseDashboard::ASSIGNMENT_GROUP) {
+                SyncAssignmentRecords::syncMetabaseDashboardAccessGroups($metabaseDashboard, $accessGroupIds ?? []);
+                SyncAssignmentRecords::syncMetabaseDashboardUsers($metabaseDashboard, []);
+            } else {
+                SyncAssignmentRecords::syncMetabaseDashboardUsers($metabaseDashboard, $userIds ?? []);
+                SyncAssignmentRecords::syncMetabaseDashboardAccessGroups($metabaseDashboard, []);
+            }
+        }
+
+        return response()->json($metabaseDashboard->fresh()->load(['assignedAccessGroups', 'assignedUsers']));
     }
 
     public function destroy(Request $request, MetabaseDashboard $metabaseDashboard): JsonResponse
@@ -300,12 +331,13 @@ class MetabaseDashboardController extends Controller
         }
 
         if ($dashboard->assignment_type === MetabaseDashboard::ASSIGNMENT_INDIVIDUAL) {
-            $assignedUserIds = array_map('intval', $dashboard->user_ids ?? []);
+            $dashboard->loadMissing('assignedUsers');
 
-            return in_array((int) $user->id, $assignedUserIds, true);
+            return in_array((int) $user->id, $dashboard->assignedUserIdList(), true);
         }
 
-        $allowedGroupIds = array_map('intval', $dashboard->access_group_ids ?? []);
+        $dashboard->loadMissing('assignedAccessGroups');
+        $allowedGroupIds = $dashboard->accessGroupIdList();
         if ($allowedGroupIds === []) {
             return false;
         }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import {
-  Activity, Calendar, Wifi, Settings, Megaphone, Shield, Users, Menu, Moon, Newspaper, Mail,
+  Activity, Calendar, Wifi, Settings, Megaphone, Shield, Users, Menu, Moon, Newspaper, Mail, GitBranch,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import {
 
 const MORE_ITEMS = [
   { path: '/people', icon: Users, label: 'People' },
+  { path: '/organization', icon: GitBranch, label: 'Organization' },
   { path: '/feed', icon: Newspaper, label: 'Company Feed' },
   { path: '/messages', icon: Mail, label: 'Messages' },
   { path: '/activity', icon: Activity, label: 'Activity Feed' },

@@ -502,6 +502,11 @@ export const db = {
 		return request(`/users/${userId}/profile`);
 	},
 
+	async getOrgChart(filters = {}) {
+		const queryString = buildQuery(filters);
+		return request(`/users/org-chart${queryString}`);
+	},
+
 	async uploadUsersCsv(file, path) {
 		const token = localStorage.getItem(AUTH_TOKEN_KEY);
 		const formData = new FormData();

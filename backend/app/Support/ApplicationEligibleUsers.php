@@ -51,10 +51,15 @@ class ApplicationEligibleUsers
      */
     private static function privateApplicationUsers(Application $application): Collection
     {
-        $emails = array_values(array_filter(
-            (array) $application->private_allowed_user_emails,
-            fn ($email) => is_string($email) && $email !== ''
-        ));
+        if (! $application->relationLoaded('privateAccessEmails')) {
+            $application->load('privateAccessEmails');
+        }
+
+        $emails = $application->privateAccessEmails
+            ->pluck('email')
+            ->filter(fn ($email) => is_string($email) && $email !== '')
+            ->values()
+            ->all();
 
         return User::query()
             ->where('is_approved', true)
@@ -79,11 +84,13 @@ class ApplicationEligibleUsers
     {
         $userIds = collect();
 
+        $application = Application::query()->where('slug', $slug)->first();
+        if (! $application) {
+            return collect();
+        }
+
         $matchingGroupIds = AccessGroup::query()
-            ->get(['id', 'allowed_system_slugs'])
-            ->filter(function (AccessGroup $group) use ($slug) {
-                return in_array($slug, UserApplicationAccess::normalizeSlugs($group->allowed_system_slugs), true);
-            })
+            ->whereHas('allowedApplications', fn ($query) => $query->where('applications.id', $application->id))
             ->pluck('id');
 
         if ($matchingGroupIds->isNotEmpty()) {
@@ -96,10 +103,7 @@ class ApplicationEligibleUsers
         }
 
         $accessEmails = UserSystemAccess::query()
-            ->get(['user_email', 'allowed_system_slugs'])
-            ->filter(function (UserSystemAccess $record) use ($slug) {
-                return in_array($slug, UserApplicationAccess::normalizeSlugs($record->allowed_system_slugs), true);
-            })
+            ->whereHas('allowedApplications', fn ($query) => $query->where('applications.id', $application->id))
             ->pluck('user_email')
             ->filter(fn ($email) => is_string($email) && $email !== '')
             ->values();

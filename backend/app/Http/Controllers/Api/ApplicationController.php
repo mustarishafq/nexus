@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationEligibleUsers;
 use App\Support\NotificationEventMapping;
+use App\Support\SyncAssignmentRecords;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
@@ -36,7 +37,7 @@ class ApplicationController extends Controller
             Application::query(),
             ['slug', 'status', 'is_enabled', 'auth_mode', 'visibility'],
             'sort_order'
-        )->with('creator');
+        )->with(['creator', 'privateAccessEmails']);
 
         if ($user->role !== 'admin') {
             $allowedPublicSlugs = UserApplicationAccess::allowedPublicSlugs($user);
@@ -57,7 +58,7 @@ class ApplicationController extends Controller
                         ->where(function ($privateAccess) use ($user) {
                             $privateAccess
                                 ->where('created_by_user_id', $user->id)
-                                ->orWhereJsonContains('private_allowed_user_emails', $user->email);
+                                ->orWhereHas('privateAccessEmails', fn ($emailQuery) => $emailQuery->where('email', $user->email));
                         });
                 });
             });
@@ -100,9 +101,10 @@ class ApplicationController extends Controller
         if ($user->role !== 'admin') {
             $validated['visibility'] = 'private';
         }
-        $validated['private_allowed_user_emails'] = $this->normalizePrivateEmails($validated['private_allowed_user_emails'] ?? null, $user->email);
+        $privateEmails = $this->normalizePrivateEmails($validated['private_allowed_user_emails'] ?? null, $user->email);
+        unset($validated['private_allowed_user_emails']);
         if (($validated['visibility'] ?? 'public') !== 'private') {
-            $validated['private_allowed_user_emails'] = null;
+            $privateEmails = null;
         }
 
         $validated['sort_order'] = ((int) Application::query()->max('sort_order')) + 1;
@@ -112,8 +114,9 @@ class ApplicationController extends Controller
         }
 
         $item = Application::create($validated);
+        SyncAssignmentRecords::syncApplicationPrivateEmails($item, $privateEmails);
 
-        return response()->json($item->load('creator'), 201);
+        return response()->json($item->load(['creator', 'privateAccessEmails']), 201);
     }
 
     public function show(Application $application): JsonResponse
@@ -128,7 +131,7 @@ class ApplicationController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json($application->load('creator'));
+        return response()->json($application->load(['creator', 'privateAccessEmails']));
     }
 
     public function update(Request $request, Application $application): JsonResponse
@@ -172,13 +175,16 @@ class ApplicationController extends Controller
             $validated = Arr::except($validated, ['visibility']);
         }
 
-        if (array_key_exists('private_allowed_user_emails', $validated)) {
-            $validated['private_allowed_user_emails'] = $this->normalizePrivateEmails($validated['private_allowed_user_emails'], $user->email);
+        $hadPrivateEmailsInput = array_key_exists('private_allowed_user_emails', $validated);
+        $privateEmails = null;
+        if ($hadPrivateEmailsInput) {
+            $privateEmails = $this->normalizePrivateEmails($validated['private_allowed_user_emails'], $user->email);
         }
+        unset($validated['private_allowed_user_emails']);
 
         $nextVisibility = $validated['visibility'] ?? $application->visibility;
         if ($nextVisibility !== 'private') {
-            $validated['private_allowed_user_emails'] = null;
+            $privateEmails = [];
         }
 
         if (array_key_exists('notification_config', $validated)) {
@@ -187,7 +193,11 @@ class ApplicationController extends Controller
 
         $application->update($validated);
 
-        return response()->json($application->fresh()->load('creator'));
+        if ($hadPrivateEmailsInput || array_key_exists('visibility', $validated)) {
+            SyncAssignmentRecords::syncApplicationPrivateEmails($application, $privateEmails);
+        }
+
+        return response()->json($application->fresh()->load(['creator', 'privateAccessEmails']));
     }
 
     public function reorder(Request $request): JsonResponse
@@ -642,7 +652,8 @@ class ApplicationController extends Controller
                 return true;
             }
 
-            $allowedEmails = array_values(array_filter((array) $application->private_allowed_user_emails, fn ($email) => is_string($email) && $email !== ''));
+            $application->loadMissing('privateAccessEmails');
+            $allowedEmails = $application->privateAllowedEmailsList();
 
             return in_array($user->email, $allowedEmails, true);
         }

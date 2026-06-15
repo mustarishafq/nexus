@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -20,6 +20,7 @@ import CompanyFeed from '@/pages/CompanyFeed';
 import Messages from '@/pages/Messages';
 import PersonProfile from '@/pages/PersonProfile';
 import People from '@/pages/People';
+import OrgChart from '@/pages/OrgChart';
 import UserManagement from '@/pages/UserManagement';
 import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
 import Analytics from '@/pages/Analytics';
@@ -35,6 +36,11 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
   return <Navigate to={`/people/${userId}`} replace />;
+}
+
+function LegacyOrgChartRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/organization${location.search}`} replace />;
 }
 
 const ProtectedRoutes = () => {
@@ -70,6 +76,8 @@ const ProtectedRoutes = () => {
         <Route path="/messages/new/:userId" element={<Messages />} />
         <Route path="/messages/:conversationId" element={<Messages />} />
         <Route path="/people" element={<People />} />
+        <Route path="/organization" element={<OrgChart />} />
+        <Route path="/people/org-chart" element={<LegacyOrgChartRedirect />} />
         <Route path="/people/:userId" element={<PersonProfile />} />
         <Route path="/users/:userId/dashboard" element={<LegacyUserDashboardRedirect />} />
         <Route path="/notifications" element={<NotificationCenter />} />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
+import { ArrowLeft, MessageCircle } from 'lucide-react';
 import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -9,7 +9,8 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
-import { formatTenure, getDisplayName } from '@/lib/profile';
+import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
+import { getDisplayName } from '@/lib/profile';
 
 export default function PersonProfile() {
   const { userId } = useParams();
@@ -29,7 +30,6 @@ export default function PersonProfile() {
   });
 
   const user = data?.user;
-  const tenure = formatTenure(user?.joined_at);
 
   useMetaTags({
     title: user ? `${getDisplayName(user)} - People` : 'Colleague Profile',
@@ -101,32 +101,7 @@ export default function PersonProfile() {
         </div>
 
         <div className="xl:col-span-7 space-y-4">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">At a glance</h2>
-            </div>
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {user.department ? (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Department</dt>
-                  <dd className="text-sm font-medium mt-0.5">{user.department}</dd>
-                </div>
-              ) : null}
-              {tenure ? (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Tenure</dt>
-                  <dd className="text-sm font-medium mt-0.5 capitalize">{tenure} with the team</dd>
-                </div>
-              ) : null}
-              {user.email ? (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Email</dt>
-                  <dd className="text-sm font-medium mt-0.5 break-all">{user.email}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </div>
+          <ProfileStaffDetails user={user} />
         </div>
       </motion.div>
     </div>

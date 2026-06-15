@@ -13,25 +13,40 @@ class AccessGroup extends Model
     protected $fillable = [
         'name',
         'description',
-        'allowed_system_slugs',
     ];
 
     protected $appends = [
         'created_date',
         'updated_date',
         'user_count',
+        'allowed_system_slugs',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'allowed_system_slugs' => 'array',
-        ];
-    }
 
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withTimestamps();
+    }
+
+    public function allowedApplications(): BelongsToMany
+    {
+        return $this->belongsToMany(Application::class, 'access_group_applications')->withTimestamps();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function allowedSystemSlugs(): array
+    {
+        if (! $this->relationLoaded('allowedApplications')) {
+            return [];
+        }
+
+        return $this->allowedApplications->pluck('slug')->values()->all();
+    }
+
+    public function getAllowedSystemSlugsAttribute(): array
+    {
+        return $this->allowedSystemSlugs();
     }
 
     public function getCreatedDateAttribute(): ?string

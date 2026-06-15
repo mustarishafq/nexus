@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncUserProfileRecords;
+use App\Support\UserProfileSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +31,20 @@ class MeController extends Controller
             ], 403);
         }
 
-        return response()->json($user->load('department'));
+        return response()->json(UserProfileSerializer::privateProfile($this->loadProfile($user)));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function profileRelations(): array
+    {
+        return ['department', 'manager.department', 'educations', 'workExperiences', 'userSkills'];
+    }
+
+    private function loadProfile($user)
+    {
+        return $user->load($this->profileRelations());
     }
 
     public function update(Request $request): JsonResponse
@@ -54,6 +69,24 @@ class MeController extends Controller
             'ask_me_about' => ['sometimes', 'nullable', 'string', 'max:200'],
             'date_of_birth' => ['sometimes', 'nullable', 'date'],
             'joined_at' => ['sometimes', 'nullable', 'date'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'personal_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'personal_phone_visible' => ['sometimes', 'boolean'],
+            'emergency_contact_name' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'emergency_contact_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'gender' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'education_history' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'education_history.*.institution' => ['required_with:education_history', 'string', 'max:150'],
+            'education_history.*.qualification' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'education_history.*.field_of_study' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'education_history.*.year_from' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'education_history.*.year_to' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'work_history' => ['sometimes', 'nullable', 'array', 'max:15'],
+            'work_history.*.company' => ['required_with:work_history', 'string', 'max:150'],
+            'work_history.*.job_title' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'work_history.*.date_from' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'work_history.*.date_to' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'work_history.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
             'notification_settings' => ['sometimes', 'nullable', 'array'],
             'current_password' => ['sometimes', 'string'],
             'new_password' => ['sometimes', 'required_with:current_password', 'string', 'min:8', 'confirmed'],
@@ -74,12 +107,31 @@ class MeController extends Controller
         }
 
         $profileData = collect($validated)
-            ->except(['current_password', 'new_password', 'new_password_confirmation'])
+            ->except([
+                'current_password',
+                'new_password',
+                'new_password_confirmation',
+                'education_history',
+                'work_history',
+                'skills',
+            ])
             ->toArray();
         $profileData = $this->resolveDepartmentFields($profileData);
 
         $user->fill($profileData)->save();
 
-        return response()->json($user->fresh()->load('department'));
+        if (array_key_exists('education_history', $validated)) {
+            SyncUserProfileRecords::syncEducations($user, $validated['education_history']);
+        }
+
+        if (array_key_exists('work_history', $validated)) {
+            SyncUserProfileRecords::syncWorkExperiences($user, $validated['work_history']);
+        }
+
+        if (array_key_exists('skills', $validated)) {
+            SyncUserProfileRecords::syncSkills($user, $validated['skills']);
+        }
+
+        return response()->json(UserProfileSerializer::privateProfile($this->loadProfile($user->fresh())));
     }
 }

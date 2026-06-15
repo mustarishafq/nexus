@@ -31,6 +31,9 @@ export default function UserDirectoryCard({ user, className }) {
           >
             {displayName}
           </Link>
+          {user?.job_title ? (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.job_title}</p>
+          ) : null}
           {user?.department ? (
             <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
               <Briefcase className="h-3.5 w-3.5 shrink-0" />

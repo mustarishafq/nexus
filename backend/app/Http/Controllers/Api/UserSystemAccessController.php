@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\UserSystemAccess;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -22,7 +23,7 @@ class UserSystemAccessController extends Controller
 
         $items = $this->applyIndexQuery(
             $request,
-            UserSystemAccess::query(),
+            UserSystemAccess::query()->with('allowedApplications'),
             ['user_email']
         )->get();
 
@@ -45,9 +46,13 @@ class UserSystemAccessController extends Controller
             ],
         ]);
 
-        $item = UserSystemAccess::create($validated);
+        $allowedSlugs = $validated['allowed_system_slugs'] ?? null;
+        unset($validated['allowed_system_slugs']);
 
-        return response()->json($item, 201);
+        $item = UserSystemAccess::create($validated);
+        SyncAssignmentRecords::syncUserSystemAccessApplications($item, $allowedSlugs);
+
+        return response()->json($item->fresh()->load('allowedApplications'), 201);
     }
 
     public function show(UserSystemAccess $userSystemAccess): JsonResponse
@@ -56,7 +61,7 @@ class UserSystemAccessController extends Controller
             return $response;
         }
 
-        return response()->json($userSystemAccess);
+        return response()->json($userSystemAccess->load('allowedApplications'));
     }
 
     public function update(Request $request, UserSystemAccess $userSystemAccess): JsonResponse
@@ -75,9 +80,16 @@ class UserSystemAccessController extends Controller
             ],
         ]);
 
+        $allowedSlugs = array_key_exists('allowed_system_slugs', $validated) ? $validated['allowed_system_slugs'] : null;
+        unset($validated['allowed_system_slugs']);
+
         $userSystemAccess->update($validated);
 
-        return response()->json($userSystemAccess->fresh());
+        if ($allowedSlugs !== null) {
+            SyncAssignmentRecords::syncUserSystemAccessApplications($userSystemAccess, $allowedSlugs);
+        }
+
+        return response()->json($userSystemAccess->fresh()->load('allowedApplications'));
     }
 
     public function destroy(UserSystemAccess $userSystemAccess): JsonResponse
@@ -86,6 +98,7 @@ class UserSystemAccessController extends Controller
             return $response;
         }
 
+        $userSystemAccess->allowedApplications()->detach();
         $userSystemAccess->delete();
 
         return response()->noContent();

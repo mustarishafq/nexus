@@ -9,6 +9,8 @@ use App\Models\AccessGroup;
 use App\Models\Department;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncUserProfileRecords;
+use App\Support\UserProfileSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -23,7 +25,7 @@ class UserController extends Controller
     {
         $users = $this->applyIndexQuery(
             $request,
-            User::query()->with(['accessGroups', 'department']),
+            User::query()->with(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills']),
             ['role', 'email']
         )->get();
 
@@ -35,17 +37,7 @@ class UserController extends Controller
      */
     private function publicUserProfile(User $user): array
     {
-        $array = $user->makeHidden([
-            'password',
-            'remember_token',
-            'notification_settings',
-            'force_password_change',
-            'full_name',
-        ])->toArray();
-
-        $array['name'] = $user->displayName();
-
-        return $array;
+        return UserProfileSerializer::publicProfile($user);
     }
 
     /**
@@ -61,8 +53,79 @@ class UserController extends Controller
             'role' => $user->role,
             'department_id' => $user->department_id,
             'department' => $user->department?->name,
+            'job_title' => $user->job_title,
             'location' => $user->location,
         ];
+    }
+
+    public function orgChart(Request $request): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+        ]);
+
+        $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
+
+        $users = $this->filterUsersInOrgStructure($this->orgChartUsers($departmentId));
+
+        $nodesById = $users->keyBy('id');
+        $childrenByManager = [];
+
+        foreach ($users as $user) {
+            $managerId = $user->manager_id;
+            if ($managerId !== null && ! $nodesById->has($managerId)) {
+                $managerId = null;
+            }
+
+            $childrenByManager[$managerId ?? 0][] = $user->id;
+        }
+
+        $buildBranch = function (?int $managerKey) use (&$buildBranch, $childrenByManager, $nodesById): array {
+            $childIds = $childrenByManager[$managerKey ?? 0] ?? [];
+
+            return collect($childIds)
+                ->map(function (int $userId) use (&$buildBranch, $nodesById) {
+                    $user = $nodesById->get($userId);
+                    if (! $user) {
+                        return null;
+                    }
+
+                    return [
+                        'user' => UserProfileSerializer::orgChartNode($user),
+                        'reports' => $buildBranch($user->id),
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->all();
+        };
+
+        $departments = Department::query()
+            ->whereHas('users', fn ($query) => $query->where('is_approved', true))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        if ($departmentId !== null) {
+            $department = Department::query()->find($departmentId);
+
+            return response()->json([
+                'department' => $department ? ['id' => $department->id, 'name' => $department->name] : null,
+                'departments' => $departments,
+                'tree' => $buildBranch(null),
+            ]);
+        }
+
+        return response()->json([
+            'department' => null,
+            'departments' => $departments,
+            'tree' => $buildBranch(null),
+        ]);
     }
 
     public function search(Request $request): JsonResponse
@@ -88,7 +151,7 @@ class UserController extends Controller
             ->orderBy('name')
             ->orderBy('full_name')
             ->limit($limit)
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location', 'job_title']);
 
         return response()->json(
             $users->map(fn (User $user) => $this->publicUserSummary($user))->values()
@@ -118,7 +181,7 @@ class UserController extends Controller
         $limit = (int) ($validated['limit'] ?? 50);
 
         $query = User::query()
-            ->with(['accessGroups', 'department'])
+            ->with(['accessGroups', 'department', 'manager.department', 'educations', 'workExperiences', 'userSkills'])
             ->where('is_approved', true);
 
         if ($term !== '') {
@@ -170,7 +233,7 @@ class UserController extends Controller
             return response()->json(['message' => 'User not found.'], 404);
         }
 
-        $user->load(['accessGroups', 'department']);
+        $user->load(['accessGroups', 'department', 'manager.department', 'educations', 'workExperiences', 'userSkills']);
 
         return response()->json([
             'user' => $this->publicUserProfile($user),
@@ -499,10 +562,44 @@ class UserController extends Controller
             'skills' => ['sometimes', 'nullable', 'array', 'max:10'],
             'skills.*' => ['string', 'max:50'],
             'ask_me_about' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'job_title' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'personal_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'personal_phone_visible' => ['sometimes', 'boolean'],
+            'manager_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'employee_id' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'employment_type' => ['sometimes', 'nullable', 'string', Rule::in(['full_time', 'part_time', 'contract'])],
+            'emergency_contact_name' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'emergency_contact_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'gender' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'education_history' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'education_history.*.institution' => ['required_with:education_history', 'string', 'max:150'],
+            'education_history.*.qualification' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'education_history.*.field_of_study' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'education_history.*.year_from' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'education_history.*.year_to' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'work_history' => ['sometimes', 'nullable', 'array', 'max:15'],
+            'work_history.*.company' => ['required_with:work_history', 'string', 'max:150'],
+            'work_history.*.job_title' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'work_history.*.date_from' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'work_history.*.date_to' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'work_history.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
         ]);
+
+        if (array_key_exists('manager_id', $validated) && $this->wouldCreateManagerCycle($user, $validated['manager_id'])) {
+            return response()->json([
+                'message' => 'Invalid manager assignment.',
+                'errors' => ['manager_id' => ['This manager assignment would create a reporting loop.']],
+            ], 422);
+        }
 
         $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;
         unset($validated['access_group_ids']);
+
+        $educationHistory = array_key_exists('education_history', $validated) ? $validated['education_history'] : null;
+        $workHistory = array_key_exists('work_history', $validated) ? $validated['work_history'] : null;
+        $skills = array_key_exists('skills', $validated) ? $validated['skills'] : null;
+        unset($validated['education_history'], $validated['work_history'], $validated['skills']);
 
         // Hash password if provided
         if (isset($validated['password'])) {
@@ -512,11 +609,158 @@ class UserController extends Controller
         $validated = $this->resolveDepartmentFields($validated);
         $user->update($validated);
 
+        if ($educationHistory !== null) {
+            SyncUserProfileRecords::syncEducations($user, $educationHistory);
+        }
+
+        if ($workHistory !== null) {
+            SyncUserProfileRecords::syncWorkExperiences($user, $workHistory);
+        }
+
+        if ($skills !== null) {
+            SyncUserProfileRecords::syncSkills($user, $skills);
+        }
+
         if ($groupIds !== null) {
             $user->accessGroups()->sync($groupIds);
         }
 
-        return response()->json($user->fresh()->load(['accessGroups', 'department']));
+        return response()->json($user->fresh()->load(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills']));
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    private function orgChartUsers(?int $departmentId)
+    {
+        if ($departmentId === null) {
+            return User::query()
+                ->with('department')
+                ->where('is_approved', true)
+                ->orderBy('full_name')
+                ->get();
+        }
+
+        $seedIds = User::query()
+            ->where('is_approved', true)
+            ->where('department_id', $departmentId)
+            ->pluck('id');
+
+        if ($seedIds->isEmpty()) {
+            return collect();
+        }
+
+        $relatedIds = $seedIds->unique()->values();
+
+        $seedUsers = User::query()
+            ->whereIn('id', $seedIds)
+            ->get(['id', 'department_id', 'manager_id']);
+
+        foreach ($seedUsers as $seedUser) {
+            $current = $seedUser;
+
+            while ($current->manager_id) {
+                if ($relatedIds->contains($current->manager_id)) {
+                    break;
+                }
+
+                $manager = User::query()
+                    ->where('id', $current->manager_id)
+                    ->where('is_approved', true)
+                    ->first(['id', 'department_id', 'manager_id']);
+
+                if (! $manager) {
+                    break;
+                }
+
+                $relatedIds->push($manager->id);
+
+                if ($manager->department_id === $departmentId) {
+                    $current = $manager;
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        $relatedIds = $relatedIds->unique()->values();
+
+        $frontier = $seedIds;
+        while ($frontier->isNotEmpty()) {
+            $reportIds = User::query()
+                ->where('is_approved', true)
+                ->whereIn('manager_id', $frontier)
+                ->pluck('id')
+                ->unique()
+                ->filter(fn (int $id) => ! $relatedIds->contains($id))
+                ->values();
+
+            if ($reportIds->isEmpty()) {
+                break;
+            }
+
+            $relatedIds = $relatedIds->merge($reportIds)->unique()->values();
+            $frontier = $reportIds;
+        }
+
+        return User::query()
+            ->with('department')
+            ->where('is_approved', true)
+            ->whereIn('id', $relatedIds)
+            ->orderBy('full_name')
+            ->get();
+    }
+
+    /**
+     * Keep only users that belong to a reporting line:
+     * assigned to a manager, or leading at least one direct report.
+     *
+     * @param  \Illuminate\Support\Collection<int, User>  $users
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    private function filterUsersInOrgStructure($users)
+    {
+        if ($users->isEmpty()) {
+            return $users;
+        }
+
+        $userIds = $users->pluck('id');
+
+        $leaderIds = User::query()
+            ->where('is_approved', true)
+            ->whereIn('manager_id', $userIds)
+            ->pluck('manager_id')
+            ->unique();
+
+        return $users
+            ->filter(fn (User $user) => $user->manager_id !== null || $leaderIds->contains($user->id))
+            ->values();
+    }
+
+    private function wouldCreateManagerCycle(User $user, ?int $managerId): bool
+    {
+        if ($managerId === null) {
+            return false;
+        }
+
+        if ($managerId === $user->id) {
+            return true;
+        }
+
+        $visited = [$user->id];
+        $current = User::query()->find($managerId);
+
+        while ($current) {
+            if (in_array($current->id, $visited, true)) {
+                return true;
+            }
+
+            $visited[] = $current->id;
+            $current = $current->manager_id ? User::query()->find($current->manager_id) : null;
+        }
+
+        return false;
     }
 
     private function authenticatedUser(Request $request): ?User

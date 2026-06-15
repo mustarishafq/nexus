@@ -215,7 +215,9 @@ class GoogleCalendarService
         }
 
         $attendees = [];
-        $emails = $calendarEvent->attendee_emails;
+        $emails = $calendarEvent->relationLoaded('attendees')
+            ? $calendarEvent->attendeeEmailList()
+            : $calendarEvent->attendees()->pluck('email')->all();
 
         if (is_array($emails)) {
             foreach ($emails as $email) {
@@ -274,7 +276,9 @@ class GoogleCalendarService
 
     protected function hasAttendees(CalendarEvent $calendarEvent): bool
     {
-        $emails = $calendarEvent->attendee_emails;
+        $emails = $calendarEvent->relationLoaded('attendees')
+            ? $calendarEvent->attendeeEmailList()
+            : $calendarEvent->attendees()->pluck('email')->all();
 
         return is_array($emails) && ! empty($emails);
     }

@@ -27,8 +27,17 @@ class User extends Authenticatable
         'cover_picture',
         'bio',
         'department_id',
+        'job_title',
+        'work_phone',
+        'personal_phone',
+        'personal_phone_visible',
+        'manager_id',
+        'employee_id',
+        'employment_type',
+        'emergency_contact_name',
+        'emergency_contact_phone',
+        'gender',
         'location',
-        'skills',
         'ask_me_about',
         'email',
         'password',
@@ -70,7 +79,7 @@ class User extends Authenticatable
             'is_approved' => 'boolean',
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
-            'skills' => 'array',
+            'personal_phone_visible' => 'boolean',
             'date_of_birth' => 'date',
             'joined_at' => 'date',
         ];
@@ -99,7 +108,8 @@ class User extends Authenticatable
                 ->orWhere('bio', 'like', $like)
                 ->orWhere('location', 'like', $like)
                 ->orWhere('ask_me_about', 'like', $like)
-                ->orWhere('skills', 'like', $like)
+                ->orWhere('job_title', 'like', $like)
+                ->orWhereHas('userSkills', fn (Builder $skillQuery) => $skillQuery->where('name', 'like', $like))
                 ->orWhereHas('department', fn (Builder $departmentQuery) => $departmentQuery->where('name', 'like', $like));
         });
     }
@@ -107,6 +117,85 @@ class User extends Authenticatable
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'manager_id');
+    }
+
+    public function directReports(): HasMany
+    {
+        return $this->hasMany(self::class, 'manager_id');
+    }
+
+    public function educations(): HasMany
+    {
+        return $this->hasMany(UserEducation::class)->orderBy('sort_order');
+    }
+
+    public function workExperiences(): HasMany
+    {
+        return $this->hasMany(UserWorkExperience::class)->orderBy('sort_order');
+    }
+
+    public function userSkills(): HasMany
+    {
+        return $this->hasMany(UserSkill::class)->orderBy('sort_order');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function skillsList(): array
+    {
+        if (! $this->relationLoaded('userSkills')) {
+            return [];
+        }
+
+        return $this->userSkills->pluck('name')->values()->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function educationHistoryList(): array
+    {
+        if (! $this->relationLoaded('educations')) {
+            return [];
+        }
+
+        return $this->educations
+            ->map(fn (UserEducation $education) => [
+                'institution' => $education->institution,
+                'qualification' => $education->qualification,
+                'field_of_study' => $education->field_of_study,
+                'year_from' => $education->year_from,
+                'year_to' => $education->year_to,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function workHistoryList(): array
+    {
+        if (! $this->relationLoaded('workExperiences')) {
+            return [];
+        }
+
+        return $this->workExperiences
+            ->map(fn (UserWorkExperience $experience) => [
+                'company' => $experience->company,
+                'job_title' => $experience->job_title,
+                'date_from' => $experience->date_from,
+                'date_to' => $experience->date_to,
+                'description' => $experience->description,
+            ])
+            ->values()
+            ->all();
     }
 
     public function accessGroups(): BelongsToMany
@@ -183,6 +272,20 @@ class User extends Authenticatable
 
         if ($this->joined_at) {
             $array['joined_at'] = $this->joined_at->toDateString();
+        }
+
+        $array['skills'] = $this->skillsList();
+        $array['education_history'] = $this->educationHistoryList();
+        $array['work_history'] = $this->workHistoryList();
+
+        if ($this->relationLoaded('manager')) {
+            $manager = $this->getRelation('manager');
+            $array['manager'] = $manager ? [
+                'id' => $manager->id,
+                'name' => $manager->displayName(),
+                'profile_picture' => $manager->profile_picture,
+                'job_title' => $manager->job_title,
+            ] : null;
         }
 
         return $array;

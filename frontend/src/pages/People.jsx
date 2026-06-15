@@ -68,9 +68,11 @@ export default function People() {
             Discover colleagues, learn what they do, and explore their profiles.
           </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {isFetching ? 'Updating...' : `${users.length} colleague${users.length === 1 ? '' : 's'}`}
-        </p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <p className="text-sm text-muted-foreground">
+            {isFetching ? 'Updating...' : `${users.length} colleague${users.length === 1 ? '' : 's'}`}
+          </p>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">

@@ -30,12 +30,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn, formatDateForInput } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
+import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
+import ManagerCombobox from '@/components/profile/ManagerCombobox';
+import { EMPLOYMENT_TYPE_LABELS } from '@/lib/profile';
 
 function GroupMultiSelect({ groups, selectedIds, onToggle, emptyLabel = 'No access groups yet.' }) {
   if (groups.length === 0) {
@@ -839,6 +843,13 @@ export default function UserManagement() {
       password: '',
       date_of_birth: formatDateForInput(user.date_of_birth),
       joined_at: formatDateForInput(user.joined_at),
+      job_title: user.job_title || '',
+      employee_id: user.employee_id || '',
+      employment_type: user.employment_type || '',
+      department_id: user.department_id ?? null,
+      department_name: user.department || '',
+      manager_id: user.manager_id ?? null,
+      manager_name: user.manager?.name || user.manager?.full_name || '',
     });
   };
 
@@ -855,12 +866,19 @@ export default function UserManagement() {
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
         date_of_birth: editForm.date_of_birth || null,
         joined_at: editForm.joined_at || null,
+        job_title: editForm.job_title?.trim() || null,
+        employee_id: editForm.employee_id?.trim() || null,
+        employment_type: editForm.employment_type || null,
+        department_id: editForm.department_id,
+        manager_id: editForm.manager_id,
       };
       if (editForm.password) {
         updateData.password = editForm.password;
       }
       await db.entities.User.update(editUser.id, updateData);
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      queryClient.invalidateQueries({ queryKey: ['org-chart'] });
       queryClient.invalidateQueries({ queryKey: ['access-groups'] });
       setEditUser(null);
       toast.success('User updated successfully');
@@ -1505,7 +1523,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle className="text-left pr-6">Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
           </DialogHeader>
@@ -1603,6 +1621,73 @@ export default function UserManagement() {
                 </div>
                 <p className="text-xs text-muted-foreground -mt-2">
                   Used for today&apos;s birthdays and service anniversaries on the dashboard.
+                </p>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label>Job Title</Label>
+                  <Input
+                    value={editForm.job_title || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, job_title: e.target.value }))}
+                    placeholder="e.g. Senior Accountant"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <DepartmentCombobox
+                    value={editForm.department_id}
+                    label={editForm.department_name}
+                    onChange={(departmentId, departmentName = '') =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        department_id: departmentId,
+                        department_name: departmentName,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Reports To</Label>
+                  <ManagerCombobox
+                    value={editForm.manager_id}
+                    excludeUserId={editUser.id}
+                    selectedLabel={editForm.manager_name}
+                    onChange={(managerId) => setEditForm((prev) => ({ ...prev, manager_id: managerId }))}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Employee ID</Label>
+                    <Input
+                      value={editForm.employee_id || ''}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, employee_id: e.target.value }))}
+                      placeholder="Internal staff number"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Employment Type</Label>
+                    <Select
+                      value={editForm.employment_type || 'unset'}
+                      onValueChange={(value) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          employment_type: value === 'unset' ? '' : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unset">Not specified</SelectItem>
+                        {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Work details power colleague profiles and the department org chart.
                 </p>
               </div>
               <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">

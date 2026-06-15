@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CalendarEvent extends Model
 {
@@ -17,7 +18,6 @@ class CalendarEvent extends Model
         'end_at',
         'is_all_day',
         'created_by',
-        'attendee_emails',
         'google_calendar_url',
         'google_event_id',
         'google_sync_status',
@@ -27,6 +27,7 @@ class CalendarEvent extends Model
     protected $appends = [
         'created_date',
         'updated_date',
+        'attendee_emails',
     ];
 
     protected function casts(): array
@@ -35,8 +36,31 @@ class CalendarEvent extends Model
             'start_at' => 'datetime',
             'end_at' => 'datetime',
             'is_all_day' => 'boolean',
-            'attendee_emails' => 'array',
         ];
+    }
+
+    public function attendees(): HasMany
+    {
+        return $this->hasMany(CalendarEventAttendee::class);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function attendeeEmailList(): array
+    {
+        if (! $this->relationLoaded('attendees')) {
+            return [];
+        }
+
+        return $this->attendees->pluck('email')->values()->all();
+    }
+
+    public function getAttendeeEmailsAttribute(): ?array
+    {
+        $emails = $this->attendeeEmailList();
+
+        return $emails === [] ? null : $emails;
     }
 
     public function getCreatedDateAttribute(): ?string

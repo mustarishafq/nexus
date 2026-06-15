@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Application extends Model
 {
@@ -23,7 +24,6 @@ class Application extends Model
         'open_mode',
         'visibility',
         'created_by_user_id',
-        'private_allowed_user_emails',
         'is_enabled',
         'last_heartbeat',
         'notification_config',
@@ -35,6 +35,7 @@ class Application extends Model
         'created_date',
         'updated_date',
         'created_by_credit',
+        'private_allowed_user_emails',
     ];
 
     protected function casts(): array
@@ -43,8 +44,29 @@ class Application extends Model
             'is_enabled' => 'boolean',
             'last_heartbeat' => 'datetime',
             'notification_config' => 'array',
-            'private_allowed_user_emails' => 'array',
         ];
+    }
+
+    public function privateAccessEmails(): HasMany
+    {
+        return $this->hasMany(ApplicationPrivateAccessEmail::class);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function privateAllowedEmailsList(): array
+    {
+        if (! $this->relationLoaded('privateAccessEmails')) {
+            return [];
+        }
+
+        return $this->privateAccessEmails->pluck('email')->values()->all();
+    }
+
+    public function getPrivateAllowedUserEmailsAttribute(): array
+    {
+        return $this->privateAllowedEmailsList();
     }
 
     public function creator(): BelongsTo

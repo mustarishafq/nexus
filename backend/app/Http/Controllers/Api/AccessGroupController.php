@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
 use App\Support\ApiTokenAuth;
+use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -22,7 +23,7 @@ class AccessGroupController extends Controller
 
         $items = $this->applyIndexQuery(
             $request,
-            AccessGroup::query()->withCount('users'),
+            AccessGroup::query()->with('allowedApplications')->withCount('users'),
             ['name']
         )->get();
 
@@ -49,12 +50,14 @@ class AccessGroupController extends Controller
         ]);
 
         $userIds = $validated['user_ids'] ?? [];
-        unset($validated['user_ids']);
+        $allowedSlugs = $validated['allowed_system_slugs'] ?? null;
+        unset($validated['user_ids'], $validated['allowed_system_slugs']);
 
         $group = AccessGroup::create($validated);
+        SyncAssignmentRecords::syncAccessGroupApplications($group, $allowedSlugs);
         $group->users()->sync($this->normalizeUserIds($userIds));
 
-        return response()->json($group->fresh()->loadCount('users'), 201);
+        return response()->json($group->fresh()->load('allowedApplications')->loadCount('users'), 201);
     }
 
     public function show(AccessGroup $accessGroup): JsonResponse
@@ -63,7 +66,7 @@ class AccessGroupController extends Controller
             return $response;
         }
 
-        return response()->json($accessGroup->loadCount('users'));
+        return response()->json($accessGroup->load('allowedApplications')->loadCount('users'));
     }
 
     public function update(Request $request, AccessGroup $accessGroup): JsonResponse
@@ -86,15 +89,20 @@ class AccessGroupController extends Controller
         ]);
 
         $userIds = array_key_exists('user_ids', $validated) ? $validated['user_ids'] : null;
-        unset($validated['user_ids']);
+        $allowedSlugs = array_key_exists('allowed_system_slugs', $validated) ? $validated['allowed_system_slugs'] : null;
+        unset($validated['user_ids'], $validated['allowed_system_slugs']);
 
         $accessGroup->update($validated);
+
+        if ($allowedSlugs !== null) {
+            SyncAssignmentRecords::syncAccessGroupApplications($accessGroup, $allowedSlugs);
+        }
 
         if ($userIds !== null) {
             $accessGroup->users()->sync($this->normalizeUserIds($userIds));
         }
 
-        return response()->json($accessGroup->fresh()->loadCount('users'));
+        return response()->json($accessGroup->fresh()->load('allowedApplications')->loadCount('users'));
     }
 
     public function destroy(AccessGroup $accessGroup): JsonResponse
@@ -104,6 +112,7 @@ class AccessGroupController extends Controller
         }
 
         $accessGroup->users()->detach();
+        $accessGroup->allowedApplications()->detach();
         $accessGroup->delete();
 
         return response()->noContent();
