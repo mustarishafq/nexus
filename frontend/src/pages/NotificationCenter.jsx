@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { motion } from 'framer-motion';
 import NotificationItem from '@/components/notifications/NotificationItem';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_TYPES,
@@ -98,19 +99,16 @@ export default function NotificationCenter() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Bell className="w-6 h-6 text-primary" /> Notification Center
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {notifications.filter(n => !n.is_read).length} unread of {notifications.length} total
-          </p>
-        </div>
-        <Button onClick={markAllRead} variant="outline" size="sm" className="gap-1">
-          <CheckCheck className="w-4 h-4" /> Mark All Read
-        </Button>
-      </motion.div>
+      <PageHeader
+        icon={Bell}
+        title="Notification Center"
+        description={`${notifications.filter((n) => !n.is_read).length} unread of ${notifications.length} total`}
+        actions={(
+          <Button onClick={markAllRead} variant="outline" size="sm" className="gap-1">
+            <CheckCheck className="h-4 w-4" /> Mark all read
+          </Button>
+        )}
+      />
 
       {/* Filters */}
       <div className="bg-card rounded-2xl border border-border p-4">
@@ -161,11 +159,12 @@ export default function NotificationCenter() {
           <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
         </div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <Bell className="w-12 h-12 mb-4 opacity-20" />
-          <p className="font-medium">No notifications found</p>
-          <p className="text-sm mt-1">Try adjusting your filters</p>
-        </div>
+        <EmptyState
+          variant="inline"
+          icon={Bell}
+          title="No notifications found"
+          description="Try adjusting your filters or check back later."
+        />
       ) : (
         <div className="space-y-6">
           {Object.entries(grouped).map(([date, notifs]) => (

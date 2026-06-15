@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Loader2, Newspaper } from 'lucide-react';
 import db from '@/api/base44Client';
 import { FeedComposer, FeedItem } from '@/components/feed/FeedItems';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { feedPostElementId, parseFeedFocusParams } from '@/lib/feedLinks';
 import { motion } from 'framer-motion';
@@ -66,20 +68,12 @@ export default function CompanyFeed() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Newspaper className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Company Feed</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Announcements from leadership and updates shared by your colleagues.
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground sm:text-sm">
-          {isFetching ? 'Refreshing...' : `${items.length} items`}
-        </p>
-      </div>
+      <PageHeader
+        icon={Newspaper}
+        title="Company Feed"
+        description="Announcements from leadership and updates shared by your colleagues."
+        meta={isFetching ? 'Refreshing...' : `${items.length} items`}
+      />
 
       <FeedComposer />
 
@@ -93,13 +87,11 @@ export default function CompanyFeed() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : items.length === 0 ? (
-          <div className="px-4 py-12 text-center sm:px-6 sm:py-16">
-            <Newspaper className="mx-auto h-10 w-10 text-muted-foreground/60" />
-            <p className="mt-4 text-sm font-medium">The feed is quiet right now</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Share the first update with your team using the composer above.
-            </p>
-          </div>
+          <EmptyState
+            icon={Newspaper}
+            title="The feed is quiet right now"
+            description="Share the first update with your team using the composer above."
+          />
         ) : (
           items.map((item) => (
             <FeedItem

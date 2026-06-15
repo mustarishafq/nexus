@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Loader2, Mail, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, MessageSquare, Send, Trash2, Users } from 'lucide-react';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { displayMentionText } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { UnreadBadge } from '@/components/ui/unread-badge';
 
 function ConversationListItem({ conversation, active, onClick, onDelete, deleting }) {
   const other = conversation.other_user;
@@ -48,11 +51,7 @@ function ConversationListItem({ conversation, active, onClick, onDelete, deletin
           </div>
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{preview}</p>
         </div>
-        {unread > 0 ? (
-          <span className="mt-1 min-w-[18px] rounded-full bg-primary px-1.5 text-center text-[10px] font-bold leading-[18px] text-primary-foreground">
-            {unread > 99 ? '99+' : unread}
-          </span>
-        ) : null}
+        <UnreadBadge count={unread} className="mt-1" />
       </button>
       <Button
         type="button"
@@ -187,10 +186,11 @@ export default function Messages() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-10rem)] max-w-6xl flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <Mail className="h-5 w-5 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight">Messages</h1>
-      </div>
+      <PageHeader
+        icon={Mail}
+        title="Messages"
+        description="Direct messages with your colleagues."
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className={cn('border-b border-border lg:border-b-0 lg:border-r', showThread && 'hidden lg:block')}>
@@ -206,9 +206,17 @@ export default function Messages() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : conversations.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No conversations yet. Message someone from their profile.
-              </div>
+              <EmptyState
+                variant="compact"
+                icon={Users}
+                title="No conversations yet"
+                description="Find a colleague and start a conversation from their profile."
+                action={(
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/people">Browse people</Link>
+                  </Button>
+                )}
+              />
             ) : (
               conversations.map((conversation) => (
                 <ConversationListItem
@@ -226,9 +234,13 @@ export default function Messages() {
 
         <div className={cn('flex min-h-0 flex-col', !showThread && 'hidden lg:flex')}>
           {!showThread ? (
-            <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Select a conversation to start chatting.
-            </div>
+            <EmptyState
+              variant="inline"
+              icon={MessageSquare}
+              title="Select a conversation"
+              description="Choose someone from your inbox to view the thread."
+              className="flex-1"
+            />
           ) : (
             <>
               <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">

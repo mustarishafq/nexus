@@ -1,46 +1,46 @@
 import React from 'react';
-import { Monitor, Wifi, WifiOff, AlertTriangle, Wrench } from 'lucide-react';
+import { Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const statusConfig = {
-  online: { icon: Wifi, color: 'text-success', bg: 'bg-success/10', label: 'Online' },
-  offline: { icon: WifiOff, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Offline' },
-  maintenance: { icon: Wrench, color: 'text-warning', bg: 'bg-warning/10', label: 'Maintenance' },
-  degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', label: 'Degraded' },
-};
+import { EmptyState } from '@/components/ui/empty-state';
+import { ApplicationStatusBadge } from '@/components/ui/application-status-badge';
+import { getApplicationStatus } from '@/lib/applicationStatus';
 
 export default function SystemHealthWidget({ systems }) {
   return (
-    <div className="bg-card rounded-2xl border border-border">
+    <div className="rounded-2xl border border-border bg-card">
       <div className="flex items-center gap-2 p-5 pb-3">
-        <Monitor className="w-4 h-4 text-primary" />
-        <h3 className="font-semibold text-sm">System Health</h3>
+        <Monitor className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-semibold">System Health</h3>
       </div>
       <div className="px-5 pb-5">
         {systems.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">No applications</p>
+          <EmptyState
+            variant="compact"
+            icon={Monitor}
+            title="No applications yet"
+            description="Connected systems will appear here once added."
+          />
         ) : (
-          <div className="max-h-64 overflow-y-auto space-y-3 scrollbar-on-hover -mr-5 pr-5">
-          {systems.map(system => {
-            const config = statusConfig[system.status] || statusConfig.online;
-            const StatusIcon = config.icon;
-            return (
-              <div key={system.id} className="flex items-center justify-between group">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", config.bg)}>
-                    <StatusIcon className={cn("w-4 h-4", config.color)} />
+          <div className="-mr-5 max-h-64 space-y-3 overflow-y-auto pr-5 scrollbar-on-hover">
+            {systems.map((system) => {
+              const config = getApplicationStatus(system.status);
+              const StatusIcon = config.icon;
+
+              return (
+                <div key={system.id} className="group flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', config.bg)}>
+                      <StatusIcon className={cn('h-4 w-4', config.color)} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{system.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{system.slug}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{system.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{system.slug}</p>
-                  </div>
+                  <ApplicationStatusBadge status={system.status} />
                 </div>
-                <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", config.bg, config.color)}>
-                  {config.label}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
           </div>
         )}
       </div>

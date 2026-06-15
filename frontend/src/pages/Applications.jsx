@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Bell, Monitor, Plus, Wifi, WifiOff, Wrench, AlertTriangle, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
+import { Bell, Monitor, Plus, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +52,7 @@ import {
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import { APPLICATION_ENVIRONMENTS } from '@/lib/applicationEnvironment';
+import { getApplicationStatus } from '@/lib/applicationStatus';
 import { toast } from 'sonner';
 
 const API_BASE_URL = API_ORIGIN;
@@ -67,12 +68,6 @@ const toAbsoluteUrl = (url) => {
   return url.startsWith('/') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/${url}`;
 };
 
-const statusConfig = {
-  online: { icon: Wifi, color: 'text-success', bg: 'bg-success/10', border: 'border-success/30' },
-  offline: { icon: WifiOff, color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/30' },
-  maintenance: { icon: Wrench, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
-  degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
-};
 
 function SortableReorderRow({ system }) {
   const {
@@ -84,7 +79,7 @@ function SortableReorderRow({ system }) {
     isDragging,
   } = useSortable({ id: system.id });
 
-  const config = statusConfig[system.status] || statusConfig.online;
+  const config = getApplicationStatus(system.status);
   const StatusIcon = config.icon;
 
   const style = {
@@ -132,7 +127,7 @@ function SortableReorderRow({ system }) {
           </Badge>
         ) : null}
         <Badge className={cn('text-[10px]', config.bg, config.color, 'border-0')}>
-          <StatusIcon className="w-2.5 h-2.5 mr-1" /> {system.status}
+          <StatusIcon className="mr-1 h-2.5 w-2.5" /> {config.label}
         </Badge>
       </div>
     </div>

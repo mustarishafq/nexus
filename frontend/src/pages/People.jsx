@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import UserDirectoryCard from '@/components/people/UserDirectoryCard';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 
 function useDebouncedValue(value, delay = 300) {
   const [debounced, setDebounced] = useState(value);
@@ -58,22 +60,12 @@ export default function People() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">People</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Discover colleagues, learn what they do, and explore their profiles.
-          </p>
-        </div>
-        <div className="flex flex-col items-start gap-2 sm:items-end">
-          <p className="text-sm text-muted-foreground">
-            {isFetching ? 'Updating...' : `${users.length} colleague${users.length === 1 ? '' : 's'}`}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Users}
+        title="People"
+        description="Discover colleagues, learn what they do, and explore their profiles."
+        meta={isFetching ? 'Updating...' : `${users.length} colleague${users.length === 1 ? '' : 's'}`}
+      />
 
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto]">
@@ -131,18 +123,19 @@ export default function People() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : users.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border px-6 py-16 text-center">
-          <Users className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-4 text-sm font-medium">No colleagues match your filters</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Try a different search or clear the filters to browse everyone.
-          </p>
-          {hasActiveFilters ? (
-            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          ) : null}
-        </div>
+        <EmptyState
+          variant="dashed"
+          icon={Users}
+          title="No colleagues match your filters"
+          description="Try a different search or clear the filters to browse everyone."
+          action={
+            hasActiveFilters ? (
+              <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
