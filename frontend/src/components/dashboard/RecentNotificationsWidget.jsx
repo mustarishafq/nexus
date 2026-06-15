@@ -20,7 +20,7 @@ export default function RecentNotificationsWidget({ notifications, onMarkRead })
           </Button>
         </Link>
       </div>
-      <div className="px-3 pb-3 space-y-0.5">
+      <div className="px-3 pb-3 space-y-2">
         {recent.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No recent notifications</p>
         ) : (

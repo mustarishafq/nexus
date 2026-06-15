@@ -171,7 +171,7 @@ export default function NotificationCenter() {
           {Object.entries(grouped).map(([date, notifs]) => (
             <div key={date}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{date}</h3>
-              <div className="bg-card rounded-2xl border border-border p-2 space-y-0.5">
+              <div className="bg-card rounded-2xl border border-border p-2 space-y-2">
                 {notifs.map(n => (
                   <NotificationItem
                     key={n.id}

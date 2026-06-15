@@ -164,7 +164,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
                   <p className="text-xs mt-1">You're all caught up!</p>
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {filtered.map(notif => (
                     <NotificationItem
                       key={notif.id}
