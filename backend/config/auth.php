@@ -114,4 +114,16 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Token Lifetime
+    |--------------------------------------------------------------------------
+    |
+    | Number of minutes before an API bearer token expires. Leave empty or set
+    | to 0 for tokens that never expire until the user logs out.
+    |
+    */
+
+    'api_token_lifetime' => env('AUTH_API_TOKEN_LIFETIME'),
+
 ];

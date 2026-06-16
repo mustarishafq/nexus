@@ -1,10 +1,10 @@
 // @ts-nocheck
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
+import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/authStorage';
 
 export const API_ORIGIN = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
-const AUTH_TOKEN_KEY = 'nexus_auth_token';
 
 const ENTITY_ENDPOINTS = {
 	User: 'users',
@@ -37,7 +37,7 @@ function normalizeBody(data) {
 }
 
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
-	const token = localStorage.getItem(AUTH_TOKEN_KEY);
+	const token = getAuthToken();
 	const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 	const hasBody = body !== undefined;
 
@@ -143,10 +143,10 @@ export const db = {
 			return request('/auth/register', { method: 'POST', body: data });
 		},
 
-		async login(data) {
+		async login(data, { remember = true } = {}) {
 			const payload = await request('/auth/login', { method: 'POST', body: data });
 			if (payload?.token) {
-				localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
+				setAuthToken(payload.token, { remember });
 			}
 			return payload;
 		},
@@ -179,7 +179,7 @@ export const db = {
 				// Always clear client token even if backend revoke fails.
 			}
 
-			localStorage.removeItem(AUTH_TOKEN_KEY);
+			clearAuthToken();
 			clearBirthdayShownKeys();
 			clearBroadcastAckKeys();
 			if (redirectTo) {
@@ -251,7 +251,7 @@ export const db = {
 		},
 
 		async exportCsv(filters = {}) {
-			const token = localStorage.getItem(AUTH_TOKEN_KEY);
+			const token = getAuthToken();
 			const query = buildQuery(filters);
 			const response = await fetch(`${API_BASE_URL}/network-health/export${query}`, {
 				method: 'GET',
@@ -512,7 +512,7 @@ export const db = {
 	},
 
 	async uploadUsersCsv(file, path) {
-		const token = localStorage.getItem(AUTH_TOKEN_KEY);
+		const token = getAuthToken();
 		const formData = new FormData();
 		formData.append('file', file);
 		const response = await fetch(`${API_BASE_URL}${path}`, {

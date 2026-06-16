@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { getRememberMePreference, setRememberMePreference } from '@/lib/authStorage';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(getRememberMePreference);
 
   const status = searchParams.get('status');
   const appName = appPublicSettings?.system_name || 'EMZI Nexus Brain';
@@ -32,7 +33,8 @@ export default function Login() {
       await db.auth.login({
         email: form.get('email'),
         password: form.get('password'),
-      });
+      }, { remember: rememberMe });
+      setRememberMePreference(rememberMe);
       clearBirthdayShownKeys();
       clearBroadcastAckKeys();
       await checkUserAuth();
@@ -329,6 +331,19 @@ export default function Login() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="remember-desktop"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-border/80 bg-background text-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                />
+                <Label htmlFor="remember-desktop" className="text-sm font-medium text-foreground cursor-pointer select-none">
+                  Remember me
+                </Label>
               </div>
 
               <Button

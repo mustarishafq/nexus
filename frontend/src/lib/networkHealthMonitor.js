@@ -1,4 +1,5 @@
 import db from '@/api/base44Client';
+import { getAuthToken } from '@/lib/authStorage';
 import { getDeviceInfo } from '@/lib/deviceInfo';
 
 const INTERVAL_MS = 60 * 60 * 1000;
@@ -7,7 +8,6 @@ const LAST_RUN_KEY = 'nexus_network_health_last_run';
 const LOCK_KEY = 'nexus_network_health_lock';
 const CHANNEL_NAME = 'nexus_network_health';
 const MAX_RETRIES = 2;
-const AUTH_TOKEN_KEY = 'nexus_auth_token';
 
 const TAB_ID = typeof crypto !== 'undefined' && crypto.randomUUID
   ? crypto.randomUUID()
@@ -103,7 +103,7 @@ async function measureLatency() {
 }
 
 async function measureDownloadSpeed() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   const start = performance.now();
 
   const response = await withRetries(async () => {
@@ -132,7 +132,7 @@ async function measureDownloadSpeed() {
 }
 
 async function measureUploadSpeed() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   const payload = new Uint8Array(131072);
   const blob = new Blob([payload], { type: 'application/octet-stream' });
   const formData = new FormData();
@@ -165,7 +165,7 @@ async function measureUploadSpeed() {
 }
 
 async function runHealthCheck() {
-  if (running || !localStorage.getItem(AUTH_TOKEN_KEY)) {
+  if (running || !getAuthToken()) {
     return;
   }
 

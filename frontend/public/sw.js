@@ -1,8 +1,9 @@
-const CACHE_NAME = 'nexus-shell-v5';
+const CACHE_NAME = 'nexus-shell-v6';
 const APP_SHELL = [
   '/',
   '/offline.html',
   '/icons/apple-touch-icon.png',
+  '/icons/notification-badge.png',
   '/icons/pwa-icon-192.png',
   '/icons/pwa-icon-512.png',
 ];
@@ -98,7 +99,7 @@ self.addEventListener('push', (event) => {
   const notifyOptions = {
     body,
     icon: '/icons/pwa-icon-192.png',
-    badge: '/icons/pwa-icon-192.png',
+    badge: '/icons/notification-badge.png',
     tag,
     renotify: Boolean(tag),
     silent: false,

@@ -109,7 +109,7 @@ class AuthController extends Controller
                 'description' => 'Logged out of '.config('app.name', 'EMZI Nexus Brain'),
                 'ip_address'  => $request->ip(),
             ]);
-            ApiTokenAuth::revoke($user);
+            ApiTokenAuth::revoke($user, $request->bearerToken());
         }
 
         return response()->json([
