@@ -104,7 +104,6 @@ class UserProfileSerializer
             'password',
             'remember_token',
             'notification_settings',
-            'force_password_change',
         ])->toArray();
 
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
