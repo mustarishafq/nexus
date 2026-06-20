@@ -8,7 +8,7 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/icons/pwa-icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icons/pwa-icon-512.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#022e96" />
     <link rel="manifest" href="%VITE_API_BASE_URL%/api/pwa/manifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -38,6 +38,24 @@
         if (localStorage.getItem('nexus-theme') === 'dark') {
           document.documentElement.classList.add('dark');
         }
+
+        const splashCacheRaw = localStorage.getItem('nexus_splash_public_cache_v1');
+        const splashCache = splashCacheRaw ? JSON.parse(splashCacheRaw) : null;
+        const splashColor =
+          splashCache?.splash?.background_color
+          || splashCache?.splash?.splash_background_color
+          || splashCache?.background_color
+          || splashCache?.splash_background_color;
+
+        const savedTheme = localStorage.getItem('nexus-theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const useDarkTheme = savedTheme === 'dark' || (savedTheme === 'system' && prefersDark);
+        const themeColor = useDarkTheme
+          ? '#0F172A'
+          : (typeof splashColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(splashColor) ? splashColor.toUpperCase() : '#022E96');
+
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', themeColor);
       } catch (e) {}
     </script>
   </head>

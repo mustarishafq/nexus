@@ -4,7 +4,46 @@ import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
+const DARK_THEME_COLOR = '#0F172A';
+
+function resolveSplashThemeColor(settings) {
+  const candidates = [
+    settings?.splash?.background_color,
+    settings?.splash_background_color,
+    settings?.background_color,
+  ];
+
+  const valid = candidates.find((value) => typeof value === 'string' && HEX_COLOR_REGEX.test(value.trim()));
+  return valid ? valid.toUpperCase() : '#022E96';
+}
+
+function applyThemeColor(color) {
+  if (typeof document === 'undefined') return;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    themeMeta.setAttribute('content', color);
+  }
+}
+
+function resolveThemePreference() {
+  if (typeof window === 'undefined') return 'light';
+
+  const saved = window.localStorage.getItem('nexus-theme');
+  if (saved === 'dark' || saved === 'light') return saved;
+  if (saved === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function resolveThemeColor(settings) {
+  const preference = resolveThemePreference();
+  if (preference === 'dark') return DARK_THEME_COLOR;
+  return resolveSplashThemeColor(settings);
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -29,6 +68,25 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('app-settings-updated', handleSettingsUpdated);
   }, []);
 
+  useEffect(() => {
+    const updateThemeMeta = () => {
+      applyThemeColor(resolveThemeColor(appPublicSettings));
+    };
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const observer = new MutationObserver(updateThemeMeta);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('storage', updateThemeMeta);
+    mediaQuery.addEventListener('change', updateThemeMeta);
+    updateThemeMeta();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', updateThemeMeta);
+      mediaQuery.removeEventListener('change', updateThemeMeta);
+    };
+  }, [appPublicSettings]);
+
   const refreshPublicSettings = async () => {
     try {
       const publicSettings = await db.appSettings.public();
@@ -42,8 +100,11 @@ export const AuthProvider = ({ children }) => {
           appleTitle.setAttribute('content', publicSettings.system_name);
         }
       }
+
+      applyThemeColor(resolveThemeColor(publicSettings));
     } catch {
       setAppPublicSettings({ system_name: 'EMZI Nexus Brain' });
+      applyThemeColor(resolveThemeColor(null));
     }
   };
 
