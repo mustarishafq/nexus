@@ -165,7 +165,7 @@ export default function PwaSplashScreen() {
           className={interactive
             ? 'fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-manipulation'
             : 'fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-none'}
-          style={{ backgroundColor: splashConfig?.background_color || '#022e96' }}
+          style={{ backgroundColor: splashConfig?.background_color }}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: exitFadeSeconds, ease: 'easeInOut' }}
