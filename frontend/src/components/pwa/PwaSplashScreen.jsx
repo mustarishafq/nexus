@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings } from '@/lib/splashConfig';
 
 const SPLASH_SRC = '/lottie/splash.lottie';
+const SPLASH_CACHE_KEY = 'nexus_splash_public_cache_v1';
 
 function shouldShowSplash() {
   if (typeof window === 'undefined') return false;
@@ -27,6 +28,54 @@ function shouldShowSplash() {
   }
 }
 
+function readCachedSplashSeed() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(SPLASH_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSplashSeed(settings, systemName) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const splash = settings?.splash && typeof settings.splash === 'object' ? settings.splash : settings || {};
+    window.localStorage.setItem(
+      SPLASH_CACHE_KEY,
+      JSON.stringify({
+        splash,
+        system_name: systemName || 'EMZI Nexus Brain',
+      }),
+    );
+  } catch {
+    // ignore cache write failures
+  }
+}
+
+function getNeutralStartupSeed() {
+  return {
+    splash: {
+      splash_enabled: true,
+      splash_animation_style: 'fade-rise',
+      splash_background_color: '#000000',
+      splash_accent_color: '#FFFFFF',
+      splash_secondary_color: '#A0A0A0',
+      splash_show_logo: false,
+      splash_show_system_name: false,
+      splash_background_overlay_opacity: 0,
+      splash_backdrop_blur: 0,
+    },
+    system_name: 'EMZI Nexus Brain',
+  };
+}
+
 export default function PwaSplashScreen() {
   const { appPublicSettings, isLoadingPublicSettings } = useAuth();
   const [active, setActive] = useState(shouldShowSplash);
@@ -39,13 +88,16 @@ export default function PwaSplashScreen() {
   const hydratedFromSettingsRef = useRef(false);
 
   if (splashConfigRef.current === null) {
-    splashConfigRef.current = resolveSplashConfigFromSettings(appPublicSettings || {});
-    systemNameRef.current = appPublicSettings?.system_name || 'EMZI Nexus Brain';
+    const cachedSeed = readCachedSplashSeed();
+    const initialSeed = appPublicSettings || cachedSeed || getNeutralStartupSeed();
+    splashConfigRef.current = resolveSplashConfigFromSettings(initialSeed?.splash || initialSeed);
+    systemNameRef.current = initialSeed?.system_name || 'EMZI Nexus Brain';
   }
 
   if (!isLoadingPublicSettings && !hydratedFromSettingsRef.current) {
     splashConfigRef.current = resolveSplashConfigFromSettings(appPublicSettings);
     systemNameRef.current = appPublicSettings?.system_name || 'EMZI Nexus Brain';
+    writeCachedSplashSeed(appPublicSettings, systemNameRef.current);
     hydratedFromSettingsRef.current = true;
   }
 
