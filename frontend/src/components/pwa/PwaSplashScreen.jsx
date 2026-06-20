@@ -36,10 +36,17 @@ export default function PwaSplashScreen() {
   const dismissedRef = useRef(false);
   const splashConfigRef = useRef(null);
   const systemNameRef = useRef(null);
+  const hydratedFromSettingsRef = useRef(false);
 
-  if (!isLoadingPublicSettings && splashConfigRef.current === null) {
+  if (splashConfigRef.current === null) {
+    splashConfigRef.current = resolveSplashConfigFromSettings(appPublicSettings || {});
+    systemNameRef.current = appPublicSettings?.system_name || 'EMZI Nexus Brain';
+  }
+
+  if (!isLoadingPublicSettings && !hydratedFromSettingsRef.current) {
     splashConfigRef.current = resolveSplashConfigFromSettings(appPublicSettings);
     systemNameRef.current = appPublicSettings?.system_name || 'EMZI Nexus Brain';
+    hydratedFromSettingsRef.current = true;
   }
 
   const splashConfig = splashConfigRef.current;
@@ -154,7 +161,6 @@ export default function PwaSplashScreen() {
 
   if (!active || splashConfig?.enabled === false) return null;
 
-  const waitingForSettings = isLoadingPublicSettings || !splashConfig || !runtime;
   const exitFadeSeconds = (runtime?.timing.exitFadeMs ?? 450) / 1000;
 
   return (
@@ -171,7 +177,7 @@ export default function PwaSplashScreen() {
           transition={{ duration: exitFadeSeconds, ease: 'easeInOut' }}
           aria-hidden="true"
         >
-          {waitingForSettings ? null : usesLottie ? (
+          {usesLottie ? (
             <>
               <SplashBackground config={splashConfig ?? {}} />
               <div className="relative z-10 flex flex-col items-center justify-center gap-4">
