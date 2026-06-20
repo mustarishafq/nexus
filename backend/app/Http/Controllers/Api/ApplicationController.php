@@ -325,6 +325,10 @@ class ApplicationController extends Controller
                 'wau_days' => 7,
                 'mau_days' => 30,
             ],
+            'trend' => [
+                'days' => 30,
+                'daily' => $this->dailyTrendForSlugs($slugs, 30),
+            ],
         ];
 
         if ($scope === 'overall') {
@@ -333,9 +337,103 @@ class ApplicationController extends Controller
                 'slug' => $app->slug,
                 'name' => $app->name,
             ])->values();
+            $payload['by_application'] = $this->applicationBreakdown(
+                $applications,
+                $weekStart,
+                $monthStart,
+            );
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  array<int, string>  $slugs
+     * @return array<int, array{date: string, active_users: int, launches: int}>
+     */
+    private function dailyTrendForSlugs(array $slugs, int $days = 30): array
+    {
+        if ($slugs === []) {
+            return [];
+        }
+
+        $start = now()->subDays($days - 1)->startOfDay();
+
+        $rows = ActivityLog::query()
+            ->selectRaw('date(created_at) as day')
+            ->selectRaw('COUNT(DISTINCT user_id) as active_users')
+            ->selectRaw('COUNT(*) as launches')
+            ->whereIn('system_id', $slugs)
+            ->whereIn('action', ['login', 'view'])
+            ->whereNotNull('user_id')
+            ->where('created_at', '>=', $start)
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get()
+            ->keyBy(fn ($row) => Carbon::parse($row->day)->toDateString());
+
+        $daily = [];
+
+        for ($i = 0; $i < $days; $i++) {
+            $dayKey = $start->copy()->addDays($i)->toDateString();
+            $row = $rows->get($dayKey);
+
+            $daily[] = [
+                'date' => $dayKey,
+                'active_users' => $row ? (int) $row->active_users : 0,
+                'launches' => $row ? (int) $row->launches : 0,
+            ];
+        }
+
+        return $daily;
+    }
+
+    /**
+     * @return array<int, array{application_id: int, name: string, wau: int, mau: int}>
+     */
+    private function applicationBreakdown(
+        Collection $applications,
+        Carbon $weekStart,
+        Carbon $monthStart,
+    ): array {
+        $slugs = $applications->pluck('slug')->all();
+
+        if ($slugs === []) {
+            return [];
+        }
+
+        $wauCounts = $this->distinctActiveUsersBySlug($slugs, $weekStart);
+        $mauCounts = $this->distinctActiveUsersBySlug($slugs, $monthStart);
+
+        return $applications
+            ->map(fn (Application $app) => [
+                'application_id' => $app->id,
+                'name' => $app->name,
+                'wau' => (int) ($wauCounts[$app->slug] ?? 0),
+                'mau' => (int) ($mauCounts[$app->slug] ?? 0),
+            ])
+            ->sortByDesc('wau')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, string>  $slugs
+     * @return array<string, int>
+     */
+    private function distinctActiveUsersBySlug(array $slugs, Carbon $since): array
+    {
+        return ActivityLog::query()
+            ->select('system_id')
+            ->selectRaw('COUNT(DISTINCT user_id) as active_users')
+            ->whereIn('system_id', $slugs)
+            ->whereIn('action', ['login', 'view'])
+            ->whereNotNull('user_id')
+            ->where('created_at', '>=', $since)
+            ->groupBy('system_id')
+            ->pluck('active_users', 'system_id')
+            ->map(fn ($count) => (int) $count)
+            ->all();
     }
 
     /**
