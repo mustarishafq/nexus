@@ -1,11 +1,11 @@
-import db from '@/api/base44Client';
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ApplicationCard from '@/components/applications/ApplicationCard';
-import { getRecentApplications, launchApplication } from '@/lib/applications';
+import { getRecentApplications } from '@/lib/applications';
+import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 
 function getFooterSubtitle(app, readOnly) {
   if (app.lastUsed) {
@@ -21,6 +21,7 @@ export default function ProfileRecentApplicationsWidget({
   readOnly = false,
 }) {
   const navigate = useNavigate();
+  const { launchingId, launchWithAnimation } = useApplicationLaunch();
   const [launching, setLaunching] = useState(null);
   const recentApplications = useMemo(
     () => getRecentApplications(applications, activities, 6),
@@ -28,12 +29,12 @@ export default function ProfileRecentApplicationsWidget({
   );
 
   const handleLaunch = async (app) => {
-    if (!app.is_enabled || launching === app.id) return;
+    if (!app.is_enabled || launching === app.id || launchingId === app.id) return;
 
     setLaunching(app.id);
 
     try {
-      await launchApplication(db, app, navigate);
+      await launchWithAnimation(app, navigate);
     } catch (err) {
       alert(err.message || 'Unable to launch application.');
     } finally {
@@ -71,7 +72,7 @@ export default function ProfileRecentApplicationsWidget({
                 system={app}
                 index={index}
                 canManageSystem={false}
-                launching={launching}
+                launching={launching ?? launchingId}
                 onLaunch={readOnly ? undefined : handleLaunch}
                 footerSubtitle={getFooterSubtitle(app, readOnly)}
                 readOnly={readOnly}

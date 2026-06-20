@@ -32,6 +32,7 @@ import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -68,7 +69,8 @@ const ProtectedRoutes = () => {
   }
 
   return (
-    <Routes>
+    <ApplicationLaunchProvider>
+      <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/feed" element={<CompanyFeed />} />
@@ -99,6 +101,7 @@ const ProtectedRoutes = () => {
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </ApplicationLaunchProvider>
   );
 };
 

@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun, Smartphone } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -23,6 +23,15 @@ import {
   supportsNativeInstallPrompt,
 } from '@/lib/pwa';
 import AdminSettings from '@/pages/AdminSettings';
+import SettingsSectionNav from '@/components/settings/SettingsSectionNav';
+
+const USER_SECTIONS = [
+  { id: 'general', label: 'General', icon: Moon },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'app', label: 'App & Install', icon: Smartphone },
+];
+
+const USER_SECTION_IDS = new Set(USER_SECTIONS.map((item) => item.id));
 
 export default function Settings() {
   const { appPublicSettings, user } = useAuth();
@@ -62,6 +71,20 @@ export default function Settings() {
     const nextTab = isAdmin && tabFromUrl === 'admin' ? 'admin' : 'user';
     setActiveTab(nextTab);
   }, [isAdmin, searchParams]);
+
+  const userSectionParam = searchParams.get('section');
+  const userSection = activeTab === 'user' && USER_SECTION_IDS.has(userSectionParam)
+    ? userSectionParam
+    : 'general';
+
+  const setUserSection = (section) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('tab');
+      next.set('section', section);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const updateInstallState = () => {
@@ -169,11 +192,25 @@ export default function Settings() {
     setActiveTab(value);
 
     if (value === 'admin' && isAdmin) {
-      setSearchParams({ tab: 'admin' });
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set('tab', 'admin');
+        if (!next.get('section') || !['branding', 'splash', 'launch', 'email'].includes(next.get('section'))) {
+          next.set('section', 'branding');
+        }
+        return next;
+      });
       return;
     }
 
-    setSearchParams({});
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('tab');
+      if (!next.get('section') || !USER_SECTION_IDS.has(next.get('section'))) {
+        next.set('section', 'general');
+      }
+      return next;
+    });
   };
 
   return (
@@ -197,202 +234,221 @@ export default function Settings() {
           ) : null}
         </TabsList>
 
-        <TabsContent value="user" className="space-y-6">
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Moon className="w-4 h-4 text-primary" /> Appearance
-              </CardTitle>
-              <CardDescription>Choose light or dark mode for the interface</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Sun className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Dark Mode</Label>
-                    <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
-                  </div>
-                </div>
-                <ThemeToggle variant="switch" />
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="user" className="mt-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+            <SettingsSectionNav
+              items={USER_SECTIONS}
+              value={userSection}
+              onChange={setUserSection}
+              className="lg:w-52 shrink-0"
+            />
 
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Bell className="w-4 h-4 text-primary" /> Notification Channels
-              </CardTitle>
-              <CardDescription>Choose how you receive notifications</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Bell className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">In-App Notifications</Label>
-                    <p className="text-xs text-muted-foreground">Show notifications in the app</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.in_app}
-                  onCheckedChange={(v) => setSettings((p) => {
-                    const next = { ...p, in_app: v };
-                    syncNotificationSettingsCache(next);
-                    return next;
-                  })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center">
-                    <Mail className="w-4 h-4 text-info" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Email Notifications</Label>
-                    <p className="text-xs text-muted-foreground">Receive email for important alerts</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.email}
-                  onCheckedChange={(v) => setSettings((p) => {
-                    const next = { ...p, email: v };
-                    syncNotificationSettingsCache(next);
-                    return next;
-                  })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
-                    {settings.sound ? <Volume2 className="w-4 h-4 text-warning" /> : <VolumeX className="w-4 h-4 text-warning" />}
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Sound Alerts</Label>
-                    <p className="text-xs text-muted-foreground">Play sound for new notifications</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.sound}
-                  onCheckedChange={(v) => {
-                    setSettings((p) => {
-                      const next = { ...p, sound: v };
-                      syncNotificationSettingsCache(next);
-                      return next;
-                    });
-
-                    if (v) {
-                      void unlockNotificationAudio().then(() => playNotificationSound());
-                    }
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary" /> Web Push Notifications
-              </CardTitle>
-              <CardDescription>Receive notifications on phone, laptop, and iOS when the browser is closed</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!pushState.supported ? (
-                <div className="text-sm text-muted-foreground">
-                  This browser does not support Web Push.
-                </div>
-              ) : !appPublicSettings?.web_push_public_key ? (
-                <div className="text-sm text-muted-foreground">
-                  Web Push is not configured yet. Ask an admin to set the VAPID keys.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      {pushState.subscribed ? <BellRing className="w-4 h-4 text-emerald-600" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
-                      {pushState.subscribed ? 'Web push enabled' : 'Web push disabled'}
+            <div className="min-w-0 flex-1 space-y-4">
+              {userSection === 'general' ? (
+                <Card className="rounded-2xl">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Moon className="w-4 h-4 text-primary" /> Appearance
+                    </CardTitle>
+                    <CardDescription>Choose light or dark mode for the interface.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Sun className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Dark mode</Label>
+                          <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
+                        </div>
+                      </div>
+                      <ThemeToggle variant="switch" />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {pushState.subscribed
-                        ? pushState.synced
-                          ? 'This device is subscribed and synced with the server.'
-                          : 'This device is subscribed, but the server sync is pending.'
-                        : 'Subscribe this device to receive browser notifications.'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Browser permission: {pushState.permission}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant={pushState.subscribed ? 'outline' : 'default'}
-                    onClick={pushState.subscribed ? unsubscribeFromPush : subscribeToPush}
-                    disabled={pushState.loading}
-                  >
-                    {pushState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                    {pushState.subscribed ? 'Disable' : 'Enable'}
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {userSection === 'notifications' ? (
+                <>
+                  <Card className="rounded-2xl">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-primary" /> Notification channels
+                      </CardTitle>
+                      <CardDescription>Choose how you receive notifications.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Bell className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">In-app notifications</Label>
+                            <p className="text-xs text-muted-foreground">Show notifications in the app</p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={settings.in_app}
+                          onCheckedChange={(v) => setSettings((p) => {
+                            const next = { ...p, in_app: v };
+                            syncNotificationSettingsCache(next);
+                            return next;
+                          })}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center">
+                            <Mail className="w-4 h-4 text-info" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Email notifications</Label>
+                            <p className="text-xs text-muted-foreground">Receive email for important alerts</p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={settings.email}
+                          onCheckedChange={(v) => setSettings((p) => {
+                            const next = { ...p, email: v };
+                            syncNotificationSettingsCache(next);
+                            return next;
+                          })}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+                            {settings.sound ? <Volume2 className="w-4 h-4 text-warning" /> : <VolumeX className="w-4 h-4 text-warning" />}
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Sound alerts</Label>
+                            <p className="text-xs text-muted-foreground">Play sound for new notifications</p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={settings.sound}
+                          onCheckedChange={(v) => {
+                            setSettings((p) => {
+                              const next = { ...p, sound: v };
+                              syncNotificationSettingsCache(next);
+                              return next;
+                            });
+
+                            if (v) {
+                              void unlockNotificationAudio().then(() => playNotificationSound());
+                            }
+                          }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-primary" /> Web push
+                      </CardTitle>
+                      <CardDescription>Notifications when the browser is closed.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {!pushState.supported ? (
+                        <div className="text-sm text-muted-foreground">
+                          This browser does not support Web Push.
+                        </div>
+                      ) : !appPublicSettings?.web_push_public_key ? (
+                        <div className="text-sm text-muted-foreground">
+                          Web Push is not configured yet. Ask an admin to set the VAPID keys.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              {pushState.subscribed ? <BellRing className="w-4 h-4 text-emerald-600" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
+                              {pushState.subscribed ? 'Web push enabled' : 'Web push disabled'}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {pushState.subscribed
+                                ? pushState.synced
+                                  ? 'This device is subscribed and synced with the server.'
+                                  : 'This device is subscribed, but the server sync is pending.'
+                                : 'Subscribe this device to receive browser notifications.'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Browser permission: {pushState.permission}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant={pushState.subscribed ? 'outline' : 'default'}
+                            onClick={pushState.subscribed ? unsubscribeFromPush : subscribeToPush}
+                            disabled={pushState.loading}
+                          >
+                            {pushState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            {pushState.subscribed ? 'Disable' : 'Enable'}
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Button onClick={save} className="w-full sm:w-auto">
+                    Save notification settings
                   </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Download className="w-4 h-4 text-primary" /> Install App
-              </CardTitle>
-              <CardDescription>Install Nexus for a faster app-like experience</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                {installState.installed
-                  ? 'Nexus is already installed on this device.'
-                  : installState.iosInstall
-                    ? 'On iPhone and iPad, install Nexus from Safari using Add to Home Screen.'
-                    : installState.available
-                      ? 'The browser install prompt is ready.'
-                      : supportsNativeInstallPrompt()
-                        ? 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'
-                        : 'Use your browser menu to install this app on your device.'}
-              </div>
-
-              {installState.iosInstall && !installState.installed ? (
-                <ol className="space-y-2 pl-4 text-sm text-muted-foreground list-decimal">
-                  {IOS_INSTALL_STEPS.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
+                </>
               ) : null}
 
-              {!installState.iosInstall ? (
-                <Button
-                  type="button"
-                  onClick={installApp}
-                  disabled={!installState.available || installState.installed || installState.loading}
-                >
-                  {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                  {installState.installed ? 'Installed' : 'Install App'}
-                </Button>
-              ) : null}
-            </CardContent>
-          </Card>
+              {userSection === 'app' ? (
+                <Card className="rounded-2xl border-dashed border-primary/30 bg-primary/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Download className="w-4 h-4 text-primary" /> Install app
+                    </CardTitle>
+                    <CardDescription>Install Nexus for a faster app-like experience.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-sm text-muted-foreground">
+                      {installState.installed
+                        ? 'Nexus is already installed on this device.'
+                        : installState.iosInstall
+                          ? 'On iPhone and iPad, install Nexus from Safari using Add to Home Screen.'
+                          : installState.available
+                            ? 'The browser install prompt is ready.'
+                            : supportsNativeInstallPrompt()
+                              ? 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'
+                              : 'Use your browser menu to install this app on your device.'}
+                    </div>
 
-          <Button onClick={save} className="w-full sm:w-auto">
-            Save Settings
-          </Button>
+                    {installState.iosInstall && !installState.installed ? (
+                      <ol className="space-y-2 pl-4 text-sm text-muted-foreground list-decimal">
+                        {IOS_INSTALL_STEPS.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    ) : null}
+
+                    {!installState.iosInstall ? (
+                      <Button
+                        type="button"
+                        onClick={installApp}
+                        disabled={!installState.available || installState.installed || installState.loading}
+                      >
+                        {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                        {installState.installed ? 'Installed' : 'Install App'}
+                      </Button>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
+          </div>
         </TabsContent>
 
         {isAdmin ? (
-          <TabsContent value="admin">
+          <TabsContent value="admin" className="mt-4">
             <AdminSettings embedded />
           </TabsContent>
         ) : null}

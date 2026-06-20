@@ -39,7 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
-import { launchApplication } from '@/lib/applications';
+import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
 import { applicationNotificationsEnabled, normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
 import ApplicationCard from '@/components/applications/ApplicationCard';
@@ -454,13 +454,15 @@ export default function Applications() {
   );
 
   const [launching, setLaunching] = useState(null);
+  const { launchingId, launchWithAnimation } = useApplicationLaunch();
+
   const handleLaunch = async (system) => {
-    if (!system.is_enabled || launching === system.id) return;
+    if (!system.is_enabled || launching === system.id || launchingId === system.id) return;
 
     setLaunching(system.id);
 
     try {
-      await launchApplication(db, system, navigate);
+      await launchWithAnimation(system, navigate);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -827,7 +829,7 @@ export default function Applications() {
                   system={system}
                   index={i}
                   canManageSystem={canManageSystem}
-                  launching={launching}
+                  launching={launching ?? launchingId}
                   footerOutside
                   onLaunch={handleLaunch}
                   onEdit={openDialog}

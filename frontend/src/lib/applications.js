@@ -72,7 +72,7 @@ function openExternalUrl(url, { newTab = true } = {}) {
   window.location.href = url;
 }
 
-export async function openApplicationTarget(db, system, { actionUrl, navigate } = {}) {
+export async function openApplicationTarget(db, system, { actionUrl, navigate, deferNavigation = false } = {}) {
   if (!system?.is_enabled) {
     throw new Error('Application is not enabled.');
   }
@@ -82,8 +82,14 @@ export async function openApplicationTarget(db, system, { actionUrl, navigate } 
 
   if (resolvedOpenMode === 'embedded') {
     const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
-    navigate(`/applications/${system.id}/view${query}`);
-    return;
+    const path = `/applications/${system.id}/view${query}`;
+
+    if (deferNavigation) {
+      return { action: 'navigate', path };
+    }
+
+    navigate(path);
+    return null;
   }
 
   const { launch_url, auth_mode } = await db.launchSystem(system.id, {
@@ -92,13 +98,32 @@ export async function openApplicationTarget(db, system, { actionUrl, navigate } 
   const targetUrl = auth_mode === 'redirect' && redirectTo ? redirectTo : launch_url;
 
   if (resolvedOpenMode === 'new_tab') {
+    if (deferNavigation) {
+      return { action: 'open_external', url: targetUrl, newTab: true };
+    }
+
     openExternalUrl(targetUrl, { newTab: true });
-    return;
+    return null;
+  }
+
+  if (deferNavigation) {
+    return { action: 'open_external', url: targetUrl, newTab: false };
   }
 
   openExternalUrl(targetUrl, { newTab: false });
+  return null;
 }
 
-export async function launchApplication(db, system, navigate) {
-  await openApplicationTarget(db, system, { navigate });
+export async function launchApplication(db, system, navigate, options = {}) {
+  const result = await openApplicationTarget(db, system, { navigate, ...options });
+
+  if (!options.deferNavigation) {
+    if (result?.action === 'navigate') {
+      navigate(result.path);
+    } else if (result?.action === 'open_external') {
+      openExternalUrl(result.url, { newTab: result.newTab });
+    }
+  }
+
+  return result;
 }
