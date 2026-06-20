@@ -1,7 +1,7 @@
 import db from '@/api/base44Client';
 import React, { useEffect, useState } from 'react';
 
-import { Shield, PenLine, Save, Server } from 'lucide-react';
+import { Shield, PenLine, Save, Server, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,21 +10,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import SplashSettingsPanel from '@/components/admin/SplashSettingsPanel';
+import { normalizeSplashAnimation } from '@/lib/splashAnimations';
+import { resetSplashFormState, splashConfigToFormState } from '@/lib/splashConfig';
+
+function mergeSettingsFromPayload(payload, fallback = {}) {
+  const splashDefaults = resetSplashFormState();
+
+  return {
+    system_name: payload?.system_name || fallback.system_name || 'EMZI Nexus Brain',
+    smtp_host: payload?.smtp_host || '',
+    smtp_port: payload?.smtp_port || 587,
+    smtp_username: payload?.smtp_username || '',
+    smtp_password: payload?.smtp_password || '',
+    smtp_encryption: payload?.smtp_encryption || 'tls',
+    smtp_from_email: payload?.smtp_from_email || '',
+    smtp_from_name: payload?.smtp_from_name || payload?.system_name || fallback.system_name || 'EMZI Nexus Brain',
+    splash_animations: payload?.splash_animations || fallback.splash_animations || [],
+    splash_system_name_animations: payload?.splash_system_name_animations || fallback.splash_system_name_animations || [],
+    ...splashDefaults,
+    ...splashConfigToFormState(payload?.splash || payload),
+    splash_animation_style: normalizeSplashAnimation(payload?.splash_animation_style ?? payload?.splash?.animation_style),
+  };
+}
 
 export default function AdminSettings({ embedded = false }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState({
-    system_name: 'EMZI Nexus Brain',
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_username: '',
-    smtp_password: '',
-    smtp_encryption: 'tls',
-    smtp_from_email: '',
-    smtp_from_name: '',
-  });
+  const [settings, setSettings] = useState(() => mergeSettingsFromPayload({}));
 
   useEffect(() => {
     if (user?.role !== 'admin') {
@@ -34,16 +48,7 @@ export default function AdminSettings({ embedded = false }) {
 
     db.appSettings.admin()
       .then((payload) => {
-        setSettings({
-          system_name: payload?.system_name || 'EMZI Nexus Brain',
-          smtp_host: payload?.smtp_host || '',
-          smtp_port: payload?.smtp_port || 587,
-          smtp_username: payload?.smtp_username || '',
-          smtp_password: payload?.smtp_password || '',
-          smtp_encryption: payload?.smtp_encryption || 'tls',
-          smtp_from_email: payload?.smtp_from_email || '',
-          smtp_from_name: payload?.smtp_from_name || payload?.system_name || 'EMZI Nexus Brain',
-        });
+        setSettings(mergeSettingsFromPayload(payload));
       })
       .catch((error) => {
         toast.error(error?.data?.message || error.message || 'Failed to load settings');
@@ -55,16 +60,7 @@ export default function AdminSettings({ embedded = false }) {
     setSaving(true);
     try {
       const payload = await db.appSettings.update(settings);
-      setSettings({
-        system_name: payload?.system_name || settings.system_name,
-        smtp_host: payload?.smtp_host || '',
-        smtp_port: payload?.smtp_port || 587,
-        smtp_username: payload?.smtp_username || '',
-        smtp_password: payload?.smtp_password || '',
-        smtp_encryption: payload?.smtp_encryption || 'tls',
-        smtp_from_email: payload?.smtp_from_email || '',
-        smtp_from_name: payload?.smtp_from_name || payload?.system_name || settings.system_name,
-      });
+      setSettings((current) => mergeSettingsFromPayload(payload, current));
       toast.success('Admin settings saved');
       window.dispatchEvent(new Event('app-settings-updated'));
     } catch (error) {
@@ -94,7 +90,7 @@ export default function AdminSettings({ embedded = false }) {
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" /> Admin Settings
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage the system name and default email sender.</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage branding, splash animation, and default email sender.</p>
         </motion.div>
       ) : null}
 
@@ -118,6 +114,23 @@ export default function AdminSettings({ embedded = false }) {
                 value={settings.system_name}
                 onChange={(event) => setSettings((current) => ({ ...current, system_name: event.target.value }))}
                 placeholder="EMZI Nexus Brain"
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-visible rounded-2xl">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" /> Splash Screen
+              </CardTitle>
+              <CardDescription>
+                Configure animation style, brand colors, timing, and logo size for the PWA splash experience.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-visible">
+              <SplashSettingsPanel
+                settings={settings}
+                onChange={setSettings}
               />
             </CardContent>
           </Card>

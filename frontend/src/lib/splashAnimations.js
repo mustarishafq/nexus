@@ -1,0 +1,15 @@
+export {
+  DEFAULT_SPLASH_ANIMATION,
+  DEFAULT_SPLASH_CONFIG,
+  SPLASH_ANIMATIONS,
+  INTERACTIVE_SPLASH_ANIMATIONS,
+  isSplashAnimationInteractive,
+  normalizeSplashAnimation,
+  getSplashAnimationMeta,
+  mergeSplashAnimationCatalog,
+  normalizeSplashConfig,
+  resolveSplashConfigFromSettings,
+  splashConfigToFormState,
+  buildSplashRuntime,
+  resetSplashFormState,
+} from '@/lib/splashConfig';

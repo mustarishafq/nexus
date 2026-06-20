@@ -406,12 +406,14 @@ export const db = {
 				formData.append('file', file);
 				formData.append('folder', folder);
 
+				const token = getAuthToken();
 				const response = await fetch(`${API_BASE_URL}/uploads`, {
 					method: 'POST',
 					body: formData,
 					credentials: 'include',
 					headers: {
 						Accept: 'application/json',
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
 					},
 				});
 

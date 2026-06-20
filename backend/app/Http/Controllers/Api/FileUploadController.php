@@ -3,32 +3,76 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules\File;
 
 class FileUploadController extends Controller
 {
+    private const IMAGE_FOLDERS = [
+        'profile-pictures',
+        'cover-pictures',
+        'cover-pictures-new',
+        'post-images',
+    ];
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'file' => ['required', 'file', 'max:10240'],
             'folder' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
 
         $folder = $validated['folder'] ?? 'uploads';
 
-        if (in_array($folder, ['profile-pictures', 'cover-pictures', 'cover-pictures-new', 'post-images'], true)) {
+        if ($folder === 'splash-media') {
+            if ($response = $this->authorizeAdmin($request)) {
+                return $response;
+            }
+
             $request->validate([
-                'file' => ['image', 'mimes:jpeg,jpg,png,webp,gif'],
+                'file' => [
+                    'required',
+                    File::types(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'mp4', 'webm', 'mov'])
+                        ->max(51200),
+                ],
+            ]);
+        } elseif (in_array($folder, self::IMAGE_FOLDERS, true)) {
+            $request->validate([
+                'file' => ['required', 'file', 'max:10240', 'image', 'mimes:jpeg,jpg,png,webp,gif'],
+            ]);
+        } else {
+            $request->validate([
+                'file' => ['required', 'file', 'max:10240'],
             ]);
         }
-        $path = $request->file('file')->store($folder, 'public');
+
+        $file = $request->file('file');
+        $path = $file->store($folder, 'public');
         $url = Storage::url($path);
+        $mime = (string) $file->getMimeType();
 
         return response()->json([
             'file_url' => $url,
             'path' => $path,
+            'media_type' => str_starts_with($mime, 'video/') ? 'video' : 'image',
+            'mime_type' => $mime,
         ], 201);
+    }
+
+    private function authorizeAdmin(Request $request): ?JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return null;
     }
 }

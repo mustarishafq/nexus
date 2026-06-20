@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
+use App\Support\SplashAnimationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class AppSettingController extends Controller
             return $response;
         }
 
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'system_name' => ['required', 'string', 'max:255'],
             'smtp_host' => ['nullable', 'string', 'max:255'],
             'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
@@ -40,12 +41,18 @@ class AppSettingController extends Controller
             'smtp_encryption' => ['nullable', 'in:tls,ssl,null'],
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
-        ]);
+            'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
+        ], SplashAnimationSettings::validationRules()));
+
+        $splash = SplashAnimationSettings::normalizeConfig(array_merge(
+            (array) DB::table('app_settings')->first(),
+            $validated
+        ));
 
         $settings = DB::table('app_settings')->first();
 
         if ($settings) {
-            DB::table('app_settings')->where('id', $settings->id)->update([
+            DB::table('app_settings')->where('id', $settings->id)->update(array_merge([
                 'system_name' => $validated['system_name'],
                 'smtp_host' => $validated['smtp_host'] ?? null,
                 'smtp_port' => $validated['smtp_port'] ?? null,
@@ -55,9 +62,9 @@ class AppSettingController extends Controller
                 'smtp_from_email' => $validated['smtp_from_email'] ?? null,
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
                 'updated_at' => now(),
-            ]);
+            ], SplashAnimationSettings::toDatabaseColumns($splash)));
         } else {
-            DB::table('app_settings')->insert([
+            DB::table('app_settings')->insert(array_merge([
                 'system_name' => $validated['system_name'],
                 'smtp_host' => $validated['smtp_host'] ?? null,
                 'smtp_port' => $validated['smtp_port'] ?? null,
@@ -68,7 +75,7 @@ class AppSettingController extends Controller
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ], SplashAnimationSettings::toDatabaseColumns($splash)));
         }
 
         return response()->json($this->adminPayload());
@@ -100,6 +107,7 @@ class AppSettingController extends Controller
             'smtp_encryption' => null,
             'smtp_from_email' => config('mail.from.address'),
             'smtp_from_name' => config('mail.from.name'),
+            'splash_animation_style' => SplashAnimationSettings::DEFAULT_STYLE,
         ];
 
         if (! Schema::hasTable('app_settings')) {
@@ -116,12 +124,23 @@ class AppSettingController extends Controller
         return (object) array_merge($defaults, (array) $settings);
     }
 
+    private function splashPayload(object $settings): array
+    {
+        return SplashAnimationSettings::normalizeConfig($settings);
+    }
+
     private function publicPayload(): array
     {
         $settings = $this->currentSettings();
+        $splash = $this->splashPayload($settings);
 
         return [
             'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
+            'splash' => $splash,
+            'splash_animation_style' => $splash['animation_style'],
+            'splash_animations' => SplashAnimationSettings::catalog(),
+            'splash_system_name_animations' => SplashAnimationSettings::systemNameCatalog(),
+            'splash_background_styles' => SplashAnimationSettings::backgroundStyleCatalog(),
             'web_push_enabled' => filled(config('services.web_push.public_key')) && filled(config('services.web_push.private_key')) && filled(config('services.web_push.subject')),
             'web_push_public_key' => config('services.web_push.public_key'),
         ];
@@ -130,8 +149,9 @@ class AppSettingController extends Controller
     private function adminPayload(): array
     {
         $settings = $this->currentSettings();
+        $splash = $this->splashPayload($settings);
 
-        return [
+        return array_merge([
             'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
             'smtp_host' => $settings->smtp_host,
             'smtp_port' => $settings->smtp_port,
@@ -140,6 +160,10 @@ class AppSettingController extends Controller
             'smtp_encryption' => $settings->smtp_encryption,
             'smtp_from_email' => $settings->smtp_from_email ?: config('mail.from.address'),
             'smtp_from_name' => $settings->smtp_from_name ?: config('mail.from.name'),
-        ];
+            'splash' => $splash,
+            'splash_animations' => SplashAnimationSettings::catalog(),
+            'splash_system_name_animations' => SplashAnimationSettings::systemNameCatalog(),
+            'splash_background_styles' => SplashAnimationSettings::backgroundStyleCatalog(),
+        ], SplashAnimationSettings::toDatabaseColumns($splash));
     }
 }
