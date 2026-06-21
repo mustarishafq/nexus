@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Monitor, Smartphone, Tablet, Maximize2, Layers, PanelBottom } from 'lucide-react';
+import { Monitor, Play, Smartphone, Tablet, Maximize2, Layers, PanelBottom } from 'lucide-react';
 import LaunchPreviewCanvas from '@/components/applications/launch-animations/LaunchPreviewCanvas';
 import { useLaunchOverlayEnergy } from '@/components/applications/launch-animations/useLaunchOverlayEnergy';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
+import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import {
   getLaunchAnimationMeta,
   getLaunchOverlayLayoutKind,
   getLaunchOverlayLayoutLabel,
+  getLaunchOverlayPlacement,
+  LAUNCH_OVERLAY_PLACEMENT_LABELS,
   normalizeLaunchAnimation,
 } from '@/lib/launchConfig';
+import { toast } from 'sonner';
 
 const PREVIEW_DEVICES = {
   mobile: {
@@ -39,24 +43,28 @@ const PREVIEW_DEVICES = {
   },
 };
 
-const LAYOUT_BADGE = {
-  fullscreen: { icon: Maximize2, className: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300' },
-  panel: { icon: Layers, className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300' },
-  docked: { icon: PanelBottom, className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+const LAYOUT_KIND_STYLES = {
+  fullscreen: { icon: Maximize2, className: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300' },
+  panel: { icon: Layers, className: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
+  docked: { icon: PanelBottom, className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
 };
 
 export default function LaunchLivePreview({ settings, launchConfig }) {
   const [device, setDevice] = useState('mobile');
+  const [testing, setTesting] = useState(false);
   const viewportRef = useRef(null);
   const [scale, setScale] = useState(0.45);
+  const { previewLaunchAnimation, launchingId } = useApplicationLaunch();
   const frame = PREVIEW_DEVICES[device];
   const previewKey = `${launchConfig.animation_style}-${launchConfig.overlay_mode}-${launchConfig.progress_style}`;
   const { energy, boost } = useLaunchOverlayEnergy(true, previewKey);
   const animationMeta = getLaunchAnimationMeta(launchConfig.animation_style, settings?.launch_animations);
   const layoutLabel = getLaunchOverlayLayoutLabel(launchConfig.overlay_mode, settings?.launch_overlay_modes);
   const layoutKind = getLaunchOverlayLayoutKind(launchConfig.overlay_mode);
-  const layoutBadge = LAYOUT_BADGE[layoutKind];
-  const LayoutIcon = layoutBadge.icon;
+  const placement = getLaunchOverlayPlacement(launchConfig.overlay_mode, settings?.launch_overlay_modes);
+  const placementLabel = LAUNCH_OVERLAY_PLACEMENT_LABELS[placement] || placement;
+  const layoutKindStyle = LAYOUT_KIND_STYLES[layoutKind];
+  const LayoutIcon = layoutKindStyle.icon;
   const isInstant = normalizeLaunchAnimation(launchConfig.animation_style) === 'none';
 
   useEffect(() => {
@@ -85,31 +93,79 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
   const scaledWidth = useMemo(() => Math.round(frame.width * scale), [frame.width, scale]);
   const scaledHeight = useMemo(() => Math.round(frame.height * scale), [frame.height, scale]);
 
+  const handleProductionTest = async () => {
+    if (isInstant) {
+      toast.info('Instant launch has no overlay to preview.');
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const result = await previewLaunchAnimation(launchConfig, {
+        animationCatalog: settings?.launch_animations,
+        durationCatalog: settings?.launch_durations,
+        application: {
+          id: 'launch-preview',
+          name: settings?.system_name || 'Preview App',
+          color: DEFAULT_BRAND_COLOR,
+          is_enabled: true,
+        },
+      });
+
+      if (result?.skipped && result.reason === 'busy') {
+        toast.info('A launch preview is already running.');
+      }
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <div className="overflow-visible rounded-2xl border bg-card shadow-sm">
       <div className="border-b bg-muted/30 px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
             <p className="text-sm font-medium">Live preview</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {isInstant
-                ? 'Instant launch — no overlay is shown'
-                : `${animationMeta.label} · tap the device to simulate boosts`}
-            </p>
+            {isInstant ? (
+              <p className="text-xs text-muted-foreground">
+                Instant launch — applications open with no overlay.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <span className="font-medium text-foreground">{animationMeta.label}</span>
+                  <span className="text-muted-foreground/50" aria-hidden>·</span>
+                  <span className="text-muted-foreground">{layoutLabel.modeLabel}</span>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                      layoutKindStyle.className,
+                    )}
+                  >
+                    <LayoutIcon className="h-3 w-3 shrink-0" />
+                    {placementLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {layoutLabel.hint}. Tap the device frame to simulate boosts.
+                </p>
+              </>
+            )}
           </div>
           {!isInstant ? (
-            <div className="flex flex-col items-end gap-1">
-              <Badge variant="outline" className={cn('gap-1 text-[10px]', layoutBadge.className)}>
-                <LayoutIcon className="h-3 w-3" />
-                {layoutLabel.title}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">{layoutLabel.modeLabel}</span>
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5"
+              disabled={testing || Boolean(launchingId)}
+              onClick={handleProductionTest}
+            >
+              <Play className="h-3.5 w-3.5" />
+              {testing ? 'Running…' : 'Test full screen'}
+            </Button>
           ) : null}
         </div>
-        {!isInstant ? (
-          <p className="mt-2 text-[11px] text-muted-foreground">{layoutLabel.hint}</p>
-        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-1 border-b p-2">
@@ -168,17 +224,21 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
                 settings={settings}
                 energy={energy}
                 onBoost={boost}
-                ready={energy > 0.72}
-                showLayoutGuide
+                ready={false}
+                showLayoutGuide={false}
               />
             </div>
           </div>
         )}
       </div>
 
-      <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-        Frame {frame.width}×{frame.height} · {Math.round(scale * 100)}%
-        {!isInstant ? ` · ${layoutLabel.title} (${layoutLabel.modeLabel})` : ''}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-[11px] text-muted-foreground">
+        <span>
+          Frame {frame.width}×{frame.height} · {Math.round(scale * 100)}%
+        </span>
+        {!isInstant ? (
+          <span className="text-muted-foreground/80">Test full screen uses your current settings — no app opens</span>
+        ) : null}
       </div>
     </div>
   );

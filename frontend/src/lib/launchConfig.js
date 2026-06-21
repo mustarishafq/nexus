@@ -16,7 +16,6 @@ export const DEFAULT_LAUNCH_CONFIG = {
 export const LAUNCH_ANIMATIONS = [
   { id: 'none', label: 'Instant', description: 'Skip the overlay and open immediately.', hint: 'Best for power users who prefer zero delay.', category: 'instant' },
   { id: 'warp', label: 'Warp Drive', description: 'Star streaks rush past as the app logo zooms forward.', hint: 'Tap anywhere to jump to hyperdrive.', category: 'space' },
-  { id: 'ripple', label: 'Ripple Gate', description: 'Ripples pulse from the logo toward the edges.', hint: 'Tap to add energy and launch sooner.', category: 'energy' },
   { id: 'orbit', label: 'Orbital Sync', description: 'Satellites orbit the app icon before lift-off.', hint: 'Tap to add orbiters and accelerate.', category: 'space' },
   { id: 'portal', label: 'Portal Step', description: 'A swirling portal opens around the app logo.', hint: 'Tap or hold to step through the portal.', category: 'energy' },
   { id: 'ignite', label: 'Ignition', description: 'Embers gather around the logo before blast-off.', hint: 'Tap to stoke the flames and launch faster.', category: 'energy' },
@@ -27,7 +26,6 @@ export const LAUNCH_ANIMATIONS = [
   { id: 'vortex', label: 'Vortex', description: 'A spiral tunnel pulls the logo forward.', hint: 'Tap to spin the vortex faster.', category: 'space' },
   { id: 'magnetic', label: 'Magnetic Pull', description: 'Particles snap inward to assemble the logo.', hint: 'Tap to strengthen the magnetic field.', category: 'energy' },
   { id: 'comet', label: 'Comet Trail', description: 'A blazing comet orbits and settles on the icon.', hint: 'Tap to ignite a brighter tail.', category: 'space' },
-  { id: 'matrix', label: 'Matrix Rain', description: 'Falling code columns frame the logo reveal.', hint: 'Tap to accelerate the data stream.', category: 'glitch' },
   { id: 'neon', label: 'Neon Flicker', description: 'A buzzing neon frame flickers on around the logo.', hint: 'Tap to stabilize the neon sign.', category: 'energy' },
   { id: 'bounce', label: 'Bounce In', description: 'Logo drops in with a playful elastic bounce.', hint: 'Tap to add extra bounce.', category: 'energy' },
   { id: 'hologram', label: 'Hologram', description: 'Scan lines flicker before the logo stabilizes.', hint: 'Tap to sharpen the projection.', category: 'glitch' },
@@ -42,28 +40,17 @@ export const LAUNCH_ANIMATIONS = [
   { id: 'laser_grid', label: 'Laser Grid', description: 'Perspective laser grid converges on the brand mark.', hint: 'Tap to tighten the grid.', category: 'hologram' },
   { id: 'crystal', label: 'Crystal Shatter', description: 'Glass shards burst outward, revealing the logo.', hint: 'Tap to shatter faster.', category: 'energy' },
   { id: 'flip', label: 'Flip Reveal', description: 'Logo flips into view on a 3D axis.', hint: 'Tap to complete the flip.', category: 'energy' },
-  { id: 'star_warp', label: 'Star Warp', description: 'Streaking stars rush past before the logo arrives.', hint: 'Tap to warp harder.', category: 'space' },
   { id: 'ink_drop', label: 'Ink Drop', description: 'Ink ripples spread outward from the logo center.', hint: 'Tap to send another ripple.', category: 'liquid' },
   { id: 'fold', label: 'Fold Unfold', description: 'Paper panels unfold to expose the logo.', hint: 'Tap to unfold quicker.', category: 'energy' },
   { id: 'ring_fire', label: 'Ring of Fire', description: 'A fiery halo spins before the brand ignites.', hint: 'Tap to stoke the flames.', category: 'energy' },
   { id: 'dna', label: 'DNA Helix', description: 'Twin helix strands spiral around the logo.', hint: 'Tap to tighten the spiral.', category: 'nature' },
-  { id: 'radar', label: 'Radar Sweep', description: 'A scanning radar arc sweeps across the logo.', hint: 'Tap to widen the sweep.', category: 'space' },
-  { id: 'constellation', label: 'Constellation', description: 'Stars connect with lines that converge on the logo.', hint: 'Tap to link more stars.', category: 'space' },
   { id: 'particle_burst', label: 'Particle Burst', description: 'Sparks burst outward, then the logo resolves.', hint: 'Tap to trigger another burst.', category: 'energy' },
   { id: 'pixelate', label: 'Pixelate', description: 'Blocky pixels dissolve into a sharp logo.', hint: 'Tap to resolve pixels faster.', category: 'glitch' },
-  { id: 'corrupt', label: 'Data Corrupt', description: 'Vertical corruption bars scramble then restore.', hint: 'Tap to corrupt more columns.', category: 'glitch' },
   { id: 'holo_flicker', label: 'Holo Flicker', description: 'Unstable hologram flickers before locking in.', hint: 'Tap to stabilize the signal.', category: 'hologram' },
-  { id: 'wireframe', label: 'Wireframe', description: 'A rotating wireframe cage forms around the logo.', hint: 'Tap to tighten the mesh.', category: 'hologram' },
-  { id: 'teleport', label: 'Teleport', description: 'A beam of light teleports the logo into place.', hint: 'Tap to charge the beam.', category: 'energy' },
   { id: 'shockwave', label: 'Shockwave', description: 'An explosive ring expands from the logo center.', hint: 'Tap to amplify the blast.', category: 'energy' },
   { id: 'tornado', label: 'Tornado', description: 'A spinning funnel lifts the logo into view.', hint: 'Tap to spin faster.', category: 'nature' },
-  { id: 'bloom', label: 'Bloom', description: 'Petal-like shapes bloom outward around the logo.', hint: 'Tap to unfurl more petals.', category: 'nature' },
-  { id: 'mosaic', label: 'Mosaic', description: 'Color tiles snap together to form the icon.', hint: 'Tap to place more tiles.', category: 'energy' },
-  { id: 'plasma', label: 'Plasma Orb', description: 'A swirling plasma ball condenses into the logo.', hint: 'Tap to intensify the plasma.', category: 'energy' },
   { id: 'eclipse', label: 'Eclipse', description: 'A dark disc passes to reveal the bright logo.', hint: 'Tap to speed the eclipse.', category: 'space' },
   { id: 'zoom_blur', label: 'Zoom Blur', description: 'Motion-blurred zoom rushes into the sharp logo.', hint: 'Tap to punch in harder.', category: 'energy' },
-  { id: 'phoenix', label: 'Phoenix Rise', description: 'Flaming wings spread as the logo emerges.', hint: 'Tap to fan the flames.', category: 'energy' },
-  { id: 'geometric', label: 'Geometric', description: 'Rotating polygons orbit and merge on the logo.', hint: 'Tap to add more shapes.', category: 'hologram' },
   { id: 'sandstorm', label: 'Sandstorm', description: 'Swirling grains part to reveal the logo.', hint: 'Tap to clear the storm.', category: 'nature' },
 ];
 
@@ -111,6 +98,73 @@ export const LAUNCH_OVERLAY_MODES = [
   { id: 'pixel_frame', label: 'Pixel frame', description: 'Retro pixel border around a floating card.', interactive: true },
   { id: 'orbit_frame', label: 'Orbit frame', description: 'Orbiting dots trace a full-screen border.', interactive: true },
 ];
+
+export const LAUNCH_OVERLAY_PLACEMENT_CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'fullscreen', label: 'Full screen' },
+  { id: 'center', label: 'Center panel' },
+  { id: 'border', label: 'Border & frame' },
+  { id: 'bottom', label: 'Bottom' },
+  { id: 'bottom_right', label: 'Bottom right' },
+  { id: 'top', label: 'Top' },
+  { id: 'side', label: 'Side' },
+];
+
+export const LAUNCH_OVERLAY_PLACEMENT_LABELS = {
+  fullscreen: 'Full screen',
+  center: 'Center panel',
+  border: 'Border & frame',
+  bottom: 'Bottom',
+  bottom_right: 'Bottom right',
+  top: 'Top',
+  side: 'Side',
+};
+
+/** Where on screen the overlay content is anchored. */
+export const LAUNCH_OVERLAY_PLACEMENT_BY_MODE = {
+  fullscreen: 'fullscreen',
+  blur: 'fullscreen',
+  frosted: 'fullscreen',
+  spotlight: 'fullscreen',
+  gradient: 'fullscreen',
+  mesh: 'fullscreen',
+  split: 'fullscreen',
+  cinema: 'fullscreen',
+  glitch_frame: 'border',
+  aurora_full: 'fullscreen',
+  scanlines_full: 'fullscreen',
+  void: 'fullscreen',
+  prism_full: 'fullscreen',
+  circuit_board: 'fullscreen',
+  hologram_full: 'fullscreen',
+  vignette: 'fullscreen',
+  orbit_frame: 'border',
+  interactive_glow: 'fullscreen',
+  card: 'center',
+  glass: 'center',
+  glass_deep: 'center',
+  bubble: 'center',
+  tilt: 'center',
+  mirror: 'center',
+  clear_glass: 'center',
+  neon_frame: 'border',
+  hologram_panel: 'border',
+  prism_edge: 'border',
+  crt_monitor: 'border',
+  hexagon_panel: 'border',
+  glitch_panel: 'border',
+  polaroid: 'border',
+  stained_glass: 'border',
+  pixel_frame: 'border',
+  minimal: 'bottom',
+  dock: 'bottom',
+  bottom_sheet: 'bottom',
+  full_glass: 'bottom',
+  corner: 'bottom_right',
+  top_banner: 'top',
+  sidebar: 'side',
+  right_rail: 'side',
+};
 
 export const LAUNCH_PROGRESS_STYLES = [
   { id: 'bar', label: 'Loading bar', description: 'Horizontal bar that fills as launch progresses.' },
@@ -215,9 +269,24 @@ export function mergeLaunchAnimationCatalog(catalog) {
 }
 
 export function mergeLaunchOverlayModeCatalog(catalog) {
-  if (!catalog?.length) return LAUNCH_OVERLAY_MODES;
-  const byId = Object.fromEntries(LAUNCH_OVERLAY_MODES.map((item) => [item.id, item]));
-  return catalog.map((item) => ({ ...byId[item.id], ...item }));
+  const withPlacement = (item) => ({
+    ...item,
+    placement: item.placement ?? LAUNCH_OVERLAY_PLACEMENT_BY_MODE[item.id] ?? 'fullscreen',
+  });
+
+  if (!catalog?.length) {
+    return LAUNCH_OVERLAY_MODES.map(withPlacement);
+  }
+
+  const byId = Object.fromEntries(LAUNCH_OVERLAY_MODES.map((item) => [item.id, withPlacement(item)]));
+  return catalog.map((item) => withPlacement({ ...byId[item.id], ...item }));
+}
+
+export function getLaunchOverlayPlacement(mode, catalog) {
+  const resolved = normalizeLaunchOverlayMode(mode);
+  const meta = mergeLaunchOverlayModeCatalog(catalog).find((item) => item.id === resolved);
+
+  return meta?.placement ?? LAUNCH_OVERLAY_PLACEMENT_BY_MODE[resolved] ?? 'fullscreen';
 }
 
 export function mergeLaunchProgressStyleCatalog(catalog) {

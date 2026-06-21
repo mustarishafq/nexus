@@ -8,28 +8,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import LaunchLivePreview from '@/components/admin/LaunchLivePreview';
 import LaunchAnimationPicker from '@/components/admin/LaunchAnimationPicker';
+import LaunchOverlayModePicker from '@/components/admin/LaunchOverlayModePicker';
 import {
   launchConfigToFormState,
-  getLaunchOverlayLayoutKind,
   mergeLaunchAnimationCatalog,
   mergeLaunchDurationCatalog,
-  mergeLaunchOverlayModeCatalog,
   mergeLaunchProgressStyleCatalog,
   normalizeLaunchConfig,
 } from '@/lib/launchConfig';
 
-const LAYOUT_KIND_LABELS = {
-  fullscreen: 'Full screen',
-  panel: 'Floating panel',
-  docked: 'Partial',
-};
-
-function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 xl:grid-cols-3', showLayoutKind = false }) {
+function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 xl:grid-cols-3' }) {
   return (
     <div className={cn('grid grid-cols-1 gap-3', columns)}>
       {options.map((option) => {
         const selected = value === option.id;
-        const layoutKind = showLayoutKind ? getLaunchOverlayLayoutKind(option.id) : null;
 
         return (
           <button
@@ -43,23 +35,8 @@ function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 xl:gri
                 : 'border-border bg-card hover:border-primary/35 hover:bg-muted/20',
             )}
           >
-            {showLayoutKind ? (
-              <div className="mb-2 overflow-hidden rounded-lg border border-border/80 bg-muted/30 p-2">
-                <LayoutKindWireframe kind={layoutKind} />
-              </div>
-            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">{option.label}</p>
-              {layoutKind ? (
-                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                  {LAYOUT_KIND_LABELS[layoutKind]}
-                </Badge>
-              ) : null}
-              {option.interactive ? (
-                <Badge variant="outline" className="h-5 border-primary/30 px-1.5 text-[10px] text-primary">
-                  Interactive
-                </Badge>
-              ) : null}
               {selected ? <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Selected</Badge> : null}
             </div>
             <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{option.description}</p>
@@ -70,38 +47,9 @@ function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 xl:gri
   );
 }
 
-function LayoutKindWireframe({ kind }) {
-  if (kind === 'fullscreen') {
-    return (
-      <div className="relative h-12 rounded-md border-2 border-dashed border-cyan-500/50 bg-cyan-500/10">
-        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-medium uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
-          Edge to edge
-        </span>
-      </div>
-    );
-  }
-
-  if (kind === 'docked') {
-    return (
-      <div className="relative h-12 rounded-md border border-border bg-background">
-        <div className="absolute inset-x-2 top-2 h-5 rounded-sm bg-muted/80" />
-        <div className="absolute inset-x-0 bottom-0 h-3 rounded-b-md bg-primary/25" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative h-12 rounded-md border border-border bg-background">
-      <div className="absolute inset-1 rounded-sm bg-muted/50" />
-      <div className="absolute inset-x-3 top-2 bottom-2 rounded-md border border-violet-500/40 bg-violet-500/15" />
-    </div>
-  );
-}
-
 export default function LaunchSettingsPanel({ settings, onChange }) {
   const launchConfig = useMemo(() => normalizeLaunchConfig(settings), [settings]);
   const animations = mergeLaunchAnimationCatalog(settings.launch_animations);
-  const overlayModes = mergeLaunchOverlayModeCatalog(settings.launch_overlay_modes);
   const progressStyles = mergeLaunchProgressStyleCatalog(settings.launch_progress_styles);
   const durations = mergeLaunchDurationCatalog(settings.launch_durations);
 
@@ -136,24 +84,17 @@ export default function LaunchSettingsPanel({ settings, onChange }) {
 
           <TabsContent value="animation" className="space-y-3">
             <LaunchAnimationPicker
-              value={settings.launch_animation_style}
+              value={launchConfig.animation_style}
               onChange={(launch_animation_style) => patch({ animation_style: launch_animation_style, launch_animation_style })}
               catalog={animations}
             />
           </TabsContent>
 
           <TabsContent value="layout" className="space-y-3">
-            <div>
-              <Label>Overlay layout</Label>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                How the launch experience is framed on screen.
-              </p>
-            </div>
-            <OptionGrid
-              options={overlayModes}
-              value={settings.launch_overlay_mode}
+            <LaunchOverlayModePicker
+              value={launchConfig.overlay_mode}
               onChange={(launch_overlay_mode) => patch({ overlay_mode: launch_overlay_mode, launch_overlay_mode })}
-              showLayoutKind
+              catalog={settings.launch_overlay_modes}
             />
           </TabsContent>
 

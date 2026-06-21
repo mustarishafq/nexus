@@ -198,9 +198,7 @@ export default function LaunchOverlayShell({
             transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
           />
         ) : null}
-        <CenteredPanel panelClassName="rounded-3xl border border-white/15 bg-black/35 p-6 backdrop-blur-md">
-          {children}
-        </CenteredPanel>
+        <div className="relative flex h-full flex-col items-center justify-center px-6 py-10">{children}</div>
       </div>
     );
   }

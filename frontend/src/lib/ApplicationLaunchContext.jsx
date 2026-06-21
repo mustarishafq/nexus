@@ -4,9 +4,11 @@ import ApplicationLaunchOverlay from '@/components/applications/ApplicationLaunc
 import { openApplicationTarget } from '@/lib/applications';
 import {
   getLaunchDurationPreset,
+  normalizeLaunchConfig,
   resolveLaunchConfigFromSettings,
   shouldShowLaunchOverlay,
 } from '@/lib/launchConfig';
+import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import { useAuth } from '@/lib/AuthContext';
 
 const ApplicationLaunchContext = createContext(null);
@@ -57,6 +59,8 @@ export function ApplicationLaunchProvider({ children }) {
   const [launch, setLaunch] = useState(null);
   const [launchingId, setLaunchingId] = useState(null);
   const pendingTargetRef = useRef(null);
+  const previewReadyTimerRef = useRef(null);
+  const previewResolveRef = useRef(null);
   const launchConfig = useMemo(
     () => resolveLaunchConfigFromSettings(appPublicSettings),
     [appPublicSettings],
@@ -74,12 +78,21 @@ export function ApplicationLaunchProvider({ children }) {
   const finishLaunch = useCallback(() => {
     const pendingTarget = pendingTargetRef.current;
     pendingTargetRef.current = null;
+
+    if (previewReadyTimerRef.current) {
+      window.clearTimeout(previewReadyTimerRef.current);
+      previewReadyTimerRef.current = null;
+    }
+
     setLaunch(null);
     setLaunchingId(null);
 
     if (pendingTarget) {
       window.setTimeout(() => resolveLaunchTarget(pendingTarget, pendingTarget.navigate), 0);
     }
+
+    previewResolveRef.current?.();
+    previewResolveRef.current = null;
   }, []);
 
   const launchWithAnimation = useCallback(async (application, navigate) => {
@@ -140,12 +153,57 @@ export function ApplicationLaunchProvider({ children }) {
     setLaunch((current) => (current?.key === launchKey ? { ...current, ready: true } : current));
   }, [appPublicSettings?.launch_animations, durationPreset.min_ms, launchConfig, launchingId]);
 
+  const previewLaunchAnimation = useCallback((config, options = {}) => {
+    const normalizedConfig = normalizeLaunchConfig(config);
+
+    if (!shouldShowLaunchOverlay(normalizedConfig)) {
+      return Promise.resolve({ skipped: true, reason: 'instant' });
+    }
+
+    if (launch || launchingId) {
+      return Promise.resolve({ skipped: true, reason: 'busy' });
+    }
+
+    const durationCatalog = options.durationCatalog ?? appPublicSettings?.launch_durations;
+    const durationPresetForPreview = getLaunchDurationPreset(normalizedConfig.duration, durationCatalog);
+    const application = options.application ?? {
+      id: 'launch-preview',
+      name: 'Preview App',
+      color: DEFAULT_BRAND_COLOR,
+      is_enabled: true,
+    };
+
+    return new Promise((resolve) => {
+      previewResolveRef.current = resolve;
+
+      const launchKey = `preview-${Date.now()}`;
+      setLaunchingId(application.id);
+      pendingTargetRef.current = null;
+
+      setLaunch({
+        key: launchKey,
+        application,
+        config: normalizedConfig,
+        animationCatalog: options.animationCatalog ?? appPublicSettings?.launch_animations,
+        durationCatalog,
+        ready: false,
+        preview: true,
+      });
+
+      previewReadyTimerRef.current = window.setTimeout(() => {
+        previewReadyTimerRef.current = null;
+        setLaunch((current) => (current?.key === launchKey ? { ...current, ready: true } : current));
+      }, durationPresetForPreview.min_ms);
+    });
+  }, [appPublicSettings?.launch_animations, appPublicSettings?.launch_durations, launch, launchingId]);
+
   const value = useMemo(
     () => ({
       launchingId,
       launchWithAnimation,
+      previewLaunchAnimation,
     }),
-    [launchWithAnimation, launchingId],
+    [launchWithAnimation, launchingId, previewLaunchAnimation],
   );
 
   return (

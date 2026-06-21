@@ -22,7 +22,7 @@ export default function ApplicationLaunchOverlay({ launch, onDismiss, durationCa
   const overlayMode = normalizeLaunchOverlayMode(launch?.config?.overlay_mode);
   const progressStyle = normalizeLaunchProgressStyle(launch?.config?.progress_style);
   const duration = normalizeLaunchDuration(launch?.config?.duration);
-  const preset = getLaunchDurationPreset(duration, durationCatalog);
+  const preset = getLaunchDurationPreset(duration, launch?.durationCatalog ?? durationCatalog);
   const application = launch?.application;
   const brandColor = application?.color || DEFAULT_BRAND_COLOR;
   const isCompactShell = isCompactLaunchOverlayMode(overlayMode);
@@ -70,7 +70,9 @@ export default function ApplicationLaunchOverlay({ launch, onDismiss, durationCa
         transition={{ duration: 0.25 }}
         role="dialog"
         aria-modal="true"
-        aria-label={`Launching ${application?.name || 'application'}`}
+        aria-label={launch.preview
+          ? `Preview launch for ${application?.name || 'application'}`
+          : `Launching ${application?.name || 'application'}`}
         onPointerDown={() => {
           if (launch.config?.interactive !== false) {
             boost(style === 'portal' ? 0.18 : 0.14);

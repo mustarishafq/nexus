@@ -37,12 +37,6 @@ class ApplicationLaunchSettings
             'hint' => 'Tap anywhere to jump to hyperdrive.',
             'category' => 'space',
         ],
-        'ripple' => [
-            'label' => 'Ripple Gate',
-            'description' => 'Ripples pulse from the logo toward the edges.',
-            'hint' => 'Tap to add energy and launch sooner.',
-            'category' => 'energy',
-        ],
         'orbit' => [
             'label' => 'Orbital Sync',
             'description' => 'Satellites orbit the app icon before lift-off.',
@@ -102,12 +96,6 @@ class ApplicationLaunchSettings
             'description' => 'A blazing comet orbits and settles on the icon.',
             'hint' => 'Tap to ignite a brighter tail.',
             'category' => 'space',
-        ],
-        'matrix' => [
-            'label' => 'Matrix Rain',
-            'description' => 'Falling code columns frame the logo reveal.',
-            'hint' => 'Tap to accelerate the data stream.',
-            'category' => 'glitch',
         ],
         'neon' => [
             'label' => 'Neon Flicker',
@@ -193,12 +181,6 @@ class ApplicationLaunchSettings
             'hint' => 'Tap to complete the flip.',
             'category' => 'energy',
         ],
-        'star_warp' => [
-            'label' => 'Star Warp',
-            'description' => 'Streaking stars rush past before the logo arrives.',
-            'hint' => 'Tap to warp harder.',
-            'category' => 'space',
-        ],
         'ink_drop' => [
             'label' => 'Ink Drop',
             'description' => 'Ink ripples spread outward from the logo center.',
@@ -223,18 +205,6 @@ class ApplicationLaunchSettings
             'hint' => 'Tap to tighten the spiral.',
             'category' => 'nature',
         ],
-        'radar' => [
-            'label' => 'Radar Sweep',
-            'description' => 'A scanning radar arc sweeps across the logo.',
-            'hint' => 'Tap to widen the sweep.',
-            'category' => 'space',
-        ],
-        'constellation' => [
-            'label' => 'Constellation',
-            'description' => 'Stars connect with lines that converge on the logo.',
-            'hint' => 'Tap to link more stars.',
-            'category' => 'space',
-        ],
         'particle_burst' => [
             'label' => 'Particle Burst',
             'description' => 'Sparks burst outward, then the logo resolves.',
@@ -247,29 +217,11 @@ class ApplicationLaunchSettings
             'hint' => 'Tap to resolve pixels faster.',
             'category' => 'glitch',
         ],
-        'corrupt' => [
-            'label' => 'Data Corrupt',
-            'description' => 'Vertical corruption bars scramble then restore.',
-            'hint' => 'Tap to corrupt more columns.',
-            'category' => 'glitch',
-        ],
         'holo_flicker' => [
             'label' => 'Holo Flicker',
             'description' => 'Unstable hologram flickers before locking in.',
             'hint' => 'Tap to stabilize the signal.',
             'category' => 'hologram',
-        ],
-        'wireframe' => [
-            'label' => 'Wireframe',
-            'description' => 'A rotating wireframe cage forms around the logo.',
-            'hint' => 'Tap to tighten the mesh.',
-            'category' => 'hologram',
-        ],
-        'teleport' => [
-            'label' => 'Teleport',
-            'description' => 'A beam of light teleports the logo into place.',
-            'hint' => 'Tap to charge the beam.',
-            'category' => 'energy',
         ],
         'shockwave' => [
             'label' => 'Shockwave',
@@ -283,24 +235,6 @@ class ApplicationLaunchSettings
             'hint' => 'Tap to spin faster.',
             'category' => 'nature',
         ],
-        'bloom' => [
-            'label' => 'Bloom',
-            'description' => 'Petal-like shapes bloom outward around the logo.',
-            'hint' => 'Tap to unfurl more petals.',
-            'category' => 'nature',
-        ],
-        'mosaic' => [
-            'label' => 'Mosaic',
-            'description' => 'Color tiles snap together to form the icon.',
-            'hint' => 'Tap to place more tiles.',
-            'category' => 'energy',
-        ],
-        'plasma' => [
-            'label' => 'Plasma Orb',
-            'description' => 'A swirling plasma ball condenses into the logo.',
-            'hint' => 'Tap to intensify the plasma.',
-            'category' => 'energy',
-        ],
         'eclipse' => [
             'label' => 'Eclipse',
             'description' => 'A dark disc passes to reveal the bright logo.',
@@ -313,24 +247,58 @@ class ApplicationLaunchSettings
             'hint' => 'Tap to punch in harder.',
             'category' => 'energy',
         ],
-        'phoenix' => [
-            'label' => 'Phoenix Rise',
-            'description' => 'Flaming wings spread as the logo emerges.',
-            'hint' => 'Tap to fan the flames.',
-            'category' => 'energy',
-        ],
-        'geometric' => [
-            'label' => 'Geometric',
-            'description' => 'Rotating polygons orbit and merge on the logo.',
-            'hint' => 'Tap to add more shapes.',
-            'category' => 'hologram',
-        ],
         'sandstorm' => [
             'label' => 'Sandstorm',
             'description' => 'Swirling grains part to reveal the logo.',
             'hint' => 'Tap to clear the storm.',
             'category' => 'nature',
         ],
+    ];
+
+    /** @var array<string, string> */
+    public const OVERLAY_PLACEMENTS = [
+        'fullscreen' => 'fullscreen',
+        'blur' => 'fullscreen',
+        'frosted' => 'fullscreen',
+        'spotlight' => 'fullscreen',
+        'gradient' => 'fullscreen',
+        'mesh' => 'fullscreen',
+        'split' => 'fullscreen',
+        'cinema' => 'fullscreen',
+        'glitch_frame' => 'border',
+        'aurora_full' => 'fullscreen',
+        'scanlines_full' => 'fullscreen',
+        'void' => 'fullscreen',
+        'prism_full' => 'fullscreen',
+        'circuit_board' => 'fullscreen',
+        'hologram_full' => 'fullscreen',
+        'vignette' => 'fullscreen',
+        'orbit_frame' => 'border',
+        'interactive_glow' => 'fullscreen',
+        'card' => 'center',
+        'glass' => 'center',
+        'glass_deep' => 'center',
+        'bubble' => 'center',
+        'tilt' => 'center',
+        'mirror' => 'center',
+        'clear_glass' => 'center',
+        'neon_frame' => 'border',
+        'hologram_panel' => 'border',
+        'prism_edge' => 'border',
+        'crt_monitor' => 'border',
+        'hexagon_panel' => 'border',
+        'glitch_panel' => 'border',
+        'polaroid' => 'border',
+        'stained_glass' => 'border',
+        'pixel_frame' => 'border',
+        'minimal' => 'bottom',
+        'dock' => 'bottom',
+        'bottom_sheet' => 'bottom',
+        'full_glass' => 'bottom',
+        'corner' => 'bottom_right',
+        'top_banner' => 'top',
+        'sidebar' => 'side',
+        'right_rail' => 'side',
     ];
 
     /** @var array<string, array{label: string, description: string}> */
@@ -739,10 +707,15 @@ class ApplicationLaunchSettings
         return self::catalogFromMap(self::ANIMATIONS);
     }
 
-    /** @return list<array{id: string, label: string, description: string}> */
+    /** @return list<array{id: string, label: string, description: string, placement?: string}> */
     public static function overlayModeCatalog(): array
     {
-        return self::catalogFromMap(self::OVERLAY_MODES);
+        return array_map(
+            fn (array $item) => array_merge($item, [
+                'placement' => self::OVERLAY_PLACEMENTS[$item['id']] ?? 'fullscreen',
+            ]),
+            self::catalogFromMap(self::OVERLAY_MODES)
+        );
     }
 
     /** @return list<array{id: string, label: string, description: string}> */

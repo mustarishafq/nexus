@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Check } from 'lucide-react';
 import LaunchAnimationStage from '@/components/applications/launch-animations/LaunchAnimationStage';
 import { useLaunchOverlayEnergy } from '@/components/applications/launch-animations/useLaunchOverlayEnergy';
@@ -11,6 +11,9 @@ const PREVIEW_APP = {
   color: DEFAULT_BRAND_COLOR,
 };
 
+/** Matches production launch stage height before card scaling. */
+const PRODUCTION_STAGE_HEIGHT = 220;
+
 export default function LaunchAnimationThumbnail({
   style,
   selected = false,
@@ -19,11 +22,7 @@ export default function LaunchAnimationThumbnail({
   application = PREVIEW_APP,
 }) {
   const resolvedStyle = normalizeLaunchAnimation(style);
-  const { energy, setEnergy } = useLaunchOverlayEnergy(true, resolvedStyle);
-
-  useEffect(() => {
-    setEnergy(0.48);
-  }, [resolvedStyle, setEnergy]);
+  const { energy } = useLaunchOverlayEnergy(true, resolvedStyle);
 
   return (
     <button
@@ -49,16 +48,25 @@ export default function LaunchAnimationThumbnail({
             </div>
           </div>
         ) : (
-          <LaunchAnimationStage
-            style={resolvedStyle}
-            application={application}
-            energy={energy}
-            compact
-            interactive={false}
-            showHint={false}
-            catalog={catalog}
-            className="h-full min-h-0"
-          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="w-full origin-center"
+              style={{
+                height: PRODUCTION_STAGE_HEIGHT,
+                transform: `scale(${144 / PRODUCTION_STAGE_HEIGHT})`,
+              }}
+            >
+              <LaunchAnimationStage
+                style={resolvedStyle}
+                application={application}
+                energy={energy}
+                interactive={false}
+                showHint={false}
+                catalog={catalog}
+                className="min-h-[220px]"
+              />
+            </div>
+          </div>
         )}
 
         {selected ? (
