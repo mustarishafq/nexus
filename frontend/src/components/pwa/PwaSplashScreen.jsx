@@ -11,20 +11,34 @@ import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFr
 
 const SPLASH_SRC = '/lottie/splash.lottie';
 const SPLASH_CACHE_KEY = 'nexus_splash_public_cache_v1';
+const SPLASH_FIRST_LAUNCH_KEY = 'nexus_splash_first_launch_done';
+
+function hasCompletedFirstLaunchSplash() {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.localStorage.getItem(SPLASH_FIRST_LAUNCH_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function shouldShowSplash() {
   if (typeof window === 'undefined') return false;
+  if (hasCompletedFirstLaunchSplash()) return false;
 
   const isStandalone =
     window.matchMedia('(display-mode: standalone)').matches
     || window.navigator.standalone === true;
 
-  if (isStandalone) return true;
+  return isStandalone;
+}
 
+function markSplashCompleted() {
   try {
-    return !sessionStorage.getItem('nexus_splash_shown');
+    window.localStorage.setItem(SPLASH_FIRST_LAUNCH_KEY, '1');
   } catch {
-    return true;
+    // ignore storage errors
   }
 }
 
@@ -64,9 +78,9 @@ function getNeutralStartupSeed() {
     splash: {
       splash_enabled: true,
       splash_animation_style: 'fade-rise',
-      splash_background_color: '#000000',
-      splash_accent_color: '#FFFFFF',
-      splash_secondary_color: '#A0A0A0',
+      splash_background_color: '#022e96',
+      splash_accent_color: '#FA9D04',
+      splash_secondary_color: '#017CF3',
       splash_show_logo: false,
       splash_show_system_name: false,
       splash_background_overlay_opacity: 0,
@@ -110,13 +124,7 @@ export default function PwaSplashScreen() {
   const dismiss = useCallback(() => {
     if (dismissedRef.current) return;
     dismissedRef.current = true;
-
-    try {
-      sessionStorage.setItem('nexus_splash_shown', '1');
-    } catch {
-      // ignore storage errors
-    }
-
+    markSplashCompleted();
     setExiting(true);
   }, []);
 

@@ -39,6 +39,7 @@
           document.documentElement.classList.add('dark');
         }
 
+        const splashAlreadyDone = localStorage.getItem('nexus_splash_first_launch_done') === '1';
         const splashCacheRaw = localStorage.getItem('nexus_splash_public_cache_v1');
         const splashCache = splashCacheRaw ? JSON.parse(splashCacheRaw) : null;
         const splashColor =
@@ -50,12 +51,19 @@
         const savedTheme = localStorage.getItem('nexus-theme');
         const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         const useDarkTheme = savedTheme === 'dark' || (savedTheme === 'system' && prefersDark);
-        const themeColor = useDarkTheme
-          ? '#0F172A'
-          : (typeof splashColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(splashColor) ? splashColor.toUpperCase() : '#022E96');
+        const resolvedSplashColor = typeof splashColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(splashColor)
+          ? splashColor.toUpperCase()
+          : '#022E96';
+        const themeColor = useDarkTheme ? '#0F172A' : resolvedSplashColor;
 
         const themeMeta = document.querySelector('meta[name="theme-color"]');
         if (themeMeta) themeMeta.setAttribute('content', themeColor);
+
+        // Paint the boot screen immediately so the OS splash → app handoff matches your custom splash.
+        if (!splashAlreadyDone) {
+          document.documentElement.style.backgroundColor = resolvedSplashColor;
+          document.body.style.backgroundColor = resolvedSplashColor;
+        }
       } catch (e) {}
     </script>
   </head>
