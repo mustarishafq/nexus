@@ -11,13 +11,14 @@ import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFr
 
 const SPLASH_SRC = '/lottie/splash.lottie';
 const SPLASH_CACHE_KEY = 'nexus_splash_public_cache_v1';
-const SPLASH_FIRST_LAUNCH_KEY = 'nexus_splash_first_launch_done';
+/** Cleared when the app process is killed (e.g. removed from phone recents). */
+const SPLASH_SESSION_KEY = 'nexus_splash_session_done';
 
-function hasCompletedFirstLaunchSplash() {
+function hasCompletedSessionSplash() {
   if (typeof window === 'undefined') return false;
 
   try {
-    return window.localStorage.getItem(SPLASH_FIRST_LAUNCH_KEY) === '1';
+    return window.sessionStorage.getItem(SPLASH_SESSION_KEY) === '1';
   } catch {
     return false;
   }
@@ -25,7 +26,7 @@ function hasCompletedFirstLaunchSplash() {
 
 function shouldShowSplash() {
   if (typeof window === 'undefined') return false;
-  if (hasCompletedFirstLaunchSplash()) return false;
+  if (hasCompletedSessionSplash()) return false;
 
   const isStandalone =
     window.matchMedia('(display-mode: standalone)').matches
@@ -36,7 +37,9 @@ function shouldShowSplash() {
 
 function markSplashCompleted() {
   try {
-    window.localStorage.setItem(SPLASH_FIRST_LAUNCH_KEY, '1');
+    window.sessionStorage.setItem(SPLASH_SESSION_KEY, '1');
+    // Legacy key from an earlier build — no longer used for gating.
+    window.localStorage.removeItem('nexus_splash_first_launch_done');
   } catch {
     // ignore storage errors
   }

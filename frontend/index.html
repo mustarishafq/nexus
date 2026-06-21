@@ -39,7 +39,7 @@
           document.documentElement.classList.add('dark');
         }
 
-        const splashAlreadyDone = localStorage.getItem('nexus_splash_first_launch_done') === '1';
+        const splashAlreadyDone = sessionStorage.getItem('nexus_splash_session_done') === '1';
         const splashCacheRaw = localStorage.getItem('nexus_splash_public_cache_v1');
         const splashCache = splashCacheRaw ? JSON.parse(splashCacheRaw) : null;
         const splashColor =
