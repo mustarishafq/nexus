@@ -114,9 +114,10 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingPublicSettings(true);
       setAuthError(null);
 
-      await refreshPublicSettings();
-
-      await checkUserAuth();
+      await Promise.all([
+        refreshPublicSettings(),
+        checkUserAuth(),
+      ]);
       setIsLoadingPublicSettings(false);
     } catch (error) {
       console.error('Unexpected error:', error);

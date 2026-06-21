@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -5,25 +6,7 @@ import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useParam
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
-import Dashboard from '@/pages/Dashboard';
-import NotificationCenter from '@/pages/NotificationCenter';
-import ActivityTimeline from '@/pages/ActivityTimeline';
-import Applications from '@/pages/Applications';
-import ApplicationUsage from '@/pages/ApplicationUsage';
-import ApplicationBrowser from '@/pages/ApplicationBrowser';
-import BroadcastCenter from '@/pages/BroadcastCenter';
-import SystemEvents from '@/pages/SystemEvents';
-import AdminCalendar from '@/pages/AdminCalendar';
-import Settings from '@/pages/Settings';
-import Profile from '@/pages/Profile';
-import CompanyFeed from '@/pages/CompanyFeed';
-import Messages from '@/pages/Messages';
-import PersonProfile from '@/pages/PersonProfile';
-import People from '@/pages/People';
-import OrgChart from '@/pages/OrgChart';
-import UserManagement from '@/pages/UserManagement';
-import NetworkHealthDashboard from '@/pages/NetworkHealthDashboard';
-import Analytics from '@/pages/Analytics';
+import PageLoader from '@/components/PageLoader';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -33,6 +16,26 @@ import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
+
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const NotificationCenter = lazy(() => import('@/pages/NotificationCenter'));
+const ActivityTimeline = lazy(() => import('@/pages/ActivityTimeline'));
+const Applications = lazy(() => import('@/pages/Applications'));
+const ApplicationUsage = lazy(() => import('@/pages/ApplicationUsage'));
+const ApplicationBrowser = lazy(() => import('@/pages/ApplicationBrowser'));
+const BroadcastCenter = lazy(() => import('@/pages/BroadcastCenter'));
+const SystemEvents = lazy(() => import('@/pages/SystemEvents'));
+const AdminCalendar = lazy(() => import('@/pages/AdminCalendar'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const Profile = lazy(() => import('@/pages/Profile'));
+const CompanyFeed = lazy(() => import('@/pages/CompanyFeed'));
+const Messages = lazy(() => import('@/pages/Messages'));
+const PersonProfile = lazy(() => import('@/pages/PersonProfile'));
+const People = lazy(() => import('@/pages/People'));
+const OrgChart = lazy(() => import('@/pages/OrgChart'));
+const UserManagement = lazy(() => import('@/pages/UserManagement'));
+const NetworkHealthDashboard = lazy(() => import('@/pages/NetworkHealthDashboard'));
+const Analytics = lazy(() => import('@/pages/Analytics'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -48,11 +51,7 @@ const ProtectedRoutes = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError, forcePasswordChange } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {
@@ -70,37 +69,39 @@ const ProtectedRoutes = () => {
 
   return (
     <ApplicationLaunchProvider>
-      <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/feed" element={<CompanyFeed />} />
-        <Route path="/messages" element={<Messages />} />
-        <Route path="/messages/new/:userId" element={<Messages />} />
-        <Route path="/messages/:conversationId" element={<Messages />} />
-        <Route path="/people" element={<People />} />
-        <Route path="/organization" element={<OrgChart />} />
-        <Route path="/people/org-chart" element={<LegacyOrgChartRedirect />} />
-        <Route path="/people/:userId" element={<PersonProfile />} />
-        <Route path="/users/:userId/dashboard" element={<LegacyUserDashboardRedirect />} />
-        <Route path="/notifications" element={<NotificationCenter />} />
-        <Route path="/activity" element={<ActivityTimeline />} />
-        <Route path="/network-health" element={<NetworkHealthDashboard />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/applications/usage" element={<ApplicationUsage />} />
-        <Route path="/applications" element={<Applications />} />
-        <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
-        <Route path="/admin/broadcast" element={<BroadcastCenter />} />
-        <Route path="/admin/events" element={<SystemEvents />} />
-        <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
-        <Route path="/calendar" element={<AdminCalendar />} />
-        <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
-        <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/admin/users" element={<UserManagement />} />
-      </Route>
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/feed" element={<CompanyFeed />} />
+          <Route path="/messages" element={<Messages />} />
+          <Route path="/messages/new/:userId" element={<Messages />} />
+          <Route path="/messages/:conversationId" element={<Messages />} />
+          <Route path="/people" element={<People />} />
+          <Route path="/organization" element={<OrgChart />} />
+          <Route path="/people/org-chart" element={<LegacyOrgChartRedirect />} />
+          <Route path="/people/:userId" element={<PersonProfile />} />
+          <Route path="/users/:userId/dashboard" element={<LegacyUserDashboardRedirect />} />
+          <Route path="/notifications" element={<NotificationCenter />} />
+          <Route path="/activity" element={<ActivityTimeline />} />
+          <Route path="/network-health" element={<NetworkHealthDashboard />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/applications/usage" element={<ApplicationUsage />} />
+          <Route path="/applications" element={<Applications />} />
+          <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
+          <Route path="/admin/broadcast" element={<BroadcastCenter />} />
+          <Route path="/admin/events" element={<SystemEvents />} />
+          <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
+          <Route path="/calendar" element={<AdminCalendar />} />
+          <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
+          <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/admin/users" element={<UserManagement />} />
+        </Route>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+      </Suspense>
     </ApplicationLaunchProvider>
   );
 };
@@ -113,13 +114,15 @@ function App() {
         <QueryClientProvider client={queryClientInstance}>
           <PwaSplashScreen />
           <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/*" element={<ProtectedRoutes />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/*" element={<ProtectedRoutes />} />
+              </Routes>
+            </Suspense>
           </Router>
           <PwaInstallPrompt />
           <Toaster />

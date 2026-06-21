@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { glassDockStyles } from './glassStyles';
@@ -21,6 +22,10 @@ export default function BottomNav() {
     enabled: !isMobile,
   });
 
+  const { data: unreadNotifications = [] } = useUnreadNotifications({
+    refetchInterval: 15_000,
+  });
+
   const navItems = useMemo(() => {
     if (isMobile) return MOBILE_BOTTOM_NAV_ITEMS;
 
@@ -32,30 +37,29 @@ export default function BottomNav() {
   }, [isMobile, user?.role, metabaseDashboards.length]);
 
   useEffect(() => {
-    const loadBadgeCounts = async () => {
+    const loadMessageBadge = async () => {
       try {
-        const [notifs, inbox] = await Promise.all([
-          db.entities.Notification.filter(
-            { is_read: false, exclude_broadcasts: true, exclude_direct_messages: true },
-            '-created_date',
-            100
-          ),
-          db.messages.listConversations(),
-        ]);
-
-        setBadgeCounts({
-          notifications: Array.isArray(notifs) ? notifs.length : 0,
+        const inbox = await db.messages.listConversations();
+        setBadgeCounts((prev) => ({
+          ...prev,
           messages: Number(inbox?.unread_total) || 0,
-        });
+        }));
       } catch {
-        setBadgeCounts({ notifications: 0, messages: 0 });
+        setBadgeCounts((prev) => ({ ...prev, messages: 0 }));
       }
     };
 
-    loadBadgeCounts();
-    const interval = setInterval(loadBadgeCounts, 15000);
+    loadMessageBadge();
+    const interval = setInterval(loadMessageBadge, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    setBadgeCounts((prev) => ({
+      ...prev,
+      notifications: unreadNotifications.length,
+    }));
+  }, [unreadNotifications.length]);
 
   return (
     <nav

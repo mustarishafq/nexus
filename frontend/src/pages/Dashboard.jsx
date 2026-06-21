@@ -1,7 +1,7 @@
 import db from '@/api/base44Client';
 import React from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
@@ -14,29 +14,18 @@ import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useAuth } from '@/lib/AuthContext';
+import {
+  RECENT_NOTIFICATIONS_QUERY_KEY,
+  UNREAD_NOTIFICATIONS_QUERY_KEY,
+  useRecentNotifications,
+} from '@/hooks/useNotifications';
+import { useQuery } from '@tanstack/react-query';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { user: authUser } = useAuth();
+  const { user, checkUserAuth } = useAuth();
 
-  const { data: user } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => db.auth.me(),
-    initialData: authUser ?? undefined,
-    staleTime: 0,
-    refetchOnMount: 'always',
-    retry: false,
-  });
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications-dash'],
-    queryFn: () =>
-      db.entities.Notification.filter(
-        { exclude_broadcasts: true, exclude_direct_messages: true },
-        '-created_date',
-        50
-      ),
-  });
+  const { data: notifications = [] } = useRecentNotifications();
 
   const { data: systems = [] } = useQuery({
     queryKey: ['applications'],
@@ -60,7 +49,7 @@ export default function Dashboard() {
   });
 
   const refreshUser = async () => {
-    await queryClient.refetchQueries({ queryKey: ['current-user'] });
+    await checkUserAuth();
   };
 
   const markRead = async (notif) => {
@@ -68,7 +57,8 @@ export default function Dashboard() {
       is_read: true,
       read_at: new Date().toISOString(),
     });
-    queryClient.invalidateQueries({ queryKey: ['notifications-dash'] });
+    queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY });
   };
 
   return (

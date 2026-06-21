@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { toAbsoluteUrl } from '@/lib/media';
+import { useUnreadNotifications } from '@/hooks/useNotifications';
 
 import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import MobileMoreMenu from './MobileMoreMenu';
@@ -22,9 +23,13 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const navigate = useNavigate();
   const { user: authUser, logout } = useAuth();
   const [user, setUser] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { data: unreadNotifications = [] } = useUnreadNotifications({
+    enabled: !isMobile,
+    refetchInterval: 15_000,
+  });
+  const unreadCount = unreadNotifications.length;
 
   useGlobalSearchShortcut(setSearchOpen);
 
@@ -36,26 +41,6 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
     if (authUser) return;
     db.auth.me().then(setUser).catch(() => {});
   }, [authUser]);
-
-  useEffect(() => {
-    if (isMobile) return;
-    loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 15000);
-    return () => clearInterval(interval);
-  }, [isMobile]);
-
-  const loadUnreadCount = async () => {
-    try {
-      const notifs = await db.entities.Notification.filter(
-        { is_read: false, exclude_broadcasts: true, exclude_direct_messages: true },
-        '-created_date',
-        100
-      );
-      setUnreadCount(Array.isArray(notifs) ? notifs.length : 0);
-    } catch {
-      setUnreadCount(0);
-    }
-  };
 
   return (
     <>
@@ -131,7 +116,6 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
         <NotificationPanel
           open={panelOpen}
           onClose={() => setPanelOpen(false)}
-          onCountChange={setUnreadCount}
         />
       ) : null}
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />

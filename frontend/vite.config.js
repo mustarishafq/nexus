@@ -8,6 +8,22 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+
+          if (id.includes('framer-motion')) return 'vendor-motion';
+          if (id.includes('@lottiefiles')) return 'vendor-lottie';
+          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
+          if (id.includes('@radix-ui')) return 'vendor-radix';
+          if (id.includes('lucide-react')) return 'vendor-icons';
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

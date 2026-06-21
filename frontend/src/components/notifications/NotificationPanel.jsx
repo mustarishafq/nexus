@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { followNotificationAction } from '@/lib/notificationAction';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,12 +12,22 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link } from 'react-router-dom';
 import NotificationItem from './NotificationItem';
+import {
+  RECENT_NOTIFICATIONS_QUERY_KEY,
+  UNREAD_NOTIFICATIONS_QUERY_KEY,
+} from '@/hooks/useNotifications';
 
 export default function NotificationPanel({ open, onClose, onCountChange }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const invalidateSharedNotificationQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
+  }, [queryClient]);
 
   const { data: applications = [] } = useQuery({
     queryKey: ['applications'],
@@ -62,7 +72,8 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
 
   const markRead = async (notif) => {
     await db.entities.Notification.update(notif.id, { is_read: true, read_at: new Date().toISOString() });
-    load();
+    await load();
+    invalidateSharedNotificationQueries();
   };
 
   const markAllRead = async () => {
@@ -70,18 +81,21 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     await Promise.all(unread.map(n =>
       db.entities.Notification.update(n.id, { is_read: true, read_at: new Date().toISOString() })
     ));
-    load();
+    await load();
+    invalidateSharedNotificationQueries();
   };
 
   const snooze = async (notif) => {
     const snoozeUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await db.entities.Notification.update(notif.id, { snoozed_until: snoozeUntil });
-    load();
+    await load();
+    invalidateSharedNotificationQueries();
   };
 
   const dismiss = async (notif) => {
     await db.entities.Notification.delete(notif.id);
-    load();
+    await load();
+    invalidateSharedNotificationQueries();
   };
 
   const activateNotification = useCallback(async (notif) => {
