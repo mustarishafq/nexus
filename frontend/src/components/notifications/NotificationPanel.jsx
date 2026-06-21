@@ -13,8 +13,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link } from 'react-router-dom';
 import NotificationItem from './NotificationItem';
 import {
-  RECENT_NOTIFICATIONS_QUERY_KEY,
-  UNREAD_NOTIFICATIONS_QUERY_KEY,
+  clearUnreadNotificationsCache,
+  invalidateNotificationQueries,
+  removeUnreadNotificationFromCache,
 } from '@/hooks/useNotifications';
 
 export default function NotificationPanel({ open, onClose, onCountChange }) {
@@ -25,8 +26,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   const queryClient = useQueryClient();
 
   const invalidateSharedNotificationQueries = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
+    invalidateNotificationQueries(queryClient);
   }, [queryClient]);
 
   const { data: applications = [] } = useQuery({
@@ -71,31 +71,81 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   }, [onCountChange]);
 
   const markRead = async (notif) => {
-    await db.entities.Notification.update(notif.id, { is_read: true, read_at: new Date().toISOString() });
-    await load();
-    invalidateSharedNotificationQueries();
+    if (notif.is_read) return;
+
+    const readAt = new Date().toISOString();
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, is_read: true, read_at: readAt } : n))
+    );
+    removeUnreadNotificationFromCache(queryClient, notif.id);
+    onCountChange?.((prev) => Math.max(0, (typeof prev === 'number' ? prev : 0) - 1));
+
+    try {
+      await db.entities.Notification.update(notif.id, { is_read: true, read_at: readAt });
+      invalidateSharedNotificationQueries();
+    } catch {
+      await load();
+      invalidateSharedNotificationQueries();
+      toast.error('Failed to mark notification as read.');
+    }
   };
 
   const markAllRead = async () => {
-    const unread = notifications.filter(n => !n.is_read);
-    await Promise.all(unread.map(n =>
-      db.entities.Notification.update(n.id, { is_read: true, read_at: new Date().toISOString() })
-    ));
-    await load();
-    invalidateSharedNotificationQueries();
+    const unread = notifications.filter((n) => !n.is_read);
+    if (unread.length === 0) return;
+
+    const readAt = new Date().toISOString();
+    setNotifications((prev) =>
+      prev.map((n) => (n.is_read ? n : { ...n, is_read: true, read_at: readAt }))
+    );
+    clearUnreadNotificationsCache(queryClient);
+    onCountChange?.(0);
+
+    try {
+      await Promise.all(
+        unread.map((n) =>
+          db.entities.Notification.update(n.id, { is_read: true, read_at: readAt })
+        )
+      );
+      invalidateSharedNotificationQueries();
+    } catch {
+      await load();
+      invalidateSharedNotificationQueries();
+      toast.error('Failed to mark all notifications as read.');
+    }
   };
 
   const snooze = async (notif) => {
     const snoozeUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    await db.entities.Notification.update(notif.id, { snoozed_until: snoozeUntil });
-    await load();
-    invalidateSharedNotificationQueries();
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, snoozed_until: snoozeUntil } : n))
+    );
+
+    try {
+      await db.entities.Notification.update(notif.id, { snoozed_until: snoozeUntil });
+      invalidateSharedNotificationQueries();
+    } catch {
+      await load();
+      invalidateSharedNotificationQueries();
+      toast.error('Failed to snooze notification.');
+    }
   };
 
   const dismiss = async (notif) => {
-    await db.entities.Notification.delete(notif.id);
-    await load();
-    invalidateSharedNotificationQueries();
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    if (!notif.is_read) {
+      removeUnreadNotificationFromCache(queryClient, notif.id);
+      onCountChange?.((prev) => Math.max(0, (typeof prev === 'number' ? prev : 0) - 1));
+    }
+
+    try {
+      await db.entities.Notification.delete(notif.id);
+      invalidateSharedNotificationQueries();
+    } catch {
+      await load();
+      invalidateSharedNotificationQueries();
+      toast.error('Failed to dismiss notification.');
+    }
   };
 
   const activateNotification = useCallback(async (notif) => {

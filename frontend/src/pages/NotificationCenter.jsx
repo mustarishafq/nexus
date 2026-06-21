@@ -21,6 +21,10 @@ import {
 } from '@/lib/notificationVisuals';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { buildSystemStatusDescription } from '@/lib/MetaTagManager';
+import {
+  clearUnreadNotificationsCache,
+  invalidateNotificationQueries,
+} from '@/hooks/useNotifications';
 
 export default function NotificationCenter() {
   const [filter, setFilter] = useState('all');
@@ -75,9 +79,28 @@ export default function NotificationCenter() {
   }, [applications, navigate]);
 
   const markAllRead = async () => {
-    const unread = notifications.filter(n => !n.is_read);
-    await Promise.all(unread.map(n => db.entities.Notification.update(n.id, { is_read: true, read_at: new Date().toISOString() })));
-    queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
+    const unread = notifications.filter((n) => !n.is_read);
+    if (unread.length === 0) return;
+
+    const readAt = new Date().toISOString();
+    queryClient.setQueryData(['notifications-center'], (old = []) =>
+      old.map((n) => (n.is_read ? n : { ...n, is_read: true, read_at: readAt }))
+    );
+    clearUnreadNotificationsCache(queryClient);
+
+    try {
+      await Promise.all(
+        unread.map((n) =>
+          db.entities.Notification.update(n.id, { is_read: true, read_at: readAt })
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
+      invalidateNotificationQueries(queryClient);
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
+      invalidateNotificationQueries(queryClient);
+      toast.error('Failed to mark all notifications as read.');
+    }
   };
 
   const filtered = notifications.filter(n => {

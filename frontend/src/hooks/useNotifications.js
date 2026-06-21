@@ -34,3 +34,18 @@ export function useRecentNotifications({ enabled = true, refetchInterval = false
     refetchInterval: enabled && refetchInterval ? refetchInterval : false,
   });
 }
+
+export function clearUnreadNotificationsCache(queryClient) {
+  queryClient.setQueryData(UNREAD_NOTIFICATIONS_QUERY_KEY, []);
+}
+
+export function removeUnreadNotificationFromCache(queryClient, id) {
+  queryClient.setQueryData(UNREAD_NOTIFICATIONS_QUERY_KEY, (old = []) =>
+    old.filter((notification) => notification.id !== id)
+  );
+}
+
+export function invalidateNotificationQueries(queryClient) {
+  queryClient.invalidateQueries({ queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY });
+  queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
+}
