@@ -58,11 +58,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
           </div>
         </div>
 
-        {isMobile ? (
-          <div className="ml-3 flex shrink-0 items-center">
-            <ThemeToggle />
-          </div>
-        ) : (
+        {!isMobile && (
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <button
