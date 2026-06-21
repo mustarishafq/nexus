@@ -513,6 +513,20 @@ export const db = {
 		return request(`/users/org-chart${queryString}`);
 	},
 
+	async sendProfileNudge(userId, options = {}) {
+		return request(`/users/${userId}/profile-nudge`, {
+			method: 'POST',
+			body: options,
+		});
+	},
+
+	async nudgeIncompleteProfiles(options = {}) {
+		return request('/users/nudge-incomplete-profiles', {
+			method: 'POST',
+			body: options,
+		});
+	},
+
 	async uploadUsersCsv(file, path) {
 		const token = getAuthToken();
 		const formData = new FormData();

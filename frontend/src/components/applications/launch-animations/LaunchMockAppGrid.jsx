@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { glassDockStyles, glassPanelStyles } from '@/components/layout/glassStyles';
 
 const MOCK_APPS = [
   { name: 'EMZI Nexus', color: '#2563eb' },
@@ -15,7 +16,7 @@ const MOCK_APPS = [
 export default function LaunchMockAppGrid({ className }) {
   return (
     <div className={cn('absolute inset-0 overflow-hidden bg-[#0b1220]', className)} aria-hidden>
-      <div className="border-b border-white/10 bg-[#111827]/90 px-4 py-3">
+      <div className={cn('border-b px-4 py-3', glassPanelStyles)}>
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Applications</p>
         <p className="mt-0.5 text-sm font-medium text-white/80">Your apps</p>
       </div>
@@ -32,12 +33,14 @@ export default function LaunchMockAppGrid({ className }) {
           </div>
         ))}
       </div>
-      <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-[#111827]/95 px-4 py-2">
-        <div className="flex justify-around text-[8px] text-white/35">
-          <span>Dashboard</span>
-          <span>People</span>
-          <span className="font-semibold text-white/70">Apps</span>
-          <span>Settings</span>
+      <div className="absolute inset-x-0 bottom-0 px-3 pb-2">
+        <div className={cn('flex justify-around px-4 py-2', glassDockStyles)}>
+          <div className="flex w-full justify-around text-[8px] text-muted-foreground">
+            <span>Dashboard</span>
+            <span>People</span>
+            <span className="font-semibold text-primary">Apps</span>
+            <span>Settings</span>
+          </div>
         </div>
       </div>
     </div>

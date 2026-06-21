@@ -282,6 +282,7 @@ class ApplicationLaunchSettings
         'tilt' => 'center',
         'mirror' => 'center',
         'clear_glass' => 'center',
+        'shell_glass' => 'center',
         'neon_frame' => 'border',
         'hologram_panel' => 'border',
         'prism_edge' => 'border',
@@ -318,6 +319,10 @@ class ApplicationLaunchSettings
         'clear_glass' => [
             'label' => 'Clear glass modal',
             'description' => 'See-through glass modal — background stays sharp with only a light panel blur.',
+        ],
+        'shell_glass' => [
+            'label' => 'Shell glass modal',
+            'description' => 'See-through modal using the same glass styling as the navbar and bottom navigation.',
         ],
         'spotlight' => [
             'label' => 'Spotlight',

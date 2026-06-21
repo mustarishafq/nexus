@@ -84,7 +84,9 @@ Route::post('/users', [UserController::class, 'store']);
 Route::post('/users/import-csv', [UserController::class, 'importCsv']);
 Route::post('/users/import-hr-onboarding-csv', [UserController::class, 'importHrOnboardingCsv']);
 Route::post('/users/assign-access-groups-csv', [UserController::class, 'assignAccessGroupsCsv']);
+Route::post('/users/nudge-incomplete-profiles', [UserController::class, 'nudgeIncompleteProfiles']);
 Route::get('/users/{user}/profile', [UserController::class, 'profile']);
+Route::post('/users/{user}/profile-nudge', [UserController::class, 'profileNudge']);
 Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
 

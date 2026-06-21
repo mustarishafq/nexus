@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import { toAbsoluteUrl } from '@/lib/media';
 
@@ -21,7 +22,7 @@ export function LaunchAppBadge({ application, size = 'lg', className }) {
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20" />
       {logoUrl ? (
-        <img src={logoUrl} alt={application?.name || 'Application'} className="relative z-[1] h-full w-full object-contain p-2" />
+        <img src={logoUrl} alt={application?.name || 'Application'} className={cn('relative z-[1]', APPLICATION_TILE_ICON_CLASS)} />
       ) : (
         <div className="relative z-[1] flex h-full w-full items-center justify-center">
           <span className={cn('font-bold text-white/95', textSize)}>

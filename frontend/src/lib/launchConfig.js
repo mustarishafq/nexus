@@ -59,6 +59,7 @@ export const LAUNCH_OVERLAY_MODES = [
   { id: 'card', label: 'Center card', description: 'Floating card centered on a dimmed backdrop.' },
   { id: 'glass', label: 'Glass panel', description: 'Frosted glass panel with blurred background.' },
   { id: 'clear_glass', label: 'Clear glass modal', description: 'See-through glass modal — background stays sharp with only a light panel blur.', interactive: true },
+  { id: 'shell_glass', label: 'Shell glass modal', description: 'See-through modal using the same glass styling as the navbar and bottom navigation.', interactive: true },
   { id: 'spotlight', label: 'Spotlight', description: 'Radial spotlight framing the app logo.' },
   { id: 'cinema', label: 'Cinema', description: 'Letterboxed cinematic presentation.' },
   { id: 'minimal', label: 'Bottom bar', description: 'Compact progress bar anchored to the bottom.' },
@@ -147,6 +148,7 @@ export const LAUNCH_OVERLAY_PLACEMENT_BY_MODE = {
   tilt: 'center',
   mirror: 'center',
   clear_glass: 'center',
+  shell_glass: 'center',
   neon_frame: 'border',
   hologram_panel: 'border',
   prism_edge: 'border',
@@ -341,6 +343,16 @@ export const LAUNCH_ANIMATION_CATEGORIES = [
 
 export const COMPACT_LAUNCH_OVERLAY_MODES = new Set(['minimal', 'dock', 'corner', 'top_banner', 'bottom_sheet']);
 
+/** All centered floating panel overlay modes — compact shell_glass sizing and dense content layout. */
+export const CENTER_PANEL_LAUNCH_OVERLAY_MODES = new Set(
+  Object.entries(LAUNCH_OVERLAY_PLACEMENT_BY_MODE)
+    .filter(([, placement]) => placement === 'center')
+    .map(([id]) => id),
+);
+
+/** @deprecated Use CENTER_PANEL_LAUNCH_OVERLAY_MODES */
+export const DENSE_PANEL_LAUNCH_OVERLAY_MODES = CENTER_PANEL_LAUNCH_OVERLAY_MODES;
+
 export const INTERACTIVE_LAUNCH_OVERLAY_MODES = new Set([
   'interactive_glow',
   'tilt',
@@ -353,10 +365,19 @@ export const INTERACTIVE_LAUNCH_OVERLAY_MODES = new Set([
   'pixel_frame',
   'orbit_frame',
   'clear_glass',
+  'shell_glass',
 ]);
 
 export function isCompactLaunchOverlayMode(mode) {
   return COMPACT_LAUNCH_OVERLAY_MODES.has(normalizeLaunchOverlayMode(mode));
+}
+
+export function isDensePanelLaunchOverlayMode(mode) {
+  return CENTER_PANEL_LAUNCH_OVERLAY_MODES.has(normalizeLaunchOverlayMode(mode));
+}
+
+export function isCenterPanelLaunchOverlayMode(mode) {
+  return isDensePanelLaunchOverlayMode(mode);
 }
 
 export function isInteractiveLaunchOverlayMode(mode) {
@@ -406,6 +427,7 @@ export const PANEL_LAUNCH_OVERLAY_MODES = new Set([
   'stained_glass',
   'pixel_frame',
   'clear_glass',
+  'shell_glass',
 ]);
 
 /**

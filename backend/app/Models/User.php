@@ -65,6 +65,7 @@ class User extends Authenticatable
         'notification_settings',
         'date_of_birth',
         'joined_at',
+        'last_profile_nudge_at',
     ];
 
     protected $appends = [
@@ -102,6 +103,7 @@ class User extends Authenticatable
             'children' => 'array',
             'date_of_birth' => 'date',
             'joined_at' => 'date',
+            'last_profile_nudge_at' => 'datetime',
         ];
     }
 

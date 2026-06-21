@@ -9,7 +9,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
 use App\Models\Department;
 use App\Models\User;
+use App\Services\ProfileNudgeService;
 use App\Support\ApiTokenAuth;
+use App\Support\ProfileCompleteness;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserHrCsvImporter;
 use App\Support\UserProfileSerializer;
@@ -32,7 +34,62 @@ class UserController extends Controller
             ['role', 'email']
         )->get();
 
-        return response()->json($users);
+        return response()->json(
+            $users->map(fn (User $user) => $this->adminUserPayload($user))->values()
+        );
+    }
+
+    public function profileNudge(Request $request, User $user): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        $admin = ApiTokenAuth::userFromRequest($request);
+        $validated = $request->validate([
+            'force' => ['sometimes', 'boolean'],
+        ]);
+
+        $result = app(ProfileNudgeService::class)->nudge(
+            $user->load(['department', 'educations', 'workExperiences']),
+            $admin,
+            (bool) ($validated['force'] ?? false)
+        );
+
+        if (! $result['sent']) {
+            return response()->json([
+                'message' => $result['reason'],
+                'completeness' => $result['completeness'] ?? null,
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Profile reminder sent.',
+            'notification' => $result['notification'],
+            'completeness' => $result['completeness'],
+        ]);
+    }
+
+    public function nudgeIncompleteProfiles(Request $request): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        $admin = ApiTokenAuth::userFromRequest($request);
+        $validated = $request->validate([
+            'force' => ['sometimes', 'boolean'],
+        ]);
+
+        $result = app(ProfileNudgeService::class)->nudgeIncompleteUsers(
+            $admin,
+            (bool) ($validated['force'] ?? false)
+        );
+
+        return response()->json([
+            'message' => "Sent {$result['sent']} profile reminder(s).",
+            ...$result,
+        ]);
     }
 
     /**
@@ -250,6 +307,10 @@ class UserController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
@@ -294,6 +355,10 @@ class UserController extends Controller
      */
     public function importCsv(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $request->validate([
             'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
         ]);
@@ -413,6 +478,10 @@ class UserController extends Controller
      */
     public function importHrOnboardingCsv(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $request->validate([
             'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
         ]);
@@ -438,6 +507,10 @@ class UserController extends Controller
      */
     public function assignAccessGroupsCsv(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $request->validate([
             'file' => ['required', 'file', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel'],
         ]);
@@ -569,6 +642,10 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): JsonResponse
     {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
         $validated = $request->validate(array_merge([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -799,6 +876,31 @@ class UserController extends Controller
         }
 
         return $user;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function adminUserPayload(User $user): array
+    {
+        return array_merge($user->toArray(), [
+            'profile_completeness' => ProfileCompleteness::forUser($user),
+        ]);
+    }
+
+    private function authorizeAdmin(Request $request): ?JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return null;
     }
 
 }

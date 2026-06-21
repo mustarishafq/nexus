@@ -2,11 +2,30 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { isCompactLaunchOverlayMode, normalizeLaunchOverlayMode } from '@/lib/launchConfig';
+import { glassPanelStyles } from '@/components/layout/glassStyles';
 
-function CenteredPanel({ children, className, panelClassName, style }) {
+const COMPACT_CENTER_OUTER = 'absolute inset-0 flex items-center justify-center p-4';
+const COMPACT_CENTER_PANEL = 'relative z-10 w-full max-w-[17.5rem]';
+const COMPACT_CENTER_PADDING = 'px-4 py-3.5';
+const COMPACT_CENTER_RADIUS = 'rounded-2xl';
+
+function compactCenterPanelClassName(...extra) {
+  return cn(
+    COMPACT_CENTER_PANEL,
+    COMPACT_CENTER_RADIUS,
+    COMPACT_CENTER_PADDING,
+    'overflow-hidden',
+    ...extra,
+  );
+}
+
+function CenteredPanel({ children, className, panelClassName, style, compact = false }) {
   return (
-    <div className={cn('absolute inset-0 flex items-center justify-center p-6', className)}>
-      <div className={cn('relative z-10 w-full max-w-md', panelClassName)} style={style}>
+    <div className={cn(compact ? COMPACT_CENTER_OUTER : 'absolute inset-0 flex items-center justify-center p-6', className)}>
+      <div
+        className={cn(compact ? COMPACT_CENTER_PANEL : 'relative z-10 w-full max-w-md', panelClassName)}
+        style={style}
+      >
         {children}
       </div>
     </div>
@@ -85,9 +104,12 @@ export default function LaunchOverlayShell({
       }
     : {};
 
-  const wrapPanel = (panel, extraClassName = 'p-6') => (
+  const wrapPanel = (panel, extraClassName = 'p-6', { compact = false } = {}) => (
     <motion.div
-      className={cn('overflow-hidden rounded-3xl border shadow-2xl', extraClassName)}
+      className={cn(
+        'overflow-hidden border shadow-2xl',
+        compact ? cn(COMPACT_CENTER_RADIUS, 'p-0') : cn('rounded-3xl', extraClassName),
+      )}
       {...panelMotionProps}
     >
       {panel}
@@ -152,13 +174,14 @@ export default function LaunchOverlayShell({
       <div className={cn('absolute inset-0', className)} onPointerMove={handlePointerMove}>
         {backdrop}
         <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl" />
-        <CenteredPanel>
+        <CenteredPanel compact>
           {wrapPanel(
-            <div className="border border-white/20 bg-white/10 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_30px_80px_-30px_rgba(0,0,0,0.8)] backdrop-blur-2xl">
+            <div className={cn('border border-white/20 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_30px_80px_-30px_rgba(0,0,0,0.8)] backdrop-blur-2xl', COMPACT_CENTER_PADDING)}>
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_55%)]" />
               <div className="relative">{children}</div>
             </div>,
             'p-0',
+            { compact: true },
           )}
         </CenteredPanel>
       </div>
@@ -169,9 +192,13 @@ export default function LaunchOverlayShell({
     return (
       <div className={cn('absolute inset-0', className)} onPointerMove={handlePointerMove}>
         <div className="absolute inset-0 bg-black/50 backdrop-blur-md" />
-        <CenteredPanel>
+        <CenteredPanel compact>
           <motion.div
-            className="overflow-hidden rounded-[2.5rem] border border-white/25 p-6 shadow-[0_0_60px_color-mix(in_srgb,var(--launch-brand)_45%,transparent)] backdrop-blur-xl"
+            className={cn(
+              COMPACT_CENTER_RADIUS,
+              'border border-white/25 shadow-[0_0_60px_color-mix(in_srgb,var(--launch-brand)_45%,transparent)] backdrop-blur-xl',
+              COMPACT_CENTER_PADDING,
+            )}
             style={{ '--launch-brand': brandColor }}
             animate={{ scale: [1, 1.02, 1], boxShadow: ['0 0 40px rgba(255,255,255,0.08)', `0 0 70px color-mix(in srgb, ${brandColor} 40%, transparent)`, '0 0 40px rgba(255,255,255,0.08)'] }}
             transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
@@ -271,12 +298,13 @@ export default function LaunchOverlayShell({
     return (
       <div className={cn('absolute inset-0', className)} onPointerMove={handlePointerMove}>
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-        <CenteredPanel>
+        <CenteredPanel compact>
           {wrapPanel(
-            <div className="border border-white/15 bg-[#0f172a]/90 p-6 shadow-2xl backdrop-blur-xl">
+            <div className={cn('border border-white/15 bg-[#0f172a]/90 shadow-2xl backdrop-blur-xl', COMPACT_CENTER_PADDING)}>
               {children}
             </div>,
             'p-0',
+            { compact: true },
           )}
         </CenteredPanel>
       </div>
@@ -306,9 +334,9 @@ export default function LaunchOverlayShell({
 
   if (resolvedMode === 'card') {
     return (
-      <div className={cn('absolute inset-0 flex items-center justify-center p-6', className)} onPointerMove={handlePointerMove}>
+      <div className={cn(COMPACT_CENTER_OUTER, className)} onPointerMove={handlePointerMove}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-        <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-[#020617]/90 p-6 shadow-2xl">
+        <div className={compactCenterPanelClassName('border border-white/15 bg-[#020617]/90 shadow-2xl')}>
           {children}
         </div>
       </div>
@@ -317,10 +345,10 @@ export default function LaunchOverlayShell({
 
   if (resolvedMode === 'glass') {
     return (
-      <div className={cn('absolute inset-0 flex items-center justify-center p-6', className)} onPointerMove={handlePointerMove}>
+      <div className={cn(COMPACT_CENTER_OUTER, className)} onPointerMove={handlePointerMove}>
         {backdrop}
         <div className="absolute inset-0 bg-white/5 backdrop-blur-2xl" />
-        <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
+        <div className={compactCenterPanelClassName('border border-white/20 bg-white/10 shadow-2xl backdrop-blur-xl')}>
           {children}
         </div>
       </div>
@@ -329,9 +357,9 @@ export default function LaunchOverlayShell({
 
   if (resolvedMode === 'clear_glass') {
     return (
-      <div className={cn('absolute inset-0 flex items-center justify-center p-6', className)} onPointerMove={handlePointerMove}>
+      <div className={cn(COMPACT_CENTER_OUTER, className)} onPointerMove={handlePointerMove}>
         <motion.div
-          className="relative z-10 w-full max-w-md overflow-hidden rounded-[2rem] border border-white/20 p-6 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.35)]"
+          className={compactCenterPanelClassName('border border-white/20 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.35)]')}
           style={{
             backgroundColor: 'rgba(255, 255, 255, 0.03)',
             backdropFilter: 'blur(10px)',
@@ -342,15 +370,36 @@ export default function LaunchOverlayShell({
           transition={{ type: 'spring', stiffness: 140, damping: 20 }}
         >
           <div
-            className="pointer-events-none absolute inset-0 rounded-[2rem] ring-1 ring-inset ring-white/10"
+            className={cn('pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10', COMPACT_CENTER_RADIUS)}
           />
           <div
-            className="pointer-events-none absolute inset-0 rounded-[2rem] transition-[background] duration-200"
+            className={cn('pointer-events-none absolute inset-0 transition-[background] duration-200', COMPACT_CENTER_RADIUS)}
             style={{
               background: `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, rgba(255,255,255,0.08) 0%, transparent 55%)`,
             }}
           />
           <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+          <div className="relative">{children}</div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (resolvedMode === 'shell_glass') {
+    return (
+      <div className={cn(COMPACT_CENTER_OUTER, className)} onPointerMove={handlePointerMove}>
+        <motion.div
+          className={compactCenterPanelClassName(glassPanelStyles)}
+          initial={{ opacity: 0, scale: 0.98, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 140, damping: 20 }}
+        >
+          <div
+            className={cn('pointer-events-none absolute inset-0 transition-[background] duration-200', COMPACT_CENTER_RADIUS)}
+            style={{
+              background: `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, rgba(255,255,255,0.06) 0%, transparent 55%)`,
+            }}
+          />
           <div className="relative">{children}</div>
         </motion.div>
       </div>
@@ -512,9 +561,9 @@ export default function LaunchOverlayShell({
 
   if (resolvedMode === 'mirror') {
     return (
-      <div className={cn('absolute inset-0 flex items-center justify-center p-6', className)} onPointerMove={handlePointerMove}>
+      <div className={cn(COMPACT_CENTER_OUTER, className)} onPointerMove={handlePointerMove}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-        <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/25 bg-gradient-to-br from-white/20 via-white/5 to-white/10 p-6 shadow-2xl backdrop-blur-2xl">
+        <div className={compactCenterPanelClassName('border border-white/25 bg-gradient-to-br from-white/20 via-white/5 to-white/10 shadow-2xl backdrop-blur-2xl')}>
           <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rotate-12 rounded-full bg-white/20 blur-2xl" />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22),transparent_45%)]" />
           <div className="relative">{children}</div>

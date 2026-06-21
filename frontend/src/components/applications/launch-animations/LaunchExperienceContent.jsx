@@ -6,6 +6,7 @@ import { LaunchHint, LaunchTitle } from '@/components/applications/launch-animat
 import {
   getLaunchAnimationMeta,
   isCompactLaunchOverlayMode,
+  isDensePanelLaunchOverlayMode,
   normalizeLaunchOverlayMode,
 } from '@/lib/launchConfig';
 
@@ -27,12 +28,17 @@ export default function LaunchExperienceContent({
 }) {
   const resolvedOverlayMode = normalizeLaunchOverlayMode(overlayMode);
   const isCompactShell = isCompactLaunchOverlayMode(resolvedOverlayMode);
+  const isDensePanel = isDensePanelLaunchOverlayMode(resolvedOverlayMode);
   const progress = Math.max(energy, ready ? 0.25 : 0.08);
   const meta = getLaunchAnimationMeta(style, animationCatalog);
 
   return (
-    <div className={cn('space-y-6', isCompactShell && 'space-y-4')}>
-      {!isCompactShell ? <LaunchTitle application={application} /> : null}
+    <div className={cn('space-y-6', (isCompactShell || isDensePanel) && 'space-y-3')}>
+      {isDensePanel ? (
+        <p className="text-center text-sm font-semibold leading-tight text-foreground">{application?.name}</p>
+      ) : !isCompactShell ? (
+        <LaunchTitle application={application} />
+      ) : null}
 
       <LaunchAnimationStage
         style={style}
@@ -40,16 +46,22 @@ export default function LaunchExperienceContent({
         energy={energy}
         onBoost={onBoost}
         exiting={exiting}
-        compact={compact || isCompactShell}
+        compact={compact || isCompactShell || isDensePanel}
         interactive={interactive}
         catalog={animationCatalog}
-        showHint={showHint}
+        showHint={showHint && !isDensePanel}
+        className={isDensePanel ? 'min-h-[96px]' : undefined}
       />
 
-      <div className="space-y-3">
+      <div className={cn('space-y-3', isDensePanel && 'space-y-2')}>
         <LaunchProgressIndicator style={progressStyle} progress={progress} />
         {showHint ? (
-          <LaunchHint className={isCompactShell ? 'text-[10px]' : undefined}>
+          <LaunchHint
+            className={cn(
+              (isCompactShell || isDensePanel) && 'text-[10px]',
+              isDensePanel && 'text-muted-foreground',
+            )}
+          >
             {ready ? 'Opening now…' : meta.hint}
           </LaunchHint>
         ) : null}
@@ -60,7 +72,10 @@ export default function LaunchExperienceContent({
               event.stopPropagation();
               onSkip?.();
             }}
-            className="mx-auto block text-[11px] uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white/75"
+            className={cn(
+              'mx-auto block uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground',
+              isDensePanel ? 'text-[10px]' : 'text-[11px] text-white/45 hover:text-white/75',
+            )}
           >
             {ready ? 'Continue' : 'Skip'}
           </button>

@@ -6,6 +6,7 @@ import { useLaunchOverlayEnergy } from '@/components/applications/launch-animati
 import {
   getLaunchDurationPreset,
   isCompactLaunchOverlayMode,
+  isDensePanelLaunchOverlayMode,
   normalizeLaunchDuration,
   normalizeLaunchOverlayMode,
   normalizeLaunchProgressStyle,
@@ -26,6 +27,7 @@ export default function ApplicationLaunchOverlay({ launch, onDismiss, durationCa
   const application = launch?.application;
   const brandColor = application?.color || DEFAULT_BRAND_COLOR;
   const isCompactShell = isCompactLaunchOverlayMode(overlayMode);
+  const isDensePanel = isDensePanelLaunchOverlayMode(overlayMode);
 
   const beginExit = () => {
     if (exiting) return;
@@ -79,7 +81,7 @@ export default function ApplicationLaunchOverlay({ launch, onDismiss, durationCa
           }
         }}
       >
-        <LaunchOverlayShell mode={overlayMode} brandColor={brandColor} compact={isCompactShell}>
+        <LaunchOverlayShell mode={overlayMode} brandColor={brandColor} compact={isCompactShell || isDensePanel}>
           <LaunchExperienceContent
             application={application}
             style={style}
@@ -89,7 +91,7 @@ export default function ApplicationLaunchOverlay({ launch, onDismiss, durationCa
             onBoost={boost}
             exiting={exiting}
             ready={launch.ready}
-            compact={isCompactShell}
+            compact={isCompactShell || isDensePanel}
             interactive={launch.config?.interactive !== false}
             showHint={launch.config?.show_hint !== false}
             showSkip={launch.config?.show_skip !== false}

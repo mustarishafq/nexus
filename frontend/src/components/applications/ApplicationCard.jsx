@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
 import { cn } from '@/lib/utils';
+import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import { getEnvironmentBadge } from '@/lib/applicationEnvironment';
 import { toAbsoluteUrl } from '@/lib/media';
@@ -64,7 +65,10 @@ export default function ApplicationCard({
         <img
           src={logoUrl}
           alt={system.name}
-          className="relative z-[1] h-full w-full object-contain transition-transform duration-300 ease-out will-change-transform group-hover:scale-[1.06]"
+          className={cn(
+            'relative z-[1] transition-transform duration-300 ease-out will-change-transform group-hover:scale-[1.06]',
+            APPLICATION_TILE_ICON_CLASS,
+          )}
         />
       ) : (
         <div className="relative z-[1] flex h-full w-full items-center justify-center transition-transform duration-300 ease-out group-hover:scale-110">

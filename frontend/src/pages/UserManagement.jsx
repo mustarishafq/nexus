@@ -3,7 +3,7 @@ import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -39,8 +40,48 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
-import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload } from '@/lib/profile';
+import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
+
+function getUserProfileStrength(user) {
+  if (user?.profile_completeness) {
+    const { percent, done_count, total_count, checks } = user.profile_completeness;
+    return {
+      percent,
+      doneCount: done_count,
+      totalCount: total_count,
+      checks: (checks || []).map((item) => ({ ...item, done: item.done })),
+    };
+  }
+
+  const result = getProfileCompleteness(user);
+  return {
+    percent: result.percent,
+    doneCount: result.doneCount,
+    totalCount: result.totalCount,
+    checks: result.checks,
+  };
+}
+
+function ProfileStrengthCell({ user, compact = false }) {
+  const { percent } = getUserProfileStrength(user);
+
+  return (
+    <div className={cn('min-w-[88px]', compact ? 'space-y-1' : 'space-y-1.5')}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn('font-semibold tabular-nums', percent === 100 ? 'text-primary' : 'text-foreground')}>
+          {percent}%
+        </span>
+        {percent === 100 ? (
+          <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+        ) : (
+          <Sparkles className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        )}
+      </div>
+      <Progress value={percent} className={compact ? 'h-1.5' : 'h-2'} />
+    </div>
+  );
+}
 
 function CsvImportOption({ icon: Icon, title, description, onUpload, onTemplate, disabled = false }) {
   return (
@@ -223,6 +264,7 @@ export default function UserManagement() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [profileFilter, setProfileFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [assignDialogUser, setAssignDialogUser] = useState(null);
   const [assignGroupIds, setAssignGroupIds] = useState(new Set());
@@ -254,6 +296,8 @@ export default function UserManagement() {
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const [activeSection, setActiveSection] = useState('users');
+  const [nudgingUser, setNudgingUser] = useState(null);
+  const [bulkNudging, setBulkNudging] = useState(false);
   const csvRef = useRef(null);
   const hrOnboardingCsvRef = useRef(null);
   const assignGroupsCsvRef = useRef(null);
@@ -302,7 +346,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, roleFilter, statusFilter]);
+  }, [search, roleFilter, statusFilter, profileFilter]);
 
   const getGroupById = (groupId) => accessGroups.find((group) => String(group.id) === String(groupId));
 
@@ -347,8 +391,12 @@ export default function UserManagement() {
     const matchesStatus = statusFilter === 'all'
       || (statusFilter === 'approved' && user.is_approved)
       || (statusFilter === 'pending' && !user.is_approved);
+    const profilePercent = getUserProfileStrength(user).percent;
+    const matchesProfile = profileFilter === 'all'
+      || (profileFilter === 'incomplete' && profilePercent < 100)
+      || (profileFilter === 'complete' && profilePercent === 100);
 
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole && matchesStatus && matchesProfile;
   });
 
   const pageSize = 20;
@@ -367,6 +415,7 @@ export default function UserManagement() {
     admins: users.filter(user => user.role === 'admin').length,
     approved: users.filter(user => user.is_approved).length,
     pending: users.filter(user => !user.is_approved).length,
+    incompleteProfiles: users.filter((user) => user.is_approved && getUserProfileStrength(user).percent < 100).length,
   };
 
   const openGroupDialog = (group = null) => {
@@ -764,7 +813,11 @@ export default function UserManagement() {
     return parts.join(', ');
   };
 
-  const renderUserActionsMenu = (user, align = 'end') => (
+  const renderUserActionsMenu = (user, align = 'end') => {
+    const profilePercent = getUserProfileStrength(user).percent;
+    const canNudge = user.is_approved && profilePercent < 100;
+
+    return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -777,6 +830,15 @@ export default function UserManagement() {
           <Edit className="w-4 h-4 mr-2" />
           Edit user
         </DropdownMenuItem>
+        {canNudge ? (
+          <DropdownMenuItem
+            onClick={() => handleProfileNudge(user)}
+            disabled={nudgingUser === user.id}
+          >
+            <BellRing className="w-4 h-4 mr-2" />
+            {nudgingUser === user.id ? 'Sending reminder...' : 'Send profile reminder'}
+          </DropdownMenuItem>
+        ) : null}
         {user.role !== 'admin' && (
           <>
             <DropdownMenuItem onClick={() => openAssignDialog(user)}>
@@ -809,7 +871,8 @@ export default function UserManagement() {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+    );
+  };
 
   const saveUserGroup = async () => {
     if (!assignDialogUser) return;
@@ -1102,10 +1165,37 @@ export default function UserManagement() {
     }
   };
 
+  const handleProfileNudge = async (user, { force = false } = {}) => {
+    setNudgingUser(user.id);
+    try {
+      await db.sendProfileNudge(user.id, force ? { force: true } : {});
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(`Profile reminder sent to ${user.full_name || user.email}`);
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to send profile reminder');
+    } finally {
+      setNudgingUser(null);
+    }
+  };
+
+  const handleBulkProfileNudge = async () => {
+    setBulkNudging(true);
+    try {
+      const result = await db.nudgeIncompleteProfiles();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(result?.message || `Sent ${result?.sent || 0} profile reminder(s)`);
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to send profile reminders');
+    } finally {
+      setBulkNudging(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearch('');
     setRoleFilter('all');
     setStatusFilter('all');
+    setProfileFilter('all');
   };
 
   const selectableUsers = users
@@ -1141,12 +1231,37 @@ export default function UserManagement() {
                 </button>
               </>
             ) : null}
+            {stats.incompleteProfiles > 0 ? (
+              <>
+                <span className="hidden sm:inline text-border">·</span>
+                <button
+                  type="button"
+                  className="font-semibold text-primary hover:text-primary/80 transition-colors"
+                  onClick={() => {
+                    setActiveSection('users');
+                    setProfileFilter('incomplete');
+                  }}
+                >
+                  {stats.incompleteProfiles} incomplete profile{stats.incompleteProfiles === 1 ? '' : 's'}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
           <input ref={hrOnboardingCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleHrOnboardingFileSelect} />
           <input ref={assignGroupsCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleAssignGroupsFileSelect} />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={bulkNudging || stats.incompleteProfiles === 0}
+            onClick={handleBulkProfileNudge}
+          >
+            <BellRing className="w-4 h-4" />
+            {bulkNudging ? 'Sending reminders...' : 'Nudge incomplete'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1223,7 +1338,18 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
 
-              {(search || roleFilter !== 'all' || statusFilter !== 'all') ? (
+              <Select value={profileFilter} onValueChange={setProfileFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All profiles</SelectItem>
+                  <SelectItem value="incomplete">Incomplete</SelectItem>
+                  <SelectItem value="complete">Complete</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all') ? (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
                   Clear
                 </Button>
@@ -1272,9 +1398,11 @@ export default function UserManagement() {
                       </Badge>
                     </div>
                     <div className="grid grid-cols-1 gap-1.5 text-xs text-muted-foreground">
+                      <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete</p>
                       <p><span className="font-medium text-foreground/80">Groups:</span> {getUserAccessLabel(user)}</p>
                       <p><span className="font-medium text-foreground/80">Analytics:</span> {getUserAnalyticsLabel(user)}</p>
                     </div>
+                    <ProfileStrengthCell user={user} compact />
                   </div>
                 ))}
               </div>
@@ -1286,6 +1414,7 @@ export default function UserManagement() {
                     <TableHead className="pl-6">User</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Profile strength</TableHead>
                     <TableHead className="hidden xl:table-cell">Access</TableHead>
                     <TableHead className="text-right pr-6 w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -1314,6 +1443,9 @@ export default function UserManagement() {
                         >
                           {user.is_approved ? 'approved' : 'pending'}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <ProfileStrengthCell user={user} />
                       </TableCell>
                       <TableCell className="hidden xl:table-cell max-w-[240px]">
                         <p className="text-sm text-muted-foreground truncate" title={getUserAccessLabel(user)}>
