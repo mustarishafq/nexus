@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
@@ -9,21 +9,42 @@ import BroadcastAnnouncementGate from '@/components/broadcasts/BroadcastAnnounce
 import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
 import NotificationToastGate from '@/components/notifications/NotificationToastGate';
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
-import GlobalBroadcastStrip from '@/components/broadcasts/GlobalBroadcastStrip';
+import TopAlertStrips from '@/components/layout/TopAlertStrips';
+import PageLoader from '@/components/PageLoader';
+import {
+  ATTENDANCE_PATH,
+  useAttendanceClockInRedirect,
+} from '@/hooks/useAttendanceReminder';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 
 export default function AppLayout() {
   useNetworkHealthMonitor();
+  const { isChecking, shouldRedirect, fromPath } = useAttendanceClockInRedirect();
   const isMobile = useIsMobile();
   const location = useLocation();
-  const [broadcastStripVisible, setBroadcastStripVisible] = useState(false);
+  const [topStripCount, setTopStripCount] = useState(0);
+
+  const handleTopStripLayout = useCallback(({ stripCount }) => {
+    setTopStripCount(stripCount);
+  }, []);
+
+  if (isChecking) {
+    return <PageLoader />;
+  }
+
+  if (shouldRedirect) {
+    return (
+      <Navigate
+        to={ATTENDANCE_PATH}
+        replace
+        state={{ attendanceRedirect: true, from: fromPath }}
+      />
+    );
+  }
+
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
   const isAnalyticsPage = location.pathname === '/analytics';
   const showBottomNav = !isFullBleed;
-
-  const handleBroadcastStripVisibility = useCallback((visible) => {
-    setBroadcastStripVisible(visible);
-  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,10 +56,10 @@ export default function AppLayout() {
       {!isFullBleed ? (
         <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">
           <TopBar embedded sidebarWidth={0} isMobile={isMobile} />
-          <GlobalBroadcastStrip
+          <TopAlertStrips
             embedded
             isMobile={isMobile}
-            onVisibilityChange={handleBroadcastStripVisibility}
+            onLayoutChange={handleTopStripLayout}
           />
         </div>
       ) : null}
@@ -48,8 +69,9 @@ export default function AppLayout() {
           isFullBleed ? 'min-h-screen overflow-hidden' : 'pt-16',
           isAnalyticsPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
           !isFullBleed && !isAnalyticsPage && 'min-h-screen',
-          !isFullBleed && broadcastStripVisible && 'pt-[calc(4rem+1.75rem)] sm:pt-21',
-          showBottomNav && 'pb-[calc(4.75rem+env(safe-area-inset-bottom))]'
+          !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
+          !isFullBleed && topStripCount >= 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
+          showBottomNav && 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
         )}
       >
         {isFullBleed ? (

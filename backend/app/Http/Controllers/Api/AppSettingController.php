@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
+use App\Support\AttendanceWatermarkSettings;
 use App\Support\SplashAnimationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,11 +44,12 @@ class AppSettingController extends Controller
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
-        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules()));
+        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules()));
 
         $current = (array) DB::table('app_settings')->first();
         $splash = SplashAnimationSettings::normalizeConfig(array_merge($current, $validated));
         $launch = ApplicationLaunchSettings::normalizeConfig(array_merge($current, $validated));
+        $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
 
         $settings = DB::table('app_settings')->first();
 
@@ -62,7 +64,7 @@ class AppSettingController extends Controller
                 'smtp_from_email' => $validated['smtp_from_email'] ?? null,
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch)));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
         } else {
             DB::table('app_settings')->insert(array_merge([
                 'system_name' => $validated['system_name'],
@@ -75,7 +77,7 @@ class AppSettingController extends Controller
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch)));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
         }
 
         return response()->json($this->adminPayload());
@@ -134,14 +136,24 @@ class AppSettingController extends Controller
         return ApplicationLaunchSettings::normalizeConfig($settings);
     }
 
+    private function attendancePayload(object $settings): array
+    {
+        return AttendanceWatermarkSettings::normalizeConfig($settings);
+    }
+
     private function publicPayload(): array
     {
         $settings = $this->currentSettings();
         $splash = $this->splashPayload($settings);
         $launch = $this->launchPayload($settings);
+        $attendance = $this->attendancePayload($settings);
 
         return [
             'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
+            'attendance' => $attendance,
+            'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
+            'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
+            'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
             'splash' => $splash,
             'splash_animation_style' => $splash['animation_style'],
             'splash_animations' => SplashAnimationSettings::catalog(),
@@ -162,9 +174,14 @@ class AppSettingController extends Controller
         $settings = $this->currentSettings();
         $splash = $this->splashPayload($settings);
         $launch = $this->launchPayload($settings);
+        $attendance = $this->attendancePayload($settings);
 
         return array_merge([
             'system_name' => $settings->system_name ?: config('app.name', 'EMZI Nexus Brain'),
+            'attendance' => $attendance,
+            'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
+            'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
+            'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
             'smtp_host' => $settings->smtp_host,
             'smtp_port' => $settings->smtp_port,
             'smtp_username' => $settings->smtp_username,
@@ -181,6 +198,6 @@ class AppSettingController extends Controller
             'launch_overlay_modes' => ApplicationLaunchSettings::overlayModeCatalog(),
             'launch_progress_styles' => ApplicationLaunchSettings::progressStyleCatalog(),
             'launch_durations' => ApplicationLaunchSettings::durationCatalog(),
-        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch));
+        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance));
     }
 }

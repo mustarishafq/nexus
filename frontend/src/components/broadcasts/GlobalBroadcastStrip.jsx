@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import { sortBroadcastsByPriority } from '@/lib/broadcast';
+import { TopStripBadge, TopStripDismissButton, TOP_STRIP_ROW_CLASS } from '@/components/layout/TopStripBadge';
 import { cn } from '@/lib/utils';
 
 const stripStyles = {
@@ -51,22 +51,11 @@ function LiveBadge({ priority }) {
   const isUrgent = priority === 'critical' || priority === 'high';
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 self-stretch border-r border-white/10 bg-black/25 px-2.5 backdrop-blur-sm">
-      <span className="relative flex h-1.5 w-1.5 shrink-0">
-        {isUrgent ? (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-70" />
-        ) : null}
-        <span
-          className={cn(
-            'relative inline-flex h-1.5 w-1.5 rounded-full',
-            isUrgent ? 'bg-red-500' : 'bg-emerald-400'
-          )}
-        />
-      </span>
-      <span className="text-[9px] font-bold uppercase leading-none tracking-[0.16em] opacity-95">
-        {badgeLabels[priority] || badgeLabels.medium}
-      </span>
-    </div>
+    <TopStripBadge
+      label={badgeLabels[priority] || badgeLabels.medium}
+      pulse={isUrgent}
+      dotClassName={isUrgent ? 'bg-red-500' : 'bg-emerald-400'}
+    />
   );
 }
 
@@ -164,7 +153,7 @@ export default function GlobalBroadcastStrip({
       aria-live="polite"
       aria-label={visibleBroadcasts.map(formatBroadcastText).join('. ')}
     >
-      <div className="flex h-7 items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-8">
+      <div className={TOP_STRIP_ROW_CLASS}>
         <LiveBadge priority={topPriority} />
 
         <div
@@ -195,14 +184,7 @@ export default function GlobalBroadcastStrip({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={dismissAll}
-          className="flex h-full shrink-0 items-center self-stretch border-l border-white/10 px-2.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-          aria-label="Dismiss announcements"
-        >
-          <X className="h-3 w-3" />
-        </button>
+        <TopStripDismissButton onClick={dismissAll} ariaLabel="Dismiss announcements" />
       </div>
     </div>
   );

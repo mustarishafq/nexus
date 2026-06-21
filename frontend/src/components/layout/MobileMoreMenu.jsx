@@ -1,55 +1,60 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
-import {
-  Activity, Calendar, Wifi, Settings, Megaphone, Shield, Users, Menu, Moon, Newspaper, Mail, GitBranch,
-} from 'lucide-react';
+import { Moon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
 import { glassPanelStyles } from './glassStyles';
+import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 
-const MORE_ITEMS = [
-  { path: '/people', icon: Users, label: 'People' },
-  { path: '/organization', icon: GitBranch, label: 'Organization' },
-  { path: '/feed', icon: Newspaper, label: 'Company Feed' },
-  { path: '/messages', icon: Mail, label: 'Messages' },
-  { path: '/activity', icon: Activity, label: 'Activity Feed' },
-  { path: '/calendar', icon: Calendar, label: 'Calendar' },
-  { path: '/network-health', icon: Wifi, label: 'Network Health' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
-];
-
-const ADMIN_ITEMS = [
-  { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
-  { path: '/admin/events', icon: Shield, label: 'System Events' },
-  { path: '/admin/users', icon: Users, label: 'User Management' },
-];
-
-export default function MobileMoreMenu() {
+export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerIcon, label = 'More' }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const { user, appPublicSettings } = useAuth();
+
+  const { data: metabaseDashboards = [] } = useQuery({
+    queryKey: ['metabase-dashboards'],
+    queryFn: () => db.entities.MetabaseDashboard.list('sort_order', 50),
+    staleTime: 60_000,
+  });
+
+  const showAnalytics = user?.role === 'admin' || metabaseDashboards.length > 0;
   const isAdmin = user?.role === 'admin';
+  const moreItems = buildMobileMoreItems({ showAnalytics, isAdmin });
+  const adminItems = moreItems.filter((item) => item.path.startsWith('/admin/'));
+  const regularItems = moreItems.filter((item) => !item.path.startsWith('/admin/'));
+  const isActive = matchMobileMorePath(location.pathname, moreItems);
 
   const renderLink = (item) => {
-    const isActive = location.pathname === item.path;
+    const isItemActive = item.match(location.pathname);
+    const badgeCount = item.badge ? badgeCounts[item.badge] ?? 0 : 0;
+
     return (
       <Link
         key={item.path}
         to={item.path}
         onClick={() => setOpen(false)}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
-          isActive
+          'relative flex flex-col items-center gap-2 rounded-xl px-2 py-3 transition-colors',
+          isItemActive
             ? 'bg-primary/15 text-primary'
             : 'text-foreground hover:bg-foreground/5'
         )}
       >
-        <item.icon className="h-5 w-5 shrink-0" />
-        <span className="text-sm font-medium">{item.label}</span>
+        <span className="relative">
+          <item.icon className="h-5 w-5 shrink-0" />
+          {badgeCount > 0 && (
+            <span className="absolute -right-2 -top-1.5 min-w-[16px] h-4 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground text-center">
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </span>
+          )}
+        </span>
+        <span className="text-center text-[11px] font-medium leading-tight">{item.label}</span>
       </Link>
     );
   };
@@ -58,41 +63,54 @@ export default function MobileMoreMenu() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-          aria-label="Open menu"
+          type="button"
+          className={cn(
+            'relative flex flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-colors',
+            isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          )}
+          aria-label="Open more menu"
         >
-          <Menu className="w-5 h-5 text-muted-foreground" />
+          {isActive && (
+            <span className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
+          )}
+          {TriggerIcon ? <TriggerIcon className={cn('h-5 w-5', isActive && 'text-primary')} /> : null}
+          <span className={cn('text-[10px] font-medium leading-none', isActive && 'text-primary')}>
+            {label}
+          </span>
         </button>
       </SheetTrigger>
       <SheetContent
-        side="left"
-        hideCloseButton
+        side="bottom"
         overlayClassName="bg-black/25 backdrop-blur-sm"
         className={cn(
-          'flex w-[280px] flex-col border-r p-0 shadow-2xl',
+          'flex max-h-[85dvh] flex-col rounded-t-2xl border-t p-0 pb-[env(safe-area-inset-bottom)]',
           glassPanelStyles
         )}
       >
         <SheetHeader className="border-b border-border/50 px-4 py-4 text-left">
           <div className="flex items-center gap-3">
-            <img src="/icons/logo.png" alt="Logo" className="h-9 w-9 rounded-xl shrink-0" />
+            <img src="/icons/logo.png" alt="Logo" className="h-9 w-9 shrink-0 rounded-xl" />
             <SheetTitle className="text-base font-bold tracking-tight">
               {appPublicSettings?.system_name || 'EMZI Nexus Brain'}
             </SheetTitle>
           </div>
         </SheetHeader>
-        <nav className="flex flex-col gap-1 p-3">
-          {MORE_ITEMS.map(renderLink)}
-          {isAdmin && (
+        <nav className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
+            {regularItems.map(renderLink)}
+          </div>
+          {isAdmin && adminItems.length > 0 && (
             <>
-              <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-1 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Admin
               </p>
-              {ADMIN_ITEMS.map(renderLink)}
+              <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
+                {adminItems.map(renderLink)}
+              </div>
             </>
           )}
         </nav>
-        <div className="mt-auto border-t border-border/50 p-4">
+        <div className="border-t border-border/50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">

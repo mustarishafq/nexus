@@ -8,11 +8,13 @@ use App\Http\Controllers\Api\BroadcastController;
 use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DepartmentAttendanceController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\PostReactionController;
+use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
 use App\Http\Controllers\Api\FileUploadController;
@@ -39,6 +41,15 @@ Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);
+Route::get('/attendance/export', [AttendanceController::class, 'exportCsv']);
+Route::get('/attendance/watermark-logo', [AttendanceController::class, 'watermarkLogo']);
+Route::get('/attendance/reverse-geocode', [AttendanceController::class, 'reverseGeocode']);
+Route::get('/attendance/status', [AttendanceController::class, 'status']);
+Route::get('/attendance/my-history', [AttendanceController::class, 'myHistory']);
+Route::post('/attendance/clock', [AttendanceController::class, 'store']);
+Route::get('/attendance/dashboard', [AttendanceController::class, 'dashboard']);
+Route::get('/attendance/users/{user}/history', [AttendanceController::class, 'userHistory']);
+
 Route::get('/network-health/ping', [NetworkHealthController::class, 'ping']);
 Route::get('/network-health/download-test', [NetworkHealthController::class, 'downloadTest']);
 Route::post('/network-health/upload-test', [NetworkHealthController::class, 'uploadTest']);
@@ -73,6 +84,9 @@ Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'discon
 
 Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
+Route::get('/admin/department-attendance', [DepartmentAttendanceController::class, 'index']);
+Route::get('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'show']);
+Route::put('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'update']);
 
 Route::get('/departments', [DepartmentController::class, 'index']);
 Route::post('/departments', [DepartmentController::class, 'store']);

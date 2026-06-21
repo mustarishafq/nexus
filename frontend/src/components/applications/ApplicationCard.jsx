@@ -160,18 +160,28 @@ export default function ApplicationCard({
   );
 
   if (footerOutside) {
-    const Wrapper = isInteractive ? 'button' : 'div';
+    const hasAdminActions = Boolean(canManageSystem && onEdit && onDelete);
+
+    const handleLaunchKeyDown = (event) => {
+      if (!isInteractive) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onLaunch(system);
+      }
+    };
 
     return (
-      <Wrapper
-        type={isInteractive ? 'button' : undefined}
+      <div
+        role={isInteractive && !hasAdminActions ? 'button' : undefined}
+        tabIndex={isInteractive && !hasAdminActions ? 0 : undefined}
         aria-label={system.name}
-        disabled={isInteractive ? launching === system.id : undefined}
+        aria-disabled={isInteractive && launching === system.id ? true : undefined}
         onClick={isInteractive ? () => onLaunch(system) : undefined}
+        onKeyDown={!hasAdminActions ? handleLaunchKeyDown : undefined}
         className={cn(
           'group/tile flex w-full flex-col items-center gap-1 text-center',
           isInteractive && system.is_enabled ? 'cursor-pointer' : 'cursor-default',
-          !system.is_enabled && 'opacity-60'
+          !system.is_enabled && 'opacity-60',
         )}
       >
         {card}
@@ -179,7 +189,7 @@ export default function ApplicationCard({
           <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
           <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{footerDetail}</p>
         </div>
-      </Wrapper>
+      </div>
     );
   }
 

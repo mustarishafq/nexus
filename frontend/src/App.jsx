@@ -36,6 +36,7 @@ const OrgChart = lazy(() => import('@/pages/OrgChart'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
 const NetworkHealthDashboard = lazy(() => import('@/pages/NetworkHealthDashboard'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
+const Attendance = lazy(() => import('@/pages/Attendance'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -85,6 +86,8 @@ const ProtectedRoutes = () => {
           <Route path="/notifications" element={<NotificationCenter />} />
           <Route path="/activity" element={<ActivityTimeline />} />
           <Route path="/network-health" element={<NetworkHealthDashboard />} />
+          <Route path="/attendance" element={<Attendance />} />
+          <Route path="/admin/attendance" element={<Navigate to="/attendance" replace />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/applications/usage" element={<ApplicationUsage />} />
           <Route path="/applications" element={<Applications />} />

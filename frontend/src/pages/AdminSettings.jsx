@@ -1,7 +1,7 @@
 import db from '@/api/base44Client';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PenLine, Save, Server, Sparkles, Rocket, Shield } from 'lucide-react';
+import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,16 +10,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import SettingsSectionNav from '@/components/settings/SettingsSectionNav';
 import SplashSettingsPanel from '@/components/admin/SplashSettingsPanel';
 import LaunchSettingsPanel from '@/components/admin/LaunchSettingsPanel';
+import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
+import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { normalizeSplashAnimation } from '@/lib/splashAnimations';
 import { resetSplashFormState, splashConfigToFormState } from '@/lib/splashConfig';
 import { launchConfigToFormState, resetLaunchFormState } from '@/lib/launchConfig';
+import { attendanceWatermarkConfigToFormState, resetAttendanceWatermarkFormState } from '@/lib/watermarkConfig';
 
 const ADMIN_SECTIONS = [
   { id: 'branding', label: 'Branding', icon: PenLine },
   { id: 'splash', label: 'Splash', icon: Sparkles },
   { id: 'launch', label: 'App Launch', icon: Rocket },
+  { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'email', label: 'Email', icon: Server },
 ];
 
@@ -28,6 +32,7 @@ const ADMIN_SECTION_IDS = new Set(ADMIN_SECTIONS.map((item) => item.id));
 function mergeSettingsFromPayload(payload, fallback = {}) {
   const splashDefaults = resetSplashFormState();
   const launchDefaults = resetLaunchFormState();
+  const attendanceDefaults = resetAttendanceWatermarkFormState();
 
   return {
     system_name: payload?.system_name || fallback.system_name || 'EMZI Nexus Brain',
@@ -44,10 +49,15 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     launch_overlay_modes: payload?.launch_overlay_modes || fallback.launch_overlay_modes || [],
     launch_progress_styles: payload?.launch_progress_styles || fallback.launch_progress_styles || [],
     launch_durations: payload?.launch_durations || fallback.launch_durations || [],
+    attendance_datetime_formats: payload?.attendance_datetime_formats || fallback.attendance_datetime_formats || [],
+    attendance_watermark_positions: payload?.attendance_watermark_positions || fallback.attendance_watermark_positions || [],
+    attendance_logo_positions: payload?.attendance_logo_positions || fallback.attendance_logo_positions || [],
     ...splashDefaults,
     ...launchDefaults,
+    ...attendanceDefaults,
     ...splashConfigToFormState(payload?.splash || payload),
     ...launchConfigToFormState(payload?.launch || payload),
+    ...attendanceWatermarkConfigToFormState(payload?.attendance || payload),
     splash_animation_style: normalizeSplashAnimation(payload?.splash_animation_style ?? payload?.splash?.animation_style),
   };
 }
@@ -122,7 +132,7 @@ export default function AdminSettings({ embedded = false }) {
             <Shield className="w-6 h-6 text-primary" /> Admin Settings
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Branding, splash screen, application launch, and email delivery.
+            Branding, splash screen, application launch, attendance watermark, and email delivery.
           </p>
         </div>
       ) : null}
@@ -181,6 +191,31 @@ export default function AdminSettings({ embedded = false }) {
                   <LaunchSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
+            ) : null}
+
+            {activeSection === 'attendance' ? (
+              <>
+                <Card className="overflow-visible rounded-2xl">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Attendance watermark</CardTitle>
+                    <CardDescription>Clock in/out camera watermark fields, styling, and live preview.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="overflow-visible">
+                    <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
+                  </CardContent>
+                </Card>
+                <Card className="overflow-visible rounded-2xl">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Department attendance rules</CardTitle>
+                    <CardDescription>
+                      Set geofence radius, working hours, shifts, and overtime rules per department.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="overflow-visible">
+                    <DepartmentAttendancePolicyPanel />
+                  </CardContent>
+                </Card>
+              </>
             ) : null}
 
             {activeSection === 'email' ? (

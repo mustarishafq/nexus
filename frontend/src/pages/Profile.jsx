@@ -22,7 +22,6 @@ import {
   Phone,
   GraduationCap,
   HeartPulse,
-  GitBranch,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -42,7 +41,6 @@ import {
   formatBirthdayLabel,
   formatTenure,
   getDisplayName,
-  getOrgChartHref,
   normalizeSkills,
   skillsAreEqual,
   normalizeEducationHistory,
@@ -280,36 +278,6 @@ export default function Profile() {
             <Card className="rounded-2xl">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-primary" />
-                  Organization
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  See who reports to whom across departments
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to={getOrgChartHref(profileForm.department_id)} className="block">
-                  <Button variant="outline" size="sm" className="w-full justify-between h-9 text-xs">
-                    <span className="flex items-center gap-2">
-                      <GitBranch className="w-3.5 h-3.5" />
-                      {profileForm.department_name ? `View ${profileForm.department_name} org chart` : 'View org chart'}
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="order-4 xl:order-none"
-          >
-            <Card className="rounded-2xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
                   <Settings className="w-4 h-4 text-primary" />
                   More settings
                 </CardTitle>
@@ -334,8 +302,8 @@ export default function Profile() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="order-5 xl:order-none"
+            transition={{ delay: 0.08 }}
+            className="order-4 xl:order-none"
           >
             <Card className="rounded-2xl border-destructive/20">
               <CardHeader className="pb-3">
@@ -467,14 +435,6 @@ export default function Profile() {
                                 }))
                               }
                             />
-                            <Link to={getOrgChartHref(profileForm.department_id)}>
-                              <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                                <GitBranch className="w-3.5 h-3.5" />
-                                {profileForm.department_name
-                                  ? `View ${profileForm.department_name} org chart`
-                                  : 'View org chart'}
-                              </Button>
-                            </Link>
                           </div>
 
                           <div className="space-y-1.5">

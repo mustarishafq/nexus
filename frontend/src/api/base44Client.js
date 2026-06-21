@@ -287,6 +287,103 @@ export const db = {
 		},
 	},
 
+	departmentAttendance: {
+		async list() {
+			return request('/admin/department-attendance');
+		},
+
+		async get(departmentId) {
+			return request(`/admin/department-attendance/${departmentId}`);
+		},
+
+		async update(departmentId, data) {
+			return request(`/admin/department-attendance/${departmentId}`, { method: 'PUT', body: data });
+		},
+	},
+
+	attendance: {
+		async status() {
+			return request('/attendance/status');
+		},
+
+		async myHistory(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/attendance/my-history${query}`);
+		},
+
+		async clock(data) {
+			return request('/attendance/clock', { method: 'POST', body: data });
+		},
+
+		async dashboard(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/attendance/dashboard${query}`);
+		},
+
+		async exportCsv(filters = {}) {
+			const token = getAuthToken();
+			const query = buildQuery(filters);
+			const response = await fetch(`${API_BASE_URL}/attendance/export${query}`, {
+				method: 'GET',
+				headers: {
+					Accept: 'text/csv',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				let payload = null;
+				try {
+					payload = await response.json();
+				} catch {
+					payload = null;
+				}
+				const error = new Error(payload?.message || `HTTP ${response.status}`);
+				error.status = response.status;
+				error.data = payload;
+				throw error;
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `attendance-${new Date().toISOString().slice(0, 10)}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.URL.revokeObjectURL(url);
+		},
+
+		async userHistory(userId, filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/attendance/users/${userId}/history${query}`);
+		},
+
+		async reverseGeocode({ latitude, longitude }) {
+			const query = buildQuery({ latitude, longitude });
+			return request(`/attendance/reverse-geocode${query}`);
+		},
+
+        async fetchWatermarkLogo(path) {
+			const query = buildQuery({ path });
+			const response = await fetch(`${API_BASE_URL}/attendance/watermark-logo${query}`, {
+				method: 'GET',
+				headers: {
+					Accept: 'image/*',
+				},
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				return null;
+			}
+
+			return response.blob();
+		},
+	},
+
 	dashboard: {
 		async celebrations({ date } = {}) {
 			const query = date ? `?date=${encodeURIComponent(date)}` : '';

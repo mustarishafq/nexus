@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle,
-  Briefcase, MessageSquare, Phone, Users, GitBranch, ChevronDown,
+  Briefcase, MessageSquare, Phone, Users, ChevronDown,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import {
   getProfileCompleteness,
   normalizeSkills,
   getDisplayName,
-  getOrgChartHref,
 } from '@/lib/profile';
 import { formatPhoneNumber, phoneTelHref } from '@/lib/phone';
 
@@ -70,12 +69,6 @@ export default function ProfileAboutCard({ user, showCompleteLink = true, showCh
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Department</p>
               <p className="font-medium">{user.department}</p>
-              <Link to={getOrgChartHref(user.department_id)} className="mt-2 inline-block">
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                  <GitBranch className="w-3.5 h-3.5" />
-                  View org chart
-                </Button>
-              </Link>
             </div>
           </div>
         ) : null}

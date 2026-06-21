@@ -6,7 +6,6 @@ import { toAbsoluteUrl } from '@/lib/media';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 
 import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
-import MobileMoreMenu from './MobileMoreMenu';
 import GlobalSearch, { GlobalSearchTrigger, useGlobalSearchShortcut } from './GlobalSearch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -54,7 +53,6 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
       >
         {/* Search */}
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {isMobile && <MobileMoreMenu />}
           <div className="relative min-w-0 flex-1">
             <GlobalSearchTrigger onClick={() => setSearchOpen(true)} />
           </div>

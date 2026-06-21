@@ -16,6 +16,7 @@ class FileUploadController extends Controller
         'cover-pictures',
         'cover-pictures-new',
         'post-images',
+        'attendance-photos',
     ];
 
     public function store(Request $request): JsonResponse
@@ -36,6 +37,18 @@ class FileUploadController extends Controller
                     'required',
                     File::types(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'mp4', 'webm', 'mov'])
                         ->max(51200),
+                ],
+            ]);
+        } elseif ($folder === 'attendance-watermark-logos') {
+            if ($response = $this->authorizeAdmin($request)) {
+                return $response;
+            }
+
+            $request->validate([
+                'file' => [
+                    'required',
+                    File::types(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'])
+                        ->max(10240),
                 ],
             ]);
         } elseif (in_array($folder, self::IMAGE_FOLDERS, true)) {
