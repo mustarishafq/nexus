@@ -21,7 +21,7 @@
     },
     {
       "src": "/icons/notification-badge.png",
-      "sizes": "512x512",
+      "sizes": "96x96",
       "type": "image/png",
       "purpose": "monochrome"
     },
