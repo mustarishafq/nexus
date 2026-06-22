@@ -20,7 +20,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/notification-badge.png",
+      "src": "/icons/badge_96.png",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "monochrome"
