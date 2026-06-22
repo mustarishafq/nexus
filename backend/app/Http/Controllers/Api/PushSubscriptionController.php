@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PushSubscription;
+use App\Services\WebPushWelcomeService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +54,10 @@ class PushSubscriptionController extends Controller
                 'user_agent' => $validated['userAgent'] ?? $request->userAgent(),
             ]
         );
+
+        if ($subscription->wasRecentlyCreated) {
+            app(WebPushWelcomeService::class)->sendWelcome($user);
+        }
 
         return response()->json($subscription, 201);
     }

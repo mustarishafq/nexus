@@ -9,6 +9,7 @@ use App\Models\Application;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationEligibleUsers;
+use App\Support\ApplicationSsoCredentials;
 use App\Support\NotificationEventMapping;
 use App\Support\SyncAssignmentRecords;
 use App\Support\UserApplicationAccess;
@@ -648,13 +649,31 @@ class ApplicationController extends Controller
             return response()->json(['message' => 'System has no api_key configured — cannot sign token.'], 422);
         }
 
+        $ssoEmail = ApplicationSsoCredentials::resolveLaunchEmail(
+            $user,
+            $application,
+            $request->input('sso_email')
+        );
+
+        if ($ssoEmail === null) {
+            return response()->json(['message' => 'No SSO email is available for this application.'], 422);
+        }
+
+        if (
+            is_string($request->input('sso_email'))
+            && trim($request->input('sso_email')) !== ''
+            && strtolower(trim($request->input('sso_email'))) !== strtolower(trim($ssoEmail))
+        ) {
+            return response()->json(['message' => 'The selected SSO email is not allowed for this application.'], 422);
+        }
+
         $now     = time();
         $payload = [
             'iss'   => config('app.url'),
             'iat'   => $now,
             'exp'   => $now + 60,
             'sub'   => (string) $user->id,
-            'email' => $user->email,
+            'email' => $ssoEmail,
             'name'  => $user->name ?? '',
             'sys'   => $application->slug,
             'return_to' => $returnTo,

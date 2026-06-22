@@ -1,3 +1,5 @@
+import { pickSsoEmailForLaunch } from '@/lib/ssoCredentials';
+
 const LAUNCH_ACTIONS = new Set(['login', 'view']);
 
 export function getRecentApplications(applications = [], activities = [], limit = 6) {
@@ -72,16 +74,34 @@ function openExternalUrl(url, { newTab = true } = {}) {
   window.location.href = url;
 }
 
-export async function openApplicationTarget(db, system, { actionUrl, navigate, deferNavigation = false } = {}) {
+export async function openApplicationTarget(db, system, {
+  actionUrl,
+  navigate,
+  deferNavigation = false,
+  ssoEmail,
+  resolveSsoEmail,
+} = {}) {
   if (!system?.is_enabled) {
     throw new Error('Application is not enabled.');
   }
 
   const redirectTo = actionUrl?.trim() || undefined;
   const resolvedOpenMode = system.open_mode || 'embedded';
+  let selectedSsoEmail = ssoEmail ?? null;
+
+  if (!selectedSsoEmail && system.auth_mode !== 'redirect') {
+    if (typeof resolveSsoEmail === 'function') {
+      selectedSsoEmail = await resolveSsoEmail(system);
+    } else {
+      selectedSsoEmail = await pickSsoEmailForLaunch(system, (applicationId) => db.getApplicationSsoCredentials(applicationId));
+    }
+  }
 
   if (resolvedOpenMode === 'embedded') {
-    const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+    const params = new URLSearchParams();
+    if (redirectTo) params.set('redirect_to', redirectTo);
+    if (selectedSsoEmail) params.set('sso_email', selectedSsoEmail);
+    const query = params.toString() ? `?${params.toString()}` : '';
     const path = `/applications/${system.id}/view${query}`;
 
     if (deferNavigation) {
@@ -94,6 +114,7 @@ export async function openApplicationTarget(db, system, { actionUrl, navigate, d
 
   const { launch_url, auth_mode } = await db.launchSystem(system.id, {
     redirect_to: redirectTo,
+    sso_email: selectedSsoEmail || undefined,
   });
   const targetUrl = auth_mode === 'redirect' && redirectTo ? redirectTo : launch_url;
 

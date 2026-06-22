@@ -250,15 +250,17 @@ Use these layers consistently. Do not invent new z-index values without updating
 | z-index | Component / usage |
 |---------|-------------------|
 | `z-[9999]` | PWA splash screen |
-| `z-[120]` | Mention autocomplete popover |
+| `z-[130]` | SSO credential picker (above launch overlay at `z-[120]`) |
+| `z-[120]` | Mention autocomplete popover, application launch overlay |
 | `z-50` | Dialogs, sheets, drawers, dropdowns, selects, notification panel backdrop + panel, PWA install prompt |
 | `z-40` | BottomNav |
 | `z-[25]` | GlobalBroadcastStrip (fixed below TopBar) |
 | `z-30` | TopBar, AppLayout header stack |
 | `z-20` | Auth theme toggle, cover photo controls, app card launch overlay |
 | `z-10` | Sticky table headers, drag overlays, corner ribbon |
+| `z-[4]` | App card interactive overlays (SSO key, admin edit/delete) |
 | `z-[3]` | CornerRibbon on app tiles |
-| `z-[2]` | App card admin overlay |
+| `z-[2]` | App card footer overlay |
 | `z-[1]` | App card logo layer |
 
 ---
@@ -353,15 +355,32 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 | Shadow | `shadow-[0_8px_24px_rgba(0,0,0,0.08)]` | `shadow-[0_8px_32px_rgba(0,0,0,0.4)]` |
 | Ring | `ring-1 ring-black/5` | `ring-white/10` |
 
-**Import:** `import { glassPanelStyles } from '@/components/layout/glassStyles';`
+**Import:** `import { glassPanelStyles, glassDialogPanelStyles, glassDialogMutedText } from '@/components/layout/glassStyles';`
 
 **Usage:** Apply via `cn(glassPanelStyles, …)` and add edge-specific borders as needed (`border-b`, `border-r`, `border`).
+
+| Token | Use when |
+|-------|----------|
+| `glassPanelStyles` | Chrome only — TopBar, bottom dock (thin bars over page content) |
+| `glassDialogPanelStyles` | Dialogs, sheets, pickers with readable body text (higher opacity in light mode) |
+| `glassDialogMutedText` | Descriptions, captions, secondary lines on `glassDialogPanelStyles` surfaces |
+
+#### Dialog glass (`glassDialogPanelStyles`)
+
+| Setting | Light | Dark |
+|---------|-------|------|
+| Blur | `backdrop-blur-2xl` | same |
+| Background | `bg-card/95` (`supports-[backdrop-filter]:bg-card/90`) | `bg-card/85` |
+| Text | `text-foreground` on panel; use `glassDialogMutedText` for descriptions | same |
+
+**Do not** use `glassPanelStyles` (`bg-card/30`) on content-heavy modals — muted text becomes illegible in light mode.
 
 | Component | Additional classes |
 |-----------|-------------------|
 | TopBar (§7.1) | `border-b` |
-| Mobile more menu sheet (§7.3) | `border-r shadow-2xl` |
+| Mobile more menu sheet (§7.3) | `border-t` + `glassDialogPanelStyles` |
 | Bottom dock (§7.4) | `glassDockStyles` = base + `rounded-2xl border` |
+| SSO picker / compact glass dialogs (§11.9) | `glassDialogPanelStyles` + `rounded-2xl border` |
 
 ### 7.1 Top bar
 
@@ -430,7 +449,7 @@ hover:bg-muted/70 focus-visible:ring-1 focus-visible:ring-ring
 
 **Trigger:** `p-2 rounded-lg hover:bg-muted`; `Menu w-5 h-5 text-muted-foreground`
 
-**Sheet:** `side="left"`, `hideCloseButton`, `w-[280px]`, `flex flex-col border-r p-0 shadow-2xl` + `glassPanelStyles` (see §7.0)
+**Sheet:** `side="bottom"`, `rounded-t-2xl border-t` + `glassDialogPanelStyles` (see §7.0)
 
 **Overlay:** `bg-black/25 backdrop-blur-sm` (lighter than default `bg-black/80`)
 
@@ -816,6 +835,10 @@ Destructive: `border-destructive/50 text-destructive`
 - Close: `absolute right-4 top-4 opacity-70`
 - Animation: 200ms zoom/fade
 
+**Mobile width:** Do not use bare `w-full` on centered dialogs — it stretches edge-to-edge. Use `w-[calc(100vw-1.5rem)]` with a `sm:max-w-*` cap so the modal keeps side margins on phones (see §11.9).
+
+**Footer buttons:** Default `DialogFooter` stacks actions vertically on mobile (`flex-col-reverse`). For confirm/picker dialogs, override with horizontal alignment (see §11.9).
+
 ### 11.2 Full-height form dialog (Applications CRUD)
 
 ```
@@ -864,6 +887,72 @@ See §7.2.
 | Selected | `border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm` |
 | Unselected | `border-border bg-card hover:bg-muted/30 hover:border-primary/40` |
 | Preview wireframe | `h-14 rounded-lg border border-border/80 bg-muted/30` |
+
+### 11.9 Mobile compact dialogs (glass / confirm / picker)
+
+**Required for:** SSO account picker, destructive confirms, and any small centered modal on mobile.
+
+Users have repeatedly flagged full-width modals and vertically stacked footer buttons on phones. Follow this spec exactly.
+
+#### Width
+
+| Property | Value |
+|----------|-------|
+| Mobile width | `w-[calc(100vw-1.5rem)]` — **never** bare `w-full` on centered dialogs |
+| Side inset | `0.75rem` each side (`1.5rem` total horizontal margin) |
+| Desktop cap | `sm:max-w-md` (compact) or `sm:max-w-lg` (content-heavy) |
+
+```jsx
+<DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md">
+```
+
+Custom glass dialog (Radix `DialogPrimitive.Content`):
+
+```jsx
+className={cn(
+  'fixed left-[50%] top-[50%] z-[130] w-[calc(100vw-1.5rem)] max-w-md translate-x-[-50%] translate-y-[-50%]',
+  'rounded-2xl border',
+  glassDialogPanelStyles,
+)}
+```
+
+Description:
+
+```jsx
+<DialogDescription className={glassDialogMutedText}>...</DialogDescription>
+```
+
+#### Glass overlay (match top nav / mobile menu)
+
+| Element | Classes |
+|---------|---------|
+| Overlay | `bg-black/25 backdrop-blur-sm` (not default `bg-black/80`) |
+| Panel | `glassDialogPanelStyles` + `rounded-2xl border` (see §7.0) |
+| Description / helper | `glassDialogMutedText` (not bare `text-muted-foreground` on glass) |
+| Option rows | `bg-card border-border` unselected; `text-foreground` for labels |
+
+#### Footer actions — horizontal on all breakpoints
+
+**Do not** rely on default `DialogFooter` mobile stacking (`flex-col-reverse`) for two-button confirms.
+
+| Property | Value |
+|----------|-------|
+| Layout | `flex-row justify-end gap-2` |
+| Button height | `h-10` |
+| Mobile equal width | `flex-1 sm:flex-none` on each button when both actions should share the row |
+
+```jsx
+<DialogFooter className="flex-row justify-end gap-2 sm:justify-end sm:space-x-0">
+  <Button variant="outline" className="h-10 flex-1 sm:flex-none">Cancel</Button>
+  <Button className="h-10 flex-1 sm:flex-none">Continue</Button>
+</DialogFooter>
+```
+
+`AlertDialogFooter` variant: `className="flex-row justify-end gap-2"` with `AlertDialogCancel className="mt-0 h-10 flex-1 sm:flex-none"`.
+
+#### Reference implementation
+
+`frontend/src/components/applications/SsoCredentialPickerDialog.jsx`
 
 ---
 
@@ -1587,6 +1676,12 @@ Filters in collapsible card (mobile collapsed by default):
 - [ ] Mobile dock stays ≤ 6 items; overflow in MobileMoreMenu
 - [ ] Active state `match()` handles nested paths
 
+### Overlays
+- [ ] Mobile compact dialogs: `w-[calc(100vw-1.5rem)]`, not full-width (§11.9)
+- [ ] Two-button dialog footers: horizontal `flex-row` on mobile, not stacked (§11.9)
+- [ ] Glass pickers use `glassDialogPanelStyles` + `glassDialogMutedText` (§7.0, §11.9)
+- [ ] Destructive actions use AlertDialog
+
 ### States
 - [ ] Loading: semantic spinner (§17.1)
 - [ ] Empty: dashed border or centered icon pattern (§17.2)
@@ -1639,6 +1734,7 @@ Filters in collapsible card (mobile collapsed by default):
 | Application card | `frontend/src/components/applications/ApplicationCard.jsx` |
 | Corner ribbon | `frontend/src/components/applications/CornerRibbon.jsx` |
 | App browser | `frontend/src/pages/ApplicationBrowser.jsx` |
+| SSO credential picker | `frontend/src/components/applications/SsoCredentialPickerDialog.jsx` |
 | Broadcast strip | `frontend/src/components/broadcasts/GlobalBroadcastStrip.jsx` |
 | Notification panel | `frontend/src/components/notifications/NotificationPanel.jsx` |
 | Notification visuals | `frontend/src/lib/notificationVisuals.js` |

@@ -1,13 +1,15 @@
 // @ts-nocheck
 import db from '@/api/base44Client';
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, Sparkles } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, Sparkles, KeyRound, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -42,6 +44,7 @@ import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
 import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
+import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 
 function getUserProfileStrength(user) {
   if (user?.profile_completeness) {
@@ -253,6 +256,7 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 
 export default function UserManagement() {
   const [approvingUser, setApprovingUser] = useState(null);
+  const [pendingUserApproval, setPendingUserApproval] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -295,9 +299,23 @@ export default function UserManagement() {
   });
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
-  const [activeSection, setActiveSection] = useState('users');
+  const [searchParams] = useSearchParams();
+  const adminSections = new Set(['users', 'groups', 'analytics', 'sso-links']);
+  const [activeSection, setActiveSection] = useState(() => {
+    const section = searchParams.get('section');
+    return section && adminSections.has(section) ? section : 'users';
+  });
   const [nudgingUser, setNudgingUser] = useState(null);
   const [bulkNudging, setBulkNudging] = useState(false);
+  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [notificationSending, setNotificationSending] = useState(false);
+  const [notificationUserIds, setNotificationUserIds] = useState(new Set());
+  const [notificationForm, setNotificationForm] = useState({
+    title: '',
+    message: '',
+    sendInApp: true,
+    sendWebPush: true,
+  });
   const csvRef = useRef(null);
   const hrOnboardingCsvRef = useRef(null);
   const assignGroupsCsvRef = useRef(null);
@@ -839,6 +857,12 @@ export default function UserManagement() {
             {nudgingUser === user.id ? 'Sending reminder...' : 'Send profile reminder'}
           </DropdownMenuItem>
         ) : null}
+        {user.is_approved ? (
+          <DropdownMenuItem onClick={() => openNotificationDialog(user)}>
+            <Send className="w-4 h-4 mr-2" />
+            Send notification
+          </DropdownMenuItem>
+        ) : null}
         {user.role !== 'admin' && (
           <>
             <DropdownMenuItem onClick={() => openAssignDialog(user)}>
@@ -854,7 +878,7 @@ export default function UserManagement() {
         <DropdownMenuSeparator />
         {user.is_approved ? (
           <DropdownMenuItem
-            onClick={() => setApproval(user, false)}
+            onClick={() => setPendingUserApproval({ user, isApproved: false })}
             disabled={approvingUser === user.id}
           >
             <UserX className="w-4 h-4 mr-2" />
@@ -862,7 +886,7 @@ export default function UserManagement() {
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            onClick={() => setApproval(user, true)}
+            onClick={() => setPendingUserApproval({ user, isApproved: true })}
             disabled={approvingUser === user.id}
           >
             <UserCheck className="w-4 h-4 mr-2" />
@@ -1165,6 +1189,14 @@ export default function UserManagement() {
     }
   };
 
+  const confirmUserApproval = async () => {
+    if (!pendingUserApproval) return;
+
+    const { user, isApproved } = pendingUserApproval;
+    setPendingUserApproval(null);
+    await setApproval(user, isApproved);
+  };
+
   const handleProfileNudge = async (user, { force = false } = {}) => {
     setNudgingUser(user.id);
     try {
@@ -1191,6 +1223,64 @@ export default function UserManagement() {
     }
   };
 
+  const openNotificationDialog = (user = null) => {
+    setNotificationUserIds(new Set(user ? [user.id] : []));
+    setNotificationForm({
+      title: '',
+      message: '',
+      sendInApp: true,
+      sendWebPush: true,
+    });
+    setNotificationDialogOpen(true);
+  };
+
+  const toggleNotificationUser = (userId) => {
+    setNotificationUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const handleSendAdminNotification = async () => {
+    const title = notificationForm.title.trim();
+    if (!title) {
+      toast.error('Enter a notification title');
+      return;
+    }
+
+    if (notificationUserIds.size === 0) {
+      toast.error('Select at least one user');
+      return;
+    }
+
+    if (!notificationForm.sendInApp && !notificationForm.sendWebPush) {
+      toast.error('Choose at least one delivery channel');
+      return;
+    }
+
+    setNotificationSending(true);
+    try {
+      const result = await db.sendAdminNotification({
+        user_ids: [...notificationUserIds].map(Number),
+        title,
+        message: notificationForm.message.trim() || null,
+        send_in_app: notificationForm.sendInApp,
+        send_web_push: notificationForm.sendWebPush,
+      });
+      setNotificationDialogOpen(false);
+      toast.success(result?.message || `Sent notification to ${result?.sent || 0} user(s)`);
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to send notification');
+    } finally {
+      setNotificationSending(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearch('');
     setRoleFilter('all');
@@ -1200,6 +1290,10 @@ export default function UserManagement() {
 
   const selectableUsers = users
     .filter((user) => user.role !== 'admin')
+    .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
+
+  const notifiableUsers = users
+    .filter((user) => user.is_approved)
     .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
 
   const importBusy = importing || importingHr || assigningGroups;
@@ -1259,6 +1353,15 @@ export default function UserManagement() {
             variant="outline"
             size="sm"
             className="gap-1.5 w-full sm:w-auto min-h-[40px]"
+            onClick={() => openNotificationDialog()}
+          >
+            <Send className="w-4 h-4 shrink-0" />
+            <span className="truncate">Send notification</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 w-full sm:w-auto min-h-[40px]"
             disabled={bulkNudging || stats.incompleteProfiles === 0}
             onClick={handleBulkProfileNudge}
           >
@@ -1279,7 +1382,7 @@ export default function UserManagement() {
       </motion.div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:inline-flex sm:h-10 sm:w-auto">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4 sm:inline-flex sm:h-10 sm:w-auto">
           <TabsTrigger value="users" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <UsersIcon className="w-4 h-4 shrink-0" />
             <span className="truncate">Users</span>
@@ -1295,7 +1398,15 @@ export default function UserManagement() {
             <span className="truncate">Analytics</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{metabaseDashboards.length}</Badge>
           </TabsTrigger>
+          <TabsTrigger value="sso-links" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+            <KeyRound className="w-4 h-4 shrink-0" />
+            <span className="truncate">SSO Links</span>
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="sso-links" className="mt-0">
+          <SsoCredentialApprovals />
+        </TabsContent>
 
         <TabsContent value="users" className="mt-0">
       <Card className="rounded-2xl border-border/70">
@@ -2380,6 +2491,50 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={Boolean(pendingUserApproval)} onOpenChange={(open) => !open && setPendingUserApproval(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingUserApproval?.isApproved ? 'Approve user?' : 'Revoke user access?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingUserApproval ? (
+                pendingUserApproval.isApproved ? (
+                  <>
+                    Approve <span className="font-medium text-foreground">{pendingUserApproval.user.full_name || pendingUserApproval.user.email}</span> so they can sign in and use Nexus.
+                  </>
+                ) : (
+                  <>
+                    Revoke access for <span className="font-medium text-foreground">{pendingUserApproval.user.full_name || pendingUserApproval.user.email}</span>. They will no longer be able to sign in until approved again.
+                  </>
+                )
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={approvingUser === pendingUserApproval?.user?.id}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={approvingUser === pendingUserApproval?.user?.id}
+              className={
+                pendingUserApproval?.isApproved
+                  ? undefined
+                  : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                confirmUserApproval();
+              }}
+            >
+              {approvingUser === pendingUserApproval?.user?.id
+                ? 'Saving...'
+                : pendingUserApproval?.isApproved
+                  ? 'Approve'
+                  : 'Revoke access'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={Boolean(pendingDeleteGroup)} onOpenChange={(open) => !open && setPendingDeleteGroup(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2429,6 +2584,92 @@ export default function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
+            <DialogTitle>Send notification</DialogTitle>
+            <DialogDescription className="text-xs">
+              Send a manual in-app notification and/or web push to selected users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Recipients *</Label>
+              <SearchableUserMultiSelect
+                users={notifiableUsers}
+                selectedIds={notificationUserIds}
+                onToggle={toggleNotificationUser}
+                placeholder="Search approved users by name or email..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-notification-title">Title *</Label>
+              <Input
+                id="admin-notification-title"
+                value={notificationForm.title}
+                onChange={(e) => setNotificationForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="Notification title"
+                maxLength={255}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-notification-message">Message</Label>
+              <Textarea
+                id="admin-notification-message"
+                value={notificationForm.message}
+                onChange={(e) => setNotificationForm((prev) => ({ ...prev, message: e.target.value }))}
+                placeholder="Optional message body"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+                <div>
+                  <Label>In-app notification</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Shows in the user&apos;s notification center.</p>
+                </div>
+                <Switch
+                  checked={notificationForm.sendInApp}
+                  onCheckedChange={(checked) => setNotificationForm((prev) => ({ ...prev, sendInApp: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+                <div>
+                  <Label>Web push</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Sends a browser push to subscribed devices.</p>
+                </div>
+                <Switch
+                  checked={notificationForm.sendWebPush}
+                  onCheckedChange={(checked) => setNotificationForm((prev) => ({ ...prev, sendWebPush: checked }))}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setNotificationDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={notificationSending || notificationUserIds.size === 0}
+              onClick={handleSendAdminNotification}
+            >
+              {notificationSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send notification
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

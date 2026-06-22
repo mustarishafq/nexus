@@ -8,6 +8,7 @@ import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrati
 import BroadcastAnnouncementGate from '@/components/broadcasts/BroadcastAnnouncementGate';
 import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
 import NotificationToastGate from '@/components/notifications/NotificationToastGate';
+import NotificationClickGate from '@/components/notifications/NotificationClickGate';
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
 import TopAlertStrips from '@/components/layout/TopAlertStrips';
 import PageLoader from '@/components/PageLoader';
@@ -52,6 +53,7 @@ export default function AppLayout() {
       <BroadcastAnnouncementGate />
       <WebPushPromptGate />
       <NotificationToastGate />
+      <NotificationClickGate />
       <NotificationAudioUnlock />
       {!isFullBleed ? (
         <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">

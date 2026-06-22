@@ -45,6 +45,7 @@ import { applicationNotificationsEnabled, normalizeNotificationEventMapping } fr
 import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
+import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import {
   DEFAULT_BRAND_COLOR,
   extractDominantColorFromFile,
@@ -454,6 +455,7 @@ export default function Applications() {
   );
 
   const [launching, setLaunching] = useState(null);
+  const [ssoCredentialsSystem, setSsoCredentialsSystem] = useState(null);
   const { launchingId, launchWithAnimation } = useApplicationLaunch();
 
   const handleLaunch = async (system) => {
@@ -463,8 +465,6 @@ export default function Applications() {
 
     try {
       await launchWithAnimation(system, navigate);
-    } catch (err) {
-      alert(err.message);
     } finally {
       setLaunching(null);
     }
@@ -837,6 +837,7 @@ export default function Applications() {
                     setDeleteConfirmName('');
                     setPendingDeleteSystem(selectedSystem);
                   }}
+                  onManageSsoCredentials={setSsoCredentialsSystem}
                 />
               </div>
             );
@@ -899,6 +900,14 @@ export default function Applications() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SsoCredentialsDialog
+        application={ssoCredentialsSystem}
+        open={Boolean(ssoCredentialsSystem)}
+        onOpenChange={(open) => {
+          if (!open) setSsoCredentialsSystem(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\AccessGroupController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AppSettingController;
@@ -18,6 +19,8 @@ use App\Http\Controllers\Api\PostReactionController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
+use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
+use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\MeController;
@@ -83,7 +86,9 @@ Route::get('/google/oauth/status', [GoogleOAuthController::class, 'status']);
 Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);
 
-Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
+Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
+Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::class, 'index']);
+Route::patch('/admin/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialAdminController::class, 'update']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
 Route::get('/admin/attendance-locations', [AttendanceLocationController::class, 'index']);
 Route::post('/admin/attendance-locations', [AttendanceLocationController::class, 'store']);
@@ -124,6 +129,9 @@ Route::post('applications/reorder', [ApplicationController::class, 'reorder']);
 Route::get('applications/usage-stats', [ApplicationController::class, 'usageStats']);
 Route::apiResource('applications', ApplicationController::class);
 Route::post('applications/{application}/launch', [ApplicationController::class, 'launch']);
+Route::get('applications/{application}/sso-credentials', [ApplicationSsoCredentialController::class, 'index']);
+Route::post('applications/{application}/sso-credentials', [ApplicationSsoCredentialController::class, 'store']);
+Route::delete('applications/{application}/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialController::class, 'destroy']);
 Route::post('applications/{application}/event-webhook', [ApplicationEventWebhookController::class, 'store']);
 Route::post('applications/{application}/event-webhook/preview', [ApplicationEventWebhookController::class, 'preview']);
 Route::apiResource('access-groups', AccessGroupController::class);

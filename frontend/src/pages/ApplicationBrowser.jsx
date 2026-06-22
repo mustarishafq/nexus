@@ -46,6 +46,12 @@ export default function ApplicationBrowser() {
 
     return location.state?.redirectTo || undefined;
   }, [location.search, location.state?.redirectTo]);
+  const ssoEmail = useMemo(() => {
+    const fromQuery = new URLSearchParams(location.search).get('sso_email');
+    if (fromQuery) return fromQuery;
+
+    return location.state?.ssoEmail || undefined;
+  }, [location.search, location.state?.ssoEmail]);
   const iframeRef = useRef(null);
   const [launchUrl, setLaunchUrl] = useState(null);
   const [launchError, setLaunchError] = useState(null);
@@ -68,7 +74,10 @@ export default function ApplicationBrowser() {
     setLaunchUrl(null);
     setEmbedBlocked(false);
 
-    db.launchSystem(id, { redirect_to: redirectTo || undefined })
+    db.launchSystem(id, {
+      redirect_to: redirectTo || undefined,
+      sso_email: ssoEmail || undefined,
+    })
       .then(({ launch_url }) => {
         if (!cancelled) {
           setLaunchUrl(launch_url);
@@ -88,7 +97,7 @@ export default function ApplicationBrowser() {
     return () => {
       cancelled = true;
     };
-  }, [id, redirectTo]);
+  }, [id, redirectTo, ssoEmail]);
 
   const checkEmbedStatus = useCallback(() => {
     if (detectEmbedBlocked(iframeRef.current)) {

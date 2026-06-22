@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, KeyRound, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
@@ -22,6 +22,7 @@ export default function ApplicationCard({
   onLaunch,
   onEdit,
   onDelete,
+  onManageSsoCredentials,
   footerSubtitle,
   readOnly = false,
   footerAlwaysVisible = false,
@@ -109,9 +110,28 @@ export default function ApplicationCard({
         </span>
       )}
 
+      {system.auth_mode === 'jwt' && onManageSsoCredentials && (
+        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
+          <div className="pointer-events-auto absolute top-2 left-2 translate-y-1 transition-transform duration-300 group-hover:translate-y-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg border border-white/20 bg-black/55 text-white shadow-lg hover:bg-white/15 hover:text-white"
+              title="Manage SSO accounts"
+              onClick={(e) => {
+                e.stopPropagation();
+                onManageSsoCredentials(system);
+              }}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {canManageSystem && onEdit && onDelete && (
-        <div className={cn('absolute inset-0 z-[2] pointer-events-none', hoverRevealClass)}>
-          <div className="pointer-events-auto absolute top-2 right-2 z-10 flex translate-y-1 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:translate-y-0">
+        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
+          <div className="pointer-events-auto absolute top-2 right-2 flex translate-y-1 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:translate-y-0">
             <Badge variant="outline" className="h-5 border-white/25 bg-white/10 text-[9px] text-white">
               {system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}
             </Badge>

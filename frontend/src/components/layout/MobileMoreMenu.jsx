@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Moon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
-import { glassPanelStyles } from './glassStyles';
+import { glassDialogMutedText, glassDialogPanelStyles } from './glassStyles';
 import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -84,7 +84,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
         overlayClassName="bg-black/25 backdrop-blur-sm"
         className={cn(
           'flex max-h-[85dvh] flex-col rounded-t-2xl border-t p-0 pb-[env(safe-area-inset-bottom)]',
-          glassPanelStyles
+          glassDialogPanelStyles
         )}
       >
         <SheetHeader className="border-b border-border/50 px-4 py-4 text-left">
@@ -101,7 +101,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
           </div>
           {isAdmin && adminItems.length > 0 && (
             <>
-              <p className="px-1 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className={cn('px-1 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide', glassDialogMutedText)}>
                 Admin
               </p>
               <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
@@ -118,7 +118,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
               </div>
               <div>
                 <p className="text-sm font-medium">Dark Mode</p>
-                <p className="text-xs text-muted-foreground">Light or dark theme</p>
+                <p className={cn('text-xs', glassDialogMutedText)}>Light or dark theme</p>
               </div>
             </div>
             <ThemeToggle variant="switch" />

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v6';
+const CACHE_NAME = 'nexus-shell-v7';
 const APP_SHELL = [
   '/',
   '/offline.html',
@@ -92,9 +92,14 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'EMZI Nexus Brain';
   const body = payload.message || payload.body || 'You have a new notification in EMZI Nexus Brain.';
-  const url = payload.action_url || payload.url || '/notifications';
+  const actionUrl = payload.action_url || payload.url || null;
   const tag = payload.id ? `notification-${payload.id}` : undefined;
-  const notificationData = { url, id: payload.id || null };
+  const notificationData = {
+    id: payload.id || null,
+    action_url: actionUrl,
+    system_id: payload.system_id || null,
+    url: actionUrl || (payload.id ? `/notifications?open=${payload.id}` : '/notifications'),
+  };
 
   const notifyOptions = {
     body,
@@ -133,39 +138,64 @@ self.addEventListener('push', (event) => {
   );
 });
 
+function isAbsoluteHttpUrl(value) {
+  return /^https?:\/\//i.test(value || '');
+}
+
+function resolveNotificationTargetPath(data = {}) {
+  if (data.id) {
+    return `/notifications?open=${data.id}`;
+  }
+
+  return data.action_url || data.url || '/notifications';
+}
+
+async function openNotificationTarget(notificationData = {}) {
+  const targetPath = resolveNotificationTargetPath(notificationData);
+  const isExternalTarget = isAbsoluteHttpUrl(targetPath)
+    && !targetPath.startsWith(self.location.origin);
+  const targetUrl = isExternalTarget
+    ? targetPath
+    : new URL(targetPath, self.location.origin).href;
+
+  const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const originClient = windowClients.find((client) => {
+    try {
+      return new URL(client.url).origin === self.location.origin;
+    } catch {
+      return false;
+    }
+  });
+
+  if (originClient && !isExternalTarget) {
+    await originClient.focus();
+    originClient.postMessage({ type: 'NOTIFICATION_OPEN', payload: notificationData });
+    return;
+  }
+
+  if (originClient && 'navigate' in originClient) {
+    const navigated = await originClient.navigate(targetUrl);
+    if (navigated && 'focus' in navigated) {
+      await navigated.focus();
+      if (!isExternalTarget) {
+        navigated.postMessage({ type: 'NOTIFICATION_OPEN', payload: notificationData });
+      }
+      return;
+    }
+  }
+
+  if (clients.openWindow) {
+    await clients.openWindow(targetUrl);
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
-  // Handle action button clicks
   if (event.action === 'close') {
     event.notification.close();
     return;
   }
 
-  // Default action: open the notification URL
   event.notification.close();
 
-  const targetPath = event.notification?.data?.url || '/notifications';
-  const targetUrl = new URL(targetPath, self.location.origin).href;
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Prefer a client that is already at the target URL.
-      const exactMatch = windowClients.find((c) => c.url === targetUrl);
-      if (exactMatch && 'focus' in exactMatch) {
-        return exactMatch.focus();
-      }
-
-      // Fall back to any open window on the same origin — navigate it to the target URL
-      // so the PWA window is reused rather than opening a new browser tab.
-      const anyClient = windowClients.find((c) => new URL(c.url).origin === self.location.origin);
-      if (anyClient && 'navigate' in anyClient) {
-        return anyClient.navigate(targetUrl).then((navigated) => navigated && navigated.focus());
-      }
-
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-
-      return undefined;
-    })
-  );
+  event.waitUntil(openNotificationTarget(event.notification?.data || {}));
 });

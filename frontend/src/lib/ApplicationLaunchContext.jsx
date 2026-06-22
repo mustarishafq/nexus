@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import db from '@/api/base44Client';
 import ApplicationLaunchOverlay from '@/components/applications/ApplicationLaunchOverlay';
+import SsoCredentialPickerDialog from '@/components/applications/SsoCredentialPickerDialog';
 import { openApplicationTarget } from '@/lib/applications';
 import {
   getLaunchDurationPreset,
@@ -10,6 +11,8 @@ import {
 } from '@/lib/launchConfig';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import { useAuth } from '@/lib/AuthContext';
+import { pickSsoEmailForLaunch, registerSsoCredentialPicker, SSO_SELECTION_CANCELLED_MESSAGE, isSsoSelectionCancelled } from '@/lib/ssoCredentials';
+import { toast } from 'sonner';
 
 const ApplicationLaunchContext = createContext(null);
 
@@ -58,9 +61,11 @@ export function ApplicationLaunchProvider({ children }) {
   const { appPublicSettings } = useAuth();
   const [launch, setLaunch] = useState(null);
   const [launchingId, setLaunchingId] = useState(null);
+  const [credentialPicker, setCredentialPicker] = useState(null);
   const pendingTargetRef = useRef(null);
   const previewReadyTimerRef = useRef(null);
   const previewResolveRef = useRef(null);
+  const credentialPickerResolveRef = useRef(null);
   const launchConfig = useMemo(
     () => resolveLaunchConfigFromSettings(appPublicSettings),
     [appPublicSettings],
@@ -74,6 +79,28 @@ export function ApplicationLaunchProvider({ children }) {
     if (!launch) return undefined;
     return lockBodyScroll(true);
   }, [launch]);
+
+  useEffect(() => {
+    return registerSsoCredentialPicker(({ application, options }) => new Promise((resolve, reject) => {
+      credentialPickerResolveRef.current = { resolve, reject };
+      setCredentialPicker({ application, options });
+    }));
+  }, []);
+
+  const finishCredentialPicker = useCallback((email = null) => {
+    const pending = credentialPickerResolveRef.current;
+    credentialPickerResolveRef.current = null;
+    setCredentialPicker(null);
+
+    if (!pending) return;
+
+    if (email) {
+      pending.resolve(email);
+      return;
+    }
+
+    pending.reject(new Error(SSO_SELECTION_CANCELLED_MESSAGE));
+  }, []);
 
   const finishLaunch = useCallback(() => {
     const pendingTarget = pendingTargetRef.current;
@@ -100,57 +127,83 @@ export function ApplicationLaunchProvider({ children }) {
       return;
     }
 
-    if (!shouldShowLaunchOverlay(launchConfig)) {
-      setLaunchingId(application.id);
-      try {
-        const result = await openApplicationTarget(db, application, { navigate, deferNavigation: true });
-        resolveLaunchTarget(result, navigate);
-      } finally {
-        setLaunchingId(null);
+    try {
+      let selectedSsoEmail = null;
+      if (application.auth_mode !== 'redirect') {
+        selectedSsoEmail = await pickSsoEmailForLaunch(
+          application,
+          (applicationId) => db.getApplicationSsoCredentials(applicationId),
+        );
       }
-      return;
-    }
 
-    setLaunchingId(application.id);
-    pendingTargetRef.current = null;
+      if (!shouldShowLaunchOverlay(launchConfig)) {
+        setLaunchingId(application.id);
+        try {
+          const result = await openApplicationTarget(db, application, {
+            navigate,
+            deferNavigation: true,
+            ssoEmail: selectedSsoEmail,
+          });
+          resolveLaunchTarget(result, navigate);
+        } finally {
+          setLaunchingId(null);
+        }
+        return;
+      }
 
-    const launchKey = `${application.id}-${Date.now()}`;
-    setLaunch({
-      key: launchKey,
-      application,
-      config: launchConfig,
-      animationCatalog: appPublicSettings?.launch_animations,
-      ready: false,
-    });
+      setLaunchingId(application.id);
+      pendingTargetRef.current = null;
 
-    let launchError = null;
-    let launchTarget = null;
-
-    const launchPromise = openApplicationTarget(db, application, {
-      navigate,
-      deferNavigation: true,
-    })
-      .then((result) => {
-        launchTarget = result;
-      })
-      .catch((error) => {
-        launchError = error;
+      const launchKey = `${application.id}-${Date.now()}`;
+      setLaunch({
+        key: launchKey,
+        application,
+        config: launchConfig,
+        animationCatalog: appPublicSettings?.launch_animations,
+        ready: false,
       });
 
-    await Promise.all([
-      launchPromise,
-      new Promise((resolve) => window.setTimeout(resolve, durationPreset.min_ms)),
-    ]);
+      let launchError = null;
+      let launchTarget = null;
 
-    if (launchError) {
+      const launchPromise = openApplicationTarget(db, application, {
+        navigate,
+        deferNavigation: true,
+        ssoEmail: selectedSsoEmail,
+      })
+        .then((result) => {
+          launchTarget = result;
+        })
+        .catch((error) => {
+          launchError = error;
+        });
+
+      await Promise.all([
+        launchPromise,
+        new Promise((resolve) => window.setTimeout(resolve, durationPreset.min_ms)),
+      ]);
+
+      if (launchError) {
+        setLaunch(null);
+        setLaunchingId(null);
+        pendingTargetRef.current = null;
+        throw launchError;
+      }
+
+      pendingTargetRef.current = launchTarget ? { ...launchTarget, navigate } : null;
+      setLaunch((current) => (current?.key === launchKey ? { ...current, ready: true } : current));
+    } catch (error) {
       setLaunch(null);
       setLaunchingId(null);
       pendingTargetRef.current = null;
-      throw launchError;
-    }
 
-    pendingTargetRef.current = launchTarget ? { ...launchTarget, navigate } : null;
-    setLaunch((current) => (current?.key === launchKey ? { ...current, ready: true } : current));
+      if (isSsoSelectionCancelled(error)) {
+        toast.info('SSO account selection cancelled.');
+        return;
+      }
+
+      toast.error(error?.message || 'Unable to launch application.');
+    }
   }, [appPublicSettings?.launch_animations, durationPreset.min_ms, launchConfig, launchingId]);
 
   const previewLaunchAnimation = useCallback((config, options = {}) => {
@@ -213,6 +266,13 @@ export function ApplicationLaunchProvider({ children }) {
         launch={launch}
         onDismiss={finishLaunch}
         durationCatalog={appPublicSettings?.launch_durations}
+      />
+      <SsoCredentialPickerDialog
+        open={Boolean(credentialPicker)}
+        application={credentialPicker?.application}
+        options={credentialPicker?.options ?? []}
+        onCancel={() => finishCredentialPicker(null)}
+        onConfirm={(email) => finishCredentialPicker(email)}
       />
     </ApplicationLaunchContext.Provider>
   );

@@ -558,10 +558,43 @@ export const db = {
 	 * Returns { launch_url, token, expires_in }.
 	 * Open launch_url in a new tab to auto-login the user.
 	 */
-	async launchSystem(systemId, { redirect_to } = {}) {
+	async launchSystem(systemId, { redirect_to, sso_email } = {}) {
+		const body = {};
+		if (redirect_to) body.redirect_to = redirect_to;
+		if (sso_email) body.sso_email = sso_email;
+
 		return request(`/applications/${systemId}/launch`, {
 			method: 'POST',
-			body: redirect_to ? { redirect_to } : undefined,
+			body: Object.keys(body).length > 0 ? body : undefined,
+		});
+	},
+
+	async getApplicationSsoCredentials(applicationId) {
+		return request(`/applications/${applicationId}/sso-credentials`);
+	},
+
+	async createApplicationSsoCredential(applicationId, payload) {
+		return request(`/applications/${applicationId}/sso-credentials`, {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	async deleteApplicationSsoCredential(applicationId, credentialId) {
+		return request(`/applications/${applicationId}/sso-credentials/${credentialId}`, {
+			method: 'DELETE',
+		});
+	},
+
+	async listAdminSsoCredentials({ status = 'pending' } = {}) {
+		const params = status ? `?status=${encodeURIComponent(status)}` : '';
+		return request(`/admin/sso-credentials${params}`);
+	},
+
+	async reviewAdminSsoCredential(credentialId, { status }) {
+		return request(`/admin/sso-credentials/${credentialId}`, {
+			method: 'PATCH',
+			body: { status },
 		});
 	},
 
@@ -641,6 +674,13 @@ export const db = {
 		return request('/users/nudge-incomplete-profiles', {
 			method: 'POST',
 			body: options,
+		});
+	},
+
+	async sendAdminNotification(payload) {
+		return request('/admin/notifications/send', {
+			method: 'POST',
+			body: payload,
 		});
 	},
 

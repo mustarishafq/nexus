@@ -35,8 +35,6 @@ export default function ProfileRecentApplicationsWidget({
 
     try {
       await launchWithAnimation(app, navigate);
-    } catch (err) {
-      alert(err.message || 'Unable to launch application.');
     } finally {
       setLaunching(null);
     }

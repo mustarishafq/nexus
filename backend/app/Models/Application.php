@@ -52,6 +52,11 @@ class Application extends Model
         return $this->hasMany(ApplicationPrivateAccessEmail::class);
     }
 
+    public function ssoCredentials(): HasMany
+    {
+        return $this->hasMany(ApplicationSsoCredential::class);
+    }
+
     /**
      * @return array<int, string>
      */
