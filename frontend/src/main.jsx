@@ -27,8 +27,19 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     }
   });
 
+  const reportDisplayMode = () => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    navigator.serviceWorker.controller?.postMessage({ type: 'CLIENT_DISPLAY_MODE', standalone });
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', reportDisplayMode);
+  window.matchMedia('(display-mode: standalone)').addEventListener('change', reportDisplayMode);
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(() => {
+      navigator.serviceWorker.ready.then(reportDisplayMode);
+    }).catch((err) => {
       console.warn('[sw] Registration failed:', err);
     });
   });
