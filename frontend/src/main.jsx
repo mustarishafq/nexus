@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
 import { showNotificationAlert } from '@/lib/notificationAlerts'
+import { initPwaInstallListeners } from '@/lib/pwa'
+
+if (typeof window !== 'undefined') {
+  initPwaInstallListeners();
+}
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

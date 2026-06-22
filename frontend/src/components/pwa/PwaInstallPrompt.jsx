@@ -1,101 +1,69 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Download, Share, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePwaInstall } from '@/hooks/usePwaInstall';
 import {
-  canShowIosInstallPrompt,
-  dismissIosInstallPrompt,
-  IOS_INSTALL_STEPS,
-  isRunningStandalone,
-  supportsNativeInstallPrompt,
+  canShowManualInstallPrompt,
+  CHROMIUM_INSTALL_STEPS,
+  dismissManualInstallPrompt,
+  getManualInstallPlatform,
+  getManualInstallSteps,
 } from '@/lib/pwa';
 
 export default function PwaInstallPrompt() {
   const isMobile = useIsMobile();
-  const deferredPromptRef = useRef(null);
+  const pwaInstall = usePwaInstall();
   const [showPrompt, setShowPrompt] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(isRunningStandalone());
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
-  const [isIosInstall, setIsIosInstall] = useState(false);
-  const [hasNativePrompt, setHasNativePrompt] = useState(false);
+  const [manualInstallPlatform, setManualInstallPlatform] = useState(null);
 
   useEffect(() => {
-    const updateInstalledState = () => {
-      const installed = isRunningStandalone();
-      setIsInstalled(installed);
-
-      if (!installed && deferredPromptRef.current) {
-        setShowPrompt(true);
-        setHasNativePrompt(true);
-      }
-    };
-
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      deferredPromptRef.current = event;
-      setHasNativePrompt(true);
-      setShowPrompt(true);
-    };
-
-    const handleAppInstalled = () => {
-      setIsInstalled(true);
-      deferredPromptRef.current = null;
-      setHasNativePrompt(false);
-      setShowPrompt(false);
-    };
-
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
 
-    updateInstalledState();
+    const manualInstallable = canShowManualInstallPrompt();
+    setManualInstallPlatform(getManualInstallPlatform());
 
-    const iosInstallable = canShowIosInstallPrompt();
-    setIsIosInstall(iosInstallable);
-
-    const timer = iosInstallable
+    const timer = manualInstallable
       ? window.setTimeout(() => setShowPrompt(true), 2500)
       : null;
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    if (pwaInstall.hasNativePrompt && !pwaInstall.installed) {
+      setShowPrompt(true);
+    }
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    window.addEventListener('focus', updateInstalledState);
-    document.addEventListener('visibilitychange', updateInstalledState);
 
     return () => {
       if (timer) window.clearTimeout(timer);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('focus', updateInstalledState);
-      document.removeEventListener('visibilitychange', updateInstalledState);
     };
-  }, []);
+  }, [pwaInstall.hasNativePrompt, pwaInstall.installed]);
 
   const dismissPrompt = () => {
-    if (isIosInstall) {
-      dismissIosInstallPrompt();
+    if (pwaInstall.manualInstall) {
+      dismissManualInstallPrompt();
     }
     setShowPrompt(false);
   };
 
   const install = async () => {
-    if (!deferredPromptRef.current) return;
-
-    deferredPromptRef.current.prompt();
-    await deferredPromptRef.current.userChoice;
-    deferredPromptRef.current = null;
-    setHasNativePrompt(false);
-    setShowPrompt(false);
+    const choice = await pwaInstall.install();
+    if (choice?.outcome !== 'unavailable') {
+      setShowPrompt(false);
+    }
   };
 
-  const showNativeInstall = showPrompt && !isInstalled && hasNativePrompt && supportsNativeInstallPrompt();
-  const showIosInstall = showPrompt && !isInstalled && isIosInstall;
-  const shouldShow = showNativeInstall || showIosInstall || isOffline;
+  const showNativeInstall = showPrompt && !pwaInstall.installed && pwaInstall.hasNativePrompt;
+  const showManualInstall = showPrompt && !pwaInstall.installed && pwaInstall.manualInstall;
+  const showChromiumFallback = showPrompt && !pwaInstall.installed && pwaInstall.chromiumFallback;
+  const shouldShow = showNativeInstall || showManualInstall || showChromiumFallback || isOffline;
+  const manualInstallSteps = getManualInstallSteps();
 
   return (
     <AnimatePresence>
@@ -115,7 +83,7 @@ export default function PwaInstallPrompt() {
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 {isOffline ? (
                   <WifiOff className="w-5 h-5 text-primary" />
-                ) : isIosInstall ? (
+                ) : showManualInstall ? (
                   <Share className="w-5 h-5 text-primary" />
                 ) : (
                   <Download className="w-5 h-5 text-primary" />
@@ -123,14 +91,22 @@ export default function PwaInstallPrompt() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">
-                  {isOffline ? 'You are offline' : isIosInstall ? 'Add to Home Screen' : 'Install the app'}
+                  {isOffline ? 'You are offline' : showManualInstall
+                    ? (manualInstallPlatform === 'macos-safari' ? 'Add to Dock' : 'Add to Home Screen')
+                    : showChromiumFallback
+                      ? 'Install from Chrome'
+                      : 'Install the app'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isOffline
                     ? 'Cached pages stay available while you reconnect.'
-                    : isIosInstall
-                      ? 'Install Nexus on your iPhone or iPad for a faster, app-like experience.'
-                      : 'Add Nexus to your device for a faster, app-like experience.'}
+                    : showManualInstall
+                      ? (manualInstallPlatform === 'macos-safari'
+                        ? 'Install Nexus on your Mac for a faster, app-like experience.'
+                        : 'Install Nexus on your iPhone or iPad for a faster, app-like experience.')
+                      : showChromiumFallback
+                        ? 'Use the install icon in Chrome\'s address bar to add Nexus.'
+                        : 'Add Nexus to your device for a faster, app-like experience.'}
                 </p>
               </div>
               {!isOffline && (
@@ -145,9 +121,17 @@ export default function PwaInstallPrompt() {
               )}
             </div>
 
-            {showIosInstall && (
+            {showManualInstall && (
               <ol className="space-y-2 pl-4 text-xs text-muted-foreground list-decimal">
-                {IOS_INSTALL_STEPS.map((step) => (
+                {manualInstallSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+
+            {showChromiumFallback && (
+              <ol className="space-y-2 pl-4 text-xs text-muted-foreground list-decimal">
+                {CHROMIUM_INSTALL_STEPS.map((step) => (
                   <li key={step}>{step}</li>
                 ))}
               </ol>
@@ -155,7 +139,7 @@ export default function PwaInstallPrompt() {
 
             {!isOffline && (
               <div className="flex gap-2 justify-end">
-                {showIosInstall ? (
+                {showManualInstall || showChromiumFallback ? (
                   <Button size="sm" onClick={dismissPrompt}>
                     Got it
                   </Button>

@@ -13,14 +13,13 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
 import { useWebPush } from '@/hooks/useWebPush';
+import { usePwaInstall } from '@/hooks/usePwaInstall';
 import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
 import { playNotificationSound, unlockNotificationAudio } from '@/lib/notificationSound';
 import {
-  canShowIosInstallPrompt,
-  IOS_INSTALL_STEPS,
-  isIosDevice,
-  isRunningStandalone,
-  supportsNativeInstallPrompt,
+  CHROMIUM_INSTALL_STEPS,
+  getInstallStatusMessage,
+  getManualInstallSteps,
 } from '@/lib/pwa';
 import AdminSettings from '@/pages/AdminSettings';
 import SettingsSectionNav from '@/components/settings/SettingsSectionNav';
@@ -44,13 +43,8 @@ export default function Settings() {
   });
   const [activeTab, setActiveTab] = useState('user');
   const { pushState, subscribe, unsubscribe } = useWebPush(appPublicSettings?.web_push_public_key);
-  const [installState, setInstallState] = useState({
-    available: false,
-    installed: isRunningStandalone(),
-    iosInstall: canShowIosInstallPrompt(),
-    loading: false,
-  });
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const pwaInstall = usePwaInstall();
+  const [installLoading, setInstallLoading] = useState(false);
 
   useEffect(() => {
     db.auth.me().then((u) => {
@@ -86,54 +80,29 @@ export default function Settings() {
     });
   };
 
-  useEffect(() => {
-    const updateInstallState = () => {
-      const installed = isRunningStandalone();
+  const installApp = async () => {
+    if (pwaInstall.manualInstall || pwaInstall.chromiumFallback) {
+      return;
+    }
 
-      setInstallState((current) => ({
-        ...current,
-        installed,
-        iosInstall: isIosDevice() && !installed,
-      }));
+    if (!pwaInstall.hasNativePrompt) {
+      toast.info('Install prompt is not available yet on this browser session.');
+      return;
+    }
 
-      if (installed) {
-        setDeferredInstallPrompt(null);
+    setInstallLoading(true);
+
+    try {
+      const choice = await pwaInstall.install();
+      if (choice?.outcome === 'unavailable') {
+        toast.info('Install prompt is not available yet on this browser session.');
       }
-    };
-
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      setDeferredInstallPrompt(event);
-      setInstallState((current) => ({
-        ...current,
-        available: true,
-      }));
-    };
-
-    const handleAppInstalled = () => {
-      setDeferredInstallPrompt(null);
-      setInstallState((current) => ({
-        ...current,
-        available: false,
-        installed: true,
-        loading: false,
-      }));
-    };
-
-    updateInstallState();
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-    window.addEventListener('focus', updateInstallState);
-    document.addEventListener('visibilitychange', updateInstallState);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-      window.removeEventListener('focus', updateInstallState);
-      document.removeEventListener('visibilitychange', updateInstallState);
-    };
-  }, []);
+    } catch {
+      toast.error('Unable to open install prompt right now.');
+    } finally {
+      setInstallLoading(false);
+    }
+  };
 
   const subscribeToPush = async () => {
     const result = await subscribe();
@@ -157,35 +126,6 @@ export default function Settings() {
     await db.auth.updateMe({ notification_settings: settings });
     syncNotificationSettingsCache(settings);
     toast.success('Settings saved');
-  };
-
-  const installApp = async () => {
-    if (installState.iosInstall) {
-      return;
-    }
-
-    if (!deferredInstallPrompt) {
-      toast.info('Install prompt is not available yet on this browser session.');
-      return;
-    }
-
-    setInstallState((current) => ({ ...current, loading: true }));
-
-    try {
-      deferredInstallPrompt.prompt();
-      const choice = await deferredInstallPrompt.userChoice;
-
-      setDeferredInstallPrompt(null);
-      setInstallState((current) => ({
-        ...current,
-        loading: false,
-        available: false,
-        installed: choice?.outcome === 'accepted' ? true : current.installed,
-      }));
-    } catch {
-      setInstallState((current) => ({ ...current, loading: false }));
-      toast.error('Unable to open install prompt right now.');
-    }
   };
 
   const handleTabChange = (value) => {
@@ -416,33 +356,33 @@ export default function Settings() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="text-sm text-muted-foreground">
-                      {installState.installed
-                        ? 'Nexus is already installed on this device.'
-                        : installState.iosInstall
-                          ? 'On iPhone and iPad, install Nexus from Safari using Add to Home Screen.'
-                          : installState.available
-                            ? 'The browser install prompt is ready.'
-                            : supportsNativeInstallPrompt()
-                              ? 'Install prompt is currently unavailable. Keep browsing for a moment and try again.'
-                              : 'Use your browser menu to install this app on your device.'}
+                      {getInstallStatusMessage(pwaInstall)}
                     </div>
 
-                    {installState.iosInstall && !installState.installed ? (
+                    {pwaInstall.manualInstall && !pwaInstall.installed ? (
                       <ol className="space-y-2 pl-4 text-sm text-muted-foreground list-decimal">
-                        {IOS_INSTALL_STEPS.map((step) => (
+                        {getManualInstallSteps().map((step) => (
                           <li key={step}>{step}</li>
                         ))}
                       </ol>
                     ) : null}
 
-                    {!installState.iosInstall ? (
+                    {pwaInstall.chromiumFallback && !pwaInstall.installed ? (
+                      <ol className="space-y-2 pl-4 text-sm text-muted-foreground list-decimal">
+                        {CHROMIUM_INSTALL_STEPS.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    ) : null}
+
+                    {!pwaInstall.manualInstall && !pwaInstall.chromiumFallback && !pwaInstall.installed ? (
                       <Button
                         type="button"
                         onClick={installApp}
-                        disabled={!installState.available || installState.installed || installState.loading}
+                        disabled={!pwaInstall.hasNativePrompt || pwaInstall.installed || installLoading}
                       >
-                        {installState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                        {installState.installed ? 'Installed' : 'Install App'}
+                        {installLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                        {pwaInstall.installed ? 'Installed' : 'Install App'}
                       </Button>
                     ) : null}
                   </CardContent>
