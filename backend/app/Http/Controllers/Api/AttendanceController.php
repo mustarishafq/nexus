@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
-    public function watermarkLogo(Request $request): BinaryFileResponse|JsonResponse
+    public function watermarkLogo(Request $request): BinaryFileResponse|StreamedResponse|JsonResponse
     {
         // Public branding asset — the path is already exposed in app settings.
         $validated = $request->validate([
@@ -41,9 +41,10 @@ class AttendanceController extends Controller
             return response()->json(['message' => 'Logo not found.'], 404);
         }
 
+        $fullPath = Storage::disk('public')->path($relative);
         $mime = Storage::disk('public')->mimeType($relative) ?: 'image/png';
 
-        return Storage::disk('public')->response($relative, null, [
+        return response()->file($fullPath, [
             'Content-Type' => $mime,
             'Cache-Control' => 'private, max-age=3600',
         ]);
