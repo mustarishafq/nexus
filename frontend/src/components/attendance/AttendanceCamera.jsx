@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, RefreshCw, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   buildWatermarkLines,
@@ -14,6 +16,23 @@ import {
 } from '@/lib/watermarkConfig';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
+const MIRROR_STORAGE_KEY = 'attendance-camera-mirror';
+
+function readMirrorPreference() {
+  try {
+    return localStorage.getItem(MIRROR_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function persistMirrorPreference(mirror) {
+  try {
+    localStorage.setItem(MIRROR_STORAGE_KEY, String(mirror));
+  } catch {
+    // Ignore storage errors (private browsing, etc.).
+  }
+}
 
 function waitForVideoReady(video, timeoutMs = CAMERA_START_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
@@ -110,9 +129,12 @@ export default function AttendanceCamera({
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [facingMode, setFacingMode] = useState('user');
+  const [mirrorPreview, setMirrorPreview] = useState(readMirrorPreference);
   const [previewUrl, setPreviewUrl] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [locationTick, setLocationTick] = useState(0);
+  const mirrorRef = useRef(mirrorPreview);
+  mirrorRef.current = mirrorPreview;
 
   const config = useMemo(
     () => normalizeAttendanceWatermarkConfig(watermarkConfig),
@@ -171,6 +193,7 @@ export default function AttendanceCamera({
       buildContext(),
       displayAspectRef.current,
       logoImageRef.current,
+      mirrorRef.current,
     );
     frameRef.current = requestAnimationFrame(drawLiveFrame);
   }, [buildContext]);
@@ -314,6 +337,7 @@ export default function AttendanceCamera({
         context,
         displayAspectRef.current,
         logoImageRef.current,
+        mirrorRef.current,
       );
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
@@ -346,6 +370,11 @@ export default function AttendanceCamera({
 
   const toggleCamera = () => {
     setFacingMode((current) => (current === 'user' ? 'environment' : 'user'));
+  };
+
+  const handleMirrorChange = (checked) => {
+    setMirrorPreview(checked);
+    persistMirrorPreference(checked);
   };
 
   const watermarkLines = useMemo(
@@ -383,6 +412,25 @@ export default function AttendanceCamera({
           </div>
         ) : null}
       </div>
+
+      {status !== 'preview' ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
+          <div className="min-w-0">
+            <Label htmlFor="attendance-camera-mirror" className="text-sm font-medium">
+              Mirror preview
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Flip the camera like a selfie mirror. Your choice is remembered on this device.
+            </p>
+          </div>
+          <Switch
+            id="attendance-camera-mirror"
+            checked={mirrorPreview}
+            onCheckedChange={handleMirrorChange}
+            disabled={disabled || capturing || status !== 'live'}
+          />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {status === 'preview' ? (

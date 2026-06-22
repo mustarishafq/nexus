@@ -603,6 +603,7 @@ export function drawVideoFrameWithWatermark(
   context = {},
   displayAspect = null,
   logoImage = null,
+  mirror = false,
 ) {
   const sourceWidth = video.videoWidth || 640;
   const sourceHeight = video.videoHeight || 480;
@@ -611,6 +612,12 @@ export function drawVideoFrameWithWatermark(
 
   canvas.width = Math.max(1, Math.round(crop.width));
   canvas.height = Math.max(1, Math.round(crop.height));
+
+  if (mirror) {
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+  }
 
   ctx.drawImage(
     video,
@@ -624,13 +631,24 @@ export function drawVideoFrameWithWatermark(
     canvas.height,
   );
 
+  if (mirror) {
+    ctx.restore();
+  }
+
   drawWatermarkOnCanvas(ctx, canvas, config, context, logoImage);
 }
 
-export async function captureCanvasWithWatermark(video, config, context = {}, displayAspect = null, logoImage = null) {
+export async function captureCanvasWithWatermark(
+  video,
+  config,
+  context = {},
+  displayAspect = null,
+  logoImage = null,
+  mirror = false,
+) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  drawVideoFrameWithWatermark(ctx, canvas, video, config, context, displayAspect, logoImage);
+  drawVideoFrameWithWatermark(ctx, canvas, video, config, context, displayAspect, logoImage, mirror);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
