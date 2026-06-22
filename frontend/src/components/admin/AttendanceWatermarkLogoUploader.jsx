@@ -59,9 +59,9 @@ export default function AttendanceWatermarkLogoUploader({ value, onChange, onCle
           <div className="flex h-28 items-center justify-center bg-slate-900/80 p-4">
             <img src={previewUrl} alt="Watermark logo preview" className="max-h-full max-w-full object-contain" />
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
-            <p className="max-w-[70%] truncate text-xs text-muted-foreground">{value}</p>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 break-all text-xs text-muted-foreground">{value}</p>
+            <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-auto">
               <Button
                 type="button"
                 variant="outline"

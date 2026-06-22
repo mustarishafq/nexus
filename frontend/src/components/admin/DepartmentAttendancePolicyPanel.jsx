@@ -16,6 +16,7 @@ import {
   normalizeDepartmentAttendanceSettings,
   WEEKDAYS,
 } from '@/lib/attendancePolicy';
+import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
 import { toast } from 'sonner';
 
 function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
@@ -83,12 +84,13 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-        <div>
+      <div className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <Label>Crosses midnight</Label>
           <p className="text-xs text-muted-foreground">Enable for night shifts that end the next day.</p>
         </div>
         <Switch
+          className="shrink-0 self-end sm:self-auto"
           checked={Boolean(shift.crosses_midnight)}
           onCheckedChange={(checked) => onChange(index, { ...shift, crosses_midnight: checked })}
         />
@@ -190,8 +192,8 @@ export default function DepartmentAttendancePolicyPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <div className="space-y-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1 space-y-2">
           <Label>Department</Label>
           <Select value={departmentId} onValueChange={setDepartmentId}>
             <SelectTrigger>
@@ -215,23 +217,22 @@ export default function DepartmentAttendancePolicyPanel() {
           type="button"
           onClick={() => saveMutation.mutate()}
           disabled={!departmentId || saveMutation.isPending}
-          className="gap-2"
+          className="gap-2 w-full sm:w-auto min-h-[40px] shrink-0"
         >
           {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save policy
+          Save department policy
         </Button>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border px-4 py-3">
-        <div>
-          <Label>Enable rules for this department</Label>
-          <p className="text-xs text-muted-foreground">When disabled, users in this department are not restricted.</p>
-        </div>
+      <AdminSettingsToggleRow
+        label={<Label>Enable rules for this department</Label>}
+        description="When disabled, users in this department are not restricted."
+      >
         <Switch
           checked={form.enabled}
           onCheckedChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))}
         />
-      </div>
+      </AdminSettingsToggleRow>
 
       <Card className="rounded-2xl">
         <CardHeader className="pb-3">
@@ -241,14 +242,13 @@ export default function DepartmentAttendancePolicyPanel() {
           </CardTitle>
           <CardDescription>Require users to clock in/out within a radius of the assigned site.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-            <Label>Enable geofence</Label>
+        <CardContent className="space-y-4 px-4 sm:px-6">
+          <AdminSettingsToggleRow label={<Label>Enable geofence</Label>}>
             <Switch
               checked={form.geofence_enabled}
               onCheckedChange={(checked) => setForm((current) => ({ ...current, geofence_enabled: checked }))}
             />
-          </div>
+          </AdminSettingsToggleRow>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -269,7 +269,7 @@ export default function DepartmentAttendancePolicyPanel() {
             </div>
           </div>
 
-          <Button type="button" variant="outline" onClick={useCurrentLocation} className="gap-2">
+          <Button type="button" variant="outline" onClick={useCurrentLocation} className="gap-2 w-full sm:w-auto">
             <MapPin className="h-4 w-4" />
             Use my current location
           </Button>
@@ -288,16 +288,15 @@ export default function DepartmentAttendancePolicyPanel() {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-            <div>
-              <Label>Allow outside radius</Label>
-              <p className="text-xs text-muted-foreground">Record attendance but flag it when outside the radius.</p>
-            </div>
+          <AdminSettingsToggleRow
+            label={<Label>Allow outside radius</Label>}
+            description="Record attendance but flag it when outside the radius."
+          >
             <Switch
               checked={form.allow_outside_radius}
               onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_radius: checked }))}
             />
-          </div>
+          </AdminSettingsToggleRow>
         </CardContent>
       </Card>
 
@@ -309,7 +308,7 @@ export default function DepartmentAttendancePolicyPanel() {
           </CardTitle>
           <CardDescription>Define one or more shifts per department, including night shifts.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 sm:px-6">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Timezone</Label>
@@ -334,16 +333,15 @@ export default function DepartmentAttendancePolicyPanel() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-            <div>
-              <Label>Allow outside shift hours</Label>
-              <p className="text-xs text-muted-foreground">Flag attendance recorded outside scheduled shifts.</p>
-            </div>
+          <AdminSettingsToggleRow
+            label={<Label>Allow outside shift hours</Label>}
+            description="Flag attendance recorded outside scheduled shifts."
+          >
             <Switch
               checked={form.allow_outside_shift_hours}
               onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_shift_hours: checked }))}
             />
-          </div>
+          </AdminSettingsToggleRow>
 
           <div className="space-y-3">
             {form.shifts.map((shift, index) => (
@@ -358,7 +356,7 @@ export default function DepartmentAttendancePolicyPanel() {
             ))}
           </div>
 
-          <Button type="button" variant="outline" onClick={addShift} className="gap-2">
+          <Button type="button" variant="outline" onClick={addShift} className="gap-2 w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Add shift
           </Button>
@@ -370,14 +368,13 @@ export default function DepartmentAttendancePolicyPanel() {
           <CardTitle className="text-base">Overtime</CardTitle>
           <CardDescription>Calculate overtime when users clock out after their standard day.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-            <Label>Track overtime</Label>
+        <CardContent className="space-y-4 px-4 sm:px-6">
+          <AdminSettingsToggleRow label={<Label>Track overtime</Label>}>
             <Switch
               checked={form.overtime_enabled}
               onCheckedChange={(checked) => setForm((current) => ({ ...current, overtime_enabled: checked }))}
             />
-          </div>
+          </AdminSettingsToggleRow>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">

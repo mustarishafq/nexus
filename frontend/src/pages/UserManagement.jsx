@@ -1208,8 +1208,8 @@ export default function UserManagement() {
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Shield className="w-6 h-6 text-primary" /> User Management
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> User Management
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Manage users, access groups, and analytics dashboards.</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -1248,52 +1248,52 @@ export default function UserManagement() {
             ) : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileSelect} />
           <input ref={hrOnboardingCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleHrOnboardingFileSelect} />
           <input ref={assignGroupsCsvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleAssignGroupsFileSelect} />
+          <Button size="sm" className="gap-1.5 w-full sm:w-auto min-h-[40px]" onClick={() => setCreateOpen(true)}>
+            <UserPlus className="w-4 h-4" /> Create User
+          </Button>
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="gap-1.5 w-full sm:w-auto min-h-[40px]"
             disabled={bulkNudging || stats.incompleteProfiles === 0}
             onClick={handleBulkProfileNudge}
           >
-            <BellRing className="w-4 h-4" />
-            {bulkNudging ? 'Sending reminders...' : 'Nudge incomplete'}
+            <BellRing className="w-4 h-4 shrink-0" />
+            <span className="truncate">{bulkNudging ? 'Sending…' : 'Nudge incomplete'}</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="gap-1.5 w-full sm:w-auto min-h-[40px]"
             disabled={importBusy}
             onClick={() => setImportDialogOpen(true)}
           >
-            <Upload className="w-4 h-4" />
-            {importBusy ? 'Importing...' : 'Import'}
-          </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-            <UserPlus className="w-4 h-4" /> Create User
+            <Upload className="w-4 h-4 shrink-0" />
+            {importBusy ? 'Importing…' : 'Import'}
           </Button>
         </div>
       </motion.div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
-        <TabsList className="h-10 w-full sm:w-auto">
-          <TabsTrigger value="users" className="gap-2 flex-1 sm:flex-none">
-            <UsersIcon className="w-4 h-4" />
-            Users
-            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{stats.total}</Badge>
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:inline-flex sm:h-10 sm:w-auto">
+          <TabsTrigger value="users" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+            <UsersIcon className="w-4 h-4 shrink-0" />
+            <span className="truncate">Users</span>
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{stats.total}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="groups" className="gap-2 flex-1 sm:flex-none">
-            <Layers className="w-4 h-4" />
-            Access Groups
-            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{accessGroups.length}</Badge>
+          <TabsTrigger value="groups" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+            <Layers className="w-4 h-4 shrink-0" />
+            <span className="truncate">Groups</span>
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{accessGroups.length}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-2 flex-1 sm:flex-none">
-            <BarChart3 className="w-4 h-4" />
-            Analytics
-            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs font-normal">{metabaseDashboards.length}</Badge>
+          <TabsTrigger value="analytics" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+            <BarChart3 className="w-4 h-4 shrink-0" />
+            <span className="truncate">Analytics</span>
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{metabaseDashboards.length}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -1315,9 +1315,9 @@ export default function UserManagement() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:shrink-0">
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[130px]">
+                <SelectTrigger className="w-full sm:w-[130px]">
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1328,7 +1328,7 @@ export default function UserManagement() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full sm:w-[140px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1339,7 +1339,7 @@ export default function UserManagement() {
               </Select>
 
               <Select value={profileFilter} onValueChange={setProfileFilter}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-full col-span-2 sm:col-span-1 sm:w-[160px]">
                   <SelectValue placeholder="Profile" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1350,8 +1350,8 @@ export default function UserManagement() {
               </Select>
 
               {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all') ? (
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  Clear
+                <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1 w-full sm:w-auto" onClick={clearFilters}>
+                  Clear filters
                 </Button>
               ) : null}
               </div>
@@ -1469,17 +1469,19 @@ export default function UserManagement() {
           )}
 
           {filteredUsers.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
+            <div className="flex flex-col gap-3 border-t border-border px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
                 Showing {Math.min((currentPage - 1) * pageSize + 1, filteredUsers.length)}-{Math.min(currentPage * pageSize, filteredUsers.length)} of {filteredUsers.length}
               </p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              <div className="flex items-center justify-center gap-2">
+                <Button variant="outline" size="sm" className="min-h-[40px] flex-1 sm:flex-none" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                  <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Previous</span>
                 </Button>
-                <span className="text-sm text-muted-foreground px-2">Page {currentPage} of {totalPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                <span className="text-xs sm:text-sm text-muted-foreground px-1 tabular-nums whitespace-nowrap">{currentPage}/{totalPages}</span>
+                <Button variant="outline" size="sm" className="min-h-[40px] flex-1 sm:flex-none" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-4 h-4 sm:ml-1" />
                 </Button>
               </div>
             </div>
@@ -1504,7 +1506,7 @@ export default function UserManagement() {
                 <CardDescription className="text-sm">
                   Control which apps each group can access, then assign users to groups.
                 </CardDescription>
-                <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openGroupDialog()}>
+                <Button size="sm" className="gap-1.5 shrink-0 w-full sm:w-auto min-h-[40px]" onClick={() => openGroupDialog()}>
                   <Plus className="w-4 h-4" /> Create Group
                 </Button>
               </div>
@@ -1519,7 +1521,46 @@ export default function UserManagement() {
                   No access groups yet. Create one to manage application access in bulk.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="md:hidden divide-y divide-border">
+                    {accessGroups.map((group) => {
+                      const appCount = (group.allowed_system_slugs || []).length;
+                      const memberCount = group.users_count ?? group.user_count ?? getUsersInGroup(group.id).length;
+
+                      return (
+                        <div key={group.id} className="px-4 py-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium leading-tight">{group.name}</p>
+                              {group.description ? (
+                                <p className="text-xs text-muted-foreground mt-1">{group.description}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex shrink-0 gap-1">
+                              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openGroupDialog(group)}>
+                                <Edit className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-destructive"
+                                onClick={() => setPendingDeleteGroup(group)}
+                                disabled={deleteGroupMut.isPending && String(pendingDeleteGroup?.id) === String(group.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span>{appCount} app{appCount === 1 ? '' : 's'}</span>
+                            <span>{memberCount} user{memberCount === 1 ? '' : 's'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-muted/40">
                       <TableRow>
@@ -1571,7 +1612,8 @@ export default function UserManagement() {
                       })}
                     </TableBody>
                   </Table>
-                </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -1584,7 +1626,7 @@ export default function UserManagement() {
                 <CardDescription className="text-sm">
                   Metabase dashboards shown on each user&apos;s Analytics page.
                 </CardDescription>
-                <Button size="sm" className="gap-1.5 shrink-0" onClick={() => openDashboardDialog()}>
+                <Button size="sm" className="gap-1.5 shrink-0 w-full sm:w-auto min-h-[40px]" onClick={() => openDashboardDialog()}>
                   <Plus className="w-4 h-4" /> Add Dashboard
                 </Button>
               </div>
@@ -1599,7 +1641,74 @@ export default function UserManagement() {
                   No dashboards yet. Add a public Metabase link and assign who can see it.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="md:hidden divide-y divide-border">
+                    {metabaseDashboards.map((dashboard) => {
+                      const groupNames = getDashboardGroupNames(dashboard);
+                      const userNames = getDashboardUserNames(dashboard);
+                      const assignmentLabel = getDashboardAssignmentLabel(dashboard);
+
+                      let assignmentDetail = assignmentLabel;
+                      if (dashboard.owner_user_id) {
+                        assignmentDetail = assignmentLabel;
+                      } else if (dashboard.assignment_type === 'individual') {
+                        assignmentDetail = userNames.length > 0
+                          ? `${userNames.length} user${userNames.length === 1 ? '' : 's'}`
+                          : 'No users';
+                      } else {
+                        assignmentDetail = groupNames.length > 0
+                          ? groupNames.join(', ')
+                          : 'No groups';
+                      }
+
+                      return (
+                        <div key={dashboard.id} className="px-4 py-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="font-medium leading-tight truncate">{dashboard.name}</p>
+                                <a
+                                  href={dashboard.public_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="shrink-0 text-muted-foreground hover:text-primary"
+                                  title="Open dashboard"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                              {dashboard.category?.trim() ? (
+                                <p className="text-xs text-muted-foreground mt-1">{dashboard.category.trim()}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex shrink-0 gap-1">
+                              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openDashboardDialog(dashboard)}>
+                                <Edit className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-destructive"
+                                onClick={() => setPendingDeleteDashboard(dashboard)}
+                                disabled={deleteDashboardMut.isPending && String(pendingDeleteDashboard?.id) === String(dashboard.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={dashboard.is_enabled ? 'default' : 'outline'} className="text-xs">
+                              {dashboard.is_enabled ? 'Enabled' : 'Disabled'}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">{assignmentLabel}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2" title={assignmentDetail}>{assignmentDetail}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-muted/40">
                       <TableRow>
@@ -1677,7 +1786,8 @@ export default function UserManagement() {
                       })}
                     </TableBody>
                   </Table>
-                </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -1685,7 +1795,7 @@ export default function UserManagement() {
       </Tabs>
 
       <Dialog open={groupDialogOpen} onOpenChange={(open) => !open && closeGroupDialog()}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 sm:w-full">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle>{editGroup ? `Edit Group - ${editGroup.name}` : 'Create Access Group'}</DialogTitle>
           </DialogHeader>
@@ -1770,9 +1880,9 @@ export default function UserManagement() {
                 <p className="text-xs text-muted-foreground">Users can belong to multiple groups. Access is combined from all assigned groups.</p>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeGroupDialog}>Cancel</Button>
-              <Button type="submit" disabled={groupSaving}>
+            <div className="px-4 sm:px-6 py-4 border-t border-border/70 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={closeGroupDialog}>Cancel</Button>
+              <Button type="submit" className="w-full sm:w-auto" disabled={groupSaving}>
                 {groupSaving ? 'Saving...' : editGroup ? 'Save Group' : 'Create Group'}
               </Button>
             </div>
@@ -1781,7 +1891,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 sm:w-full">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle className="text-left pr-6">Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
           </DialogHeader>

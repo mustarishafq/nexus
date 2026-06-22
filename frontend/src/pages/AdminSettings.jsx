@@ -125,7 +125,7 @@ export default function AdminSettings({ embedded = false }) {
   }
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full max-w-full space-y-4 overflow-x-hidden">
       {!embedded ? (
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -142,15 +142,21 @@ export default function AdminSettings({ embedded = false }) {
           <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
           <SettingsSectionNav
             items={ADMIN_SECTIONS}
             value={activeSection}
             onChange={setActiveSection}
-            className="lg:w-52 shrink-0"
+            className="md:w-48 lg:w-52 shrink-0"
           />
 
-          <div className="min-w-0 flex-1 space-y-4">
+          <div
+            className={`min-w-0 flex-1 space-y-4 overflow-x-hidden md:pb-4 ${
+              activeSection === 'attendance'
+                ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
+                : 'pb-[calc(10rem+env(safe-area-inset-bottom))]'
+            }`}
+          >
             {activeSection === 'branding' ? (
               <Card className="rounded-2xl">
                 <CardHeader className="pb-3">
@@ -170,24 +176,24 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection === 'splash' ? (
-              <Card className="overflow-visible rounded-2xl">
-                <CardHeader className="pb-3">
+              <Card className="overflow-hidden rounded-2xl">
+                <CardHeader className="pb-3 px-4 sm:px-6">
                   <CardTitle className="text-base">Splash screen</CardTitle>
                   <CardDescription>PWA splash animation, colors, timing, and media.</CardDescription>
                 </CardHeader>
-                <CardContent className="overflow-visible">
+                <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
                   <SplashSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
             ) : null}
 
             {activeSection === 'launch' ? (
-              <Card className="overflow-visible rounded-2xl">
-                <CardHeader className="pb-3">
+              <Card className="overflow-hidden rounded-2xl">
+                <CardHeader className="pb-3 px-4 sm:px-6">
                   <CardTitle className="text-base">Application launch</CardTitle>
                   <CardDescription>Launch animation, layout, progress, and timing.</CardDescription>
                 </CardHeader>
-                <CardContent className="overflow-visible">
+                <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
                   <LaunchSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
@@ -195,23 +201,28 @@ export default function AdminSettings({ embedded = false }) {
 
             {activeSection === 'attendance' ? (
               <>
-                <Card className="overflow-visible rounded-2xl">
-                  <CardHeader className="pb-3">
+                <Card className="overflow-hidden rounded-2xl">
+                  <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Attendance watermark</CardTitle>
                     <CardDescription>Clock in/out camera watermark fields, styling, and live preview.</CardDescription>
                   </CardHeader>
-                  <CardContent className="overflow-visible">
+                  <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
                     <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
+                    <div className="mt-6 flex justify-end border-t pt-4">
+                      <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
+                        <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save watermark settings'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
-                <Card className="overflow-visible rounded-2xl">
-                  <CardHeader className="pb-3">
+                <Card className="overflow-hidden rounded-2xl">
+                  <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Department attendance rules</CardTitle>
                     <CardDescription>
                       Set geofence radius, working hours, shifts, and overtime rules per department.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="overflow-visible">
+                  <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
                     <DepartmentAttendancePolicyPanel />
                   </CardContent>
                 </Card>
@@ -299,11 +310,13 @@ export default function AdminSettings({ embedded = false }) {
               </Card>
             ) : null}
 
-            <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:bottom-4">
-              <Button onClick={save} disabled={saving} className="gap-2">
-                <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save admin settings'}
-              </Button>
-            </div>
+            {activeSection !== 'attendance' ? (
+              <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 -mx-1 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 md:bottom-4 md:z-20">
+                <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
+                  <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save admin settings'}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

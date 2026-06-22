@@ -9,7 +9,12 @@ export default function SettingsSectionNav({
 }) {
   return (
     <>
-      <div className={cn('flex gap-1 overflow-x-auto pb-1 lg:hidden', className)}>
+      <div
+        className={cn(
+          'flex gap-1.5 overflow-x-auto pb-1 md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          className,
+        )}
+      >
         {items.map((item) => {
           const Icon = item.icon;
           const active = value === item.id;
@@ -20,21 +25,21 @@ export default function SettingsSectionNav({
               type="button"
               onClick={() => onChange(item.id)}
               className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition-colors min-h-[36px]',
                 active
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground',
               )}
             >
-              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+              {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
               {item.label}
             </button>
           );
         })}
       </div>
 
-      <nav className={cn('hidden lg:block', className)}>
-        <div className="sticky top-24 space-y-1 rounded-2xl border bg-card p-2">
+      <nav className={cn('hidden md:block', className)}>
+        <div className="sticky top-[calc(4rem+0.5rem)] space-y-1 rounded-2xl border bg-card p-2 lg:top-24">
           {items.map((item) => {
             const Icon = item.icon;
             const active = value === item.id;
@@ -45,7 +50,7 @@ export default function SettingsSectionNav({
                 type="button"
                 onClick={() => onChange(item.id)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
+                  'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors min-h-[44px]',
                   active
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',

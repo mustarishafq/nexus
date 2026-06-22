@@ -3,6 +3,7 @@ import { RotateCcw } from 'lucide-react';
 
 import SplashAnimationPicker from '@/components/admin/SplashAnimationPicker';
 import SplashMediaUploader from '@/components/admin/SplashMediaUploader';
+import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,18 +24,18 @@ function ColorField({ id, label, value, onChange }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
           id={id}
           type="color"
           value={value}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="h-10 w-14 cursor-pointer rounded-lg border p-1"
+          className="h-10 w-14 shrink-0 cursor-pointer rounded-lg border p-1"
         />
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="font-mono uppercase"
+          className="min-w-0 font-mono uppercase"
           placeholder="#022E96"
         />
       </div>
@@ -45,12 +46,12 @@ function ColorField({ id, label, value, onChange }) {
 function SliderField({ id, label, hint, value, min, max, step = 1, formatValue, onChange }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <Label htmlFor={id}>{label}</Label>
           {hint ? <p className="text-xs text-muted-foreground mt-0.5">{hint}</p> : null}
         </div>
-        <span className="text-sm font-medium tabular-nums">{formatValue(value)}</span>
+        <span className="shrink-0 text-sm font-medium tabular-nums">{formatValue(value)}</span>
       </div>
       <Slider
         id={id}
@@ -82,26 +83,23 @@ export default function SplashSettingsPanel({ settings, onChange }) {
   const patch = (updates) => onChange((current) => ({ ...current, ...updates }));
 
   return (
-    <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-hidden md:flex-row md:items-start">
       <div className="min-w-0 flex-1 space-y-6">
-      <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Enable splash screen</p>
-          <p className="text-xs text-muted-foreground">
-            Show the splash when Nexus opens as a PWA or on the first visit in a browser session.
-          </p>
-        </div>
+      <AdminSettingsToggleRow
+        label={<p className="text-sm font-medium">Enable splash screen</p>}
+        description="Show the splash when Nexus opens as a PWA or on the first visit in a browser session."
+      >
         <Switch
           checked={settings.splash_enabled}
           onCheckedChange={(splash_enabled) => patch({ splash_enabled })}
         />
-      </div>
+      </AdminSettingsToggleRow>
 
-      <div className="xl:hidden">
+      <div className="md:hidden">
         <SplashLivePreview settings={settings} splashConfig={splashConfig} runtime={runtime} />
       </div>
 
-      <div className="grid gap-4 rounded-2xl border p-4">
+      <div className="grid gap-4 rounded-2xl border p-3 sm:p-4">
         <div>
           <p className="text-sm font-medium">Custom logo / video</p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -132,6 +130,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
             value={settings.splash_logo_url || ''}
             onChange={(event) => patch({ splash_logo_url: event.target.value })}
             placeholder="/storage/splash-media/logo.png or https://cdn.example.com/intro.mp4"
+            className="min-w-0"
           />
           {settings.splash_logo_url ? (
             <p className="text-xs text-muted-foreground">
@@ -140,18 +139,17 @@ export default function SplashSettingsPanel({ settings, onChange }) {
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Show logo / media</p>
-            <p className="text-xs text-muted-foreground">Hide the center media while keeping motion effects.</p>
-          </div>
+        <AdminSettingsToggleRow
+          label={<p className="text-sm font-medium">Show logo / media</p>}
+          description="Hide the center media while keeping motion effects."
+        >
           <Switch
             checked={settings.splash_show_logo}
             onCheckedChange={(splash_show_logo) => patch({ splash_show_logo })}
           />
-        </div>
+        </AdminSettingsToggleRow>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="splash_media_fit">Media fit</Label>
             <Select value={settings.splash_media_fit} onValueChange={(splash_media_fit) => patch({ splash_media_fit })}>
@@ -190,22 +188,19 @@ export default function SplashSettingsPanel({ settings, onChange }) {
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Show system name</p>
-            <p className="text-xs text-muted-foreground">
-              Displays the system name from branding settings on the splash screen.
-            </p>
-          </div>
+      <div className="grid gap-4 rounded-2xl border p-3 sm:p-4">
+        <AdminSettingsToggleRow
+          label={<p className="text-sm font-medium">Show system name</p>}
+          description="Displays the system name from branding settings on the splash screen."
+        >
           <Switch
             checked={settings.splash_show_system_name}
             onCheckedChange={(splash_show_system_name) => patch({ splash_show_system_name })}
           />
-        </div>
+        </AdminSettingsToggleRow>
 
         {settings.splash_show_system_name ? (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="splash_system_name_animation">Title animation</Label>
               <Select
@@ -274,7 +269,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
         />
       </div>
 
-      <div className="grid gap-4 rounded-2xl border p-4 md:grid-cols-3">
+      <div className="grid gap-4 rounded-2xl border p-3 sm:p-4 sm:grid-cols-2 lg:grid-cols-3">
         <ColorField
           id="splash_background_color"
           label="Background"
@@ -295,7 +290,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
         />
       </div>
 
-      <div className="grid gap-4 rounded-2xl border p-4">
+      <div className="grid gap-4 rounded-2xl border p-3 sm:p-4">
         <div>
           <p className="text-sm font-medium">Background style</p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -303,7 +298,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="splash_background_style">Style</Label>
             <Select
@@ -356,7 +351,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
         </div>
       </div>
 
-      <div className="grid gap-5 rounded-2xl border p-4 md:grid-cols-2">
+      <div className="grid gap-5 rounded-2xl border p-3 sm:p-4 sm:grid-cols-2">
         <SliderField
           id="splash_min_duration_ms"
           label="Minimum display time"
@@ -438,15 +433,15 @@ export default function SplashSettingsPanel({ settings, onChange }) {
       <Button
         type="button"
         variant="outline"
-        className="gap-2"
+        className="gap-2 w-full sm:w-auto"
         onClick={() => patch(resetSplashFormState())}
       >
         <RotateCcw className="h-4 w-4" /> Reset splash settings to defaults
       </Button>
       </div>
 
-      <aside className="relative hidden w-full shrink-0 xl:block xl:w-[min(100%,440px)]">
-        <div className="xl:sticky xl:top-24 xl:z-10 xl:w-full xl:max-h-[calc(100vh-6rem)]">
+      <aside className="relative hidden w-full shrink-0 md:block md:w-[min(100%,320px)] lg:w-[min(100%,380px)] xl:w-[min(100%,440px)]">
+        <div className="md:sticky md:top-24 md:z-10 md:w-full md:max-h-[calc(100dvh-6rem)] md:overflow-y-auto">
           <SplashLivePreview settings={settings} splashConfig={splashConfig} runtime={runtime} />
         </div>
       </aside>

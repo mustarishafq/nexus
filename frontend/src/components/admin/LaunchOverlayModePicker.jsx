@@ -113,7 +113,7 @@ export default function LaunchOverlayModePicker({ value, onChange, catalog }) {
           No layouts in this placement group.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((option) => {
             const selected = value === option.id;
             const placementLabel = LAUNCH_OVERLAY_PLACEMENT_LABELS[option.placement] || option.placement;

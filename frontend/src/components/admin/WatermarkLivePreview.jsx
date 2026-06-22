@@ -142,7 +142,7 @@ export default function WatermarkLivePreview({ settings, className = '' }) {
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {Object.values(PREVIEW_DEVICES).map((item) => {
           const Icon = item.icon;
           return (
@@ -152,9 +152,9 @@ export default function WatermarkLivePreview({ settings, className = '' }) {
               size="sm"
               variant={device === item.id ? 'default' : 'outline'}
               onClick={() => setDevice(item.id)}
-              className="gap-2"
+              className="h-9 w-full gap-2"
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4 shrink-0" />
               {item.label}
             </Button>
           );
@@ -163,7 +163,7 @@ export default function WatermarkLivePreview({ settings, className = '' }) {
 
       <div
         ref={viewportRef}
-        className="flex min-h-[320px] items-center justify-center rounded-2xl border bg-muted/20 p-4"
+        className="flex min-h-[220px] items-center justify-center rounded-2xl border bg-muted/20 p-3 sm:min-h-[320px] sm:p-4"
       >
         <div
           className="relative overflow-hidden border bg-black shadow-2xl"

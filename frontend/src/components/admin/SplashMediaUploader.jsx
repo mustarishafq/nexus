@@ -84,9 +84,9 @@ export default function SplashMediaUploader({ value, onChange, onClear, splashCo
               />
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
-            <p className="truncate text-xs text-muted-foreground max-w-[70%]">{value}</p>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 break-all text-xs text-muted-foreground">{value}</p>
+            <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-auto">
               <Button
                 type="button"
                 variant="outline"

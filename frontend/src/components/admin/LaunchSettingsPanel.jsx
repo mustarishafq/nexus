@@ -17,7 +17,7 @@ import {
   normalizeLaunchConfig,
 } from '@/lib/launchConfig';
 
-function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 xl:grid-cols-3' }) {
+function OptionGrid({ options, value, onChange, columns = 'sm:grid-cols-2 lg:grid-cols-3' }) {
   return (
     <div className={cn('grid grid-cols-1 gap-3', columns)}>
       {options.map((option) => {
@@ -60,25 +60,25 @@ export default function LaunchSettingsPanel({ settings, onChange }) {
   }));
 
   return (
-    <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-hidden md:flex-row md:items-start">
       <div className="min-w-0 flex-1 space-y-6">
-        <div className="xl:hidden">
+        <div className="md:hidden">
           <LaunchLivePreview settings={settings} launchConfig={launchConfig} />
         </div>
 
         <Tabs defaultValue="animation" className="space-y-4">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
-            <TabsTrigger value="animation" className="gap-1.5 text-xs sm:text-sm">
-              <Sparkles className="h-3.5 w-3.5" /> Animation
+            <TabsTrigger value="animation" className="gap-1.5 min-h-[40px] px-2 text-xs sm:min-h-0 sm:px-3 sm:text-sm">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" /> Animation
             </TabsTrigger>
-            <TabsTrigger value="layout" className="gap-1.5 text-xs sm:text-sm">
-              <Layout className="h-3.5 w-3.5" /> Layout
+            <TabsTrigger value="layout" className="gap-1.5 min-h-[40px] px-2 text-xs sm:min-h-0 sm:px-3 sm:text-sm">
+              <Layout className="h-3.5 w-3.5 shrink-0" /> Layout
             </TabsTrigger>
-            <TabsTrigger value="progress" className="gap-1.5 text-xs sm:text-sm">
-              <Gauge className="h-3.5 w-3.5" /> Progress
+            <TabsTrigger value="progress" className="gap-1.5 min-h-[40px] px-2 text-xs sm:min-h-0 sm:px-3 sm:text-sm">
+              <Gauge className="h-3.5 w-3.5 shrink-0" /> Progress
             </TabsTrigger>
-            <TabsTrigger value="behavior" className="gap-1.5 text-xs sm:text-sm">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Behavior
+            <TabsTrigger value="behavior" className="gap-1.5 min-h-[40px] px-2 text-xs sm:min-h-0 sm:px-3 sm:text-sm">
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" /> Behavior
             </TabsTrigger>
           </TabsList>
 
@@ -133,38 +133,41 @@ export default function LaunchSettingsPanel({ settings, onChange }) {
               </p>
             </div>
 
-            <div className="grid gap-3 rounded-2xl border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
+            <div className="grid gap-3 rounded-2xl border p-3 sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
                   <Label htmlFor="launch_interactive">Interactive boosts</Label>
                   <p className="text-xs text-muted-foreground">Let users tap to accelerate the launch sequence.</p>
                 </div>
                 <Switch
                   id="launch_interactive"
+                  className="shrink-0 self-end sm:self-auto"
                   checked={settings.launch_interactive}
                   onCheckedChange={(launch_interactive) => patch({ interactive: launch_interactive, launch_interactive })}
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
                   <Label htmlFor="launch_show_hint">Show hint text</Label>
                   <p className="text-xs text-muted-foreground">Display guidance below the progress indicator.</p>
                 </div>
                 <Switch
                   id="launch_show_hint"
+                  className="shrink-0 self-end sm:self-auto"
                   checked={settings.launch_show_hint}
                   onCheckedChange={(launch_show_hint) => patch({ show_hint: launch_show_hint, launch_show_hint })}
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
                   <Label htmlFor="launch_show_skip">Show skip button</Label>
                   <p className="text-xs text-muted-foreground">Allow users to skip or continue once ready.</p>
                 </div>
                 <Switch
                   id="launch_show_skip"
+                  className="shrink-0 self-end sm:self-auto"
                   checked={settings.launch_show_skip}
                   onCheckedChange={(launch_show_skip) => patch({ show_skip: launch_show_skip, launch_show_skip })}
                 />
@@ -174,8 +177,8 @@ export default function LaunchSettingsPanel({ settings, onChange }) {
         </Tabs>
       </div>
 
-      <aside className="relative hidden w-full shrink-0 xl:block xl:w-[min(100%,480px)]">
-        <div className="xl:sticky xl:top-24 xl:z-10 xl:w-full">
+      <aside className="relative hidden w-full shrink-0 md:block md:w-[min(100%,340px)] lg:w-[min(100%,400px)] xl:w-[min(100%,480px)]">
+        <div className="md:sticky md:top-24 md:z-10 md:w-full">
           <LaunchLivePreview settings={settings} launchConfig={launchConfig} />
         </div>
       </aside>

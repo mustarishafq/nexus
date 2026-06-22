@@ -100,7 +100,7 @@ export default function SplashLivePreview({ settings, splashConfig, runtime, cla
   const scaledHeight = useMemo(() => Math.round(frame.height * scale), [frame.height, scale]);
 
   return (
-    <div className={cn('overflow-visible rounded-2xl border bg-card shadow-sm', className)}>
+    <div className={cn('max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm', className)}>
       <div className="border-b bg-muted/30 px-4 py-3">
         <p className="text-sm font-medium">Live preview</p>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -108,7 +108,7 @@ export default function SplashLivePreview({ settings, splashConfig, runtime, cla
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b p-2">
+      <div className="grid grid-cols-3 gap-1 border-b p-2">
         {Object.values(SPLASH_PREVIEW_DEVICES).map((option) => {
           const Icon = option.icon;
           const active = device === option.id;
@@ -119,11 +119,11 @@ export default function SplashLivePreview({ settings, splashConfig, runtime, cla
               type="button"
               size="sm"
               variant={active ? 'default' : 'outline'}
-              className="h-8 gap-1.5 px-2.5"
+              className="h-9 w-full gap-1.5 px-2 text-xs sm:text-sm"
               onClick={() => setDevice(option.id)}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {option.label}
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{option.label}</span>
             </Button>
           );
         })}
@@ -131,8 +131,8 @@ export default function SplashLivePreview({ settings, splashConfig, runtime, cla
 
       <div
         ref={viewportRef}
-        className="flex min-h-[320px] items-center justify-center bg-muted/15 p-4"
-        style={{ maxHeight: 'min(calc(100vh - 12rem), 760px)' }}
+        className="flex min-h-[240px] min-w-0 max-w-full items-center justify-center overflow-hidden bg-muted/15 p-3 sm:min-h-[320px] sm:p-4"
+        style={{ maxHeight: 'min(calc(100dvh - 12rem), 760px)' }}
       >
         <div
           className="relative overflow-hidden bg-black shadow-2xl ring-1 ring-black/10"

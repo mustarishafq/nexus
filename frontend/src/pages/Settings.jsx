@@ -195,7 +195,7 @@ export default function Settings() {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('tab', 'admin');
-        if (!next.get('section') || !['branding', 'splash', 'launch', 'email'].includes(next.get('section'))) {
+        if (!next.get('section') || !['branding', 'splash', 'launch', 'attendance', 'email'].includes(next.get('section'))) {
           next.set('section', 'branding');
         }
         return next;
@@ -214,33 +214,33 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <SettingsIcon className="w-6 h-6 text-primary" /> Settings
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+          <SettingsIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Manage account preferences and system settings</p>
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="h-10">
-          <TabsTrigger value="user" className="gap-2">
-            <SettingsIcon className="w-4 h-4" /> Settings
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:inline-flex sm:h-10 sm:w-auto">
+          <TabsTrigger value="user" className="gap-2 min-h-[40px] sm:min-h-0">
+            <SettingsIcon className="w-4 h-4 shrink-0" /> Settings
           </TabsTrigger>
           {isAdmin ? (
-            <TabsTrigger value="admin" className="gap-2">
-              <Shield className="w-4 h-4" /> Admin Settings
+            <TabsTrigger value="admin" className="gap-2 min-h-[40px] sm:min-h-0">
+              <Shield className="w-4 h-4 shrink-0" /> Admin
             </TabsTrigger>
           ) : null}
         </TabsList>
 
-        <TabsContent value="user" className="mt-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <TabsContent value="user" className="mt-4 min-w-0 overflow-x-hidden">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
             <SettingsSectionNav
               items={USER_SECTIONS}
               value={userSection}
               onChange={setUserSection}
-              className="lg:w-52 shrink-0"
+              className="md:w-48 lg:w-52 shrink-0"
             />
 
             <div className="min-w-0 flex-1 space-y-4">
@@ -253,24 +253,24 @@ export default function Settings() {
                     <CardDescription>Choose light or dark mode for the interface.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                           <Sun className="w-4 h-4 text-primary" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <Label className="text-sm font-medium">Dark mode</Label>
                           <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
                         </div>
                       </div>
-                      <ThemeToggle variant="switch" />
+                      <ThemeToggle variant="switch" className="self-end sm:self-auto" />
                     </div>
                   </CardContent>
                 </Card>
               ) : null}
 
               {userSection === 'notifications' ? (
-                <>
+                <div className="space-y-4 pb-[calc(10rem+env(safe-area-inset-bottom))] sm:pb-0">
                   <Card className="rounded-2xl">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -279,17 +279,18 @@ export default function Settings() {
                       <CardDescription>Choose how you receive notifications.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-5">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <Bell className="w-4 h-4 text-primary" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <Label className="text-sm font-medium">In-app notifications</Label>
                             <p className="text-xs text-muted-foreground">Show notifications in the app</p>
                           </div>
                         </div>
                         <Switch
+                          className="shrink-0 self-end sm:self-auto"
                           checked={settings.in_app}
                           onCheckedChange={(v) => setSettings((p) => {
                             const next = { ...p, in_app: v };
@@ -299,17 +300,18 @@ export default function Settings() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center">
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
                             <Mail className="w-4 h-4 text-info" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <Label className="text-sm font-medium">Email notifications</Label>
                             <p className="text-xs text-muted-foreground">Receive email for important alerts</p>
                           </div>
                         </div>
                         <Switch
+                          className="shrink-0 self-end sm:self-auto"
                           checked={settings.email}
                           onCheckedChange={(v) => setSettings((p) => {
                             const next = { ...p, email: v };
@@ -319,17 +321,18 @@ export default function Settings() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
                             {settings.sound ? <Volume2 className="w-4 h-4 text-warning" /> : <VolumeX className="w-4 h-4 text-warning" />}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <Label className="text-sm font-medium">Sound alerts</Label>
                             <p className="text-xs text-muted-foreground">Play sound for new notifications</p>
                           </div>
                         </div>
                         <Switch
+                          className="shrink-0 self-end sm:self-auto"
                           checked={settings.sound}
                           onCheckedChange={(v) => {
                             setSettings((p) => {
@@ -395,10 +398,12 @@ export default function Settings() {
                     </CardContent>
                   </Card>
 
-                  <Button onClick={save} className="w-full sm:w-auto">
-                    Save notification settings
-                  </Button>
-                </>
+                  <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 -mx-1 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none sm:z-auto">
+                    <Button onClick={save} className="w-full sm:w-auto">
+                      Save notification settings
+                    </Button>
+                  </div>
+                </div>
               ) : null}
 
               {userSection === 'app' ? (
@@ -448,7 +453,7 @@ export default function Settings() {
         </TabsContent>
 
         {isAdmin ? (
-          <TabsContent value="admin" className="mt-4">
+          <TabsContent value="admin" className="mt-4 min-w-0 overflow-x-hidden">
             <AdminSettings embedded />
           </TabsContent>
         ) : null}

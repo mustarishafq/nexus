@@ -121,9 +121,9 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
   };
 
   return (
-    <div className="overflow-visible rounded-2xl border bg-card shadow-sm">
+    <div className="max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="border-b bg-muted/30 px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-2">
             <p className="text-sm font-medium">Live preview</p>
             {isInstant ? (
@@ -157,7 +157,7 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
               type="button"
               size="sm"
               variant="outline"
-              className="shrink-0 gap-1.5"
+              className="w-full shrink-0 gap-1.5 sm:w-auto"
               disabled={testing || Boolean(launchingId)}
               onClick={handleProductionTest}
             >
@@ -168,7 +168,7 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b p-2">
+      <div className="grid grid-cols-3 gap-1 border-b p-2">
         {Object.values(PREVIEW_DEVICES).map((option) => {
           const Icon = option.icon;
           const active = device === option.id;
@@ -179,11 +179,11 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
               type="button"
               size="sm"
               variant={active ? 'default' : 'outline'}
-              className="h-8 gap-1.5 px-2.5"
+              className="h-9 w-full gap-1.5 px-2 text-xs sm:text-sm"
               onClick={() => setDevice(option.id)}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {option.label}
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{option.label}</span>
             </Button>
           );
         })}
@@ -191,8 +191,8 @@ export default function LaunchLivePreview({ settings, launchConfig }) {
 
       <div
         ref={viewportRef}
-        className="flex min-h-[360px] items-center justify-center bg-muted/15 p-4"
-        style={{ maxHeight: 'min(calc(100vh - 10rem), 720px)' }}
+        className="flex min-h-[260px] items-center justify-center bg-muted/15 p-3 sm:min-h-[360px] sm:p-4"
+        style={{ maxHeight: 'min(calc(100dvh - 10rem), 720px)' }}
       >
         {isInstant ? (
           <div className="flex max-w-xs flex-col items-center gap-3 rounded-2xl border border-dashed bg-background px-6 py-10 text-center">
