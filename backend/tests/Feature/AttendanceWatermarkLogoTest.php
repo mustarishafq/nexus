@@ -32,6 +32,7 @@ class AttendanceWatermarkLogoTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('Content-Type', 'image/png');
+        $this->assertNotSame('', $response->getContent());
     }
 
     public function test_returns_not_found_when_logo_is_missing(): void

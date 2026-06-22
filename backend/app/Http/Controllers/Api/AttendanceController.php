@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
-    public function watermarkLogo(Request $request): BinaryFileResponse|JsonResponse|Response
+    public function watermarkLogo(Request $request)
     {
         try {
             $validated = $request->validate([
@@ -36,21 +36,60 @@ class AttendanceController extends Controller
             }
 
             $relative = substr($path, strlen('/storage/'));
-            $fullPath = $this->resolveWatermarkLogoPath($relative);
+            $payload = $this->loadWatermarkLogoBytes($relative);
 
-            if ($fullPath === null) {
+            if ($payload === null) {
                 return response()->json(['message' => 'Logo not found.'], 404);
             }
 
-            return response()->file($fullPath, [
-                'Content-Type' => $this->guessWatermarkLogoMimeType($fullPath),
+            return response($payload['bytes'], 200, [
+                'Content-Type' => $payload['mime'],
                 'Cache-Control' => 'private, max-age=3600',
             ]);
         } catch (\Throwable $exception) {
-            report($exception);
+            logger()->error('Unable to load attendance watermark logo.', [
+                'path' => $request->query('path'),
+                'message' => $exception->getMessage(),
+            ]);
 
             return response()->json(['message' => 'Unable to load logo.'], 500);
         }
+    }
+
+    /** @return array{bytes: string, mime: string}|null */
+    private function loadWatermarkLogoBytes(string $relative): ?array
+    {
+        $fullPath = $this->resolveWatermarkLogoPath($relative);
+
+        if ($fullPath !== null) {
+            $bytes = @file_get_contents($fullPath);
+            if (is_string($bytes) && $bytes !== '') {
+                return [
+                    'bytes' => $bytes,
+                    'mime' => $this->guessWatermarkLogoMimeType($fullPath),
+                ];
+            }
+        }
+
+        // Some production setups serve /storage via nginx while PHP cannot read the file path.
+        $publicUrl = rtrim((string) config('app.url'), '/').'/storage/'.$relative;
+
+        try {
+            $response = Http::timeout(15)->get($publicUrl);
+            if ($response->successful()) {
+                $bytes = $response->body();
+                if ($bytes !== '') {
+                    return [
+                        'bytes' => $bytes,
+                        'mime' => $response->header('Content-Type') ?: $this->guessWatermarkLogoMimeType($relative),
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to not found.
+        }
+
+        return null;
     }
 
     private function resolveWatermarkLogoPath(string $relative): ?string
@@ -74,7 +113,9 @@ class AttendanceController extends Controller
 
     private function guessWatermarkLogoMimeType(string $path): string
     {
-        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        return match ($extension) {
             'jpg', 'jpeg' => 'image/jpeg',
             'png' => 'image/png',
             'webp' => 'image/webp',
