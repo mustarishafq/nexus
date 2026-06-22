@@ -22,32 +22,66 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
-    public function watermarkLogo(Request $request): BinaryFileResponse|StreamedResponse|JsonResponse
+    public function watermarkLogo(Request $request): BinaryFileResponse|JsonResponse|Response
     {
-        // Public branding asset — the path is already exposed in app settings.
-        $validated = $request->validate([
-            'path' => ['required', 'string', 'max:2048'],
-        ]);
+        try {
+            $validated = $request->validate([
+                'path' => ['required', 'string', 'max:2048'],
+            ]);
 
-        $path = $validated['path'];
+            $path = $validated['path'];
 
-        if (! preg_match('#^/storage/attendance-watermark-logos/[A-Za-z0-9._\-]+$#', $path)) {
-            return response()->json(['message' => 'Invalid logo path.'], 422);
+            if (! preg_match('#^/storage/attendance-watermark-logos/[A-Za-z0-9._\-]+$#', $path)) {
+                return response()->json(['message' => 'Invalid logo path.'], 422);
+            }
+
+            $relative = substr($path, strlen('/storage/'));
+            $fullPath = $this->resolveWatermarkLogoPath($relative);
+
+            if ($fullPath === null) {
+                return response()->json(['message' => 'Logo not found.'], 404);
+            }
+
+            return response()->file($fullPath, [
+                'Content-Type' => $this->guessWatermarkLogoMimeType($fullPath),
+                'Cache-Control' => 'private, max-age=3600',
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json(['message' => 'Unable to load logo.'], 500);
+        }
+    }
+
+    private function resolveWatermarkLogoPath(string $relative): ?string
+    {
+        $candidates = [
+            public_path('storage/'.$relative),
+        ];
+
+        if (Storage::disk('public')->exists($relative)) {
+            $candidates[] = Storage::disk('public')->path($relative);
         }
 
-        $relative = substr($path, strlen('/storage/'));
-
-        if (! Storage::disk('public')->exists($relative)) {
-            return response()->json(['message' => 'Logo not found.'], 404);
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && is_readable($candidate)) {
+                return $candidate;
+            }
         }
 
-        $fullPath = Storage::disk('public')->path($relative);
-        $mime = Storage::disk('public')->mimeType($relative) ?: 'image/png';
+        return null;
+    }
 
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Cache-Control' => 'private, max-age=3600',
-        ]);
+    private function guessWatermarkLogoMimeType(string $path): string
+    {
+        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            default => 'image/png',
+        };
     }
 
     public function reverseGeocode(Request $request): JsonResponse
