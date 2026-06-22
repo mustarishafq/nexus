@@ -1,9 +1,9 @@
-const CACHE_NAME = 'nexus-shell-v8';
+const CACHE_NAME = 'nexus-shell-v8.0.1';
 const APP_SHELL = [
   '/',
   '/offline.html',
   '/icons/apple-touch-icon.png',
-  '/icons/notification-badge.png',
+  '/icons/notify-badge.png',
   '/icons/pwa-icon-192.png',
   '/icons/pwa-icon-512.png',
 ];
@@ -101,7 +101,7 @@ self.addEventListener('push', (event) => {
     url: actionUrl || (payload.id ? `/notifications?open=${payload.id}` : '/notifications'),
   };
   const iconUrl = new URL('/icons/pwa-icon-192.png', self.location.origin).href;
-  const badgeUrl = new URL('/icons/notification-badge.png', self.location.origin).href;
+  const badgeUrl = new URL('/icons/notify-badge.png', self.location.origin).href;
 
   const notifyOptions = {
     body,
