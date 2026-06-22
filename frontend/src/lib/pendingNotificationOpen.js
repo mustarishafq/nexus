@@ -1,4 +1,6 @@
 const STORAGE_KEY = 'nexus.pendingNotificationOpen';
+export const NOTIFICATION_OPEN_EVENT = 'nexus:notification-open';
+export const NOTIFICATION_OPEN_CHANNEL = 'nexus-notification-open';
 
 export function stashPendingNotificationOpen(payload = {}) {
   if (typeof window === 'undefined') {
@@ -62,5 +64,15 @@ export function captureNotificationOpenFromUrl() {
     return;
   }
 
-  stashPendingNotificationOpen({ id: openId });
+  dispatchNotificationOpen({ id: openId });
+}
+
+export function dispatchNotificationOpen(payload = {}) {
+  stashPendingNotificationOpen(payload);
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(NOTIFICATION_OPEN_EVENT, { detail: payload }));
 }

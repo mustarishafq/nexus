@@ -6,14 +6,16 @@ import db from '@/api/base44Client';
 import { followNotificationAction } from '@/lib/notificationAction';
 import {
   clearPendingNotificationOpen,
+  NOTIFICATION_OPEN_CHANNEL,
+  NOTIFICATION_OPEN_EVENT,
   readPendingNotificationOpen,
-  stashPendingNotificationOpen,
 } from '@/lib/pendingNotificationOpen';
 
 export default function NotificationClickGate() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const handledPendingRef = useRef(false);
+  const lastOpenRef = useRef({ key: null, at: 0 });
 
   const { data: applications = [] } = useQuery({
     queryKey: ['applications'],
@@ -21,25 +23,33 @@ export default function NotificationClickGate() {
   });
 
   const openNotification = useCallback(async (payload = {}) => {
+    const payloadActionUrl = payload.action_url || payload.url || null;
     let notification = null;
 
-    if (payload.id) {
+    if (payloadActionUrl || payload.system_id) {
+      notification = {
+        id: payload.id || null,
+        action_url: payloadActionUrl,
+        system_id: payload.system_id || null,
+      };
+    } else if (payload.id) {
       try {
         notification = await db.entities.Notification.get(payload.id);
       } catch {
-        notification = null;
+        notification = {
+          id: payload.id,
+          action_url: null,
+          system_id: null,
+        };
       }
     }
 
-    if (!notification) {
-      notification = {
-        id: payload.id || null,
-        action_url: payload.action_url || payload.url || null,
-        system_id: payload.system_id || null,
-      };
-    }
-
     clearPendingNotificationOpen();
+
+    if (!notification) {
+      navigate('/notifications');
+      return;
+    }
 
     if (!notification.action_url && !notification.system_id) {
       navigate('/notifications');
@@ -55,21 +65,47 @@ export default function NotificationClickGate() {
   }, [applications, navigate]);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) {
-      return undefined;
-    }
+    const handleOpen = (payload = {}) => {
+      const key = [
+        payload.id || '',
+        payload.action_url || payload.url || '',
+        payload.system_id || '',
+      ].join('|');
+      const now = Date.now();
+      if (lastOpenRef.current.key === key && now - lastOpenRef.current.at < 750) {
+        return;
+      }
+      lastOpenRef.current = { key, at: now };
 
-    const handleMessage = (event) => {
+      void openNotification(payload);
+    };
+
+    const handleCustomEvent = (event) => {
+      handleOpen(event.detail || {});
+    };
+
+    const handleBroadcastMessage = (event) => {
       if (event.data?.type !== 'NOTIFICATION_OPEN') {
         return;
       }
 
-      stashPendingNotificationOpen(event.data.payload || {});
-      void openNotification(event.data.payload || {});
+      handleOpen(event.data.payload || {});
     };
 
-    navigator.serviceWorker.addEventListener('message', handleMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+    let broadcastChannel = null;
+    try {
+      broadcastChannel = new BroadcastChannel(NOTIFICATION_OPEN_CHANNEL);
+      broadcastChannel.onmessage = handleBroadcastMessage;
+    } catch {
+      // BroadcastChannel unavailable.
+    }
+
+    window.addEventListener(NOTIFICATION_OPEN_EVENT, handleCustomEvent);
+
+    return () => {
+      window.removeEventListener(NOTIFICATION_OPEN_EVENT, handleCustomEvent);
+      broadcastChannel?.close();
+    };
   }, [openNotification]);
 
   useEffect(() => {
@@ -81,7 +117,6 @@ export default function NotificationClickGate() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('open');
     setSearchParams(nextParams, { replace: true });
-    stashPendingNotificationOpen({ id: openId });
     void openNotification({ id: openId });
   }, [openNotification, searchParams, setSearchParams]);
 
