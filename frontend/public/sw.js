@@ -1,9 +1,12 @@
-const CACHE_NAME = 'nexus-shell-v8.0.3';
+const CACHE_NAME = 'nexus-shell-v8.0.4';
+// Android badge must be a hard-edged white silhouette (alpha 0 or 255 only).
+// Embedded so Chrome never fails to fetch the badge URL in the background.
+const NOTIFICATION_BADGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAADY0lEQVR42u2cPWtVQRCG30mukMZCbSStaHexElsJKARBSMBCsLAxhY0WNhZC/AcGuzSWdoKVkBQ2CoJN0NJaY6EIWij4MRbZC5dFLjvnkp3d4X26XGZnz9nl2Z3zFYAQQgghhBBCCCGEEEIIIYSQyEjtDlVVzQcpMug4VXUBwJ9a/Q1hoVZHTpwb0GbF+6APFR3AHH3tGLt6OUd3gwi7BKnqMoAPxmZnROR9zfGIvARtGOO3ag8+ENQAVV0C8MPYzXER+Vp7PKIasGqM3/AYfCCgASn9PoCThi6OiMjv2mMBxDRgDNvgr3gNPhBzAu4ZYl8BeOF5sKGWIFU9AeCzIXX1sjMnmgHXDbEuZWdOGANUdQTglyGtS9mZE8mAC4ZYt7IzJ5IBewDOFqZ0KztzQhigqqdQPviuZWdOiAkAcLswzr3szOl+CVLVowC+FaZyLztzIhiwXhjXRNmZ07UBxkeOTZSdOb0bUPrIsZmyM6d3A3YAXCxI0UzZmdOFAWmpyX9bRtngN1V25nQxAfj/UlPyyLG5stOdIW9FpKVmOsdSYbvT3ufbHAMnQNOSM8mxVhD/0Ptcm2SOCdhM7aGq+wXxx7zPtUnmmADVg6VnXBB30/s8S+niQmwgIxExvxldm16uAyZ8MsRe9j7YEnozYB0He8C1wvguLKhKpSqou72gGnMM/mZqX3odMGHR+5xn0dMesA0A6cboLUO7pveCXvaAXRG5NJXD+vp5s3tBLwbcn/5DRH4CeGBo36wFvRiwKCJ/szzWT5CatKALA/LBT799BLBrSNOkBV0YMOOR5HkArw2pmrOgCwNm8MYY35wFXU9AWppuGJo8a+26oOsJSDw1xjdlQfcTICLfATwyNGnKgu4nILFljG/Ggq6roCzvHspfUQcaqYiiGAAAd43xTVgQyQDrN2JAAxaEMSC9fnjH2MzdgjAGpNzW74QBZwvCGAAAIvIFwBNjM1cLQhmQ8o8BvDV24WZBKAMS72B7ewJwtCCcAamPNdhvUbhYENEAAHg+oI2LBSEnYMAjS8DpHlHICUhsD2hT3YKQe8BUX6Uf8U1TdS+IbACQvU1RSFULohvQ/P+OJoQQQgghhBBCCCGEEEIIIYfMP+pYOr0YLKmPAAAAAElFTkSuQmCC';
 const APP_SHELL = [
   '/',
   '/offline.html',
   '/icons/apple-touch-icon.png',
-  '/icons/notify-badge.png',
+  '/icons/notification-badge.png',
   '/icons/pwa-icon-192.png',
   '/icons/pwa-icon-512.png',
 ];
@@ -101,7 +104,7 @@ self.addEventListener('push', (event) => {
     url: actionUrl || (payload.id ? `/notifications?open=${payload.id}` : '/notifications'),
   };
   const iconUrl = new URL('/icons/pwa-icon-192.png', self.location.origin).href;
-  const badgeUrl = new URL('/icons/notify-badge.png', self.location.origin).href;
+  const badgeUrl = NOTIFICATION_BADGE_DATA_URL;
 
   const notifyOptions = {
     body,
