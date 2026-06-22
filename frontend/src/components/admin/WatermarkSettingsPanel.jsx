@@ -102,7 +102,7 @@ export default function WatermarkSettingsPanel({ settings, onChange }) {
   );
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-hidden md:flex-row md:items-start">
+    <div className="flex min-w-0 max-w-full flex-col gap-6 md:flex-row md:items-stretch">
       <div className="min-w-0 flex-1 space-y-6">
         <AdminSettingsToggleRow
           label={<Label htmlFor="attendance_enabled">Enable clock in/out</Label>}
@@ -341,8 +341,12 @@ export default function WatermarkSettingsPanel({ settings, onChange }) {
         </Button>
       </div>
 
-      <aside className="hidden w-full shrink-0 md:block md:w-[min(100%,300px)] lg:w-[min(100%,340px)] xl:w-[min(100%,380px)]">
-        <div className="md:sticky md:top-24">{previewBlock}</div>
+      <aside className="relative hidden w-full shrink-0 md:block md:w-[min(100%,300px)] lg:w-[min(100%,340px)] xl:w-[min(100%,380px)]">
+        <div className="md:sticky md:top-24 md:z-10 md:w-full">
+          <div className="md:max-h-[calc(100dvh-6rem)] md:overflow-y-auto">
+            {previewBlock}
+          </div>
+        </div>
       </aside>
     </div>
   );

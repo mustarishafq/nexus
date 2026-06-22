@@ -12,6 +12,7 @@ class DepartmentAttendanceSettings
         'geofence_enabled' => false,
         'center_latitude' => null,
         'center_longitude' => null,
+        'sites' => [],
         'radius_meters' => 200,
         'allow_outside_radius' => false,
         'timezone' => 'UTC',
@@ -46,6 +47,7 @@ class DepartmentAttendanceSettings
         $config['geofence_enabled'] = self::toBool($input['geofence_enabled'] ?? false);
         $config['center_latitude'] = self::toNullableFloat($input['center_latitude'] ?? null);
         $config['center_longitude'] = self::toNullableFloat($input['center_longitude'] ?? null);
+        $config['sites'] = self::normalizeSites($input['sites'] ?? []);
         $config['radius_meters'] = max(10, min(50000, (int) ($input['radius_meters'] ?? 200)));
         $config['allow_outside_radius'] = self::toBool($input['allow_outside_radius'] ?? false);
         $config['timezone'] = self::normalizeTimezone($input['timezone'] ?? config('app.timezone'));
@@ -56,7 +58,21 @@ class DepartmentAttendanceSettings
         $config['overtime_threshold_minutes'] = max(0, min(480, (int) ($input['overtime_threshold_minutes'] ?? 0)));
         $config['shifts'] = self::normalizeShifts($input['shifts'] ?? []);
 
-        if ($config['geofence_enabled'] && ($config['center_latitude'] === null || $config['center_longitude'] === null)) {
+        if ($config['sites'] === [] && $config['center_latitude'] !== null && $config['center_longitude'] !== null) {
+            $config['sites'] = [[
+                'name' => 'Primary location',
+                'latitude' => $config['center_latitude'],
+                'longitude' => $config['center_longitude'],
+            ]];
+        }
+
+        if ($config['sites'] !== []) {
+            $primary = $config['sites'][0];
+            $config['center_latitude'] = $primary['latitude'];
+            $config['center_longitude'] = $primary['longitude'];
+        }
+
+        if ($config['geofence_enabled'] && $config['sites'] === []) {
             $config['geofence_enabled'] = false;
         }
 
@@ -73,6 +89,10 @@ class DepartmentAttendanceSettings
             'geofence_enabled' => ['nullable', 'boolean'],
             'center_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'center_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'sites' => ['nullable', 'array'],
+            'sites.*.name' => ['required_with:sites', 'string', 'max:120'],
+            'sites.*.latitude' => ['required_with:sites', 'numeric', 'between:-90,90'],
+            'sites.*.longitude' => ['required_with:sites', 'numeric', 'between:-180,180'],
             'radius_meters' => ['nullable', 'integer', 'min:10', 'max:50000'],
             'allow_outside_radius' => ['nullable', 'boolean'],
             'timezone' => ['nullable', 'timezone:all'],
@@ -102,6 +122,7 @@ class DepartmentAttendanceSettings
             'geofence_enabled' => $config['geofence_enabled'],
             'center_latitude' => $config['center_latitude'],
             'center_longitude' => $config['center_longitude'],
+            'sites' => $config['sites'],
             'radius_meters' => $config['radius_meters'],
             'allow_outside_radius' => $config['allow_outside_radius'],
             'timezone' => $config['timezone'],
@@ -155,6 +176,41 @@ class DepartmentAttendanceSettings
     }
 
     /**
+     * @param  mixed  $sites
+     * @return array<int, array{name: string, latitude: float, longitude: float}>
+     */
+    public static function normalizeSites($sites): array
+    {
+        if (! is_array($sites)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($sites as $site) {
+            if (! is_array($site)) {
+                continue;
+            }
+
+            $name = trim((string) ($site['name'] ?? ''));
+            $latitude = self::toNullableFloat($site['latitude'] ?? null);
+            $longitude = self::toNullableFloat($site['longitude'] ?? null);
+
+            if ($name === '' || $latitude === null || $longitude === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'name' => $name,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function serializeForApi(DepartmentAttendanceSetting $setting): array
@@ -165,6 +221,7 @@ class DepartmentAttendanceSettings
             'geofence_enabled' => $setting->geofence_enabled,
             'center_latitude' => $setting->center_latitude !== null ? (float) $setting->center_latitude : null,
             'center_longitude' => $setting->center_longitude !== null ? (float) $setting->center_longitude : null,
+            'sites' => self::normalizeSites($setting->sites ?? []),
             'radius_meters' => $setting->radius_meters,
             'allow_outside_radius' => $setting->allow_outside_radius,
             'timezone' => $setting->timezone,

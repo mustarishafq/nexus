@@ -125,7 +125,7 @@ export default function AdminSettings({ embedded = false }) {
   }
 
   return (
-    <div className="w-full max-w-full space-y-4 overflow-x-hidden">
+    <div className="w-full max-w-full space-y-4 min-w-0">
       {!embedded ? (
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -151,7 +151,7 @@ export default function AdminSettings({ embedded = false }) {
           />
 
           <div
-            className={`min-w-0 flex-1 space-y-4 overflow-x-hidden md:pb-4 ${
+            className={`min-w-0 flex-1 space-y-4 md:pb-4 ${
               activeSection === 'attendance'
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
                 : 'pb-[calc(10rem+env(safe-area-inset-bottom))]'
@@ -176,24 +176,24 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection === 'splash' ? (
-              <Card className="overflow-hidden rounded-2xl">
+              <Card className="overflow-visible rounded-2xl">
                 <CardHeader className="pb-3 px-4 sm:px-6">
                   <CardTitle className="text-base">Splash screen</CardTitle>
                   <CardDescription>PWA splash animation, colors, timing, and media.</CardDescription>
                 </CardHeader>
-                <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
+                <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                   <SplashSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
             ) : null}
 
             {activeSection === 'launch' ? (
-              <Card className="overflow-hidden rounded-2xl">
+              <Card className="overflow-visible rounded-2xl">
                 <CardHeader className="pb-3 px-4 sm:px-6">
                   <CardTitle className="text-base">Application launch</CardTitle>
                   <CardDescription>Launch animation, layout, progress, and timing.</CardDescription>
                 </CardHeader>
-                <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
+                <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                   <LaunchSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
@@ -201,12 +201,12 @@ export default function AdminSettings({ embedded = false }) {
 
             {activeSection === 'attendance' ? (
               <>
-                <Card className="overflow-hidden rounded-2xl">
+                <Card className="overflow-visible rounded-2xl">
                   <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Attendance watermark</CardTitle>
                     <CardDescription>Clock in/out camera watermark fields, styling, and live preview.</CardDescription>
                   </CardHeader>
-                  <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
+                  <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                     <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
                     <div className="mt-6 flex justify-end border-t pt-4">
                       <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
@@ -215,14 +215,14 @@ export default function AdminSettings({ embedded = false }) {
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="overflow-hidden rounded-2xl">
+                <Card className="rounded-2xl">
                   <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Department attendance rules</CardTitle>
                     <CardDescription>
                       Set geofence radius, working hours, shifts, and overtime rules per department.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6">
+                  <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                     <DepartmentAttendancePolicyPanel />
                   </CardContent>
                 </Card>

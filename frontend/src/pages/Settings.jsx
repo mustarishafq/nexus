@@ -40,7 +40,7 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     in_app: true,
     email: true,
-    sound: false,
+    sound: true,
   });
   const [activeTab, setActiveTab] = useState('user');
   const { pushState, subscribe, unsubscribe } = useWebPush(appPublicSettings?.web_push_public_key);
@@ -60,7 +60,7 @@ export default function Settings() {
         ? JSON.parse(u.notification_settings || '{}')
         : (u.notification_settings || {});
 
-      const next = { in_app: true, email: true, sound: false, ...loaded };
+      const next = { in_app: true, email: true, sound: true, ...loaded };
       setSettings(next);
       syncNotificationSettingsCache(next);
     }).catch(() => {});
@@ -214,7 +214,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <SettingsIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Settings
@@ -234,7 +234,7 @@ export default function Settings() {
           ) : null}
         </TabsList>
 
-        <TabsContent value="user" className="mt-4 min-w-0 overflow-x-hidden">
+        <TabsContent value="user" className="mt-4 min-w-0">
           <div className="flex flex-col gap-4 md:flex-row md:items-start">
             <SettingsSectionNav
               items={USER_SECTIONS}
@@ -453,7 +453,7 @@ export default function Settings() {
         </TabsContent>
 
         {isAdmin ? (
-          <TabsContent value="admin" className="mt-4 min-w-0 overflow-x-hidden">
+          <TabsContent value="admin" className="mt-4 min-w-0">
             <AdminSettings embedded />
           </TabsContent>
         ) : null}

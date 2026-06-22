@@ -91,7 +91,9 @@ class AttendancePolicyValidator
             'geofence_enabled' => $setting->geofence_enabled,
             'center_latitude' => $setting->center_latitude !== null ? (float) $setting->center_latitude : null,
             'center_longitude' => $setting->center_longitude !== null ? (float) $setting->center_longitude : null,
+            'sites' => DepartmentAttendanceSettings::normalizeSites($setting->sites ?? []),
             'radius_meters' => $setting->radius_meters,
+            'allow_outside_radius' => $setting->allow_outside_radius,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
@@ -158,27 +160,82 @@ class AttendancePolicyValidator
             return;
         }
 
-        $distance = self::haversineMeters(
-            (float) $setting->center_latitude,
-            (float) $setting->center_longitude,
-            $latitude,
-            $longitude,
-        );
+        $sites = self::resolveSites($setting);
 
-        $metadata['distance_meters'] = round($distance, 1);
+        if ($sites === []) {
+            return;
+        }
 
-        if ($distance > $setting->radius_meters) {
-            if (! $setting->allow_outside_radius) {
-                $errors[] = sprintf(
-                    'You must be within %dm of the assigned location (currently ~%dm away).',
-                    $setting->radius_meters,
-                    (int) round($distance),
-                );
-            } else {
-                $warnings[] = sprintf('Recorded outside allowed radius (~%dm away).', (int) round($distance));
-                $metadata['outside_radius'] = true;
+        $closestDistance = null;
+        $closestSite = null;
+        $matchedSite = null;
+
+        foreach ($sites as $site) {
+            $distance = self::haversineMeters(
+                (float) $site['latitude'],
+                (float) $site['longitude'],
+                $latitude,
+                $longitude,
+            );
+
+            if ($closestDistance === null || $distance < $closestDistance) {
+                $closestDistance = $distance;
+                $closestSite = $site;
+            }
+
+            if ($distance <= $setting->radius_meters) {
+                $matchedSite = $site;
+                $metadata['distance_meters'] = round($distance, 1);
+                break;
             }
         }
+
+        if ($matchedSite) {
+            $metadata['matched_site_name'] = $matchedSite['name'];
+
+            return;
+        }
+
+        $metadata['distance_meters'] = round((float) $closestDistance, 1);
+        $metadata['nearest_site_name'] = $closestSite['name'] ?? null;
+
+        if (! $setting->allow_outside_radius) {
+            $errors[] = sprintf(
+                'You must be within %dm of a registered site (nearest: %s, ~%dm away).',
+                $setting->radius_meters,
+                $closestSite['name'] ?? 'assigned location',
+                (int) round((float) $closestDistance),
+            );
+        } else {
+            $warnings[] = sprintf(
+                'Recorded outside allowed radius (nearest site: %s, ~%dm away).',
+                $closestSite['name'] ?? 'assigned location',
+                (int) round((float) $closestDistance),
+            );
+            $metadata['outside_radius'] = true;
+        }
+    }
+
+    /**
+     * @return array<int, array{name: string, latitude: float, longitude: float}>
+     */
+    private static function resolveSites(DepartmentAttendanceSetting $setting): array
+    {
+        $sites = DepartmentAttendanceSettings::normalizeSites($setting->sites ?? []);
+
+        if ($sites !== []) {
+            return $sites;
+        }
+
+        if ($setting->center_latitude === null || $setting->center_longitude === null) {
+            return [];
+        }
+
+        return [[
+            'name' => 'Primary location',
+            'latitude' => (float) $setting->center_latitude,
+            'longitude' => (float) $setting->center_longitude,
+        ]];
     }
 
     /**

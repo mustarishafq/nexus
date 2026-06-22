@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAttendanceReminder';
 import { useAuth } from '@/lib/AuthContext';
-import { describeAttendancePolicy, findActiveShift, haversineMeters } from '@/lib/attendancePolicy';
+import { describeAttendancePolicy, findActiveShift, findMatchingAttendanceSite, findNearestAttendanceSite, resolveAttendanceSites } from '@/lib/attendancePolicy';
 import { getDeviceInfo } from '@/lib/deviceInfo';
 import { normalizeAttendanceWatermarkConfig } from '@/lib/watermarkConfig';
 import { toAbsoluteUrl } from '@/lib/media';
@@ -102,20 +102,19 @@ export default function Attendance() {
 
   const policy = status?.policy;
   const activeShift = policy ? findActiveShift(policy) : null;
-  const distanceMeters = useMemo(() => {
-    if (!policy?.geofence_enabled || !capture?.location?.latitude || !capture?.location?.longitude) {
-      return null;
-    }
-    if (policy.center_latitude == null || policy.center_longitude == null) {
-      return null;
-    }
-    return haversineMeters(
-      Number(policy.center_latitude),
-      Number(policy.center_longitude),
-      capture.location.latitude,
-      capture.location.longitude,
-    );
-  }, [policy, capture]);
+  const attendanceSites = useMemo(() => resolveAttendanceSites(policy), [policy]);
+  const liveLocation = capture?.location;
+  const nearestSite = useMemo(() => (
+    findNearestAttendanceSite(attendanceSites, liveLocation?.latitude, liveLocation?.longitude)
+  ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude]);
+  const matchedSite = useMemo(() => (
+    findMatchingAttendanceSite(
+      attendanceSites,
+      liveLocation?.latitude,
+      liveLocation?.longitude,
+      policy?.radius_meters ?? 200,
+    )
+  ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, policy?.radius_meters]);
 
   if (!attendanceConfig.enabled) {
     return (
@@ -173,10 +172,15 @@ export default function Attendance() {
             ) : policy.shifts?.length ? (
               <Badge variant="outline">Outside scheduled shift</Badge>
             ) : null}
-            {distanceMeters != null ? (
-              <Badge variant={distanceMeters <= policy.radius_meters ? 'secondary' : 'destructive'}>
-                {Math.round(distanceMeters)}m from site
+            {nearestSite ? (
+              <Badge variant={matchedSite ? 'secondary' : 'destructive'}>
+                {matchedSite
+                  ? `At ${matchedSite.site.name}`
+                  : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
               </Badge>
+            ) : null}
+            {policy?.allow_outside_radius && !matchedSite && nearestSite ? (
+              <Badge variant="outline">Outstation allowed</Badge>
             ) : null}
           </CardContent>
         </Card>
@@ -197,6 +201,8 @@ export default function Attendance() {
               watermarkConfig={appPublicSettings}
               userName={user?.full_name || user?.name || user?.email}
               deviceInfo={deviceInfo}
+              attendanceSites={attendanceSites}
+              siteRadiusMeters={policy?.radius_meters ?? 200}
               disabled={clockMutation.isPending}
               onCapture={setCapture}
             />

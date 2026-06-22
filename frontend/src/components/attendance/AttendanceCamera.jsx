@@ -14,6 +14,7 @@ import {
   reverseGeocodeAddress,
   startLocationWatch,
 } from '@/lib/watermarkConfig';
+import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
 const MIRROR_STORAGE_KEY = 'attendance-camera-mirror';
@@ -104,6 +105,8 @@ export default function AttendanceCamera({
   watermarkConfig,
   userName,
   deviceInfo,
+  attendanceSites = [],
+  siteRadiusMeters = 200,
   onCapture,
   disabled = false,
   className = '',
@@ -125,6 +128,10 @@ export default function AttendanceCamera({
   });
   const userNameRef = useRef(userName);
   const deviceInfoRef = useRef(deviceInfo);
+  const attendanceSitesRef = useRef(attendanceSites);
+  const siteRadiusRef = useRef(siteRadiusMeters);
+  attendanceSitesRef.current = attendanceSites;
+  siteRadiusRef.current = siteRadiusMeters;
 
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -282,13 +289,31 @@ export default function AttendanceCamera({
   }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const resolveSiteLabel = (latitude, longitude) => (
+      resolveAttendanceSiteLabel(
+        attendanceSitesRef.current,
+        latitude,
+        longitude,
+        siteRadiusRef.current,
+      )
+    );
+
     const stopWatch = startLocationWatch(
       (location) => {
+        const previous = locationRef.current;
         locationRef.current = {
           ...locationRef.current,
           ...location,
         };
-        setLocationTick((tick) => tick + 1);
+
+        if (
+          previous.locationLabel !== location.locationLabel
+          || previous.locatingAddress !== location.locatingAddress
+          || previous.locatingPosition !== location.locatingPosition
+          || previous.locationError !== location.locationError
+        ) {
+          setLocationTick((tick) => tick + 1);
+        }
       },
       () => {
         locationRef.current = {
@@ -298,6 +323,7 @@ export default function AttendanceCamera({
         };
         setLocationTick((tick) => tick + 1);
       },
+      { resolveLabel: resolveSiteLabel },
     );
 
     return () => stopWatch();
@@ -314,12 +340,24 @@ export default function AttendanceCamera({
         location = await getCurrentLocation();
         locationRef.current = location;
         setLocationTick((tick) => tick + 1);
+      }
+
+      const siteLabel = resolveAttendanceSiteLabel(
+        attendanceSitesRef.current,
+        location.latitude,
+        location.longitude,
+        siteRadiusRef.current,
+      );
+
+      if (siteLabel) {
+        location = { ...location, locationLabel: siteLabel };
       } else if (location.locationLabel == null && !location.locatingAddress) {
         const locationLabel = await reverseGeocodeAddress(location.latitude, location.longitude);
         location = { ...location, locationLabel };
-        locationRef.current = location;
-        setLocationTick((tick) => tick + 1);
       }
+
+      locationRef.current = location;
+      setLocationTick((tick) => tick + 1);
 
       const capturedAt = new Date();
       const context = {

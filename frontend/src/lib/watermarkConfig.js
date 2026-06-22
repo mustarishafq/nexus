@@ -249,7 +249,7 @@ export function formatCoordinates(latitude, longitude) {
   const latDir = lat >= 0 ? 'N' : 'S';
   const lngDir = lng >= 0 ? 'E' : 'W';
 
-  return `${Math.abs(lat).toFixed(5)}° ${latDir}, ${Math.abs(lng).toFixed(5)}° ${lngDir}`;
+  return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
 }
 
 export function buildWatermarkLines(config, context = {}) {
@@ -610,8 +610,12 @@ export function drawVideoFrameWithWatermark(
   const aspect = displayAspect || (sourceWidth / sourceHeight);
   const crop = computeCenterCropRect(sourceWidth, sourceHeight, aspect);
 
-  canvas.width = Math.max(1, Math.round(crop.width));
-  canvas.height = Math.max(1, Math.round(crop.height));
+  const nextWidth = Math.max(1, Math.round(crop.width));
+  const nextHeight = Math.max(1, Math.round(crop.height));
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+  }
 
   if (mirror) {
     ctx.save();
@@ -750,7 +754,24 @@ export async function getCurrentLocation(timeoutMs = 10000) {
   });
 }
 
-export function startLocationWatch(onUpdate, onError) {
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const earthRadius = 6371000;
+  const toRad = (value) => (value * Math.PI) / 180;
+  const latFrom = toRad(lat1);
+  const latTo = toRad(lat2);
+  const latDelta = toRad(lat2 - lat1);
+  const lngDelta = toRad(lng2 - lng1);
+  const a = (Math.sin(latDelta / 2) ** 2)
+    + (Math.cos(latFrom) * Math.cos(latTo) * (Math.sin(lngDelta / 2) ** 2));
+  return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+export function startLocationWatch(onUpdate, onError, options = {}) {
+  const {
+    resolveLabel = null,
+    minGeocodeDistanceMeters = 80,
+  } = options;
+
   if (!navigator.geolocation) {
     onError?.('unsupported');
     return () => {};
@@ -758,24 +779,72 @@ export function startLocationWatch(onUpdate, onError) {
 
   let active = true;
   let geocodeRequestId = 0;
+  let lastLocationLabel = null;
+  let lastGeocodedLatitude = null;
+  let lastGeocodedLongitude = null;
 
   const watchId = navigator.geolocation.watchPosition(
     async (position) => {
       if (!active) return;
 
       const { latitude, longitude } = position.coords;
+      const siteLabel = resolveLabel?.(latitude, longitude);
+
+      if (siteLabel) {
+        lastLocationLabel = siteLabel;
+        lastGeocodedLatitude = latitude;
+        lastGeocodedLongitude = longitude;
+        onUpdate({
+          latitude,
+          longitude,
+          locationLabel: siteLabel,
+          locatingAddress: false,
+          locatingPosition: false,
+        });
+        return;
+      }
+
+      const movedSinceGeocode = lastGeocodedLatitude == null
+        || lastGeocodedLongitude == null
+        || distanceMeters(lastGeocodedLatitude, lastGeocodedLongitude, latitude, longitude) >= minGeocodeDistanceMeters;
+
+      if (lastLocationLabel && !movedSinceGeocode) {
+        onUpdate({
+          latitude,
+          longitude,
+          locationLabel: lastLocationLabel,
+          locatingAddress: false,
+          locatingPosition: false,
+        });
+        return;
+      }
+
       const requestId = ++geocodeRequestId;
 
-      onUpdate({
-        latitude,
-        longitude,
-        locationLabel: null,
-        locatingAddress: true,
-        locatingPosition: false,
-      });
+      if (!lastLocationLabel) {
+        onUpdate({
+          latitude,
+          longitude,
+          locationLabel: null,
+          locatingAddress: true,
+          locatingPosition: false,
+        });
+      } else {
+        onUpdate({
+          latitude,
+          longitude,
+          locationLabel: lastLocationLabel,
+          locatingAddress: false,
+          locatingPosition: false,
+        });
+      }
 
       const locationLabel = await reverseGeocodeAddress(latitude, longitude);
       if (!active || requestId !== geocodeRequestId) return;
+
+      lastLocationLabel = locationLabel;
+      lastGeocodedLatitude = latitude;
+      lastGeocodedLongitude = longitude;
 
       onUpdate({
         latitude,

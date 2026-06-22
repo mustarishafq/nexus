@@ -16,11 +16,18 @@ export const DEFAULT_SHIFT = {
   crosses_midnight: false,
 };
 
+export const DEFAULT_SITE = {
+  name: 'EMZI HQ',
+  latitude: '',
+  longitude: '',
+};
+
 export const DEFAULT_DEPARTMENT_ATTENDANCE_SETTINGS = {
   enabled: true,
   geofence_enabled: false,
   center_latitude: '',
   center_longitude: '',
+  sites: [{ ...DEFAULT_SITE }],
   radius_meters: 200,
   allow_outside_radius: false,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -44,11 +51,35 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     }))
     : [{ ...DEFAULT_SHIFT }];
 
+  let sites = Array.isArray(input.sites) && input.sites.length
+    ? input.sites.map((site) => ({
+      name: site.name || 'Site',
+      latitude: site.latitude ?? '',
+      longitude: site.longitude ?? '',
+    }))
+    : [];
+
+  if (!sites.length && input.center_latitude != null && input.center_latitude !== ''
+    && input.center_longitude != null && input.center_longitude !== '') {
+    sites = [{
+      name: 'Primary location',
+      latitude: input.center_latitude,
+      longitude: input.center_longitude,
+    }];
+  }
+
+  if (!sites.length) {
+    sites = [{ ...DEFAULT_SITE }];
+  }
+
+  const primarySite = sites[0];
+
   return {
     enabled: input.enabled !== false,
     geofence_enabled: Boolean(input.geofence_enabled),
-    center_latitude: input.center_latitude ?? '',
-    center_longitude: input.center_longitude ?? '',
+    center_latitude: input.center_latitude ?? primarySite.latitude ?? '',
+    center_longitude: input.center_longitude ?? primarySite.longitude ?? '',
+    sites,
     radius_meters: Number(input.radius_meters ?? 200),
     allow_outside_radius: Boolean(input.allow_outside_radius),
     timezone: input.timezone || base.timezone,
@@ -63,11 +94,21 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
 
 export function departmentAttendanceSettingsToPayload(form) {
   const normalized = normalizeDepartmentAttendanceSettings(form);
+  const sites = normalized.sites
+    .map((site) => ({
+      name: site.name,
+      latitude: site.latitude === '' ? null : Number(site.latitude),
+      longitude: site.longitude === '' ? null : Number(site.longitude),
+    }))
+    .filter((site) => site.name && site.latitude != null && site.longitude != null);
+
+  const primarySite = sites[0] || null;
 
   return {
     ...normalized,
-    center_latitude: normalized.center_latitude === '' ? null : Number(normalized.center_latitude),
-    center_longitude: normalized.center_longitude === '' ? null : Number(normalized.center_longitude),
+    sites,
+    center_latitude: primarySite?.latitude ?? null,
+    center_longitude: primarySite?.longitude ?? null,
   };
 }
 
@@ -118,6 +159,60 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
   return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+export function resolveAttendanceSites(policy) {
+  if (!policy) return [];
+
+  if (Array.isArray(policy.sites) && policy.sites.length) {
+    return policy.sites
+      .map((site) => ({
+        name: site.name,
+        latitude: Number(site.latitude),
+        longitude: Number(site.longitude),
+      }))
+      .filter((site) => site.name && Number.isFinite(site.latitude) && Number.isFinite(site.longitude));
+  }
+
+  if (policy.center_latitude != null && policy.center_longitude != null) {
+    return [{
+      name: 'Primary location',
+      latitude: Number(policy.center_latitude),
+      longitude: Number(policy.center_longitude),
+    }];
+  }
+
+  return [];
+}
+
+export function findNearestAttendanceSite(sites, latitude, longitude) {
+  if (!sites?.length || latitude == null || longitude == null) {
+    return null;
+  }
+
+  let nearest = null;
+
+  sites.forEach((site) => {
+    const distance = haversineMeters(site.latitude, site.longitude, latitude, longitude);
+    if (!nearest || distance < nearest.distance) {
+      nearest = { site, distance };
+    }
+  });
+
+  return nearest;
+}
+
+export function findMatchingAttendanceSite(sites, latitude, longitude, radiusMeters) {
+  const nearest = findNearestAttendanceSite(sites, latitude, longitude);
+  if (!nearest || nearest.distance > radiusMeters) {
+    return null;
+  }
+
+  return nearest;
+}
+
+export function resolveAttendanceSiteLabel(sites, latitude, longitude, radiusMeters) {
+  return findMatchingAttendanceSite(sites, latitude, longitude, radiusMeters)?.site?.name || null;
+}
+
 export function formatShiftSummary(shift) {
   const dayLabels = WEEKDAYS
     .filter((day) => shift.days_of_week?.includes(day.value))
@@ -136,7 +231,15 @@ export function describeAttendancePolicy(policy) {
     parts.push(`Department: ${policy.department_name}`);
   }
   if (policy.geofence_enabled) {
-    parts.push(`Must be within ${policy.radius_meters}m of the assigned location`);
+    const siteCount = resolveAttendanceSites(policy).length;
+    if (siteCount > 1) {
+      parts.push(`Must be within ${policy.radius_meters}m of one of ${siteCount} registered sites`);
+    } else {
+      parts.push(`Must be within ${policy.radius_meters}m of the assigned location`);
+    }
+    if (policy.allow_outside_radius) {
+      parts.push('Outstation clock-in allowed with warning');
+    }
   }
   if (policy.shifts?.length) {
     parts.push(`Shifts: ${policy.shifts.map(formatShiftSummary).join(' · ')}`);
