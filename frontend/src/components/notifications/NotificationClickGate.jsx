@@ -1,13 +1,19 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import db from '@/api/base44Client';
 import { followNotificationAction } from '@/lib/notificationAction';
+import {
+  clearPendingNotificationOpen,
+  readPendingNotificationOpen,
+  stashPendingNotificationOpen,
+} from '@/lib/pendingNotificationOpen';
 
 export default function NotificationClickGate() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const handledPendingRef = useRef(false);
 
   const { data: applications = [] } = useQuery({
     queryKey: ['applications'],
@@ -33,6 +39,8 @@ export default function NotificationClickGate() {
       };
     }
 
+    clearPendingNotificationOpen();
+
     if (!notification.action_url && !notification.system_id) {
       navigate('/notifications');
       return;
@@ -56,6 +64,7 @@ export default function NotificationClickGate() {
         return;
       }
 
+      stashPendingNotificationOpen(event.data.payload || {});
       void openNotification(event.data.payload || {});
     };
 
@@ -72,8 +81,23 @@ export default function NotificationClickGate() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('open');
     setSearchParams(nextParams, { replace: true });
+    stashPendingNotificationOpen({ id: openId });
     void openNotification({ id: openId });
   }, [openNotification, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (handledPendingRef.current) {
+      return;
+    }
+
+    const pending = readPendingNotificationOpen();
+    if (!pending) {
+      return;
+    }
+
+    handledPendingRef.current = true;
+    void openNotification(pending);
+  }, [openNotification]);
 
   return null;
 }

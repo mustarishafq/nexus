@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v7';
+const CACHE_NAME = 'nexus-shell-v8';
 const APP_SHELL = [
   '/',
   '/offline.html',
@@ -100,11 +100,13 @@ self.addEventListener('push', (event) => {
     system_id: payload.system_id || null,
     url: actionUrl || (payload.id ? `/notifications?open=${payload.id}` : '/notifications'),
   };
+  const iconUrl = new URL('/icons/pwa-icon-192.png', self.location.origin).href;
+  const badgeUrl = new URL('/icons/notification-badge.png', self.location.origin).href;
 
   const notifyOptions = {
     body,
-    icon: '/icons/pwa-icon-192.png',
-    badge: '/icons/notification-badge.png',
+    icon: iconUrl,
+    badge: badgeUrl,
     tag,
     renotify: Boolean(tag),
     silent: false,
@@ -130,7 +132,8 @@ self.addEventListener('push', (event) => {
         // Fallback: minimal notification without optional options that some platforms reject.
         return self.registration.showNotification(title, {
           body,
-          icon: '/icons/pwa-icon-192.png',
+          icon: iconUrl,
+          badge: badgeUrl,
           data: notificationData,
         });
       });
@@ -167,25 +170,35 @@ async function openNotificationTarget(notificationData = {}) {
     }
   });
 
-  if (originClient && !isExternalTarget) {
-    await originClient.focus();
-    originClient.postMessage({ type: 'NOTIFICATION_OPEN', payload: notificationData });
+  if (!originClient) {
+    if (clients.openWindow) {
+      return clients.openWindow(targetUrl);
+    }
     return;
   }
 
-  if (originClient && 'navigate' in originClient) {
-    const navigated = await originClient.navigate(targetUrl);
-    if (navigated && 'focus' in navigated) {
-      await navigated.focus();
-      if (!isExternalTarget) {
-        navigated.postMessage({ type: 'NOTIFICATION_OPEN', payload: notificationData });
+  if ('focus' in originClient) {
+    await originClient.focus();
+  }
+
+  if (!isExternalTarget) {
+    originClient.postMessage({ type: 'NOTIFICATION_OPEN', payload: notificationData });
+  }
+
+  if ('navigate' in originClient) {
+    try {
+      const navigated = await originClient.navigate(targetUrl);
+      if (navigated && 'focus' in navigated) {
+        await navigated.focus();
+        return;
       }
-      return;
+    } catch {
+      // Android PWAs can reject navigate(); fall back to openWindow below.
     }
   }
 
   if (clients.openWindow) {
-    await clients.openWindow(targetUrl);
+    return clients.openWindow(targetUrl);
   }
 }
 
