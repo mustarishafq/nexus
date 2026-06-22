@@ -507,10 +507,24 @@ export async function loadWatermarkLogo(url) {
 
   const promise = (async () => {
     const sources = [];
-    if (storagePath) sources.push(storagePath);
-    if (absolute && !sources.includes(absolute)) sources.push(absolute);
+    if (absolute) sources.push(absolute);
+    if (storagePath && !sources.includes(storagePath)) sources.push(storagePath);
 
-    // Same-origin fetch (Vite /storage proxy or same host) — safe for canvas export.
+    // API proxy first — works in production when frontend and API/storage are on different hosts.
+    if (storagePath) {
+      try {
+        const { default: db } = await import('@/api/base44Client');
+        const blob = await db.attendance.fetchWatermarkLogo(storagePath);
+        if (blob) {
+          const image = await loadImageFromBlob(blob);
+          if (image) return image;
+        }
+      } catch {
+        // Fall through to direct fetch loaders.
+      }
+    }
+
+    // Same-origin fetch (Vite /storage proxy or co-hosted app) — safe for canvas export.
     for (const source of sources) {
       if (isCrossOrigin(source)) continue;
 
@@ -525,21 +539,7 @@ export async function loadWatermarkLogo(url) {
       }
     }
 
-    // Authenticated API route returns a blob without tainting the canvas.
-    if (storagePath) {
-      try {
-        const { default: db } = await import('@/api/base44Client');
-        const blob = await db.attendance.fetchWatermarkLogo(storagePath);
-        if (blob) {
-          const image = await loadImageFromBlob(blob);
-          if (image) return image;
-        }
-      } catch {
-        // Try the next loader.
-      }
-    }
-
-    // Cross-origin API/storage host (e.g. VITE_API_BASE_URL on a different port).
+    // Cross-origin direct storage URL when /storage is CORS-enabled.
     for (const source of sources) {
       if (!isCrossOrigin(source)) continue;
 

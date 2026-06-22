@@ -41,10 +41,9 @@ class AttendanceController extends Controller
             return response()->json(['message' => 'Logo not found.'], 404);
         }
 
-        $fullPath = Storage::disk('public')->path($relative);
-        $mime = mime_content_type($fullPath) ?: 'image/png';
+        $mime = Storage::disk('public')->mimeType($relative) ?: 'image/png';
 
-        return response()->file($fullPath, [
+        return Storage::disk('public')->response($relative, null, [
             'Content-Type' => $mime,
             'Cache-Control' => 'private, max-age=3600',
         ]);

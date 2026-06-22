@@ -367,11 +367,13 @@ export const db = {
 		},
 
         async fetchWatermarkLogo(path) {
+			const token = getAuthToken();
 			const query = buildQuery({ path });
 			const response = await fetch(`${API_BASE_URL}/attendance/watermark-logo${query}`, {
 				method: 'GET',
 				headers: {
 					Accept: 'image/*',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
 				},
 				credentials: 'include',
 			});
