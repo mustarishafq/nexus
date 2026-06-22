@@ -9,12 +9,7 @@ class DepartmentAttendanceSettings
     /** @var array<string, mixed> */
     public const DEFAULTS = [
         'enabled' => true,
-        'geofence_enabled' => false,
-        'center_latitude' => null,
-        'center_longitude' => null,
-        'sites' => [],
-        'radius_meters' => 200,
-        'allow_outside_radius' => false,
+        'attendance_location_id' => null,
         'timezone' => 'UTC',
         'grace_period_minutes' => 15,
         'allow_outside_shift_hours' => false,
@@ -44,12 +39,7 @@ class DepartmentAttendanceSettings
         $config = self::DEFAULTS;
 
         $config['enabled'] = self::toBool($input['enabled'] ?? true);
-        $config['geofence_enabled'] = self::toBool($input['geofence_enabled'] ?? false);
-        $config['center_latitude'] = self::toNullableFloat($input['center_latitude'] ?? null);
-        $config['center_longitude'] = self::toNullableFloat($input['center_longitude'] ?? null);
-        $config['sites'] = self::normalizeSites($input['sites'] ?? []);
-        $config['radius_meters'] = max(10, min(50000, (int) ($input['radius_meters'] ?? 200)));
-        $config['allow_outside_radius'] = self::toBool($input['allow_outside_radius'] ?? false);
+        $config['attendance_location_id'] = self::toNullableInt($input['attendance_location_id'] ?? null);
         $config['timezone'] = self::normalizeTimezone($input['timezone'] ?? config('app.timezone'));
         $config['grace_period_minutes'] = max(0, min(180, (int) ($input['grace_period_minutes'] ?? 15)));
         $config['allow_outside_shift_hours'] = self::toBool($input['allow_outside_shift_hours'] ?? false);
@@ -57,24 +47,6 @@ class DepartmentAttendanceSettings
         $config['standard_hours_per_day'] = max(0.5, min(24, (float) ($input['standard_hours_per_day'] ?? 8)));
         $config['overtime_threshold_minutes'] = max(0, min(480, (int) ($input['overtime_threshold_minutes'] ?? 0)));
         $config['shifts'] = self::normalizeShifts($input['shifts'] ?? []);
-
-        if ($config['sites'] === [] && $config['center_latitude'] !== null && $config['center_longitude'] !== null) {
-            $config['sites'] = [[
-                'name' => 'Primary location',
-                'latitude' => $config['center_latitude'],
-                'longitude' => $config['center_longitude'],
-            ]];
-        }
-
-        if ($config['sites'] !== []) {
-            $primary = $config['sites'][0];
-            $config['center_latitude'] = $primary['latitude'];
-            $config['center_longitude'] = $primary['longitude'];
-        }
-
-        if ($config['geofence_enabled'] && $config['sites'] === []) {
-            $config['geofence_enabled'] = false;
-        }
 
         return $config;
     }
@@ -86,15 +58,7 @@ class DepartmentAttendanceSettings
     {
         return [
             'enabled' => ['nullable', 'boolean'],
-            'geofence_enabled' => ['nullable', 'boolean'],
-            'center_latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'center_longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'sites' => ['nullable', 'array'],
-            'sites.*.name' => ['required_with:sites', 'string', 'max:120'],
-            'sites.*.latitude' => ['required_with:sites', 'numeric', 'between:-90,90'],
-            'sites.*.longitude' => ['required_with:sites', 'numeric', 'between:-180,180'],
-            'radius_meters' => ['nullable', 'integer', 'min:10', 'max:50000'],
-            'allow_outside_radius' => ['nullable', 'boolean'],
+            'attendance_location_id' => ['nullable', 'integer', 'exists:attendance_locations,id'],
             'timezone' => ['nullable', 'timezone:all'],
             'grace_period_minutes' => ['nullable', 'integer', 'min:0', 'max:180'],
             'allow_outside_shift_hours' => ['nullable', 'boolean'],
@@ -119,12 +83,7 @@ class DepartmentAttendanceSettings
     {
         return [
             'enabled' => $config['enabled'],
-            'geofence_enabled' => $config['geofence_enabled'],
-            'center_latitude' => $config['center_latitude'],
-            'center_longitude' => $config['center_longitude'],
-            'sites' => $config['sites'],
-            'radius_meters' => $config['radius_meters'],
-            'allow_outside_radius' => $config['allow_outside_radius'],
+            'attendance_location_id' => $config['attendance_location_id'],
             'timezone' => $config['timezone'],
             'grace_period_minutes' => $config['grace_period_minutes'],
             'allow_outside_shift_hours' => $config['allow_outside_shift_hours'],
@@ -215,15 +174,14 @@ class DepartmentAttendanceSettings
      */
     public static function serializeForApi(DepartmentAttendanceSetting $setting): array
     {
-        return [
+        $location = $setting->relationLoaded('attendanceLocation')
+            ? $setting->attendanceLocation
+            : null;
+
+        $payload = [
             'department_id' => $setting->department_id,
             'enabled' => $setting->enabled,
-            'geofence_enabled' => $setting->geofence_enabled,
-            'center_latitude' => $setting->center_latitude !== null ? (float) $setting->center_latitude : null,
-            'center_longitude' => $setting->center_longitude !== null ? (float) $setting->center_longitude : null,
-            'sites' => self::normalizeSites($setting->sites ?? []),
-            'radius_meters' => $setting->radius_meters,
-            'allow_outside_radius' => $setting->allow_outside_radius,
+            'attendance_location_id' => $setting->attendance_location_id,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
@@ -232,6 +190,26 @@ class DepartmentAttendanceSettings
             'overtime_threshold_minutes' => $setting->overtime_threshold_minutes,
             'shifts' => $setting->shifts ?? [],
         ];
+
+        if ($location) {
+            $payload['attendance_location'] = AttendanceLocationSettings::serializeForApi($location);
+            $payload['geofence_enabled'] = $location->geofence_enabled;
+            $payload['center_latitude'] = $location->center_latitude !== null ? (float) $location->center_latitude : null;
+            $payload['center_longitude'] = $location->center_longitude !== null ? (float) $location->center_longitude : null;
+            $payload['sites'] = AttendanceLocationSettings::resolveSites($location);
+            $payload['radius_meters'] = $location->radius_meters;
+            $payload['allow_outside_radius'] = $location->allow_outside_radius;
+        } else {
+            $payload['attendance_location'] = null;
+            $payload['geofence_enabled'] = false;
+            $payload['center_latitude'] = null;
+            $payload['center_longitude'] = null;
+            $payload['sites'] = [];
+            $payload['radius_meters'] = AttendanceLocationSettings::DEFAULTS['radius_meters'];
+            $payload['allow_outside_radius'] = false;
+        }
+
+        return $payload;
     }
 
     private static function normalizeTime(string $time): ?string
@@ -263,6 +241,15 @@ class DepartmentAttendanceSettings
     private static function toBool(mixed $value): bool
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private static function toNullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     private static function toNullableFloat(mixed $value): ?float

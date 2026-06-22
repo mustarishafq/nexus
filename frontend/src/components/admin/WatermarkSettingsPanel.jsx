@@ -92,7 +92,7 @@ export default function WatermarkSettingsPanel({ settings, onChange }) {
       <div className="border-b bg-muted/30 px-4 py-3">
         <h3 className="text-sm font-medium">Live preview</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Sample location data is shown here. On the attendance page, real GPS and street address are used.
+          Switch to Live selfie to preview the watermark caption on your camera. On the attendance page, real GPS and address are used.
         </p>
       </div>
       <div className="p-3 sm:p-4">

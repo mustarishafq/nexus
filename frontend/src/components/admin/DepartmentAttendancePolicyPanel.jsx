@@ -1,76 +1,25 @@
 import db from '@/api/base44Client';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, MapPin, Plus, Save, Trash2, Clock3 } from 'lucide-react';
+import { Clock3, Loader2, MapPin, Plus, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import {
   DEFAULT_SHIFT,
-  DEFAULT_SITE,
   departmentAttendanceSettingsToPayload,
   normalizeDepartmentAttendanceSettings,
   WEEKDAYS,
 } from '@/lib/attendancePolicy';
 import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
+import AdminSettingsToolbar, { adminSettingsToolbarButtonClassName } from '@/components/admin/AdminSettingsToolbar';
+import TimezoneSelect from '@/components/admin/TimezoneSelect';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLocation }) {
-  return (
-    <div className="rounded-xl border bg-muted/10 p-3 space-y-3">
-      <div className="flex items-start gap-2">
-        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Site name</Label>
-            <Input
-              value={site.name}
-              onChange={(event) => onChange(index, { ...site, name: event.target.value })}
-              placeholder="EMZI HQ"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Latitude</Label>
-            <Input
-              value={site.latitude}
-              onChange={(event) => onChange(index, { ...site, latitude: event.target.value })}
-              placeholder="3.1390"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Longitude</Label>
-            <Input
-              value={site.longitude}
-              onChange={(event) => onChange(index, { ...site, longitude: event.target.value })}
-              placeholder="101.6869"
-            />
-          </div>
-        </div>
-        {canRemove ? (
-          <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => onRemove(index)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onUseCurrentLocation(index)}
-        className="gap-2 w-full sm:w-auto"
-      >
-        <MapPin className="h-3.5 w-3.5" />
-        Use my location
-      </Button>
-    </div>
-  );
-}
 
 function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
   const toggleDay = (day) => {
@@ -111,14 +60,17 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
               onChange={(event) => onChange(index, { ...shift, end_time: event.target.value })}
             />
           </div>
-          <div className="flex items-end">
-            <label className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border px-3 text-sm">
-              <span className="text-xs text-muted-foreground">Crosses midnight</span>
+          <div className="sm:col-span-3">
+            <AdminSettingsToggleRow
+              className="p-3"
+              label={<Label className="text-xs">Crosses midnight</Label>}
+              description="Enable for night shifts that end after midnight, e.g. 22:00–06:00."
+            >
               <Switch
                 checked={Boolean(shift.crosses_midnight)}
                 onCheckedChange={(checked) => onChange(index, { ...shift, crosses_midnight: checked })}
               />
-            </label>
+            </AdminSettingsToggleRow>
           </div>
         </div>
         {canRemove ? (
@@ -163,7 +115,13 @@ export default function DepartmentAttendancePolicyPanel() {
     queryFn: () => db.departmentAttendance.list(),
   });
 
+  const { data: locationsData } = useQuery({
+    queryKey: ['attendance-locations'],
+    queryFn: () => db.attendanceLocations.list(),
+  });
+
   const departments = data?.departments || [];
+  const locations = locationsData?.locations || [];
 
   useEffect(() => {
     if (!departmentId && departments.length) {
@@ -194,41 +152,16 @@ export default function DepartmentAttendancePolicyPanel() {
     [departments, departmentId],
   );
 
+  const selectedLocation = useMemo(
+    () => locations.find((item) => String(item.id) === String(form.attendance_location_id)),
+    [locations, form.attendance_location_id],
+  );
+
   const updateShift = (index, nextShift) => {
     setForm((current) => ({
       ...current,
       shifts: current.shifts.map((shift, shiftIndex) => (shiftIndex === index ? nextShift : shift)),
     }));
-  };
-
-  const updateSite = (index, nextSite) => {
-    setForm((current) => ({
-      ...current,
-      sites: current.sites.map((site, siteIndex) => (siteIndex === index ? nextSite : site)),
-      center_latitude: index === 0 ? nextSite.latitude : current.center_latitude,
-      center_longitude: index === 0 ? nextSite.longitude : current.center_longitude,
-    }));
-  };
-
-  const addSite = () => {
-    setForm((current) => ({
-      ...current,
-      sites: [...current.sites, { ...DEFAULT_SITE, name: `Site ${current.sites.length + 1}` }],
-    }));
-  };
-
-  const removeSite = (index) => {
-    setForm((current) => {
-      const sites = current.sites.filter((_, siteIndex) => siteIndex !== index);
-      const primarySite = sites[0];
-
-      return {
-        ...current,
-        sites,
-        center_latitude: primarySite?.latitude ?? '',
-        center_longitude: primarySite?.longitude ?? '',
-      };
-    });
   };
 
   const addShift = () => {
@@ -245,35 +178,6 @@ export default function DepartmentAttendancePolicyPanel() {
     }));
   };
 
-  const useCurrentLocation = (siteIndex = 0) => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not available in this browser');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude.toFixed(7);
-        const longitude = position.coords.longitude.toFixed(7);
-
-        setForm((current) => ({
-          ...current,
-          geofence_enabled: true,
-          sites: current.sites.map((site, index) => (
-            index === siteIndex
-              ? { ...site, latitude, longitude }
-              : site
-          )),
-          center_latitude: siteIndex === 0 ? latitude : current.center_latitude,
-          center_longitude: siteIndex === 0 ? longitude : current.center_longitude,
-        }));
-        toast.success('Current location applied');
-      },
-      () => toast.error('Unable to get current location'),
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
-  };
-
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
@@ -284,11 +188,11 @@ export default function DepartmentAttendancePolicyPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border bg-muted/10 p-4 lg:flex-row lg:items-end">
-        <div className="min-w-0 flex-1 space-y-2">
-          <Label>Department</Label>
+      <AdminSettingsToolbar
+        label={<Label>Department</Label>}
+        control={(
           <Select value={departmentId} onValueChange={setDepartmentId}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
@@ -299,22 +203,22 @@ export default function DepartmentAttendancePolicyPanel() {
               ))}
             </SelectContent>
           </Select>
-          {selectedDepartment ? (
-            <p className="text-xs text-muted-foreground">
-              Rules apply to users assigned to {selectedDepartment.name}.
-            </p>
-          ) : null}
-        </div>
-        <Button
-          type="button"
-          onClick={() => saveMutation.mutate()}
-          disabled={!departmentId || saveMutation.isPending}
-          className="gap-2 w-full lg:w-auto min-h-[40px] shrink-0"
-        >
-          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save department policy
-        </Button>
-      </div>
+        )}
+        actions={(
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={!departmentId || saveMutation.isPending}
+            className={adminSettingsToolbarButtonClassName('gap-2')}
+          >
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save department policy
+          </Button>
+        )}
+        description={selectedDepartment
+          ? `Rules apply to users assigned to ${selectedDepartment.name}.`
+          : null}
+      />
 
       <AdminSettingsToggleRow
         className="p-3"
@@ -335,62 +239,59 @@ export default function DepartmentAttendancePolicyPanel() {
               Location radius
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Register clock-in sites. Users within the radius see the site name on their photo.
+              Assign a shared location. Multiple departments can use the same geofence.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <AdminSettingsToggleRow className="p-3 sm:col-span-2" label={<Label>Enable geofence</Label>}>
-                <Switch
-                  checked={form.geofence_enabled}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, geofence_enabled: checked }))}
-                />
-              </AdminSettingsToggleRow>
-
-              <div className="space-y-2 sm:col-span-2">
-                <div className="flex items-center justify-between gap-3">
-                  <Label>Allowed radius</Label>
-                  <span className="text-sm font-medium tabular-nums">{form.radius_meters} m</span>
-                </div>
-                <Slider
-                  min={50}
-                  max={5000}
-                  step={50}
-                  value={[form.radius_meters]}
-                  onValueChange={([value]) => setForm((current) => ({ ...current, radius_meters: value }))}
-                />
-              </div>
-
-              <AdminSettingsToggleRow
-                className="p-3 sm:col-span-2"
-                label={<Label>Allow outside radius</Label>}
-                description="Allow outstation clock-in/out with a warning when outside all sites."
-              >
-                <Switch
-                  checked={form.allow_outside_radius}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_radius: checked }))}
-                />
-              </AdminSettingsToggleRow>
-            </div>
-
             <div className="space-y-2">
-              {form.sites.map((site, index) => (
-                <SiteEditor
-                  key={`${site.name}-${index}`}
-                  site={site}
-                  index={index}
-                  onChange={updateSite}
-                  onRemove={removeSite}
-                  canRemove={form.sites.length > 1}
-                  onUseCurrentLocation={useCurrentLocation}
-                />
-              ))}
+              <Label>Assigned location</Label>
+              <Select
+                value={form.attendance_location_id ? String(form.attendance_location_id) : 'none'}
+                onValueChange={(value) => setForm((current) => ({
+                  ...current,
+                  attendance_location_id: value === 'none' ? null : Number(value),
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No location assigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No location assigned</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={String(location.id)}>
+                      {location.name}
+                      {location.geofence_enabled ? ` · ${location.radius_meters}m` : ' · geofence off'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Manage locations in the Location radius section above. Changes apply to all assigned departments.
+              </p>
             </div>
 
-            <Button type="button" variant="outline" size="sm" onClick={addSite} className="gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Add site
-            </Button>
+            {selectedLocation ? (
+              <div className="rounded-xl border bg-muted/10 p-3 space-y-2 text-sm">
+                <div className="font-medium">{selectedLocation.name}</div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>
+                    Geofence: {selectedLocation.geofence_enabled ? `enabled · ${selectedLocation.radius_meters}m radius` : 'disabled'}
+                  </p>
+                  {selectedLocation.sites?.length ? (
+                    <p>
+                      Sites: {selectedLocation.sites.map((site) => site.name).join(', ')}
+                    </p>
+                  ) : null}
+                  {selectedLocation.allow_outside_radius ? (
+                    <p>Outstation clock-in allowed with warning</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No location assigned. Users in this department will not be geofence-restricted.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -409,11 +310,13 @@ export default function DepartmentAttendancePolicyPanel() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Timezone</Label>
-                  <Input
+                  <TimezoneSelect
                     value={form.timezone}
-                    onChange={(event) => setForm((current) => ({ ...current, timezone: event.target.value }))}
-                    placeholder="Asia/Kuala_Lumpur"
+                    onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Used to evaluate shift hours, grace period, and overtime for this department.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Grace period (minutes)</Label>

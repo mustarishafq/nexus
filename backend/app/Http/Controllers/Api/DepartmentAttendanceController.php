@@ -23,6 +23,7 @@ class DepartmentAttendanceController extends Controller
             ->get(['id', 'name']);
 
         $settings = DepartmentAttendanceSetting::query()
+            ->with('attendanceLocation')
             ->get()
             ->keyBy('department_id');
 
@@ -48,6 +49,7 @@ class DepartmentAttendanceController extends Controller
         }
 
         $setting = DepartmentAttendanceSetting::query()
+            ->with('attendanceLocation')
             ->where('department_id', $department->id)
             ->first();
 
@@ -73,6 +75,8 @@ class DepartmentAttendanceController extends Controller
             ['department_id' => $department->id],
             DepartmentAttendanceSettings::toDatabaseColumns($config),
         );
+
+        $setting->load('attendanceLocation');
 
         return response()->json([
             'department' => $department->only(['id', 'name']),

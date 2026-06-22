@@ -24,12 +24,7 @@ export const DEFAULT_SITE = {
 
 export const DEFAULT_DEPARTMENT_ATTENDANCE_SETTINGS = {
   enabled: true,
-  geofence_enabled: false,
-  center_latitude: '',
-  center_longitude: '',
-  sites: [{ ...DEFAULT_SITE }],
-  radius_meters: 200,
-  allow_outside_radius: false,
+  attendance_location_id: null,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   grace_period_minutes: 15,
   allow_outside_shift_hours: false,
@@ -51,37 +46,9 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     }))
     : [{ ...DEFAULT_SHIFT }];
 
-  let sites = Array.isArray(input.sites) && input.sites.length
-    ? input.sites.map((site) => ({
-      name: site.name || 'Site',
-      latitude: site.latitude ?? '',
-      longitude: site.longitude ?? '',
-    }))
-    : [];
-
-  if (!sites.length && input.center_latitude != null && input.center_latitude !== ''
-    && input.center_longitude != null && input.center_longitude !== '') {
-    sites = [{
-      name: 'Primary location',
-      latitude: input.center_latitude,
-      longitude: input.center_longitude,
-    }];
-  }
-
-  if (!sites.length) {
-    sites = [{ ...DEFAULT_SITE }];
-  }
-
-  const primarySite = sites[0];
-
   return {
     enabled: input.enabled !== false,
-    geofence_enabled: Boolean(input.geofence_enabled),
-    center_latitude: input.center_latitude ?? primarySite.latitude ?? '',
-    center_longitude: input.center_longitude ?? primarySite.longitude ?? '',
-    sites,
-    radius_meters: Number(input.radius_meters ?? 200),
-    allow_outside_radius: Boolean(input.allow_outside_radius),
+    attendance_location_id: input.attendance_location_id ?? null,
     timezone: input.timezone || base.timezone,
     grace_period_minutes: Number(input.grace_period_minutes ?? 15),
     allow_outside_shift_hours: Boolean(input.allow_outside_shift_hours),
@@ -89,26 +56,28 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     standard_hours_per_day: Number(input.standard_hours_per_day ?? 8),
     overtime_threshold_minutes: Number(input.overtime_threshold_minutes ?? 0),
     shifts,
+    geofence_enabled: Boolean(input.geofence_enabled),
+    center_latitude: input.center_latitude ?? '',
+    center_longitude: input.center_longitude ?? '',
+    sites: Array.isArray(input.sites) ? input.sites : [],
+    radius_meters: Number(input.radius_meters ?? 200),
+    allow_outside_radius: Boolean(input.allow_outside_radius),
   };
 }
 
 export function departmentAttendanceSettingsToPayload(form) {
   const normalized = normalizeDepartmentAttendanceSettings(form);
-  const sites = normalized.sites
-    .map((site) => ({
-      name: site.name,
-      latitude: site.latitude === '' ? null : Number(site.latitude),
-      longitude: site.longitude === '' ? null : Number(site.longitude),
-    }))
-    .filter((site) => site.name && site.latitude != null && site.longitude != null);
-
-  const primarySite = sites[0] || null;
 
   return {
-    ...normalized,
-    sites,
-    center_latitude: primarySite?.latitude ?? null,
-    center_longitude: primarySite?.longitude ?? null,
+    enabled: normalized.enabled,
+    attendance_location_id: normalized.attendance_location_id,
+    timezone: normalized.timezone,
+    grace_period_minutes: normalized.grace_period_minutes,
+    allow_outside_shift_hours: normalized.allow_outside_shift_hours,
+    overtime_enabled: normalized.overtime_enabled,
+    standard_hours_per_day: normalized.standard_hours_per_day,
+    overtime_threshold_minutes: normalized.overtime_threshold_minutes,
+    shifts: normalized.shifts,
   };
 }
 
@@ -229,6 +198,9 @@ export function describeAttendancePolicy(policy) {
   const parts = [];
   if (policy.department_name) {
     parts.push(`Department: ${policy.department_name}`);
+  }
+  if (policy.attendance_location_name) {
+    parts.push(`Location: ${policy.attendance_location_name}`);
   }
   if (policy.geofence_enabled) {
     const siteCount = resolveAttendanceSites(policy).length;

@@ -301,6 +301,24 @@ export const db = {
 		},
 	},
 
+	attendanceLocations: {
+		async list() {
+			return request('/admin/attendance-locations');
+		},
+
+		async create(data) {
+			return request('/admin/attendance-locations', { method: 'POST', body: data });
+		},
+
+		async update(locationId, data) {
+			return request(`/admin/attendance-locations/${locationId}`, { method: 'PUT', body: data });
+		},
+
+		async delete(locationId) {
+			return request(`/admin/attendance-locations/${locationId}`, { method: 'DELETE' });
+		},
+	},
+
 	attendance: {
 		async status() {
 			return request('/attendance/status');

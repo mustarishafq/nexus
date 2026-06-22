@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BroadcastController;
 use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\AttendanceLocationController;
 use App\Http\Controllers\Api\DepartmentAttendanceController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
@@ -84,6 +85,10 @@ Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'discon
 
 Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
+Route::get('/admin/attendance-locations', [AttendanceLocationController::class, 'index']);
+Route::post('/admin/attendance-locations', [AttendanceLocationController::class, 'store']);
+Route::put('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'update']);
+Route::delete('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'destroy']);
 Route::get('/admin/department-attendance', [DepartmentAttendanceController::class, 'index']);
 Route::get('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'show']);
 Route::put('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'update']);

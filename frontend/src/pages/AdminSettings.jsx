@@ -12,6 +12,7 @@ import SplashSettingsPanel from '@/components/admin/SplashSettingsPanel';
 import LaunchSettingsPanel from '@/components/admin/LaunchSettingsPanel';
 import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
 import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
+import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { normalizeSplashAnimation } from '@/lib/splashAnimations';
@@ -217,9 +218,20 @@ export default function AdminSettings({ embedded = false }) {
                 </Card>
                 <Card className="rounded-2xl">
                   <CardHeader className="pb-3 px-4 sm:px-6">
+                    <CardTitle className="text-base">Location radius</CardTitle>
+                    <CardDescription>
+                      Shared geofence locations. Assign the same location to multiple departments.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
+                    <AttendanceLocationPanel />
+                  </CardContent>
+                </Card>
+                <Card className="rounded-2xl">
+                  <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Department attendance rules</CardTitle>
                     <CardDescription>
-                      Set geofence radius, working hours, shifts, and overtime rules per department.
+                      Assign a shared location and set working hours, shifts, and overtime rules per department.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AttendanceRecord;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
+use App\Support\AttendanceLocationSettings;
 use Carbon\Carbon;
 
 class AttendancePolicyValidator
@@ -16,6 +17,7 @@ class AttendancePolicyValidator
         }
 
         return DepartmentAttendanceSetting::query()
+            ->with('attendanceLocation')
             ->where('department_id', $user->department_id)
             ->where('enabled', true)
             ->first();
@@ -84,16 +86,19 @@ class AttendancePolicyValidator
         }
 
         $user->loadMissing('department');
+        $location = $setting->attendanceLocation;
 
         return [
             'department_id' => $setting->department_id,
             'department_name' => $user->department?->name,
-            'geofence_enabled' => $setting->geofence_enabled,
-            'center_latitude' => $setting->center_latitude !== null ? (float) $setting->center_latitude : null,
-            'center_longitude' => $setting->center_longitude !== null ? (float) $setting->center_longitude : null,
-            'sites' => DepartmentAttendanceSettings::normalizeSites($setting->sites ?? []),
-            'radius_meters' => $setting->radius_meters,
-            'allow_outside_radius' => $setting->allow_outside_radius,
+            'attendance_location_id' => $setting->attendance_location_id,
+            'attendance_location_name' => $location?->name,
+            'geofence_enabled' => (bool) $location?->geofence_enabled,
+            'center_latitude' => $location?->center_latitude !== null ? (float) $location->center_latitude : null,
+            'center_longitude' => $location?->center_longitude !== null ? (float) $location->center_longitude : null,
+            'sites' => AttendanceLocationSettings::resolveSites($location),
+            'radius_meters' => $location?->radius_meters ?? AttendanceLocationSettings::DEFAULTS['radius_meters'],
+            'allow_outside_radius' => (bool) $location?->allow_outside_radius,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
@@ -145,12 +150,14 @@ class AttendancePolicyValidator
         array &$warnings,
         array &$metadata,
     ): void {
-        if (! $setting->geofence_enabled) {
+        $location = $setting->attendanceLocation;
+
+        if (! $location?->geofence_enabled) {
             return;
         }
 
         if ($latitude === null || $longitude === null) {
-            if (! $setting->allow_outside_radius) {
+            if (! $location->allow_outside_radius) {
                 $errors[] = 'Location is required for attendance in your department.';
             } else {
                 $warnings[] = 'Location unavailable; recorded without geofence verification.';
@@ -160,7 +167,7 @@ class AttendancePolicyValidator
             return;
         }
 
-        $sites = self::resolveSites($setting);
+        $sites = AttendanceLocationSettings::resolveSites($location);
 
         if ($sites === []) {
             return;
@@ -183,7 +190,7 @@ class AttendancePolicyValidator
                 $closestSite = $site;
             }
 
-            if ($distance <= $setting->radius_meters) {
+            if ($distance <= $location->radius_meters) {
                 $matchedSite = $site;
                 $metadata['distance_meters'] = round($distance, 1);
                 break;
@@ -199,10 +206,10 @@ class AttendancePolicyValidator
         $metadata['distance_meters'] = round((float) $closestDistance, 1);
         $metadata['nearest_site_name'] = $closestSite['name'] ?? null;
 
-        if (! $setting->allow_outside_radius) {
+        if (! $location->allow_outside_radius) {
             $errors[] = sprintf(
                 'You must be within %dm of a registered site (nearest: %s, ~%dm away).',
-                $setting->radius_meters,
+                $location->radius_meters,
                 $closestSite['name'] ?? 'assigned location',
                 (int) round((float) $closestDistance),
             );
@@ -214,28 +221,6 @@ class AttendancePolicyValidator
             );
             $metadata['outside_radius'] = true;
         }
-    }
-
-    /**
-     * @return array<int, array{name: string, latitude: float, longitude: float}>
-     */
-    private static function resolveSites(DepartmentAttendanceSetting $setting): array
-    {
-        $sites = DepartmentAttendanceSettings::normalizeSites($setting->sites ?? []);
-
-        if ($sites !== []) {
-            return $sites;
-        }
-
-        if ($setting->center_latitude === null || $setting->center_longitude === null) {
-            return [];
-        }
-
-        return [[
-            'name' => 'Primary location',
-            'latitude' => (float) $setting->center_latitude,
-            'longitude' => (float) $setting->center_longitude,
-        ]];
     }
 
     /**
