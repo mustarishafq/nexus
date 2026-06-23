@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Moon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
-import { glassDialogMutedText, glassDialogPanelStyles } from './glassStyles';
+import { glassDialogMutedText, glassPanelStyles } from './glassStyles';
 import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -84,7 +84,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
         overlayClassName="bg-black/25 backdrop-blur-sm"
         className={cn(
           'flex max-h-[85dvh] flex-col rounded-t-2xl border-t p-0 pb-[env(safe-area-inset-bottom)]',
-          glassDialogPanelStyles
+          glassPanelStyles
         )}
       >
         <SheetHeader className="border-b border-border/50 px-4 py-4 text-left">

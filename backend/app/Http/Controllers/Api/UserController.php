@@ -30,7 +30,9 @@ class UserController extends Controller
     {
         $users = $this->applyIndexQuery(
             $request,
-            User::query()->with(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills']),
+            User::query()
+                ->with(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills'])
+                ->withExists('pushSubscriptions'),
             ['role', 'email']
         )->get();
 
@@ -732,6 +734,25 @@ class UserController extends Controller
         return response()->json($user->fresh()->load(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills']));
     }
 
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        $admin = ApiTokenAuth::userFromRequest($request);
+
+        if ($admin && $admin->id === $user->id) {
+            return response()->json([
+                'message' => 'You cannot remove your own account.',
+            ], 422);
+        }
+
+        $user->delete();
+
+        return response()->json(['message' => 'User removed.']);
+    }
+
     /**
      * @return \Illuminate\Support\Collection<int, User>
      */
@@ -885,6 +906,7 @@ class UserController extends Controller
     {
         return array_merge($user->toArray(), [
             'profile_completeness' => ProfileCompleteness::forUser($user),
+            'has_push_subscription' => (bool) $user->pushSubscriptions_exists,
         ]);
     }
 

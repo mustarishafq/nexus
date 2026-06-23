@@ -1,12 +1,13 @@
 import db from '@/api/base44Client';
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { followNotificationAction } from '@/lib/notificationAction';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCheck, Filter, Bell } from 'lucide-react';
+import { X, CheckCheck, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,6 +18,8 @@ import {
   invalidateNotificationQueries,
   removeUnreadNotificationFromCache,
 } from '@/hooks/useNotifications';
+import { cn } from '@/lib/utils';
+import { glassPanelStyles } from '@/components/layout/glassStyles';
 
 export default function NotificationPanel({ open, onClose, onCountChange }) {
   const [notifications, setNotifications] = useState([]);
@@ -162,7 +165,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     return true;
   });
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -172,7 +175,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
           />
 
           {/* Panel */}
@@ -181,10 +184,14 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-card border-l border-border shadow-2xl flex flex-col"
+            className={cn(
+              'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
+              'rounded-bl-2xl sm:rounded-none border-l',
+              glassPanelStyles
+            )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border/50">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-primary" />
                 <h2 className="font-semibold text-lg">Notifications</h2>
@@ -244,7 +251,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
             </ScrollArea>
 
             {/* Footer */}
-            <div className="p-3 border-t border-border">
+            <div className="p-3 border-t border-border/50">
               <Link to="/notifications" onClick={onClose}>
                 <Button variant="outline" className="w-full text-sm h-9">
                   View All Notifications
@@ -254,6 +261,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

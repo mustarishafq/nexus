@@ -113,6 +113,7 @@ Route::get('/users/{user}/profile', [UserController::class, 'profile']);
 Route::post('/users/{user}/profile-nudge', [UserController::class, 'profileNudge']);
 Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
+Route::delete('/users/{user}', [UserController::class, 'destroy']);
 
 Route::post('/uploads', [FileUploadController::class, 'store']);
 Route::get('/push-subscriptions', function () {

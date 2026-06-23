@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, Sparkles, KeyRound, Send } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -284,6 +284,7 @@ export default function UserManagement() {
   const [editGroup, setEditGroup] = useState(null);
   const [groupForm, setGroupForm] = useState({ name: '', description: '', allowedSlugs: new Set(), userIds: new Set() });
   const [groupSaving, setGroupSaving] = useState(false);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
   const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
   const [dashboardDialogOpen, setDashboardDialogOpen] = useState(false);
   const [editDashboard, setEditDashboard] = useState(null);
@@ -518,6 +519,12 @@ export default function UserManagement() {
     }
   };
 
+  const removeFromUsersCache = (id) => {
+    queryClient.setQueryData(['users'], (old) =>
+      (Array.isArray(old) ? old : []).filter((user) => String(user.id) !== String(id))
+    );
+  };
+
   const removeFromAccessGroupsCache = (id) => {
     queryClient.setQueryData(['access-groups'], (old) =>
       (Array.isArray(old) ? old : []).filter((group) => String(group.id) !== String(id))
@@ -531,6 +538,19 @@ export default function UserManagement() {
     queryClient.setQueryData(['metabase-dashboards-admin'], remove);
     queryClient.setQueryData(['metabase-dashboards'], remove);
   };
+
+  const deleteUserMut = useMutation({
+    mutationFn: ({ id }) => db.entities.User.delete(id),
+    onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.error(err?.data?.message || err.message || 'Failed to remove user');
+    },
+    onSuccess: async (_data, { id, name }) => {
+      removeFromUsersCache(id);
+      await queryClient.refetchQueries({ queryKey: ['users'] });
+      toast.success(`Removed ${name}`);
+    },
+  });
 
   const deleteGroupMut = useMutation({
     mutationFn: ({ id }) => db.entities.AccessGroup.delete(id),
@@ -694,6 +714,13 @@ export default function UserManagement() {
     } finally {
       setDashboardSaving(false);
     }
+  };
+
+  const confirmDeleteUser = () => {
+    if (!pendingDeleteUser || deleteUserMut.isPending) return;
+    const user = pendingDeleteUser;
+    setPendingDeleteUser(null);
+    deleteUserMut.mutate({ id: user.id, name: user.full_name || user.email });
   };
 
   const confirmDeleteGroup = () => {
@@ -893,6 +920,13 @@ export default function UserManagement() {
             Approve user
           </DropdownMenuItem>
         )}
+        <DropdownMenuItem
+          onClick={() => setPendingDeleteUser(user)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          Remove user
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     );
@@ -1500,13 +1534,25 @@ export default function UserManagement() {
                       </div>
                       {renderUserActionsMenu(user)}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
                         {user.role || 'user'}
                       </Badge>
-                      <Badge variant={user.is_approved ? 'default' : 'outline'} className="text-xs">
+                      <Badge
+                        variant={user.is_approved ? 'default' : 'outline'}
+                        className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
+                      >
                         {user.is_approved ? 'approved' : 'pending'}
                       </Badge>
+                      {!user.has_push_subscription && (
+                        <Badge
+                          variant="outline"
+                          title="Web push not enabled"
+                          className="text-xs px-1.5 border-amber-500/40 text-amber-500"
+                        >
+                          <BellOff className="h-3 w-3" />
+                        </Badge>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 gap-1.5 text-xs text-muted-foreground">
                       <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete</p>
@@ -1548,12 +1594,23 @@ export default function UserManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={user.is_approved ? 'default' : 'outline'}
-                          className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
-                        >
-                          {user.is_approved ? 'approved' : 'pending'}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            variant={user.is_approved ? 'default' : 'outline'}
+                            className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
+                          >
+                            {user.is_approved ? 'approved' : 'pending'}
+                          </Badge>
+                          {!user.has_push_subscription && (
+                            <Badge
+                              variant="outline"
+                              title="Web push not enabled"
+                              className="text-xs px-1.5 border-amber-500/40 text-amber-500"
+                            >
+                              <BellOff className="h-3 w-3" />
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <ProfileStrengthCell user={user} />
@@ -2530,6 +2587,39 @@ export default function UserManagement() {
                 : pendingUserApproval?.isApproved
                   ? 'Approve'
                   : 'Revoke access'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(pendingDeleteUser)} onOpenChange={(open) => !open && setPendingDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteUser ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {pendingDeleteUser.full_name || pendingDeleteUser.email}
+                  </span>{' '}
+                  will be removed and will no longer be able to sign in. Their data is kept and can be restored if needed.
+                </>
+              ) : (
+                'This user will be removed and will no longer be able to sign in.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteUserMut.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteUserMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteUser();
+              }}
+            >
+              {deleteUserMut.isPending ? 'Removing...' : 'Remove user'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
