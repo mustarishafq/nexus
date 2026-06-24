@@ -384,7 +384,11 @@ export default function Applications() {
         return [...current, created];
       });
       queryClient.invalidateQueries({ queryKey: ['applications'] });
-      resetDialogState();
+      setEditSystem(created);
+      setNotificationConfig(normalizeNotificationEventMapping(created?.notification_config));
+      setCalendarConfig(normalizeCalendarEventMapping(created?.calendar_config));
+      setIntegrationResetKey((current) => current + 1);
+      toast.success('Application registered. You can test webhook mappings before closing.');
     },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to create application');

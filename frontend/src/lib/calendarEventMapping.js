@@ -198,8 +198,7 @@ export function buildNestedSampleCalendarEvent() {
       location: 'HQ Meeting Room A',
       start_at: '2026-06-26T14:00:00+08:00',
       end_at: '2026-06-26T15:00:00+08:00',
-      attendee_emails: ['alex@example.com', { user_id: 42 }],
-      attendee_user_ids: [7],
+      attendee_emails: ['alex@example.com', 'sam@example.com'],
       organizer_email: 'organizer@example.com',
     },
   };

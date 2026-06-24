@@ -348,10 +348,14 @@ class CalendarEventMapperService
             return collect();
         }
 
-        return User::query()
-            ->whereIn('id', $userIds)
-            ->where('is_approved', true)
-            ->pluck('email');
+        try {
+            return User::query()
+                ->whereIn('id', $userIds)
+                ->where('is_approved', true)
+                ->pluck('email');
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     private function nullableString(mixed $value): ?string
