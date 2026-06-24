@@ -1,8 +1,7 @@
 import db from '@/api/base44Client';
 import React from 'react';
 
-import { useQueryClient } from '@tanstack/react-query';
-import RecentNotificationsWidget from '@/components/dashboard/RecentNotificationsWidget';
+import ActionItemsWidget from '@/components/dashboard/ActionItemsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import { getDisplayName } from '@/lib/profile';
@@ -14,18 +13,10 @@ import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useAuth } from '@/lib/AuthContext';
-import {
-  RECENT_NOTIFICATIONS_QUERY_KEY,
-  UNREAD_NOTIFICATIONS_QUERY_KEY,
-  useRecentNotifications,
-} from '@/hooks/useNotifications';
 import { useQuery } from '@tanstack/react-query';
 
 export default function Dashboard() {
-  const queryClient = useQueryClient();
   const { user, checkUserAuth } = useAuth();
-
-  const { data: notifications = [] } = useRecentNotifications();
 
   const { data: systems = [] } = useQuery({
     queryKey: ['applications'],
@@ -45,20 +36,11 @@ export default function Dashboard() {
 
   useMetaTags({
     title: `${getDisplayName(user, 'Dashboard')} - EMZI Nexus Brain`,
-    description: `${notifications.filter((n) => !n.is_read).length} unread notifications`,
+    description: 'Your EMZI Nexus Brain dashboard',
   });
 
   const refreshUser = async () => {
     await checkUserAuth();
-  };
-
-  const markRead = async (notif) => {
-    await db.entities.Notification.update(notif.id, {
-      is_read: true,
-      read_at: new Date().toISOString(),
-    });
-    queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY });
   };
 
   return (
@@ -71,34 +53,35 @@ export default function Dashboard() {
         transition={{ delay: 0.05 }}
         className="grid grid-cols-1 xl:grid-cols-12 gap-6"
       >
+        {/* Mobile order: about (collapsed) → celebrations → todos → calendar → feed → apps → health */}
         <div className="max-xl:contents xl:col-span-3 xl:flex xl:flex-col xl:gap-6">
-          <div className="order-1 xl:order-none">
-            <ProfileAboutCard user={user} />
-          </div>
-          <div className="order-6 xl:order-none">
-            <RecentNotificationsWidget notifications={notifications} onMarkRead={markRead} />
+          <div className="max-xl:order-1 xl:order-none">
+            <ProfileAboutCard user={user} compact defaultCollapsed isOwnProfile />
           </div>
         </div>
 
         <div className="max-xl:contents xl:col-span-6 xl:flex xl:flex-col xl:gap-6">
-          <div className="order-3 xl:order-none">
+          <div className="max-xl:order-4 xl:order-none">
             <div className="bg-card rounded-2xl border border-border overflow-hidden">
               <WeeklyCalendarWidget embedded />
             </div>
           </div>
-          <div className="order-2 xl:order-none">
+          <div className="max-xl:order-5 xl:order-none">
             <CompanyFeedWidget />
           </div>
-          <div className="order-4 xl:order-none">
+          <div className="max-xl:order-6 xl:order-none">
             <ProfileRecentApplicationsWidget applications={systems} activities={activities} />
           </div>
         </div>
 
         <div className="max-xl:contents xl:col-span-3 xl:flex xl:flex-col xl:gap-6">
-          <div className="order-3 xl:order-none">
+          <div className="max-xl:order-2 xl:order-none">
             <TodaysCelebrationsWidget />
           </div>
-          <div className="order-7 xl:order-none">
+          <div className="max-xl:order-3 xl:order-none">
+            <ActionItemsWidget />
+          </div>
+          <div className="max-xl:order-7 xl:order-none">
             <SystemHealthWidget systems={systems} />
           </div>
         </div>

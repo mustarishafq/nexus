@@ -410,6 +410,16 @@ export const db = {
 			return request(`/dashboard/celebrations${query}`);
 		},
 
+		async actionItems({ limit } = {}) {
+			const query = buildQuery({ limit });
+			const payload = await request(`/dashboard/action-items${query}`);
+			return Array.isArray(payload) ? payload : [];
+		},
+
+		async completeActionItem(id) {
+			return request(`/dashboard/action-items/${id}/complete`, { method: 'PATCH' });
+		},
+
         async sendReaction(data) {
 			return request('/dashboard/celebrations/wishes', { method: 'POST', body: data });
 		},

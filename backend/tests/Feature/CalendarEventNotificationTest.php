@@ -52,6 +52,13 @@ class CalendarEventNotificationTest extends TestCase
         $this->assertNull($notification->system_id);
         $this->assertSame('calendar_event_created', $notification->data['kind']);
         $this->assertSame('created', $notification->data['action']);
+
+        $this->assertDatabaseHas('user_todos', [
+            'user_id' => $invitee->id,
+            'notification_id' => $notification->id,
+            'title' => 'Meeting invitation: Weekly sync',
+            'category' => 'calendar',
+        ]);
     }
 
     public function test_rescheduling_event_notifies_invitees(): void

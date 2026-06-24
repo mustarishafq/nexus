@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\SystemEventController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSystemAccessController;
+use App\Http\Controllers\Api\UserTodoController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -69,6 +70,8 @@ Route::patch('/network-health/alerts/{networkHealthAlert}/acknowledge', [Network
 Route::get('/dashboard/celebrations', [DashboardController::class, 'celebrations']);
 Route::post('/dashboard/celebrations/wishes', [DashboardController::class, 'storeWish']);
 Route::delete('/dashboard/celebrations/wishes/{celebrationWish}', [DashboardController::class, 'destroyWish']);
+Route::get('/dashboard/action-items', [UserTodoController::class, 'index']);
+Route::patch('/dashboard/action-items/{userTodo}/complete', [UserTodoController::class, 'complete']);
 Route::get('/feed', [FeedController::class, 'index']);
 Route::post('/posts', [PostController::class, 'store']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);

@@ -266,7 +266,7 @@ export default function Profile() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="max-xl:contents xl:col-span-4 xl:flex xl:flex-col xl:gap-6">
           <div className="order-2 xl:order-none">
-            <ProfileAboutCard user={user} showCompleteLink={false} showChecklist />
+            <ProfileAboutCard user={user} showCompleteLink={false} showChecklist isOwnProfile />
           </div>
 
           <motion.div
