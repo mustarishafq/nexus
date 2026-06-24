@@ -1,14 +1,14 @@
 import {
   Info, CheckCircle, AlertTriangle, XCircle, AlertOctagon,
   BookOpen, Users, Package, DollarSign, Shield, Monitor,
-  ListTodo, ThumbsUp, Megaphone,
+  ListTodo, ThumbsUp, Megaphone, Calendar,
 } from 'lucide-react';
 
 export const NOTIFICATION_TYPES = ['info', 'success', 'warning', 'error', 'critical'];
 
 export const NOTIFICATION_CATEGORIES = [
   'booking', 'hr', 'inventory', 'finance', 'security',
-  'system', 'task', 'approval', 'announcement', 'other',
+  'system', 'task', 'approval', 'announcement', 'calendar', 'other',
 ];
 
 export const NOTIFICATION_PRIORITIES = ['low', 'medium', 'high', 'critical'];
@@ -71,6 +71,7 @@ export const notificationCategoryVisuals = {
   task: { label: 'Task', icon: ListTodo },
   approval: { label: 'Approval', icon: ThumbsUp },
   announcement: { label: 'Announcement', icon: Megaphone },
+  calendar: { label: 'Calendar', icon: Calendar },
   other: { label: 'Other', icon: Info },
 };
 

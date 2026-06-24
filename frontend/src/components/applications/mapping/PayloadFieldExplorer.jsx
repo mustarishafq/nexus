@@ -56,7 +56,7 @@ function DraggablePayloadField({ path, value, valueType, depth, isLeaf }) {
   );
 }
 
-export default function PayloadFieldExplorer({ samplePayload }) {
+export default function PayloadFieldExplorer({ samplePayload, scrollContainerRef }) {
   const [search, setSearch] = useState('');
   const { data: payload, error } = useMemo(
     () => parseSamplePayload(samplePayload),
@@ -100,7 +100,7 @@ export default function PayloadFieldExplorer({ samplePayload }) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-[240px] overflow-y-auto p-2">
+      <div ref={scrollContainerRef} className="flex-1 min-h-[240px] overflow-y-auto overscroll-contain p-2">
         {error ? (
           <div className="flex items-start gap-2 p-3 text-xs text-destructive">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />

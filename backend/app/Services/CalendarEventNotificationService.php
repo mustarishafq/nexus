@@ -45,12 +45,15 @@ class CalendarEventNotificationService
         $organizerName = $this->resolveOrganizerName($event, $actor);
         $schedule = $this->formatSchedule($event);
 
+        $systemId = filled($event->source_system_id) ? (string) $event->source_system_id : null;
+
         foreach ($users as $user) {
             $notification = Notification::create([
                 'user_id' => (string) $user->id,
+                'system_id' => $systemId,
                 'type' => $action === self::ACTION_CANCELLED ? 'warning' : 'info',
                 'priority' => 'medium',
-                'category' => 'other',
+                'category' => 'calendar',
                 'title' => $this->titleFor($action, (string) $event->title),
                 'message' => $this->messageFor($action, $event, $organizerName, $schedule),
                 'action_url' => '/calendar',

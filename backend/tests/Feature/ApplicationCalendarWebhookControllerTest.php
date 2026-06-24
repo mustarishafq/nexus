@@ -212,6 +212,8 @@ class ApplicationCalendarWebhookControllerTest extends TestCase
 
         $this->assertNotNull($notification);
         $this->assertSame('calendar_event_rescheduled', $notification->data['kind']);
+        $this->assertSame('calendar', $notification->category);
+        $this->assertSame('booking-app', $notification->system_id);
     }
 
     public function test_webhook_cancels_existing_event_and_notifies_invitees(): void

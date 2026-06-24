@@ -53,6 +53,7 @@
         "task",
         "approval",
         "announcement",
+        "calendar",
         "other"
       ],
       "default": "other"

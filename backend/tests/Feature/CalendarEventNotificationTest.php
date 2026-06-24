@@ -48,6 +48,8 @@ class CalendarEventNotificationTest extends TestCase
 
         $this->assertNotNull($notification);
         $this->assertSame('Meeting invitation: Weekly sync', $notification->title);
+        $this->assertSame('calendar', $notification->category);
+        $this->assertNull($notification->system_id);
         $this->assertSame('calendar_event_created', $notification->data['kind']);
         $this->assertSame('created', $notification->data['action']);
     }

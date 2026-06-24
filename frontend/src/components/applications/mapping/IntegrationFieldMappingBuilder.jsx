@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -9,6 +9,7 @@ import {
   closestCenter,
 } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@/lib/dndModifiers';
+import { useDragScrollContainers } from '@/lib/useDragScrollContainers';
 import { GripVertical, Workflow } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,6 +35,11 @@ export default function IntegrationFieldMappingBuilder({
   payloadDescription = 'Paste a real webhook body from the external system to explore and map fields.',
 }) {
   const [activeDrag, setActiveDrag] = useState(null);
+  const sourceListRef = useRef(null);
+  const targetListRef = useRef(null);
+  const scrollContainerRefs = useMemo(() => [sourceListRef, targetListRef], []);
+
+  useDragScrollContainers(Boolean(activeDrag), scrollContainerRefs);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -134,10 +140,13 @@ export default function IntegrationFieldMappingBuilder({
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-0 xl:divide-x divide-border/60">
             <div className="p-3 min-h-[320px]">
-              <PayloadFieldExplorer samplePayload={samplePayload} />
+              <PayloadFieldExplorer samplePayload={samplePayload} scrollContainerRef={sourceListRef} />
             </div>
 
-            <div className="p-3 space-y-3 max-h-[420px] overflow-y-auto bg-background/40">
+            <div
+              ref={targetListRef}
+              className="p-3 space-y-3 max-h-[420px] overflow-y-auto overscroll-contain bg-background/40"
+            >
               <div>
                 <p className="text-xs font-medium">{targetTitle}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{targetDescription}</p>
