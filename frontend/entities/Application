@@ -83,6 +83,10 @@
       "type": "string",
       "description": "JSON config for mapping external events to notification payloads"
     },
+    "calendar_config": {
+      "type": "string",
+      "description": "JSON config for mapping external events to calendar events"
+    },
     "color": {
       "type": "string",
       "description": "Brand color hex"

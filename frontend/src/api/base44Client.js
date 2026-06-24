@@ -616,6 +616,15 @@ export const db = {
 		});
 	},
 
+	async previewApplicationCalendarMapping(applicationId, event, calendarConfig = null) {
+		return request(`/applications/${applicationId}/calendar-webhook/preview`, {
+			method: 'POST',
+			body: calendarConfig
+				? { event, calendar_config: calendarConfig }
+				: event,
+		});
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */

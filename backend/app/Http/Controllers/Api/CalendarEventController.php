@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\CalendarEvent;
 use App\Models\User;
+use App\Services\CalendarEventNotificationService;
 use App\Services\GoogleCalendarService;
 use App\Support\ApiTokenAuth;
 use App\Support\SyncAssignmentRecords;
@@ -19,9 +20,14 @@ class CalendarEventController extends Controller
 
     protected GoogleCalendarService $googleCalendarService;
 
-    public function __construct(GoogleCalendarService $googleCalendarService)
-    {
+    protected CalendarEventNotificationService $calendarEventNotificationService;
+
+    public function __construct(
+        GoogleCalendarService $googleCalendarService,
+        CalendarEventNotificationService $calendarEventNotificationService,
+    ) {
         $this->googleCalendarService = $googleCalendarService;
+        $this->calendarEventNotificationService = $calendarEventNotificationService;
     }
 
     public function index(Request $request): JsonResponse
@@ -90,7 +96,14 @@ class CalendarEventController extends Controller
 
         $this->syncToGoogle($item);
 
-        return response()->json($item->fresh()->load('attendees'), 201);
+        $item = $item->fresh()->load('attendees');
+        $this->calendarEventNotificationService->notifyInvitees(
+            $item,
+            CalendarEventNotificationService::ACTION_CREATED,
+            $user
+        );
+
+        return response()->json($item, 201);
     }
 
     public function show(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -135,6 +148,8 @@ class CalendarEventController extends Controller
         }
         unset($validated['attendee_emails']);
 
+        $wasRescheduled = $this->wasScheduleChanged($calendarEvent, $validated);
+
         $startAt = array_key_exists('start_at', $validated) ? $validated['start_at'] : $calendarEvent->start_at;
         $endAt = array_key_exists('end_at', $validated) ? $validated['end_at'] : $calendarEvent->end_at;
 
@@ -160,7 +175,17 @@ class CalendarEventController extends Controller
 
         $this->syncToGoogle($calendarEvent);
 
-        return response()->json($calendarEvent->fresh()->load('attendees'));
+        $calendarEvent = $calendarEvent->fresh()->load('attendees');
+
+        if ($wasRescheduled) {
+            $this->calendarEventNotificationService->notifyInvitees(
+                $calendarEvent,
+                CalendarEventNotificationService::ACTION_RESCHEDULED,
+                $user
+            );
+        }
+
+        return response()->json($calendarEvent);
     }
 
     public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -173,6 +198,13 @@ class CalendarEventController extends Controller
         if (! $this->userCanManageEvent($user, $calendarEvent)) {
             return response()->json(['message' => 'You can only delete events you created.'], 403);
         }
+
+        $calendarEvent->load('attendees');
+        $this->calendarEventNotificationService->notifyInvitees(
+            $calendarEvent,
+            CalendarEventNotificationService::ACTION_CANCELLED,
+            $user
+        );
 
         $this->googleCalendarService->deleteEvent($calendarEvent);
 
@@ -238,6 +270,29 @@ class CalendarEventController extends Controller
         $ownerEmail = strtolower(trim((string) $calendarEvent->created_by));
 
         return $email !== '' && $ownerEmail !== '' && $email === $ownerEmail;
+    }
+
+    protected function wasScheduleChanged(CalendarEvent $calendarEvent, array $validated): bool
+    {
+        if (array_key_exists('start_at', $validated)) {
+            if (! $calendarEvent->start_at->equalTo(Carbon::parse($validated['start_at']))) {
+                return true;
+            }
+        }
+
+        if (array_key_exists('end_at', $validated)) {
+            if (! $calendarEvent->end_at->equalTo(Carbon::parse($validated['end_at']))) {
+                return true;
+            }
+        }
+
+        if (array_key_exists('is_all_day', $validated)) {
+            if ((bool) $validated['is_all_day'] !== (bool) $calendarEvent->is_all_day) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function normalizeAttendeeEmails(?array $emails): ?array

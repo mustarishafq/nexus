@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, KeyRound, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, Calendar as CalendarIcon, KeyRound, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
@@ -10,6 +10,7 @@ import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
 import { getEnvironmentBadge } from '@/lib/applicationEnvironment';
 import { toAbsoluteUrl } from '@/lib/media';
 import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping';
+import { applicationCalendarSyncEnabled } from '@/lib/calendarEventMapping';
 
 const hoverRevealClass =
   'opacity-0 transition-all duration-300 ease-out group-hover:opacity-100 group-focus-within:opacity-100';
@@ -33,6 +34,7 @@ export default function ApplicationCard({
   const isOnline = system.status === 'online';
   const environmentBadge = getEnvironmentBadge(system.environment);
   const notificationsEnabled = applicationNotificationsEnabled(system);
+  const calendarSyncEnabled = applicationCalendarSyncEnabled(system);
   const isInteractive = !readOnly && system.is_enabled && onLaunch;
   const footerDetail = footerSubtitle ?? (system.description?.trim() || 'No description provided');
   const showOverlayFooter = !footerOutside;
@@ -97,6 +99,19 @@ export default function ApplicationCard({
         >
           <Bell className="h-2.5 w-2.5 text-amber-300" aria-hidden />
           <span className="sr-only">Notifications enabled</span>
+        </span>
+      )}
+
+      {calendarSyncEnabled && (
+        <span
+          className={cn(
+            'pointer-events-none absolute bottom-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]',
+            notificationsEnabled ? 'left-8' : 'left-2'
+          )}
+          title="Calendar sync enabled"
+        >
+          <CalendarIcon className="h-2.5 w-2.5 text-sky-300" aria-hidden />
+          <span className="sr-only">Calendar sync enabled</span>
         </span>
       )}
 

@@ -27,6 +27,7 @@ class Application extends Model
         'is_enabled',
         'last_heartbeat',
         'notification_config',
+        'calendar_config',
         'color',
         'sort_order',
     ];
@@ -44,6 +45,7 @@ class Application extends Model
             'is_enabled' => 'boolean',
             'last_heartbeat' => 'datetime',
             'notification_config' => 'array',
+            'calendar_config' => 'array',
         ];
     }
 

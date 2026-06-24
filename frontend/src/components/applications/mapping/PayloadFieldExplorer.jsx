@@ -83,7 +83,7 @@ export default function PayloadFieldExplorer({ samplePayload }) {
   }, [filteredFields]);
 
   return (
-    <div className="flex flex-col h-full min-h-0 rounded-lg border border-border/70 bg-background/80">
+    <div className="flex flex-col h-full min-h-[240px] rounded-lg border border-border/70 bg-background/80">
       <div className="p-3 border-b border-border/70 space-y-2">
         <p className="text-xs font-medium">Source fields</p>
         <p className="text-[11px] text-muted-foreground">
@@ -100,7 +100,7 @@ export default function PayloadFieldExplorer({ samplePayload }) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-2 max-h-80">
+      <div className="flex-1 min-h-[240px] overflow-y-auto p-2">
         {error ? (
           <div className="flex items-start gap-2 p-3 text-xs text-destructive">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />

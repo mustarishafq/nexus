@@ -18,6 +18,8 @@ class CalendarEvent extends Model
         'end_at',
         'is_all_day',
         'created_by',
+        'source_system_id',
+        'external_event_id',
         'google_calendar_url',
         'google_event_id',
         'google_sync_status',

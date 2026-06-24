@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Bell, Monitor, Plus, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
+import { Bell, Calendar as CalendarIcon, Monitor, Plus, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,9 +42,10 @@ import { cn } from '@/lib/utils';
 import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
 import { applicationNotificationsEnabled, normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
+import { applicationCalendarSyncEnabled, normalizeCalendarEventMapping } from '@/lib/calendarEventMapping';
 import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
-import NotificationEventMappingEditor from '@/components/applications/NotificationEventMappingEditor';
+import ApplicationIntegrationsSection from '@/components/applications/ApplicationIntegrationsSection';
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import {
   DEFAULT_BRAND_COLOR,
@@ -125,6 +126,11 @@ function SortableReorderRow({ system }) {
         {applicationNotificationsEnabled(system) ? (
           <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
             <Bell className="w-2.5 h-2.5" /> Notifications
+          </Badge>
+        ) : null}
+        {applicationCalendarSyncEnabled(system) ? (
+          <Badge variant="outline" className="text-[10px] gap-1 border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+            <CalendarIcon className="w-2.5 h-2.5" /> Calendar
           </Badge>
         ) : null}
         <Badge className={cn('text-[10px]', config.bg, config.color, 'border-0')}>
@@ -266,6 +272,7 @@ export default function Applications() {
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [copiedDeleteName, setCopiedDeleteName] = useState(false);
   const [notificationConfig, setNotificationConfig] = useState(() => normalizeNotificationEventMapping());
+  const [calendarConfig, setCalendarConfig] = useState(() => normalizeCalendarEventMapping());
   const queryClient = useQueryClient();
 
   const generateApiKey = () => {
@@ -315,6 +322,7 @@ export default function Applications() {
     setVisibility(system?.visibility || 'private');
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
+    setCalendarConfig(normalizeCalendarEventMapping(system?.calendar_config));
     setDialogOpen(true);
   };
 
@@ -363,6 +371,7 @@ export default function Applications() {
     setPrivateAllowedEmails([]);
     setPrivateUsersPickerOpen(false);
     setNotificationConfig(normalizeNotificationEventMapping());
+    setCalendarConfig(normalizeCalendarEventMapping());
   };
 
   const createMut = useMutation({
@@ -502,6 +511,7 @@ export default function Applications() {
       color: brandColor,
       icon_url: logoUrl || undefined,
       notification_config: notificationConfig,
+      calendar_config: calendarConfig,
     };
     if (editSystem) {
       updateMut.mutate({ id: editSystem.id, data });
@@ -561,14 +571,14 @@ export default function Applications() {
               <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setEnvironment('production'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setEnvironment('production'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); setCalendarConfig(normalizeCalendarEventMapping()); } }}>
             <DialogTrigger asChild>
               <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Add</span>
               </Button>
             </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogContent className="sm:max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
             </DialogHeader>
@@ -735,10 +745,11 @@ export default function Applications() {
                   </label>
                 </div>
               </div>
-              <NotificationEventMappingEditor
-                key={editSystem?.id ?? 'new-application'}
-                value={notificationConfig}
-                onChange={setNotificationConfig}
+              <ApplicationIntegrationsSection
+                notificationConfig={notificationConfig}
+                onNotificationConfigChange={setNotificationConfig}
+                calendarConfig={calendarConfig}
+                onCalendarConfigChange={setCalendarConfig}
                 applicationId={editSystem?.id}
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

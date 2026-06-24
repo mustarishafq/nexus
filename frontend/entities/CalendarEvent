@@ -26,6 +26,12 @@
     "created_by": {
       "type": "string"
     },
+    "source_system_id": {
+      "type": "string"
+    },
+    "external_event_id": {
+      "type": "string"
+    },
     "attendee_emails": {
       "type": "array",
       "items": {

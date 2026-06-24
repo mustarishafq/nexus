@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\PostReactionController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ApplicationController;
+use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialController;
@@ -135,6 +136,8 @@ Route::post('applications/{application}/sso-credentials', [ApplicationSsoCredent
 Route::delete('applications/{application}/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialController::class, 'destroy']);
 Route::post('applications/{application}/event-webhook', [ApplicationEventWebhookController::class, 'store']);
 Route::post('applications/{application}/event-webhook/preview', [ApplicationEventWebhookController::class, 'preview']);
+Route::post('applications/{application}/calendar-webhook', [ApplicationCalendarWebhookController::class, 'store']);
+Route::post('applications/{application}/calendar-webhook/preview', [ApplicationCalendarWebhookController::class, 'preview']);
 Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('metabase-dashboards', MetabaseDashboardController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);

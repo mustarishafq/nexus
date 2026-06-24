@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationEligibleUsers;
 use App\Support\ApplicationSsoCredentials;
+use App\Support\CalendarEventMapping;
 use App\Support\NotificationEventMapping;
 use App\Support\SyncAssignmentRecords;
 use App\Support\UserApplicationAccess;
@@ -95,6 +96,7 @@ class ApplicationController extends Controller
             'is_enabled' => ['sometimes', 'boolean'],
             'last_heartbeat' => ['nullable', 'date'],
             'notification_config' => ['nullable', 'array'],
+            'calendar_config' => ['nullable', 'array'],
             'color' => ['nullable', 'string', 'max:20'],
         ]);
 
@@ -112,6 +114,10 @@ class ApplicationController extends Controller
 
         if (array_key_exists('notification_config', $validated)) {
             $validated['notification_config'] = NotificationEventMapping::normalizeForStorage($validated['notification_config']);
+        }
+
+        if (array_key_exists('calendar_config', $validated)) {
+            $validated['calendar_config'] = CalendarEventMapping::normalizeForStorage($validated['calendar_config']);
         }
 
         $item = Application::create($validated);
@@ -169,6 +175,7 @@ class ApplicationController extends Controller
             'is_enabled' => ['sometimes', 'boolean'],
             'last_heartbeat' => ['nullable', 'date'],
             'notification_config' => ['nullable', 'array'],
+            'calendar_config' => ['nullable', 'array'],
             'color' => ['nullable', 'string', 'max:20'],
         ]);
 
@@ -190,6 +197,10 @@ class ApplicationController extends Controller
 
         if (array_key_exists('notification_config', $validated)) {
             $validated['notification_config'] = NotificationEventMapping::normalizeForStorage($validated['notification_config']);
+        }
+
+        if (array_key_exists('calendar_config', $validated)) {
+            $validated['calendar_config'] = CalendarEventMapping::normalizeForStorage($validated['calendar_config']);
         }
 
         $application->update($validated);
