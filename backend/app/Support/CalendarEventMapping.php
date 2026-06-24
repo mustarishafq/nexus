@@ -5,16 +5,17 @@ namespace App\Support;
 class CalendarEventMapping
 {
     public const DEFAULT_FIELD_MAPPINGS = [
-        'title' => ['title', 'subject', 'summary'],
-        'description' => ['description', 'body', 'details'],
-        'location' => ['location', 'venue'],
-        'start_at' => ['start_at', 'starts_at', 'start'],
-        'end_at' => ['end_at', 'ends_at', 'end'],
-        'is_all_day' => ['is_all_day', 'all_day'],
-        'attendee_emails' => ['attendee_emails', 'attendees', 'invitees'],
-        'action' => ['action', 'event', 'event_type'],
-        'external_event_id' => ['external_event_id', 'id', 'event_id'],
-        'created_by' => ['created_by', 'organizer_email', 'organizer'],
+        'title' => ['title', 'subject', 'summary', 'data.title'],
+        'description' => ['description', 'body', 'details', 'data.description'],
+        'location' => ['location', 'venue', 'data.location'],
+        'start_at' => ['start_at', 'starts_at', 'start', 'data.start_at', 'data.starts_at'],
+        'end_at' => ['end_at', 'ends_at', 'end', 'data.end_at', 'data.ends_at'],
+        'is_all_day' => ['is_all_day', 'all_day', 'data.is_all_day'],
+        'attendee_emails' => ['attendee_emails', 'attendees', 'invitees', 'data.attendee_emails', 'data.attendees'],
+        'attendee_user_ids' => ['attendee_user_ids', 'user_ids', 'invitee_user_ids', 'data.attendee_user_ids', 'data.user_ids'],
+        'action' => ['action', 'event', 'event_type', 'data.action', 'data.type'],
+        'external_event_id' => ['external_event_id', 'id', 'event_id', 'data.id', 'data.event_id', 'data.external_event_id'],
+        'created_by' => ['created_by', 'organizer_email', 'organizer', 'data.organizer_email', 'data.created_by'],
     ];
 
     public const DEFAULT_ACTION_RULES = [

@@ -9,6 +9,7 @@ export default function ApplicationIntegrationsSection({
   calendarConfig,
   onCalendarConfigChange,
   applicationId,
+  resetKey = 0,
 }) {
   return (
     <div className="space-y-4 rounded-2xl border border-border/70 bg-gradient-to-b from-muted/25 to-transparent p-4">
@@ -26,16 +27,18 @@ export default function ApplicationIntegrationsSection({
 
       <div className="space-y-3">
         <NotificationEventMappingEditor
-          key={`notifications-${applicationId ?? 'new'}`}
+          key={`notifications-${applicationId ?? 'new'}-${resetKey}`}
           value={notificationConfig}
           onChange={onNotificationConfigChange}
           applicationId={applicationId}
+          resetKey={resetKey}
         />
         <CalendarEventMappingEditor
-          key={`calendar-${applicationId ?? 'new'}`}
+          key={`calendar-${applicationId ?? 'new'}-${resetKey}`}
           value={calendarConfig}
           onChange={onCalendarConfigChange}
           applicationId={applicationId}
+          resetKey={resetKey}
         />
       </div>
     </div>

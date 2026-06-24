@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Application;
+use App\Models\User;
 use App\Support\CalendarEventMapping;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 class CalendarEventMapperService
@@ -73,10 +75,16 @@ class CalendarEventMapperService
                 ),
                 (bool) ($defaults['is_all_day'] ?? false)
             ),
-            'attendee_emails' => $this->resolveEmailList($this->resolveField(
-                $event,
-                $this->pathsFor($fieldMappings, 'attendee_emails', ['attendee_emails', 'attendees', 'invitees'])
-            )),
+            'attendee_emails' => $this->resolveInvitees(
+                $this->resolveField(
+                    $event,
+                    $this->pathsFor($fieldMappings, 'attendee_emails', ['attendee_emails', 'attendees', 'invitees'])
+                ),
+                $this->resolveField(
+                    $event,
+                    $this->pathsFor($fieldMappings, 'attendee_user_ids', ['attendee_user_ids', 'user_ids', 'invitee_user_ids'])
+                )
+            ),
             'action' => $action,
             'external_event_id' => mb_substr((string) $externalEventId, 0, 255),
             'created_by' => $this->nullableString($this->resolveField(
@@ -219,42 +227,131 @@ class CalendarEventMapperService
     /**
      * @return array<int, string>|null
      */
-    private function resolveEmailList(mixed $value): ?array
+    private function resolveInvitees(mixed $emailSource, mixed $userIdSource): ?array
     {
-        if ($value === null || $value === '') {
-            return null;
+        $emails = collect();
+        $userIds = collect();
+
+        foreach ([$emailSource, $userIdSource] as $source) {
+            if ($source === null || $source === '') {
+                continue;
+            }
+
+            $this->collectInviteeTokens($source, $emails, $userIds);
         }
 
-        if (is_string($value)) {
-            $value = preg_split('/[\s,;]+/', $value) ?: [];
-        }
-
-        if (! is_array($value)) {
-            return null;
-        }
-
-        $emails = collect($value)
-            ->map(function ($item) {
-                if (is_string($item)) {
-                    return strtolower(trim($item));
-                }
-
-                if (is_array($item)) {
-                    foreach (['email', 'address', 'value'] as $key) {
-                        if (isset($item[$key]) && is_string($item[$key])) {
-                            return strtolower(trim($item[$key]));
-                        }
-                    }
-                }
-
-                return null;
-            })
-            ->filter()
+        $resolved = $emails
+            ->merge($this->emailsForUserIds($userIds->unique()->values()->all()))
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter(fn ($email) => $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL))
             ->unique()
             ->values()
             ->all();
 
-        return $emails === [] ? null : $emails;
+        return $resolved === [] ? null : $resolved;
+    }
+
+    private function collectInviteeTokens(mixed $value, Collection $emails, Collection $userIds): void
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            if ($trimmed === '') {
+                return;
+            }
+
+            if (str_contains($trimmed, '@')) {
+                $emails->push($trimmed);
+
+                return;
+            }
+
+            if (is_numeric($trimmed)) {
+                $userIds->push((int) $trimmed);
+
+                return;
+            }
+
+            foreach (preg_split('/[\s,;]+/', $trimmed) ?: [] as $part) {
+                $this->collectInviteeTokens($part, $emails, $userIds);
+            }
+
+            return;
+        }
+
+        if (is_numeric($value)) {
+            $userIds->push((int) $value);
+
+            return;
+        }
+
+        if (! is_array($value)) {
+            return;
+        }
+
+        if (! array_is_list($value)) {
+            $this->collectInviteeObject($value, $emails, $userIds);
+
+            return;
+        }
+
+        foreach ($value as $item) {
+            $this->collectInviteeTokens($item, $emails, $userIds);
+        }
+    }
+
+    private function collectInviteeObject(array $item, Collection $emails, Collection $userIds): void
+    {
+        foreach (['email', 'address', 'value'] as $key) {
+            if (! empty($item[$key]) && is_string($item[$key])) {
+                $emails->push($item[$key]);
+
+                return;
+            }
+        }
+
+        foreach (['user_id', 'userId', 'user'] as $key) {
+            if (! isset($item[$key])) {
+                continue;
+            }
+
+            $candidate = $item[$key];
+
+            if (is_numeric($candidate)) {
+                $userIds->push((int) $candidate);
+
+                return;
+            }
+
+            if (is_string($candidate) && is_numeric(trim($candidate))) {
+                $userIds->push((int) trim($candidate));
+
+                return;
+            }
+        }
+
+        if (
+            isset($item['id'])
+            && (is_numeric($item['id']) || (is_string($item['id']) && is_numeric(trim($item['id']))))
+        ) {
+            $userIds->push((int) (is_string($item['id']) ? trim($item['id']) : $item['id']));
+        }
+    }
+
+    /**
+     * @param  array<int, int>  $userIds
+     * @return Collection<int, string>
+     */
+    private function emailsForUserIds(array $userIds): Collection
+    {
+        if ($userIds === []) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereIn('id', $userIds)
+            ->where('is_approved', true)
+            ->pluck('email');
     }
 
     private function nullableString(mixed $value): ?string

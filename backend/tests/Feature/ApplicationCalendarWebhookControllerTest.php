@@ -76,18 +76,48 @@ class ApplicationCalendarWebhookControllerTest extends TestCase
             'title' => 'Planning session',
             'start_at' => '2026-06-25T10:00:00Z',
             'end_at' => '2026-06-25T11:00:00Z',
-            'attendee_emails' => ['invitee@example.com'],
+            'attendee_user_ids' => [$invitee->id],
         ], ['X-Webhook-Secret' => 'calendar-secret'])
             ->assertCreated()
             ->assertJsonPath('action', 'created')
             ->assertJsonPath('calendar_event.title', 'Planning session');
 
-        $this->assertDatabaseHas('calendar_events', [
-            'title' => 'Planning session',
-            'source_system_id' => 'booking-app',
-            'external_event_id' => 'meet-1',
-            'created_by' => 'organizer@example.com',
+        $this->assertDatabaseHas('calendar_event_attendees', [
+            'email' => 'invitee@example.com',
         ]);
+
+        $this->assertSame(1, Notification::query()->where('user_id', (string) $invitee->id)->count());
+    }
+
+    public function test_webhook_creates_calendar_event_with_email_invitees(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+        ]);
+        $invitee = User::factory()->create([
+            'email' => 'invitee@example.com',
+            'is_approved' => true,
+        ]);
+
+        $application = Application::factory()->create([
+            'slug' => 'booking-app',
+            'created_by_user_id' => $organizer->id,
+            'calendar_config' => CalendarEventMapping::normalize([
+                'auto_sync' => true,
+                'webhook_secret' => 'calendar-secret',
+            ]),
+        ]);
+
+        $this->postJson("/api/applications/{$application->id}/calendar-webhook", [
+            'event' => 'calendar.created',
+            'external_event_id' => 'meet-1',
+            'title' => 'Planning session',
+            'start_at' => '2026-06-25T10:00:00Z',
+            'end_at' => '2026-06-25T11:00:00Z',
+            'attendee_emails' => ['invitee@example.com'],
+        ], ['X-Webhook-Secret' => 'calendar-secret'])
+            ->assertCreated();
 
         $this->assertSame(1, Notification::query()->where('user_id', (string) $invitee->id)->count());
     }

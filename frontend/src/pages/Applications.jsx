@@ -273,6 +273,7 @@ export default function Applications() {
   const [copiedDeleteName, setCopiedDeleteName] = useState(false);
   const [notificationConfig, setNotificationConfig] = useState(() => normalizeNotificationEventMapping());
   const [calendarConfig, setCalendarConfig] = useState(() => normalizeCalendarEventMapping());
+  const [integrationResetKey, setIntegrationResetKey] = useState(0);
   const queryClient = useQueryClient();
 
   const generateApiKey = () => {
@@ -323,6 +324,7 @@ export default function Applications() {
     setPrivateAllowedEmails(Array.isArray(system?.private_allowed_user_emails) ? system.private_allowed_user_emails : []);
     setNotificationConfig(normalizeNotificationEventMapping(system?.notification_config));
     setCalendarConfig(normalizeCalendarEventMapping(system?.calendar_config));
+    setIntegrationResetKey((current) => current + 1);
     setDialogOpen(true);
   };
 
@@ -751,6 +753,7 @@ export default function Applications() {
                 calendarConfig={calendarConfig}
                 onCalendarConfigChange={setCalendarConfig}
                 applicationId={editSystem?.id}
+                resetKey={integrationResetKey}
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

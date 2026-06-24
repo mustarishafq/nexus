@@ -20,6 +20,7 @@ export default function NotificationEventMappingEditor({
   value,
   onChange,
   applicationId,
+  resetKey = 0,
 }) {
   const config = useMemo(
     () => normalizeNotificationEventMapping(value),
@@ -66,9 +67,14 @@ export default function NotificationEventMappingEditor({
       return;
     }
 
+    const previewConfig = normalizeNotificationEventMapping({
+      ...config,
+      field_mappings: formToFieldMappings(mappingForm),
+    });
+
     setPreviewLoading(true);
     try {
-      const result = await db.previewApplicationEventMapping(applicationId, event, config);
+      const result = await db.previewApplicationEventMapping(applicationId, event, previewConfig);
       setPreviewOutput(JSON.stringify(result?.payload || {}, null, 2));
     } catch (error) {
       toast.error(error?.data?.message || error.message || 'Preview failed');

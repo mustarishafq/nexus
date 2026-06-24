@@ -20,6 +20,7 @@ export default function CalendarEventMappingEditor({
   value,
   onChange,
   applicationId,
+  resetKey = 0,
 }) {
   const config = useMemo(
     () => normalizeCalendarEventMapping(value),
@@ -66,9 +67,14 @@ export default function CalendarEventMappingEditor({
       return;
     }
 
+    const previewConfig = normalizeCalendarEventMapping({
+      ...config,
+      field_mappings: formToFieldMappings(mappingForm),
+    });
+
     setPreviewLoading(true);
     try {
-      const result = await db.previewApplicationCalendarMapping(applicationId, event, config);
+      const result = await db.previewApplicationCalendarMapping(applicationId, event, previewConfig);
       setPreviewOutput(JSON.stringify(result?.payload || {}, null, 2));
     } catch (error) {
       toast.error(error?.data?.message || error.message || 'Preview failed');

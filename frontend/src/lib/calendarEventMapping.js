@@ -1,8 +1,6 @@
 export {
   appendMappingPath,
-  fieldMappingsToForm,
   flattenPayloadPaths,
-  formToFieldMappings,
   formValueFromPaths,
   formatPayloadValuePreview,
   parseSamplePayload,
@@ -14,16 +12,17 @@ export const DEFAULT_CALENDAR_EVENT_MAPPING = {
   auto_sync: false,
   webhook_secret: '',
   field_mappings: {
-    title: ['title', 'subject', 'summary'],
-    description: ['description', 'body', 'details'],
-    location: ['location', 'venue'],
-    start_at: ['start_at', 'starts_at', 'start'],
-    end_at: ['end_at', 'ends_at', 'end'],
-    is_all_day: ['is_all_day', 'all_day'],
-    attendee_emails: ['attendee_emails', 'attendees', 'invitees'],
-    action: ['action', 'event', 'event_type'],
-    external_event_id: ['external_event_id', 'id', 'event_id'],
-    created_by: ['created_by', 'organizer_email', 'organizer'],
+    title: ['title', 'subject', 'summary', 'data.title'],
+    description: ['description', 'body', 'details', 'data.description'],
+    location: ['location', 'venue', 'data.location'],
+    start_at: ['start_at', 'starts_at', 'start', 'data.start_at', 'data.starts_at'],
+    end_at: ['end_at', 'ends_at', 'end', 'data.end_at', 'data.ends_at'],
+    is_all_day: ['is_all_day', 'all_day', 'data.is_all_day'],
+    attendee_emails: ['attendee_emails', 'attendees', 'invitees', 'data.attendee_emails', 'data.attendees'],
+    attendee_user_ids: ['attendee_user_ids', 'user_ids', 'invitee_user_ids', 'data.attendee_user_ids', 'data.user_ids'],
+    action: ['action', 'event', 'event_type', 'data.action', 'data.type'],
+    external_event_id: ['external_event_id', 'id', 'event_id', 'data.id', 'data.event_id', 'data.external_event_id'],
+    created_by: ['created_by', 'organizer_email', 'organizer', 'data.organizer_email', 'data.created_by'],
   },
   action_rules: [
     { prefix: 'calendar.cancelled', action: 'cancelled' },
@@ -56,7 +55,8 @@ export const CALENDAR_FIELD_LABELS = {
   start_at: 'Start date/time (required for create/update)',
   end_at: 'End date/time (required for create/update)',
   is_all_day: 'All-day flag',
-  attendee_emails: 'Invitee emails',
+  attendee_emails: 'Invitees (emails or mixed attendee objects)',
+  attendee_user_ids: 'Invitee user IDs',
   action: 'Action (created, updated, rescheduled, cancelled)',
   external_event_id: 'External event ID (required)',
   created_by: 'Organizer email',
@@ -70,6 +70,7 @@ export const NESTED_CALENDAR_FIELD_MAPPINGS = {
   end_at: ['data.end_at', 'data.ends_at'],
   is_all_day: ['data.is_all_day'],
   attendee_emails: ['data.attendee_emails', 'data.attendees'],
+  attendee_user_ids: ['data.attendee_user_ids', 'data.user_ids'],
   action: ['event', 'data.action', 'data.type'],
   external_event_id: ['data.id', 'data.event_id', 'data.external_event_id'],
   created_by: ['data.organizer_email', 'data.created_by'],
@@ -149,6 +150,27 @@ export function applicationCalendarSyncEnabled(application) {
   return normalizeCalendarEventMapping(application?.calendar_config).auto_sync;
 }
 
+export function fieldMappingsToForm(fieldMappings) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_CALENDAR_EVENT_MAPPING.field_mappings).map((key) => [
+      key,
+      Array.isArray(fieldMappings?.[key]) ? fieldMappings[key].join(', ') : '',
+    ])
+  );
+}
+
+export function formToFieldMappings(form) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_CALENDAR_EVENT_MAPPING.field_mappings).map((key) => [
+      key,
+      String(form?.[key] || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ])
+  );
+}
+
 export function buildSampleCalendarEvent() {
   return {
     event: 'calendar.created',
@@ -176,7 +198,8 @@ export function buildNestedSampleCalendarEvent() {
       location: 'HQ Meeting Room A',
       start_at: '2026-06-26T14:00:00+08:00',
       end_at: '2026-06-26T15:00:00+08:00',
-      attendee_emails: ['alex@example.com', 'sam@example.com'],
+      attendee_emails: ['alex@example.com', { user_id: 42 }],
+      attendee_user_ids: [7],
       organizer_email: 'organizer@example.com',
     },
   };
