@@ -91,6 +91,10 @@ class CalendarEventMapperService
                 $event,
                 $this->pathsFor($fieldMappings, 'created_by', ['created_by', 'organizer_email', 'organizer'])
             )),
+            'created_by_user_id' => $this->resolveOrganizerUserId($this->resolveField(
+                $event,
+                $this->pathsFor($fieldMappings, 'created_by_user_id', ['created_by_user_id', 'organizer_user_id', 'user_id'])
+            )),
             'source_system_id' => $application->slug,
         ];
 
@@ -348,14 +352,47 @@ class CalendarEventMapperService
             return collect();
         }
 
-        try {
-            return User::query()
-                ->whereIn('id', $userIds)
-                ->where('is_approved', true)
-                ->pluck('email');
-        } catch (\Throwable) {
-            return collect();
+        return User::query()
+            ->whereIn('id', $userIds)
+            ->where('is_approved', true)
+            ->pluck('email');
+    }
+
+    private function resolveOrganizerUserId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
         }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && is_numeric(trim($value))) {
+            return (int) trim($value);
+        }
+
+        if (! is_array($value)) {
+            return null;
+        }
+
+        foreach (['user_id', 'userId', 'user', 'id'] as $key) {
+            if (! isset($value[$key])) {
+                continue;
+            }
+
+            $candidate = $value[$key];
+
+            if (is_numeric($candidate)) {
+                return (int) $candidate;
+            }
+
+            if (is_string($candidate) && is_numeric(trim($candidate))) {
+                return (int) trim($candidate);
+            }
+        }
+
+        return null;
     }
 
     private function nullableString(mixed $value): ?string

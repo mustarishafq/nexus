@@ -70,6 +70,30 @@ class CalendarEventMapperServiceTest extends TestCase
         $this->assertSame(['invitee@example.com'], $payload['attendee_emails']);
     }
 
+    public function test_resolves_organizer_from_user_id(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+        ]);
+
+        $application = Application::factory()->create([
+            'calendar_config' => CalendarEventMapping::defaults(),
+        ]);
+
+        $payload = app(CalendarEventMapperService::class)->map($application, [
+            'event' => 'calendar.created',
+            'external_event_id' => 'meet-3',
+            'title' => 'Sync',
+            'start_at' => '2026-06-25T10:00:00Z',
+            'end_at' => '2026-06-25T11:00:00Z',
+            'organizer_user_id' => $organizer->id,
+        ]);
+
+        $this->assertSame($organizer->id, $payload['created_by_user_id']);
+        $this->assertArrayNotHasKey('created_by', $payload);
+    }
+
     public function test_maps_nested_payload_with_default_field_mappings(): void
     {
         $application = Application::factory()->create([

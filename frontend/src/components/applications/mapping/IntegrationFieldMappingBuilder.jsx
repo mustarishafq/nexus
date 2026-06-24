@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
 } from '@dnd-kit/core';
+import { snapCenterToCursor } from '@/lib/dndModifiers';
 import { GripVertical, Workflow } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -116,6 +118,10 @@ export default function IntegrationFieldMappingBuilder({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        measuring={{
+          droppable: { strategy: MeasuringStrategy.Always },
+        }}
+        modifiers={[snapCenterToCursor]}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDrag(null)}
@@ -151,9 +157,9 @@ export default function IntegrationFieldMappingBuilder({
           </div>
         </div>
 
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay dropAnimation={null} adjustScale={false}>
           {activeDrag ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary bg-card shadow-lg">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary bg-card shadow-lg pointer-events-none cursor-grabbing">
               <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
               <code className="text-xs font-mono">{activeDrag.path}</code>
               <span className="text-[10px] text-muted-foreground uppercase">{activeDrag.valueType}</span>

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Application;
 use App\Models\CalendarEvent;
+use App\Models\User;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Support\Carbon;
 
@@ -157,8 +158,21 @@ class CalendarEventIntegrationService
     {
         $mappedOrganizer = strtolower(trim((string) ($mapped['created_by'] ?? '')));
 
-        if ($mappedOrganizer !== '') {
+        if ($mappedOrganizer !== '' && filter_var($mappedOrganizer, FILTER_VALIDATE_EMAIL)) {
             return $mappedOrganizer;
+        }
+
+        $organizerUserId = $mapped['created_by_user_id'] ?? null;
+
+        if ($organizerUserId !== null && $organizerUserId !== '') {
+            $email = User::query()
+                ->where('id', (int) $organizerUserId)
+                ->where('is_approved', true)
+                ->value('email');
+
+            if (filled($email)) {
+                return strtolower(trim((string) $email));
+            }
         }
 
         $application->loadMissing('creator');

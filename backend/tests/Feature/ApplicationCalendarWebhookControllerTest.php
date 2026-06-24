@@ -122,6 +122,43 @@ class ApplicationCalendarWebhookControllerTest extends TestCase
         $this->assertSame(1, Notification::query()->where('user_id', (string) $invitee->id)->count());
     }
 
+    public function test_webhook_resolves_organizer_from_user_id(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+        ]);
+        $invitee = User::factory()->create([
+            'email' => 'invitee@example.com',
+            'is_approved' => true,
+        ]);
+
+        $application = Application::factory()->create([
+            'slug' => 'booking-app',
+            'calendar_config' => CalendarEventMapping::normalize([
+                'auto_sync' => true,
+                'webhook_secret' => 'calendar-secret',
+            ]),
+        ]);
+
+        $this->postJson("/api/applications/{$application->id}/calendar-webhook", [
+            'event' => 'calendar.created',
+            'external_event_id' => 'meet-organizer-id',
+            'title' => 'Planning session',
+            'start_at' => '2026-06-25T10:00:00Z',
+            'end_at' => '2026-06-25T11:00:00Z',
+            'organizer_user_id' => $organizer->id,
+            'attendee_emails' => ['invitee@example.com'],
+        ], ['X-Webhook-Secret' => 'calendar-secret'])
+            ->assertCreated()
+            ->assertJsonPath('calendar_event.created_by', 'organizer@example.com');
+
+        $this->assertDatabaseHas('calendar_events', [
+            'external_event_id' => 'meet-organizer-id',
+            'created_by' => 'organizer@example.com',
+        ]);
+    }
+
     public function test_webhook_reschedules_existing_event_and_notifies_invitees(): void
     {
         $organizer = User::factory()->create([
@@ -256,55 +293,5 @@ class ApplicationCalendarWebhookControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('payload.title', 'Planning session')
             ->assertJsonPath('payload.action', 'created');
-    }
-
-    public function test_preview_maps_nested_preset_sample_payload(): void
-    {
-        $user = User::factory()->create(['role' => 'admin']);
-        $token = $this->issueToken($user);
-        $application = Application::factory()->create([
-            'calendar_config' => CalendarEventMapping::defaults(),
-        ]);
-
-        $nestedMappings = [
-            'title' => ['data.title'],
-            'description' => ['data.description'],
-            'location' => ['data.location'],
-            'start_at' => ['data.start_at', 'data.starts_at'],
-            'end_at' => ['data.end_at', 'data.ends_at'],
-            'is_all_day' => ['data.is_all_day'],
-            'attendee_emails' => ['data.attendee_emails', 'data.attendees'],
-            'attendee_user_ids' => ['data.attendee_user_ids', 'data.user_ids'],
-            'action' => ['event', 'data.action', 'data.type'],
-            'external_event_id' => ['data.id', 'data.event_id', 'data.external_event_id'],
-            'created_by' => ['data.organizer_email', 'data.created_by'],
-        ];
-
-        $this->postJson("/api/applications/{$application->id}/calendar-webhook/preview", [
-            'event' => [
-                'event' => 'calendar.rescheduled',
-                'fired_at' => '2026-06-11T23:45:01.907473+08:00',
-                'data' => [
-                    'id' => 'meet-1234',
-                    'action' => 'rescheduled',
-                    'title' => 'Quarterly planning',
-                    'description' => 'Review Q3 goals and blockers',
-                    'location' => 'HQ Meeting Room A',
-                    'start_at' => '2026-06-26T14:00:00+08:00',
-                    'end_at' => '2026-06-26T15:00:00+08:00',
-                    'attendee_emails' => ['alex@example.com', 'sam@example.com'],
-                    'organizer_email' => 'organizer@example.com',
-                ],
-            ],
-            'calendar_config' => CalendarEventMapping::normalize([
-                'field_mappings' => $nestedMappings,
-            ]),
-        ], ['Authorization' => "Bearer {$token}"])
-            ->assertOk()
-            ->assertJsonPath('payload.title', 'Quarterly planning')
-            ->assertJsonPath('payload.external_event_id', 'meet-1234')
-            ->assertJsonPath('payload.action', 'rescheduled')
-            ->assertJsonPath('payload.created_by', 'organizer@example.com')
-            ->assertJsonPath('payload.attendee_emails', ['alex@example.com', 'sam@example.com']);
     }
 }

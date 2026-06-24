@@ -118,10 +118,6 @@ class ApplicationCalendarWebhookController extends Controller
             return response()->json(['payload' => $payload]);
         } catch (InvalidArgumentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
-        } catch (Throwable) {
-            return response()->json([
-                'message' => 'Failed to preview calendar event mapping.',
-            ], 502);
         }
     }
 

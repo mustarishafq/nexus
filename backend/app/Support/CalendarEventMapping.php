@@ -16,6 +16,7 @@ class CalendarEventMapping
         'action' => ['action', 'event', 'event_type', 'data.action', 'data.type'],
         'external_event_id' => ['external_event_id', 'id', 'event_id', 'data.id', 'data.event_id', 'data.external_event_id'],
         'created_by' => ['created_by', 'organizer_email', 'organizer', 'data.organizer_email', 'data.created_by'],
+        'created_by_user_id' => ['created_by_user_id', 'organizer_user_id', 'user_id', 'data.organizer_user_id', 'data.created_by_user_id', 'data.user_id'],
     ];
 
     public const DEFAULT_ACTION_RULES = [

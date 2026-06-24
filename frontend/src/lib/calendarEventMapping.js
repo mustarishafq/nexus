@@ -23,6 +23,7 @@ export const DEFAULT_CALENDAR_EVENT_MAPPING = {
     action: ['action', 'event', 'event_type', 'data.action', 'data.type'],
     external_event_id: ['external_event_id', 'id', 'event_id', 'data.id', 'data.event_id', 'data.external_event_id'],
     created_by: ['created_by', 'organizer_email', 'organizer', 'data.organizer_email', 'data.created_by'],
+    created_by_user_id: ['created_by_user_id', 'organizer_user_id', 'user_id', 'data.organizer_user_id', 'data.created_by_user_id', 'data.user_id'],
   },
   action_rules: [
     { prefix: 'calendar.cancelled', action: 'cancelled' },
@@ -60,6 +61,7 @@ export const CALENDAR_FIELD_LABELS = {
   action: 'Action (created, updated, rescheduled, cancelled)',
   external_event_id: 'External event ID (required)',
   created_by: 'Organizer email',
+  created_by_user_id: 'Organizer user ID',
 };
 
 export const NESTED_CALENDAR_FIELD_MAPPINGS = {
@@ -74,6 +76,7 @@ export const NESTED_CALENDAR_FIELD_MAPPINGS = {
   action: ['event', 'data.action', 'data.type'],
   external_event_id: ['data.id', 'data.event_id', 'data.external_event_id'],
   created_by: ['data.organizer_email', 'data.created_by'],
+  created_by_user_id: ['data.organizer_user_id', 'data.user_id'],
 };
 
 function parseCalendarConfig(raw) {
@@ -182,7 +185,7 @@ export function buildSampleCalendarEvent() {
     end_at: '2026-06-25T11:00:00+08:00',
     is_all_day: false,
     attendee_emails: ['alex@example.com', 'sam@example.com'],
-    created_by: 'organizer@example.com',
+    created_by_user_id: 1,
   };
 }
 
@@ -198,8 +201,9 @@ export function buildNestedSampleCalendarEvent() {
       location: 'HQ Meeting Room A',
       start_at: '2026-06-26T14:00:00+08:00',
       end_at: '2026-06-26T15:00:00+08:00',
-      attendee_emails: ['alex@example.com', 'sam@example.com'],
-      organizer_email: 'organizer@example.com',
+      attendee_emails: ['alex@example.com', { user_id: 42 }],
+      attendee_user_ids: [7],
+      organizer_user_id: 1,
     },
   };
 }
