@@ -93,6 +93,7 @@ Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'discon
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
 Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::class, 'index']);
 Route::patch('/admin/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialAdminController::class, 'update']);
+Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
 Route::get('/admin/attendance-locations', [AttendanceLocationController::class, 'index']);
 Route::post('/admin/attendance-locations', [AttendanceLocationController::class, 'store']);
