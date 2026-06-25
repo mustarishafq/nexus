@@ -11,6 +11,7 @@ import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
 import { useGoBack } from '@/hooks/useGoBack';
+import { getDisplayName } from '@/lib/profile';
 
 export default function PersonProfile() {
   const { userId } = useParams();
