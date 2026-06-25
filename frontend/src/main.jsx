@@ -8,13 +8,21 @@ import {
   dispatchNotificationOpen,
 } from '@/lib/pendingNotificationOpen'
 import { initPwaInstallListeners } from '@/lib/pwa'
+import { initCapacitor } from '@/lib/capacitor/bootstrap'
+import { isNativePlatform } from '@/lib/capacitor/platform'
 
 if (typeof window !== 'undefined') {
-  initPwaInstallListeners();
-  captureNotificationOpenFromUrl();
+  initCapacitor();
+
+  if (!isNativePlatform()) {
+    initPwaInstallListeners();
+    captureNotificationOpenFromUrl();
+  }
 }
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+// Service worker / web-push is a PWA-only concern; native apps use
+// @capacitor/push-notifications (see src/lib/capacitor/push.js) instead.
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !isNativePlatform()) {
   // Register before load so notification clicks during startup are not missed.
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PUSH_RECEIVED') {

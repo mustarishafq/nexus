@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { DEEP_LINK_EVENT } from '@/lib/capacitor/deepLinks';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -109,6 +110,22 @@ const ProtectedRoutes = () => {
   );
 };
 
+function DeepLinkListener() {
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const handleDeepLink = (event) => {
+      const path = event?.detail?.path;
+      if (path) navigate(path);
+    };
+
+    window.addEventListener(DEEP_LINK_EVENT, handleDeepLink);
+    return () => window.removeEventListener(DEEP_LINK_EVENT, handleDeepLink);
+  }, [navigate]);
+
+  return null;
+}
+
 function App() {
 
   return (
@@ -117,6 +134,7 @@ function App() {
         <QueryClientProvider client={queryClientInstance}>
           <PwaSplashScreen />
           <Router>
+            <DeepLinkListener />
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<Login />} />

@@ -1,5 +1,5 @@
 import db from '@/api/base44Client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,13 @@ import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getRememberMePreference, setRememberMePreference } from '@/lib/authStorage';
+import { isNativePlatform } from '@/lib/capacitor/platform';
+import {
+  isBiometricsAvailable,
+  verifyIdentity,
+  saveBiometricCredentials,
+  getBiometricCredentials,
+} from '@/lib/capacitor/biometrics';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,25 +25,35 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(getRememberMePreference);
+  const [canUseBiometrics, setCanUseBiometrics] = useState(false);
 
   const status = searchParams.get('status');
   const appName = appPublicSettings?.system_name || 'EMZI Nexus Brain';
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+  useEffect(() => {
+    if (!isNativePlatform()) return;
 
+    (async () => {
+      const available = await isBiometricsAvailable();
+      const stored = available ? await getBiometricCredentials() : null;
+      setCanUseBiometrics(Boolean(available && stored));
+    })();
+  }, []);
+
+  const performLogin = async ({ email, password }) => {
     setLoading(true);
     setError('');
 
     try {
-      await db.auth.login({
-        email: form.get('email'),
-        password: form.get('password'),
-      }, { remember: rememberMe });
+      await db.auth.login({ email, password }, { remember: rememberMe });
       setRememberMePreference(rememberMe);
       clearBirthdayShownKeys();
       clearBroadcastAckKeys();
+
+      if (isNativePlatform()) {
+        saveBiometricCredentials({ username: email, password }).catch(() => {});
+      }
+
       await checkUserAuth();
       navigate('/', { replace: true });
     } catch (err) {
@@ -50,9 +67,39 @@ export default function Login() {
     }
   };
 
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await performLogin({ email: form.get('email'), password: form.get('password') });
+  };
+
+  const handleBiometricLogin = async () => {
+    const verified = await verifyIdentity({ reason: 'Sign in to ' + appName });
+    if (!verified) return;
+
+    const credentials = await getBiometricCredentials();
+    if (!credentials) {
+      setError('No saved biometric credentials. Sign in with your password first.');
+      return;
+    }
+
+    await performLogin({ email: credentials.username, password: credentials.password });
+  };
+
   return (
     <div className="min-h-screen flex relative">
-      <div className="absolute top-4 right-4 z-20 lg:top-6 lg:right-6">
+      <div className="absolute top-4 right-4 z-20 lg:top-6 lg:right-6 flex items-center gap-2">
+        {canUseBiometrics && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleBiometricLogin}
+            className="text-white lg:text-foreground hover:bg-white/10 lg:hover:bg-muted"
+          >
+            Use Face ID / Fingerprint
+          </Button>
+        )}
         <ThemeToggle className="text-white lg:text-foreground hover:bg-white/10 lg:hover:bg-muted" />
       </div>
       {/* Desktop: Left branding panel */}

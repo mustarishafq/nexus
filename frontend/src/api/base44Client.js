@@ -2,6 +2,8 @@
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/authStorage';
+import { isNativePlatform } from '@/lib/capacitor/platform';
+import { downloadAndShareFile } from '@/lib/capacitor/fileTransfer';
 
 export const API_ORIGIN = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
@@ -251,8 +253,18 @@ export const db = {
 		},
 
 		async exportCsv(filters = {}) {
-			const token = getAuthToken();
 			const query = buildQuery(filters);
+			const filename = `network-health-${new Date().toISOString().slice(0, 10)}.csv`;
+
+			if (isNativePlatform()) {
+				return downloadAndShareFile(
+					`${API_BASE_URL}/network-health/export${query}`,
+					filename,
+					{ headers: { Accept: 'text/csv' } }
+				);
+			}
+
+			const token = getAuthToken();
 			const response = await fetch(`${API_BASE_URL}/network-health/export${query}`, {
 				method: 'GET',
 				headers: {
@@ -279,7 +291,7 @@ export const db = {
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = `network-health-${new Date().toISOString().slice(0, 10)}.csv`;
+			link.download = filename;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
@@ -339,8 +351,18 @@ export const db = {
 		},
 
 		async exportCsv(filters = {}) {
-			const token = getAuthToken();
 			const query = buildQuery(filters);
+			const filename = `attendance-${new Date().toISOString().slice(0, 10)}.csv`;
+
+			if (isNativePlatform()) {
+				return downloadAndShareFile(
+					`${API_BASE_URL}/attendance/export${query}`,
+					filename,
+					{ headers: { Accept: 'text/csv' } }
+				);
+			}
+
+			const token = getAuthToken();
 			const response = await fetch(`${API_BASE_URL}/attendance/export${query}`, {
 				method: 'GET',
 				headers: {
@@ -367,7 +389,7 @@ export const db = {
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = `attendance-${new Date().toISOString().slice(0, 10)}.csv`;
+			link.download = filename;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();

@@ -18,6 +18,8 @@ import { Slider } from '@/components/ui/slider';
 import { getCroppedImageBlob, PROFILE_PHOTO_MAX_SIZE, toAbsoluteUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { isNativePlatform } from '@/lib/capacitor/platform';
+import { capturePhoto } from '@/lib/capacitor/camera';
 
 export default function ProfilePictureUploader({
   profilePicture,
@@ -54,11 +56,7 @@ export default function ProfilePictureUploader({
     setCroppedAreaPercent(null);
   };
 
-  const handleFileSelect = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
+  const acceptSelectedFile = (file) => {
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file.');
       return;
@@ -75,6 +73,30 @@ export default function ProfilePictureUploader({
       setCropDialogOpen(true);
     });
     reader.readAsDataURL(file);
+  };
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    acceptSelectedFile(file);
+  };
+
+  const handlePickPhoto = async () => {
+    if (isNativePlatform()) {
+      try {
+        const file = await capturePhoto({ fileName: 'profile-picture' });
+        acceptSelectedFile(file);
+      } catch (err) {
+        // User cancelled the native camera/picker — no error toast needed.
+        if (err?.message && !/cancel/i.test(err.message)) {
+          toast.error('Unable to open camera.');
+        }
+      }
+      return;
+    }
+
+    fileInputRef.current?.click();
   };
 
   const handleCropCancel = () => {
@@ -194,7 +216,7 @@ export default function ProfilePictureUploader({
               <button
                 type="button"
                 className="absolute inset-0 hidden sm:flex items-center justify-center rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handlePickPhoto}
                 disabled={uploading || removing}
                 aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
               >
@@ -208,7 +230,7 @@ export default function ProfilePictureUploader({
               <button
                 type="button"
                 className="absolute bottom-0 left-0 sm:hidden flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background shadow-md text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handlePickPhoto}
                 disabled={uploading || removing}
                 aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
               >
@@ -274,7 +296,7 @@ export default function ProfilePictureUploader({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handlePickPhoto}
               disabled={uploading || removing}
             >
               <Camera className="w-4 h-4 mr-2" />
