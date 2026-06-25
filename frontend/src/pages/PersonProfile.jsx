@@ -10,11 +10,12 @@ import { Button } from '@/components/ui/button';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
-import { getDisplayName } from '@/lib/profile';
+import { useGoBack } from '@/hooks/useGoBack';
 
 export default function PersonProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/people');
   const { user: authUser } = useAuth();
   const isOwnProfile = authUser?.id && String(authUser.id) === String(userId);
 
@@ -48,11 +49,9 @@ export default function PersonProfile() {
     return (
       <div className="space-y-4 py-16 text-center">
         <p className="text-muted-foreground">This profile could not be loaded.</p>
-        <Button asChild variant="outline">
-          <Link to="/people">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to People
-          </Link>
+        <Button variant="outline" onClick={goBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
         </Button>
       </div>
     );
@@ -61,11 +60,9 @@ export default function PersonProfile() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button asChild variant="ghost" size="sm" className="h-8 px-2">
-          <Link to="/people">
-            <ArrowLeft className="mr-2 h-3.5 w-3.5" />
-            People
-          </Link>
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={goBack}>
+          <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+          Back
         </Button>
         <Button
           type="button"

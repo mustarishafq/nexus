@@ -1,10 +1,11 @@
 import db, { API_ORIGIN } from '@/api/base44Client';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useGoBack } from '@/hooks/useGoBack';
 
 const toAbsoluteUrl = (url) => {
   if (!url) return '';
@@ -39,7 +40,7 @@ function detectEmbedBlocked(iframe) {
 export default function ApplicationBrowser() {
   const { id } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
+  const goBack = useGoBack('/applications');
   const redirectTo = useMemo(() => {
     const fromQuery = new URLSearchParams(location.search).get('redirect_to');
     if (fromQuery) return fromQuery;
@@ -143,9 +144,9 @@ export default function ApplicationBrowser() {
         <p className="text-sm text-muted-foreground">
           {systemError?.message || 'Application not found or access denied.'}
         </p>
-        <Button variant="outline" onClick={() => navigate('/applications')}>
+        <Button variant="outline" onClick={goBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Applications
+          Back
         </Button>
       </div>
     );
@@ -154,7 +155,7 @@ export default function ApplicationBrowser() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-2.5 backdrop-blur-xl shrink-0">
-        <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={() => navigate('/applications')}>
+        <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={goBack}>
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
@@ -218,8 +219,8 @@ export default function ApplicationBrowser() {
         {launchError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
             <p className="text-sm text-muted-foreground">{launchError}</p>
-            <Button variant="outline" onClick={() => navigate('/applications')}>
-              Back to Applications
+            <Button variant="outline" onClick={goBack}>
+              Back
             </Button>
           </div>
         ) : null}

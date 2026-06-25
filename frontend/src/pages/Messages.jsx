@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft, Loader2, Mail, MessageSquare, Send, Trash2, Users } from 'lucide-react';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,7 @@ export default function Messages() {
   const { conversationId, userId: composeUserId } = useParams();
   const isCompose = Boolean(composeUserId);
   const navigate = useNavigate();
+  const goBack = useGoBack('/messages');
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -249,7 +251,7 @@ export default function Messages() {
                   variant="ghost"
                   size="icon"
                   className="lg:hidden"
-                  onClick={() => navigate('/messages')}
+                  onClick={goBack}
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
