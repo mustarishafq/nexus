@@ -2,9 +2,11 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { normalizeLaunchProgressStyle } from '@/lib/launchConfig';
+import { getLaunchProgressPalette } from '@/components/applications/launch-animations/launchProgressPalette';
 
-export default function LaunchProgressIndicator({ style, progress, className }) {
+export default function LaunchProgressIndicator({ style, progress, className, surface = 'dark' }) {
   const resolvedStyle = normalizeLaunchProgressStyle(style);
+  const palette = getLaunchProgressPalette(surface);
   const clamped = Math.min(100, Math.max(0, progress * 100));
   const rounded = Math.round(clamped);
 
@@ -16,11 +18,11 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
     return (
       <div className={cn('relative mx-auto h-12 w-12', className)}>
         <motion.div
-          className="absolute inset-0 rounded-full border-2 border-white/15 border-t-white"
+          className={cn('absolute inset-0 rounded-full border-2', palette.spinnerBorder)}
           animate={{ rotate: 360 }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
         />
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white">
+        <div className={cn('absolute inset-0 flex items-center justify-center text-[11px] font-semibold', palette.text)}>
           {rounded}%
         </div>
       </div>
@@ -33,7 +35,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
         {[0, 1, 2].map((index) => (
           <motion.span
             key={index}
-            className="h-2.5 w-2.5 rounded-full bg-white"
+            className={cn('h-2.5 w-2.5 rounded-full', palette.fill)}
             animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.1, 0.8] }}
             transition={{ duration: 0.9, repeat: Infinity, delay: index * 0.18 }}
           />
@@ -49,13 +51,13 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
     return (
       <div className={cn('relative mx-auto h-14 w-14', className)}>
         <svg className="h-full w-full -rotate-90" viewBox="0 0 52 52">
-          <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="4" />
+          <circle cx="26" cy="26" r="22" fill="none" stroke={palette.ringTrackStroke} strokeWidth="4" />
           <motion.circle
             cx="26"
             cy="26"
             r="22"
             fill="none"
-            stroke="white"
+            stroke={palette.ringFillStroke}
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -63,7 +65,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             transition={{ type: 'spring', stiffness: 120, damping: 20 }}
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white">
+        <div className={cn('absolute inset-0 flex items-center justify-center text-[11px] font-semibold', palette.text)}>
           {rounded}%
         </div>
       </div>
@@ -73,8 +75,8 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
   if (resolvedStyle === 'percent') {
     return (
       <div className={cn('text-center', className)}>
-        <p className="text-3xl font-bold tabular-nums text-white">{rounded}%</p>
-        <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/50">Loading</p>
+        <p className={cn('text-3xl font-bold tabular-nums', palette.textLarge)}>{rounded}%</p>
+        <p className={cn('mt-1 text-[11px] uppercase tracking-[0.2em]', palette.textMuted)}>Loading</p>
       </div>
     );
   }
@@ -83,7 +85,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
     return (
       <div className={cn('flex items-center justify-center', className)}>
         <motion.span
-          className="rounded-full bg-white"
+          className={cn('rounded-full', palette.fill)}
           animate={{ width: 8 + clamped * 0.2, height: 8 + clamped * 0.2, opacity: [0.45, 1, 0.45] }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
         />
@@ -93,9 +95,12 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'liquid_bar') {
     return (
-      <div className={cn('h-3 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('h-3 w-full overflow-hidden rounded-full', palette.track, className)}>
         <motion.div
-          className="relative h-full rounded-full bg-gradient-to-r from-sky-300 via-white to-violet-300"
+          className={cn(
+            'relative h-full rounded-full bg-gradient-to-r',
+            surface === 'light' ? palette.barGradient : 'from-sky-300 via-white to-violet-300',
+          )}
           initial={{ width: '0%' }}
           animate={{ width: `${clamped}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
@@ -113,16 +118,19 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'wave') {
     return (
-      <div className={cn('relative h-4 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('relative h-4 w-full overflow-hidden rounded-full', palette.track, className)}>
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-cyan-200/90 to-white"
+          className={cn('absolute inset-y-0 left-0 rounded-full bg-gradient-to-r', palette.waveGradient)}
           animate={{ width: `${clamped}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
         <motion.div
           className="absolute inset-0 opacity-30"
           style={{
-            backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.45) 8px, rgba(255,255,255,0.45) 12px)',
+            backgroundImage:
+              surface === 'light'
+                ? 'repeating-linear-gradient(90deg, transparent, transparent 8px, hsl(var(--foreground) / 0.2) 8px, hsl(var(--foreground) / 0.2) 12px)'
+                : 'repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.45) 8px, rgba(255,255,255,0.45) 12px)',
           }}
           animate={{ x: ['0%', '100%'] }}
           transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
@@ -142,7 +150,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             key={index}
             className="h-2 rounded-sm"
             animate={{
-              backgroundColor: index < active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.12)',
+              backgroundColor: index < active ? palette.segmentActive : palette.segmentInactive,
               scaleY: index < active ? [1, 1.2, 1] : 1,
             }}
             transition={{ duration: 0.35, delay: index * 0.03 }}
@@ -154,7 +162,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'stripe') {
     return (
-      <div className={cn('relative h-3 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('relative h-3 w-full overflow-hidden rounded-full', palette.track, className)}>
         <motion.div
           className="absolute inset-y-0 left-0 overflow-hidden rounded-full"
           animate={{ width: `${clamped}%` }}
@@ -163,7 +171,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
           <div
             className="h-full w-full"
             style={{
-              backgroundImage: 'repeating-linear-gradient(-45deg, #fff, #fff 6px, rgba(255,255,255,0.35) 6px, rgba(255,255,255,0.35) 12px)',
+              backgroundImage: palette.stripeGradient,
             }}
           />
         </motion.div>
@@ -180,10 +188,10 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
         {Array.from({ length: steps }).map((_, index) => (
           <motion.div
             key={index}
-            className="w-3 rounded-sm bg-white/15"
+            className="w-3 rounded-sm"
             animate={{
               height: 8 + index * 5,
-              backgroundColor: index < active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)',
+              backgroundColor: index < active ? palette.segmentActive : palette.ladderInactive,
             }}
             transition={{ duration: 0.3, delay: index * 0.04 }}
           />
@@ -195,9 +203,9 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
   if (resolvedStyle === 'orbit_track') {
     return (
       <div className={cn('relative mx-auto h-12 w-12', className)}>
-        <div className="absolute inset-0 rounded-full border border-white/15" />
+        <div className={cn('absolute inset-0 rounded-full border', palette.trackBorder)} />
         <motion.div
-          className="absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+          className={cn('absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-full', palette.fill, palette.dotShadow)}
           animate={{ rotate: (clamped / 100) * 360 }}
           style={{ transformOrigin: '50% 24px' }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
@@ -220,7 +228,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
               <stop offset="100%" stopColor="#f472b6" />
             </linearGradient>
           </defs>
-          <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
+          <circle cx="26" cy="26" r="22" fill="none" stroke={palette.ringTrackStroke} strokeWidth="4" />
           <motion.circle
             cx="26"
             cy="26"
@@ -234,7 +242,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             transition={{ type: 'spring', stiffness: 120, damping: 20 }}
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white">
+        <div className={cn('absolute inset-0 flex items-center justify-center text-[11px] font-semibold', palette.text)}>
           {rounded}%
         </div>
       </div>
@@ -243,14 +251,14 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'glitch_bar') {
     return (
-      <div className={cn('relative h-2.5 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('relative h-2.5 w-full overflow-hidden rounded-full', palette.track, className)}>
         <motion.div
-          className="absolute inset-y-0 left-0 bg-white"
+          className={cn('absolute inset-y-0 left-0', palette.barFillSolid)}
           animate={{ width: `${clamped}%`, x: [0, 2, -1, 0] }}
           transition={{ width: { type: 'spring', stiffness: 120, damping: 20 }, x: { duration: 0.2, repeat: Infinity } }}
         />
         <motion.div
-          className="absolute inset-y-0 left-0 bg-sky-400/60 mix-blend-screen"
+          className={cn('absolute inset-y-0 left-0', palette.glitchScreen)}
           animate={{ width: `${clamped}%`, x: [0, -2, 1, 0] }}
           transition={{ width: { type: 'spring', stiffness: 120, damping: 20 }, x: { duration: 0.22, repeat: Infinity } }}
         />
@@ -298,7 +306,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
           />
         </svg>
         <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(34,211,238,0.08)_0px,rgba(34,211,238,0.08)_1px,transparent_1px,transparent_3px)]" />
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-cyan-100">
+        <div className={cn('absolute inset-0 flex items-center justify-center text-[11px] font-semibold', palette.accentCyan)}>
           {rounded}%
         </div>
       </div>
@@ -312,14 +320,14 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
           <motion.p
             key={color}
             className="absolute inset-x-0 text-3xl font-bold tabular-nums"
-            style={{ color, mixBlendMode: 'screen' }}
+            style={{ color, mixBlendMode: surface === 'light' ? 'multiply' : 'screen' }}
             animate={{ x: [0, (index - 1) * 3, 0], opacity: [0.25, 0.6, 0.25] }}
             transition={{ duration: 0.2, repeat: Infinity }}
           >
             {rounded}%
           </motion.p>
         ))}
-        <p className="relative text-3xl font-bold tabular-nums text-white">{rounded}%</p>
+        <p className={cn('relative text-3xl font-bold tabular-nums', palette.textLarge)}>{rounded}%</p>
       </div>
     );
   }
@@ -347,14 +355,17 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'scanline_bar') {
     return (
-      <div className={cn('relative h-3 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('relative h-3 w-full overflow-hidden rounded-full', palette.track, className)}>
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-cyan-300/90"
+          className={cn(
+            'absolute inset-y-0 left-0 rounded-full',
+            surface === 'light' ? 'bg-foreground/70' : 'bg-cyan-300/90',
+          )}
           animate={{ width: `${clamped}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
         <motion.div
-          className="pointer-events-none absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+          className={cn('pointer-events-none absolute inset-y-0 w-8 bg-gradient-to-r from-transparent to-transparent', palette.scanShine)}
           animate={{ left: ['-10%', `${clamped}%`] }}
           transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
         />
@@ -374,7 +385,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             className="h-4 w-4 border border-cyan-300/40"
             style={{ clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' }}
             animate={{
-              backgroundColor: index < active ? 'rgba(34,211,238,0.85)' : 'rgba(255,255,255,0.08)',
+              backgroundColor: index < active ? 'rgba(34,211,238,0.85)' : palette.hexInactive,
               scale: index < active ? [1, 1.15, 1] : 1,
             }}
             transition={{ duration: 0.35, delay: index * 0.04 }}
@@ -394,7 +405,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
           animate={{ rotate: (clamped / 100) * 360 }}
           transition={{ type: 'spring', stiffness: 100, damping: 18 }}
         />
-        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-emerald-100">
+        <div className={cn('absolute inset-0 flex items-center justify-center text-[10px] font-semibold', palette.accentEmerald)}>
           {rounded}%
         </div>
       </div>
@@ -405,8 +416,8 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
     const binary = rounded.toString(2).padStart(8, '0');
     return (
       <div className={cn('text-center font-mono', className)}>
-        <p className="text-sm tracking-widest text-cyan-200">{binary}</p>
-        <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">{rounded}%</p>
+        <p className={cn('text-sm tracking-widest', palette.accentCyan)}>{binary}</p>
+        <p className={cn('mt-1 text-[10px] uppercase tracking-[0.2em]', palette.accentSoft)}>{rounded}%</p>
       </div>
     );
   }
@@ -456,7 +467,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             key={index}
             className="h-2 w-2 rounded-full"
             animate={{
-              backgroundColor: index < active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)',
+              backgroundColor: index < active ? palette.segmentActive : palette.segmentInactive,
               x: index < active ? [0, (index % 2 === 0 ? 2 : -2), 0] : 0,
             }}
             transition={{ duration: 0.18, repeat: Infinity }}
@@ -495,10 +506,10 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
         {Array.from({ length: blocks }).map((_, index) => (
           <motion.div
             key={index}
-            className="h-4 w-3 border border-white/20"
+            className={cn('h-4 w-3 border', palette.pixelBorder)}
             style={{ imageRendering: 'pixelated' }}
             animate={{
-              backgroundColor: index < active ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.08)',
+              backgroundColor: index < active ? 'rgba(167,139,250,0.95)' : palette.pixelInactive,
               scaleY: index < active ? [1, 1.2, 1] : 1,
             }}
             transition={{ duration: 0.25, delay: index * 0.03 }}
@@ -512,11 +523,11 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
     const dotCount = 3;
     return (
       <div className={cn('relative mx-auto h-12 w-12', className)}>
-        <div className="absolute inset-0 rounded-full border border-white/15" />
+        <div className={cn('absolute inset-0 rounded-full border', palette.trackBorder)} />
         {Array.from({ length: dotCount }).map((_, index) => (
           <motion.div
             key={index}
-            className="absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+            className={cn('absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full', palette.fill, palette.dotShadow)}
             animate={{ rotate: (clamped / 100) * 360 + index * (360 / dotCount) }}
             style={{ transformOrigin: '50% 24px' }}
             transition={{ type: 'spring', stiffness: 100, damping: 18 }}
@@ -557,14 +568,14 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
       <div className={cn('text-center', className)}>
         <motion.p
           key={remaining}
-          className="text-4xl font-bold tabular-nums text-white"
+          className={cn('text-4xl font-bold tabular-nums', palette.textLarge)}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.25 }}
         >
           {remaining}
         </motion.p>
-        <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">Remaining</p>
+        <p className={cn('mt-1 text-[10px] uppercase tracking-[0.2em]', palette.accentSoft)}>Remaining</p>
       </div>
     );
   }
@@ -626,7 +637,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             key={index}
             className="h-5 w-6 rounded-sm border border-cyan-300/30"
             animate={{
-              backgroundColor: index < active ? 'rgba(34,211,238,0.55)' : 'rgba(255,255,255,0.06)',
+              backgroundColor: index < active ? 'rgba(34,211,238,0.55)' : palette.holoInactive,
               opacity: index < active ? [0.7, 1, 0.75] : 0.4,
             }}
             transition={{ duration: 0.35, delay: index * 0.05, opacity: { duration: 0.6, repeat: Infinity } }}
@@ -638,7 +649,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
 
   if (resolvedStyle === 'prism_bar') {
     return (
-      <div className={cn('relative h-3 w-full overflow-hidden rounded-full bg-white/10', className)}>
+      <div className={cn('relative h-3 w-full overflow-hidden rounded-full', palette.prismTrack, className)}>
         <motion.div
           className="h-full rounded-full"
           style={{ background: 'linear-gradient(90deg, #f472b6, #38bdf8, #a3e635, #fbbf24)' }}
@@ -660,7 +671,7 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
             key={index}
             className={index % 3 === 0 ? 'h-2 w-5 rounded-sm' : 'h-2 w-2 rounded-full'}
             animate={{
-              backgroundColor: index < active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.12)',
+              backgroundColor: index < active ? palette.segmentActive : palette.segmentInactive,
               opacity: index < active ? [0.6, 1, 0.7] : 0.3,
             }}
             transition={{ duration: 0.4, delay: index * 0.04, opacity: { duration: 0.8, repeat: Infinity } }}
@@ -671,9 +682,9 @@ export default function LaunchProgressIndicator({ style, progress, className }) 
   }
 
   return (
-    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-white/10', className)}>
+    <div className={cn('h-1.5 w-full overflow-hidden rounded-full', palette.track, className)}>
       <motion.div
-        className="h-full rounded-full bg-gradient-to-r from-white/70 via-white to-white/70"
+        className={cn('h-full rounded-full bg-gradient-to-r', palette.defaultBarGradient)}
         initial={{ width: '0%' }}
         animate={{ width: `${clamped}%` }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}

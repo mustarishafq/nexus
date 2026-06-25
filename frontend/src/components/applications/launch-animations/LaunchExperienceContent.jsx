@@ -7,6 +7,7 @@ import {
   getLaunchAnimationMeta,
   isCompactLaunchOverlayMode,
   isDensePanelLaunchOverlayMode,
+  isLightLaunchSurfaceOverlayMode,
   normalizeLaunchOverlayMode,
 } from '@/lib/launchConfig';
 
@@ -29,6 +30,7 @@ export default function LaunchExperienceContent({
   const resolvedOverlayMode = normalizeLaunchOverlayMode(overlayMode);
   const isCompactShell = isCompactLaunchOverlayMode(resolvedOverlayMode);
   const isDensePanel = isDensePanelLaunchOverlayMode(resolvedOverlayMode);
+  const lightSurface = isLightLaunchSurfaceOverlayMode(resolvedOverlayMode);
   const progress = Math.max(energy, ready ? 0.25 : 0.08);
   const meta = getLaunchAnimationMeta(style, animationCatalog);
 
@@ -54,7 +56,11 @@ export default function LaunchExperienceContent({
       />
 
       <div className={cn('space-y-3', isDensePanel && 'space-y-2')}>
-        <LaunchProgressIndicator style={progressStyle} progress={progress} />
+        <LaunchProgressIndicator
+          style={progressStyle}
+          progress={progress}
+          surface={lightSurface ? 'light' : 'dark'}
+        />
         {showHint ? (
           <LaunchHint
             className={cn(

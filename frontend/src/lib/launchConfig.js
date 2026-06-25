@@ -384,6 +384,13 @@ export function isInteractiveLaunchOverlayMode(mode) {
   return INTERACTIVE_LAUNCH_OVERLAY_MODES.has(normalizeLaunchOverlayMode(mode));
 }
 
+/** Glass / light panel overlays where progress must use foreground tokens, not white. */
+export const LIGHT_LAUNCH_SURFACE_OVERLAY_MODES = new Set(['shell_glass', 'clear_glass', 'mirror']);
+
+export function isLightLaunchSurfaceOverlayMode(mode) {
+  return LIGHT_LAUNCH_SURFACE_OVERLAY_MODES.has(normalizeLaunchOverlayMode(mode));
+}
+
 /** Overlay covers the entire viewport — no underlying UI should peek through. */
 export const FULLSCREEN_LAUNCH_OVERLAY_MODES = new Set([
   'fullscreen',
