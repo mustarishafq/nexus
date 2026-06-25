@@ -2,6 +2,7 @@ import db from '@/api/base44Client';
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +39,8 @@ function credentialStatusBadge(status) {
 
 export default function SsoCredentialsDialog({ application, open, onOpenChange }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [email, setEmail] = useState('');
   const [label, setLabel] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -84,10 +87,17 @@ export default function SsoCredentialsDialog({ application, open, onOpenChange }
     event.preventDefault();
     if (!email.trim()) return;
 
-    setPendingAdd({
+    const payload = {
       email: email.trim(),
       label: label.trim() || undefined,
-    });
+    };
+
+    if (isAdmin) {
+      createMut.mutate(payload);
+      return;
+    }
+
+    setPendingAdd(payload);
   };
 
   const confirmAdd = () => {
@@ -122,7 +132,9 @@ export default function SsoCredentialsDialog({ application, open, onOpenChange }
             SSO accounts for {application.name}
           </DialogTitle>
           <DialogDescription>
-            Add extra sign-in emails for this application. Each new email must be approved by an admin before it can be used to launch.
+            {isAdmin
+              ? 'Add extra sign-in emails for this application. New accounts are available immediately.'
+              : 'Add extra sign-in emails for this application. Each new email must be approved by an admin before it can be used to launch.'}
           </DialogDescription>
         </DialogHeader>
 

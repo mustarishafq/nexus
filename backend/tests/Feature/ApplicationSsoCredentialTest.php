@@ -25,11 +25,12 @@ class ApplicationSsoCredentialTest extends TestCase
 
     public function test_user_submitted_sso_credential_starts_pending(): void
     {
-        $user = User::factory()->create(['email' => 'primary@example.com', 'role' => 'admin']);
+        $user = User::factory()->create(['email' => 'primary@example.com', 'role' => 'user', 'is_approved' => true]);
         $token = $this->issueToken($user);
         $application = Application::factory()->create([
             'auth_mode' => 'jwt',
-            'visibility' => 'public',
+            'visibility' => 'private',
+            'created_by_user_id' => $user->id,
         ]);
 
         $this->withToken($token)
@@ -49,6 +50,42 @@ class ApplicationSsoCredentialTest extends TestCase
             'application_id' => $application->id,
             'email' => 'alt@example.com',
             'status' => 'pending',
+        ]);
+    }
+
+    public function test_admin_submitted_sso_credential_is_auto_approved(): void
+    {
+        $admin = User::factory()->create(['email' => 'admin@example.com', 'role' => 'admin']);
+        $token = $this->issueToken($admin);
+        $application = Application::factory()->create([
+            'auth_mode' => 'jwt',
+            'visibility' => 'public',
+        ]);
+
+        $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/sso-credentials", [
+                'email' => 'alt@example.com',
+                'label' => 'Admin account',
+            ])
+            ->assertCreated()
+            ->assertJson([
+                'email' => 'alt@example.com',
+                'label' => 'Admin account',
+                'status' => 'approved',
+                'message' => 'SSO account added and ready to use.',
+            ]);
+
+        $this->assertDatabaseHas('application_sso_credentials', [
+            'user_id' => $admin->id,
+            'application_id' => $application->id,
+            'email' => 'alt@example.com',
+            'status' => 'approved',
+            'reviewed_by_user_id' => $admin->id,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'category' => 'approval',
+            'title' => 'SSO account approval needed',
         ]);
     }
 

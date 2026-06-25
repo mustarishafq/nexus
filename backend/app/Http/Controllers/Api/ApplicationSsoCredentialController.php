@@ -92,22 +92,33 @@ class ApplicationSsoCredentialController extends Controller
             return response()->json(['message' => 'This SSO email is already saved for this application.'], 422);
         }
 
+        $isAdmin = $user->role === 'admin';
+        $status = $isAdmin
+            ? ApplicationSsoCredential::STATUS_APPROVED
+            : ApplicationSsoCredential::STATUS_PENDING;
+
         $credential = ApplicationSsoCredential::create([
             'user_id' => $user->id,
             'application_id' => $application->id,
             'email' => $validated['email'],
             'label' => isset($validated['label']) ? trim($validated['label']) : null,
-            'status' => ApplicationSsoCredential::STATUS_PENDING,
+            'status' => $status,
+            'reviewed_by_user_id' => $isAdmin ? $user->id : null,
+            'reviewed_at' => $isAdmin ? now() : null,
         ]);
 
-        app(ApplicationSsoCredentialNotificationService::class)->notifyAdminsOfPendingRequest($credential);
+        if (! $isAdmin) {
+            app(ApplicationSsoCredentialNotificationService::class)->notifyAdminsOfPendingRequest($credential);
+        }
 
         return response()->json([
             'id' => $credential->id,
             'email' => $credential->email,
             'label' => $credential->label,
             'status' => $credential->status,
-            'message' => 'SSO account submitted for admin approval.',
+            'message' => $isAdmin
+                ? 'SSO account added and ready to use.'
+                : 'SSO account submitted for admin approval.',
         ], 201);
     }
 
