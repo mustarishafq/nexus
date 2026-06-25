@@ -678,17 +678,25 @@ class ApplicationController extends Controller
             return response()->json(['message' => 'The selected SSO email is not allowed for this application.'], 422);
         }
 
-        $now     = time();
+        $now = time();
+        $primaryEmail = strtolower(trim((string) ($user->email ?? '')));
+        $isAdditionalSsoEmail = $primaryEmail !== ''
+            && strtolower(trim($ssoEmail)) !== $primaryEmail;
+
         $payload = [
             'iss'   => config('app.url'),
             'iat'   => $now,
             'exp'   => $now + 60,
             'sub'   => (string) $user->id,
             'email' => $ssoEmail,
-            'name'  => $user->name ?? '',
             'sys'   => $application->slug,
             'return_to' => $returnTo,
         ];
+
+        // Additional SSO emails authenticate an existing app account — do not push Nexus profile fields.
+        if (! $isAdditionalSsoEmail) {
+            $payload['name'] = $user->name ?? '';
+        }
 
         if ($redirectTo) {
             $payload['redirect_to'] = $redirectTo;

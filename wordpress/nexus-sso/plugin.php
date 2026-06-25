@@ -144,8 +144,6 @@ final class Nexus_Sso
             if (! $user instanceof \WP_User) {
                 self::fail('Unable to provision WordPress user.', 500);
             }
-        } else {
-            self::sync_display_name($user, $claims);
         }
 
         wp_clear_auth_cookie();

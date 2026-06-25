@@ -107,6 +107,33 @@ class ApplicationSsoCredentialTest extends TestCase
         $payload = (array) JWT::decode($jwt, new Key($application->api_key, 'HS256'));
 
         $this->assertSame('alt@example.com', $payload['email']);
+        $this->assertArrayNotHasKey('name', $payload);
+    }
+
+    public function test_launch_includes_name_for_primary_sso_email(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'Primary User',
+            'role' => 'admin',
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://app.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $jwt = $response->json('token');
+        $payload = (array) JWT::decode($jwt, new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('primary@example.com', $payload['email']);
+        $this->assertSame('Primary User', $payload['name']);
     }
 
     public function test_launch_rejects_unapproved_sso_email(): void
