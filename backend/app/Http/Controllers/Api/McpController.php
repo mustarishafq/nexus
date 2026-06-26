@@ -43,7 +43,7 @@ class McpController extends Controller
                     fn ($tool) => [
                         'name' => $tool->name(),
                         'description' => $tool->description(),
-                        'inputSchema' => $tool->inputSchema(),
+                        'inputSchema' => $this->normalizeInputSchema($tool->inputSchema()),
                     ],
                     array_values($this->tools->all())
                 ),
@@ -94,5 +94,29 @@ class McpController extends Controller
             'id' => $id,
             'error' => ['code' => $code, 'message' => $message],
         ], $httpStatus);
+    }
+
+    /**
+     * JSON Schema "properties" must encode as a JSON object {}, not a PHP
+     * empty array [] — strict MCP clients (e.g. Claude) reject the latter.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function normalizeInputSchema(array $schema): array
+    {
+        if (array_key_exists('properties', $schema) && is_array($schema['properties']) && $schema['properties'] === []) {
+            $schema['properties'] = (object) [];
+        }
+
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $key => $property) {
+                if (is_array($property)) {
+                    $schema['properties'][$key] = $this->normalizeInputSchema($property);
+                }
+            }
+        }
+
+        return $schema;
     }
 }

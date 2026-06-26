@@ -23,7 +23,7 @@ class ListApplicationsTool implements McpTool
     {
         return [
             'type' => 'object',
-            'properties' => [],
+            'properties' => (object) [],
         ];
     }
 

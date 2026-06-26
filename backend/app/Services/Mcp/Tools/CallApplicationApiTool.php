@@ -31,8 +31,18 @@ class CallApplicationApiTool implements McpTool
                 'slug' => ['type' => 'string', 'description' => 'Application slug from list_applications.'],
                 'method' => ['type' => 'string', 'enum' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], 'default' => 'GET'],
                 'path' => ['type' => 'string', 'description' => 'Path relative to the application\'s base_url, e.g. /api/leads/123.'],
-                'query' => ['type' => 'object', 'description' => 'Query string parameters for GET requests.'],
-                'body' => ['type' => 'object', 'description' => 'JSON body for POST/PUT/PATCH requests.'],
+                'query' => [
+                    'type' => 'object',
+                    'description' => 'Query string parameters for GET requests.',
+                    'properties' => (object) [],
+                    'additionalProperties' => true,
+                ],
+                'body' => [
+                    'type' => 'object',
+                    'description' => 'JSON body for POST/PUT/PATCH requests.',
+                    'properties' => (object) [],
+                    'additionalProperties' => true,
+                ],
             ],
             'required' => ['slug', 'path'],
         ];
