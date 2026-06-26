@@ -85,4 +85,40 @@ class ApplicationMcpCatalogControllerTest extends TestCase
                 && $request->hasHeader('Authorization', 'Bearer draft-secret');
         });
     }
+
+    public function test_catalog_test_sends_x_api_key_header_when_configured(): void
+    {
+        Http::fake([
+            'https://management.test/api/mcp-catalog' => Http::response([
+                [
+                    'method' => 'GET',
+                    'path' => '/api/nexus/schema',
+                    'description' => 'Read API schema.',
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'base_url' => 'https://management.test',
+            'mcp_api_key' => 'nxs_write_secret',
+            'mcp_auth_mode' => 'x-api-key',
+        ]);
+
+        $this->postJson("/api/applications/{$application->id}/mcp-catalog/test", [], [
+            'Authorization' => "Bearer {$token}",
+        ])
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'auth_source' => 'mcp_api_key',
+            ]);
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://management.test/api/mcp-catalog'
+                && $request->hasHeader('X-API-Key', 'nxs_write_secret')
+                && ! $request->hasHeader('Authorization');
+        });
+    }
 }

@@ -30,6 +30,7 @@ class Application extends Model
         'calendar_config',
         'mcp_catalog_path',
         'mcp_api_key',
+        'mcp_auth_mode',
         'mcp_enabled',
         'color',
         'sort_order',

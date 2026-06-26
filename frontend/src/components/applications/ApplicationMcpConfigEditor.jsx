@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_CATALOG_PATH = '/api/mcp-catalog';
@@ -26,6 +27,11 @@ const AUTH_SOURCE_LABELS = {
   webhook_secret: 'Webhook secret',
   api_key: 'SSO API key',
 };
+
+const AUTH_MODE_OPTIONS = [
+  { value: 'bearer', label: 'Authorization: Bearer' },
+  { value: 'x-api-key', label: 'X-API-Key header' },
+];
 
 const SETUP_PROMPT = `Please add an endpoint GET /api/mcp-catalog that returns a JSON array describing every endpoint another internal system might reasonably need to call. It should require the same service-to-service auth this system already uses for other internal API calls (e.g. the API key Nexus already authenticates with). For each endpoint include:
 
@@ -73,6 +79,8 @@ export default function ApplicationMcpConfigEditor({
   onCatalogPathChange,
   mcpApiKey,
   onMcpApiKeyChange,
+  mcpAuthMode = 'bearer',
+  onMcpAuthModeChange,
   baseUrl,
   apiKey,
   webhookSecret,
@@ -138,6 +146,7 @@ export default function ApplicationMcpConfigEditor({
         base_url: baseUrl?.trim() || undefined,
         mcp_catalog_path: catalogPath?.trim() || undefined,
         mcp_api_key: mcpApiKey || undefined,
+        mcp_auth_mode: mcpAuthMode || undefined,
         api_key: apiKey || undefined,
         notification_config: notificationConfig,
       });
@@ -247,13 +256,40 @@ export default function ApplicationMcpConfigEditor({
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Shield className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Label>API auth header</Label>
+                </div>
+                <Select
+                  value={mcpAuthMode || 'bearer'}
+                  onValueChange={onMcpAuthModeChange}
+                  disabled={!enabled}
+                >
+                  <SelectTrigger className="bg-background/80">
+                    <SelectValue placeholder="Choose auth header" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AUTH_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  How Nexus sends the credential when calling this system. Use X-API-Key for APIs that expect{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 text-[10px]">X-API-Key: …</code> instead of Bearer.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-muted-foreground" />
                   <Label>MCP API key <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 </div>
                 <div className="flex gap-2">
                   <Input
                     value={mcpApiKey}
                     onChange={(event) => onMcpApiKeyChange(event.target.value)}
-                    placeholder="Dedicated bearer token for Nexus → system calls"
+                    placeholder="Dedicated API credential for Nexus → system calls"
                     autoComplete="off"
                     spellCheck={false}
                     type="password"
@@ -282,7 +318,7 @@ export default function ApplicationMcpConfigEditor({
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Sent as a bearer token when Nexus calls this system. If blank, Nexus falls back to the webhook secret, then the SSO API key.
+                  Sent using the auth header above when Nexus calls this system. If blank, Nexus falls back to the webhook secret, then the SSO API key.
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   Auth that will be used:{' '}

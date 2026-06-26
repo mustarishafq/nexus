@@ -263,6 +263,7 @@ export default function Applications() {
   const [baseUrl, setBaseUrl] = useState('');
   const [mcpCatalogPath, setMcpCatalogPath] = useState('');
   const [mcpApiKey, setMcpApiKey] = useState('');
+  const [mcpAuthMode, setMcpAuthMode] = useState('bearer');
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [authMode, setAuthMode] = useState('jwt');
   const [openMode, setOpenMode] = useState('embedded');
@@ -325,6 +326,7 @@ export default function Applications() {
     setBaseUrl(system?.base_url || '');
     setMcpCatalogPath(system?.mcp_catalog_path || '');
     setMcpApiKey(system?.mcp_api_key || '');
+    setMcpAuthMode(system?.mcp_auth_mode || 'bearer');
     setMcpEnabled(Boolean(system?.mcp_enabled));
     setAuthMode(system?.auth_mode || 'jwt');
     setOpenMode(system?.open_mode || 'embedded');
@@ -378,6 +380,7 @@ export default function Applications() {
     setBaseUrl('');
     setMcpCatalogPath('');
     setMcpApiKey('');
+    setMcpAuthMode('bearer');
     setMcpEnabled(false);
     setAuthMode('jwt');
     setOpenMode('embedded');
@@ -520,6 +523,7 @@ export default function Applications() {
       api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
       mcp_catalog_path: mcpCatalogPath || undefined,
       mcp_api_key: mcpApiKey || undefined,
+      mcp_auth_mode: mcpAuthMode || 'bearer',
       mcp_enabled: mcpEnabled,
       auth_mode: authMode,
       open_mode: openMode,
@@ -776,6 +780,8 @@ export default function Applications() {
                 onCatalogPathChange={setMcpCatalogPath}
                 mcpApiKey={mcpApiKey}
                 onMcpApiKeyChange={setMcpApiKey}
+                mcpAuthMode={mcpAuthMode}
+                onMcpAuthModeChange={setMcpAuthMode}
                 baseUrl={baseUrl}
                 apiKey={apiKey}
                 webhookSecret={notificationConfig?.webhook_secret}

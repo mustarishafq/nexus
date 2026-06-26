@@ -10,6 +10,10 @@ class ApplicationApiClient
 {
     public const DEFAULT_CATALOG_PATH = '/api/mcp-catalog';
 
+    public const AUTH_MODE_BEARER = 'bearer';
+
+    public const AUTH_MODE_X_API_KEY = 'x-api-key';
+
     /**
      * Call a connected Application's API using the credentials Nexus already
      * holds for it, so callers never need their own System A credentials.
@@ -27,13 +31,7 @@ class ApplicationApiClient
 
         $request = Http::baseUrl($baseUrl)->timeout(15)->acceptJson();
 
-        $auth = $this->resolveAuth($application);
-
-        if ($auth['token']) {
-            $request = $request->withToken($auth['token']);
-        }
-
-        return $request->send(strtoupper($method), $path, $options);
+        return $this->applyAuth($request, $application)->send(strtoupper($method), $path, $options);
     }
 
     public function catalogPath(Application $application): string
@@ -53,25 +51,55 @@ class ApplicationApiClient
     }
 
     /**
-     * @return array{token: ?string, source: ?string}
+     * @return array{token: ?string, source: ?string, mode: string}
      */
     public function resolveAuth(Application $application): array
     {
+        $mode = $this->authMode($application);
+
         if ($application->mcp_api_key) {
-            return ['token' => $application->mcp_api_key, 'source' => 'mcp_api_key'];
+            return ['token' => $application->mcp_api_key, 'source' => 'mcp_api_key', 'mode' => $mode];
         }
 
         $webhookSecret = $application->notification_config['webhook_secret'] ?? null;
 
         if ($webhookSecret) {
-            return ['token' => $webhookSecret, 'source' => 'webhook_secret'];
+            return ['token' => $webhookSecret, 'source' => 'webhook_secret', 'mode' => $mode];
         }
 
         if ($application->api_key) {
-            return ['token' => $application->api_key, 'source' => 'api_key'];
+            return ['token' => $application->api_key, 'source' => 'api_key', 'mode' => $mode];
         }
 
-        return ['token' => null, 'source' => null];
+        return ['token' => null, 'source' => null, 'mode' => $mode];
+    }
+
+    public function authMode(Application $application): string
+    {
+        $mode = (string) ($application->mcp_auth_mode ?? self::AUTH_MODE_BEARER);
+
+        return in_array($mode, [self::AUTH_MODE_BEARER, self::AUTH_MODE_X_API_KEY], true)
+            ? $mode
+            : self::AUTH_MODE_BEARER;
+    }
+
+    /**
+     * @param  \Illuminate\Http\Client\PendingRequest  $request
+     * @return \Illuminate\Http\Client\PendingRequest
+     */
+    private function applyAuth($request, Application $application)
+    {
+        $auth = $this->resolveAuth($application);
+
+        if (! $auth['token']) {
+            return $request;
+        }
+
+        if ($auth['mode'] === self::AUTH_MODE_X_API_KEY) {
+            return $request->withHeaders(['X-API-Key' => $auth['token']]);
+        }
+
+        return $request->withToken($auth['token']);
     }
 
     /**
@@ -152,7 +180,7 @@ class ApplicationApiClient
     {
         $app = $application->replicate();
 
-        foreach (['base_url', 'mcp_catalog_path', 'mcp_api_key', 'api_key'] as $key) {
+        foreach (['base_url', 'mcp_catalog_path', 'mcp_api_key', 'mcp_auth_mode', 'api_key'] as $key) {
             if (array_key_exists($key, $overrides)) {
                 $app->{$key} = $overrides[$key];
             }

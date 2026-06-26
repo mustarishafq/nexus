@@ -27,6 +27,7 @@ class ApplicationMcpCatalogController extends Controller
             'base_url' => ['nullable', 'string', 'max:2048'],
             'mcp_catalog_path' => ['nullable', 'string', 'max:255'],
             'mcp_api_key' => ['nullable', 'string', 'max:255'],
+            'mcp_auth_mode' => ['nullable', 'in:bearer,x-api-key'],
             'api_key' => ['nullable', 'string', 'max:255'],
             'notification_config' => ['nullable', 'array'],
         ]);
