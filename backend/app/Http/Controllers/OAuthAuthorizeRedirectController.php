@@ -39,6 +39,6 @@ class OAuthAuthorizeRedirectController extends Controller
 
         $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
 
-        return redirect()->away($frontendUrl.'/oauth/consent?'.http_build_query($validated));
+        return redirect()->away($frontendUrl.'/mcp-consent?'.http_build_query($validated));
     }
 }

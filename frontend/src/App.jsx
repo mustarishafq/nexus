@@ -121,7 +121,7 @@ function App() {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
-                <Route path="/oauth/consent" element={<OAuthConsent />} />
+                <Route path="/mcp-consent" element={<OAuthConsent />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />

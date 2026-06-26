@@ -37,7 +37,7 @@ export default function OAuthConsent() {
         setClient(clientInfo);
 
         if (!user) {
-          const returnTo = `/oauth/consent?${searchParams.toString()}`;
+          const returnTo = `/mcp-consent?${searchParams.toString()}`;
           window.location.href = `/login?redirect=${encodeURIComponent(returnTo)}`;
           return;
         }
