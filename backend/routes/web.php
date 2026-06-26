@@ -15,6 +15,7 @@ Route::get('/.well-known/oauth-protected-resource', [OAuthDiscoveryController::c
 Route::get('/.well-known/oauth-protected-resource/mcp', [OAuthDiscoveryController::class, 'protectedResource']);
 Route::get('/authorize', OAuthAuthorizeRedirectController::class);
 Route::get('/oauth/authorize', OAuthAuthorizeRedirectController::class);
+Route::post('/token', [OAuthController::class, 'token']);
 Route::post('/oauth/token', [OAuthController::class, 'token']);
 
 // Root-level DCR path: some MCP clients POST /register on the issuer host

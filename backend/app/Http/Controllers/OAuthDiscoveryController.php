@@ -24,7 +24,7 @@ class OAuthDiscoveryController extends Controller
         return response()->json([
             'issuer' => $issuer,
             'authorization_endpoint' => "{$issuer}/authorize",
-            'token_endpoint' => "{$issuer}/oauth/token",
+            'token_endpoint' => "{$issuer}/token",
             'registration_endpoint' => "{$issuer}/register",
             'scopes_supported' => ['mcp'],
             'response_types_supported' => ['code'],
