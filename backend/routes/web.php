@@ -13,6 +13,7 @@ Route::get('/', function () {
 Route::get('/.well-known/oauth-authorization-server', [OAuthDiscoveryController::class, 'metadata']);
 Route::get('/.well-known/oauth-protected-resource', [OAuthDiscoveryController::class, 'protectedResource']);
 Route::get('/.well-known/oauth-protected-resource/mcp', [OAuthDiscoveryController::class, 'protectedResource']);
+Route::get('/authorize', OAuthAuthorizeRedirectController::class);
 Route::get('/oauth/authorize', OAuthAuthorizeRedirectController::class);
 Route::post('/oauth/token', [OAuthController::class, 'token']);
 
