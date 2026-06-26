@@ -18,6 +18,7 @@ import {
   NOTIFICATION_TYPES,
   getNotificationCategoryVisual,
   getNotificationTypeVisual,
+  normalizeNotifications,
 } from '@/lib/notificationVisuals';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { buildSystemStatusDescription } from '@/lib/MetaTagManager';
@@ -42,6 +43,7 @@ export default function NotificationCenter() {
         '-created_date',
         200
       ),
+    select: normalizeNotifications,
   });
 
   const { data: applications = [] } = useQuery({
@@ -126,11 +128,11 @@ export default function NotificationCenter() {
         icon={Bell}
         title="Notification Center"
         description={`${notifications.filter((n) => !n.is_read).length} unread of ${notifications.length} total`}
-        actions={(
+        actions={unreadCount > 0 ? (
           <Button onClick={markAllRead} variant="outline" size="sm" className="gap-1">
             <CheckCheck className="h-4 w-4" /> Mark all read
           </Button>
-        )}
+        ) : null}
       />
 
       {/* Filters */}
@@ -193,7 +195,7 @@ export default function NotificationCenter() {
           {Object.entries(grouped).map(([date, notifs]) => (
             <div key={date}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{date}</h3>
-              <div className="bg-card rounded-2xl border border-border p-2 space-y-2">
+              <div className="bg-card rounded-2xl border border-border p-2.5 space-y-2.5">
                 {notifs.map(n => (
                   <NotificationItem
                     key={n.id}

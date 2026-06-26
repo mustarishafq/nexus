@@ -20,6 +20,10 @@ import {
 } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { glassPanelStyles } from '@/components/layout/glassStyles';
+import {
+  isCriticalNotification,
+  normalizeNotifications,
+} from '@/lib/notificationVisuals';
 
 export default function NotificationPanel({ open, onClose, onCountChange }) {
   const [notifications, setNotifications] = useState([]);
@@ -43,7 +47,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     const baseQuery = { exclude_broadcasts: true, exclude_direct_messages: true };
     const query = filter === 'unread' ? { ...baseQuery, is_read: false } : baseQuery;
     const data = await db.entities.Notification.filter(query, '-created_date', 50);
-    setNotifications(data);
+    setNotifications(normalizeNotifications(data));
     setLoading(false);
     const unread = data.filter(n => !n.is_read).length;
     onCountChange?.(unread);
@@ -61,10 +65,10 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
 
     const unsub = db.entities.Notification.subscribe((event) => {
       if (event.type === 'create') {
-        setNotifications(prev => [event.data, ...prev]);
+        setNotifications(prev => [normalizeNotifications([event.data])[0], ...prev]);
         onCountChange?.(prev => (typeof prev === 'number' ? prev + 1 : 1));
       } else if (event.type === 'update') {
-        setNotifications(prev => prev.map(n => n.id === event.id ? event.data : n));
+        setNotifications(prev => prev.map(n => n.id === event.id ? normalizeNotifications([event.data])[0] : n));
       } else if (event.type === 'delete') {
         setNotifications(prev => prev.filter(n => n.id !== event.id));
       }
@@ -160,8 +164,8 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   }, [applications, navigate, onClose]);
 
   const filtered = notifications.filter(n => {
-    if (filter === 'unread') return !n.is_read;
-    if (filter === 'critical') return n.type === 'critical' || n.type === 'error';
+    if (filter === 'unread') return !n.read_at && !n.is_read;
+    if (filter === 'critical') return isCriticalNotification(n);
     return true;
   });
 
@@ -214,10 +218,10 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
             {/* Filter Tabs */}
             <div className="px-4 pt-3">
               <Tabs value={filter} onValueChange={setFilter}>
-                <TabsList className="w-full bg-muted/50 h-9">
-                  <TabsTrigger value="all" className="text-xs flex-1">All</TabsTrigger>
-                  <TabsTrigger value="unread" className="text-xs flex-1">Unread</TabsTrigger>
-                  <TabsTrigger value="critical" className="text-xs flex-1">Critical</TabsTrigger>
+                <TabsList className="w-full bg-muted/50 h-9 text-foreground/60">
+                  <TabsTrigger value="all" className="text-xs flex-1 data-[state=active]:text-foreground">All</TabsTrigger>
+                  <TabsTrigger value="unread" className="text-xs flex-1 data-[state=active]:text-foreground">Unread</TabsTrigger>
+                  <TabsTrigger value="critical" className="text-xs flex-1 data-[state=active]:text-foreground">Critical</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -232,10 +236,10 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                   <Bell className="w-10 h-10 mb-3 opacity-30" />
                   <p className="text-sm font-medium">No notifications</p>
-                  <p className="text-xs mt-1">You're all caught up!</p>
+                  <p className="text-xs text-foreground/60 dark:text-muted-foreground mt-1">You're all caught up!</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {filtered.map(notif => (
                     <NotificationItem
                       key={notif.id}

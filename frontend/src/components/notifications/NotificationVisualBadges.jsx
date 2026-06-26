@@ -29,7 +29,8 @@ export function NotificationCategoryBadge({ category, className }) {
 
   return (
     <span className={cn(
-      'inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded',
+      'inline-flex items-center gap-1 text-[10px] font-medium text-foreground/80 dark:text-muted-foreground',
+      'bg-background/90 dark:bg-muted border border-border/50 px-1.5 py-0.5 rounded',
       className
     )}>
       <Icon className="w-2.5 h-2.5" />
@@ -60,7 +61,8 @@ export function NotificationSystemBadge({ systemId, className }) {
 
   return (
     <span className={cn(
-      'inline-flex items-center text-[10px] font-mono text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded',
+      'inline-flex items-center text-[10px] font-mono text-foreground/70 dark:text-muted-foreground',
+      'bg-background/80 dark:bg-muted/80 border border-border/40 px-1.5 py-0.5 rounded',
       className
     )}>
       {systemId}

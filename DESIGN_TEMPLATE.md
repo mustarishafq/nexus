@@ -252,7 +252,9 @@ Use these layers consistently. Do not invent new z-index values without updating
 | `z-[9999]` | PWA splash screen |
 | `z-[130]` | SSO credential picker (above launch overlay at `z-[120]`) |
 | `z-[120]` | Mention autocomplete popover, application launch overlay |
-| `z-50` | Dialogs, sheets, drawers, dropdowns, selects, notification panel backdrop + panel, PWA install prompt |
+| `z-[61]` | Notification panel (slide-in sidebar) |
+| `z-[60]` | Notification panel backdrop |
+| `z-50` | Dialogs, sheets, drawers, dropdowns, selects, PWA install prompt |
 | `z-40` | BottomNav |
 | `z-[25]` | GlobalBroadcastStrip (fixed below TopBar) |
 | `z-30` | TopBar, AppLayout header stack |
@@ -402,7 +404,7 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 
 **Notification bell button:** `p-2 rounded-lg hover:bg-muted transition-colors`
 
-**Bell badge (desktop):** `absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold animate-pulse` — capped `99+`
+**Bell badge (desktop):** `absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold` — capped `99+`
 
 **Avatar dropdown trigger:** `flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors`
 
@@ -414,7 +416,7 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 
 **Dropdown:** `align="end" w-48`; sign out item: `text-destructive`
 
-**NotificationPanel:** Desktop only (`!isMobile`). Polls unread every 15s (excludes broadcasts + DMs).
+**NotificationPanel:** Desktop only (`!isMobile`). Toggled from bell click (`panelOpen`). Full spec: §15.3. Polls unread every 15s via `useUnreadNotificationCount`.
 
 ### 7.2 Global search
 
@@ -1091,53 +1093,254 @@ Shared widget header pattern:
 
 ### 15.1 Notification visual tokens
 
-**File:** `lib/notificationVisuals.js`
+**File:** `src/lib/notificationVisuals.js`
+
+Exports: `getNotificationTypeVisual`, `getNotificationPriorityVisual`, `getNotificationCategoryIcon`, `normalizeNotification`, `isCriticalNotification`.
 
 **Types:**
 
 | Type | Color classes |
 |------|---------------|
-| `info` | `text-info bg-info/10 border-info/20` |
-| `success` | `text-success bg-success/10 border-success/20` |
-| `warning` | `text-warning bg-warning/10 border-warning/20` |
-| `error` | `text-destructive bg-destructive/10 border-destructive/20` |
-| `critical` | `text-critical bg-critical/10 border-critical/20` |
+| `info` | `text-info bg-info/10 border-info/45 dark:border-info/30` |
+| `success` | `text-success bg-success/10 border-success/45 dark:border-success/30` |
+| `warning` | `text-warning bg-warning/10 border-warning/50 dark:border-warning/35` |
+| `error` | `text-destructive bg-destructive/10 border-destructive/45 dark:border-destructive/30` |
+| `critical` | `text-critical bg-critical/10 border-critical/45 dark:border-critical/30` |
 
-**Priorities:** low → muted; medium → info; high → warning; critical → critical
+Borders use higher opacity in light mode so cards separate clearly on tinted backgrounds.
 
-**Categories:** booking, hr, inventory, finance, security, system, task, approval, announcement, other — each with Lucide icon.
+**Priorities** (`getNotificationPriorityVisual`):
+
+| Priority | Light mode | Dark mode |
+|----------|------------|-----------|
+| `low` | `text-foreground/70 bg-muted` | `text-muted-foreground bg-muted` |
+| `medium` | `text-info-foreground bg-info` | same |
+| `high` | `text-warning-foreground bg-warning` | `text-warning bg-warning/25 border border-warning/40` |
+| `critical` | `text-critical-foreground bg-critical` | `text-critical bg-critical/25 border border-critical/40` |
+
+Solid priority badges in light mode improve contrast on pastel card backgrounds.
+
+**Categories:** booking, hr, inventory, finance, security, system, task, approval, announcement, calendar, other — each with Lucide icon.
+
+**Booking app inference** (when `category` / `priority` / visual type omitted):
+
+| Signal | Inferred value |
+|--------|----------------|
+| `type` contains `rejected` or `cancelled` | visual `error`, priority `critical` |
+| `type` contains `pending` | visual `warning`, priority `high` |
+| `type` contains `confirmed`, `new_pic`, or `submitted` | visual `success` |
+| `type` starts with `booking` | category `booking` |
+| `type` contains `task` or `care` | category `task` |
+| else | category `other`, visual `info`, priority `medium` |
+
+`normalizeNotification()` maps API fields: `read_at` → `is_read`, `link` → `action_url`, UUID → 5-char `system_id`.
 
 ### 15.2 NotificationItem
 
+**File:** `src/components/notifications/NotificationItem.jsx`
+
+Reusable list row — used in **NotificationPanel** (§15.3) and **Notifications page** (§15.4).
+
+#### Card shell
+
 ```
-rounded-xl p-3.5 border transition-all duration-200 cursor-pointer
+group relative flex gap-3 p-3.5 rounded-xl border transition-all duration-200 cursor-pointer
 ```
 
-Unread: type-specific `config.bg` + `config.border`; read: `bg-muted/30`
+| State | Classes |
+|-------|---------|
+| Unread | type `config.bg` + `config.border` + `shadow-sm ring-1 ring-black/[0.05] dark:ring-white/[0.08]` + `hover:opacity-95` |
+| Read | `border-border bg-card/70 shadow-sm dark:bg-muted/30` + `hover:border-border/90 hover:bg-muted/40 dark:hover:bg-muted/50` |
 
-Icon box: `w-9 h-9 rounded-lg`; unread dot: `absolute top-3.5 right-3.5 w-2 h-2 rounded-full`
+Read cards use a neutral border (not type tint) so stacked items stay visually distinct.
 
-Action menu: `opacity-0 group-hover:opacity-100`
+#### Layout (left → right)
 
-### 15.3 NotificationPanel
+```
+┌──────────────────────────────────────────────────────┐
+│ [icon box]  Title (semibold if unread)        [···]  │
+│  9×9        Message line-clamp-2                     │
+│             [Category] [system_id] [Priority]  time  │
+│                                              ● unread│
+└──────────────────────────────────────────────────────┘
+```
 
 | Element | Spec |
 |---------|------|
-| Backdrop | `fixed inset-0 z-50 bg-black/20 backdrop-blur-sm` |
-| Panel | `fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-card border-l border-border shadow-2xl flex flex-col` |
-| Slide | `initial={{ x: '100%', opacity: 0 }}` → `{ x: 0, opacity: 1 }`; spring `damping: 30, stiffness: 300` |
-| Unread pill | `text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full` |
-| Filter tabs | `TabsList w-full bg-muted/50 h-9`; triggers `text-xs flex-1` |
-| Footer CTA | `Button outline w-full text-sm h-9` → `/notifications` |
-| Loading | `w-6 h-6 border-2 border-muted border-t-primary animate-spin` |
+| Icon box | `w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-black/[0.06] dark:border-white/10` + type `config.bg` |
+| Type icon | `w-[18px] h-[18px]` + type `config.color` (from `getNotificationTypeVisual`) |
+| Title | `text-sm text-foreground leading-snug font-medium`; unread adds `font-semibold` |
+| Message | `text-xs text-foreground/75 dark:text-muted-foreground mt-0.5 line-clamp-2` (omit if empty) |
+| Unread dot | `absolute top-3.5 right-3.5 w-2 h-2 rounded-full` + type `config.dot` |
+| Timestamp | `text-[10px] text-foreground/60 dark:text-muted-foreground ml-auto` — relative time via `date-fns` `formatDistanceToNow` |
+| Row gap (list) | parent `space-y-2.5` |
 
-### 15.4 NotificationCenter
+**Light-mode readability:** body and timestamp use `foreground` opacity instead of `muted-foreground` so text stays legible on tinted unread backgrounds.
 
-Date group header: `text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1`
+#### Action menu (hover reveal)
 
-List container: `bg-card rounded-2xl border border-border p-2 space-y-0.5`
+Trigger: `opacity-0 group-hover:opacity-100` + `Button ghost icon h-6 w-6` + `MoreHorizontal w-3.5 h-3.5`
 
-Search: `pl-9 h-9 bg-muted/50 border-0`
+Dropdown `align="end" w-40`:
+
+| Action | Icon | Notes |
+|--------|------|-------|
+| Mark as read | `Check` | Only when unread |
+| Snooze 1hr | `Clock` | Toast: not available yet |
+| Dismiss | `BellOff` | `text-destructive`; toast: not available yet |
+
+#### Click behavior
+
+1. If unread → mark read (via `onMarkRead` callback).
+2. If `action_url` present → `onActivate` navigates (panel closes first).
+
+### 15.2.1 Notification metadata badges
+
+**File:** `src/components/notifications/NotificationVisualBadges.jsx`
+
+Rendered in a footer row: `flex items-center flex-wrap gap-1.5 mt-2`
+
+| Badge | When shown | Classes |
+|-------|------------|---------|
+| **Category** | `notification.category` set | `inline-flex items-center gap-1 text-[10px] font-medium text-foreground/80 dark:text-muted-foreground bg-background/90 dark:bg-muted border border-border/50 px-1.5 py-0.5 rounded` + category Lucide icon `w-2.5 h-2.5` |
+| **System** | `system_id` non-empty | `text-[10px] font-mono text-foreground/70 dark:text-muted-foreground bg-background/80 dark:bg-muted/80 border border-border/40 px-1.5 py-0.5 rounded` — shows raw system id (e.g. `6ea74`) |
+| **Priority** | `high` or `critical` only | `text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded` + priority color/bg from `getNotificationPriorityVisual` (solid fill in light mode) |
+
+### 15.3 NotificationPanel (sidebar)
+
+**File:** `src/components/notifications/NotificationPanel.jsx`
+
+Right-edge slide-in panel opened from the TopBar bell (desktop only). Rendered via `createPortal(…, document.body)` so it stacks above page content.
+
+#### Visual structure
+
+```
+┌─────────────────────────────────────┐
+│ 🔔 Notifications  [2]  Mark all ✕  │  ← header
+├─────────────────────────────────────┤
+│  [ All ] [ Unread ] [ Critical ]    │  ← filter tabs
+├─────────────────────────────────────┤
+│                                     │
+│  ┌─ NotificationItem ────────────┐  │
+│  ┌─ NotificationItem ────────────┐  │  ← scrollable list
+│  └───────────────────────────────┘  │
+│                                     │
+├─────────────────────────────────────┤
+│      View All Notifications         │  ← footer CTA
+└─────────────────────────────────────┘
+        ↑ glass panel, max-w-md
+```
+
+#### Shell & motion
+
+| Element | Spec |
+|---------|------|
+| Backdrop | `fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm`; click closes panel |
+| Backdrop motion | `AnimatePresence`; fade `opacity: 0 → 1` |
+| Panel | `fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col` |
+| Panel surface | `glassPanelStyles` (§7.0) + `border-l` + `rounded-bl-2xl sm:rounded-none` |
+| Panel motion | slide from right: `initial={{ x: '100%', opacity: 0 }}` → `{ x: 0, opacity: 1 }`; spring `damping: 30, stiffness: 300` |
+| List scroll | `ScrollArea flex-1 px-3 py-2` |
+
+#### Header
+
+Container: `flex items-center justify-between p-4 border-b border-border/50`
+
+| Element | Spec |
+|---------|------|
+| Bell icon | `Bell w-5 h-5 text-primary` |
+| Title | `font-semibold text-lg` — "Notifications" |
+| Unread pill | Shown when count > 0: `text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium` |
+| Mark all read | `Button ghost sm text-xs h-8` + `CheckCheck w-3.5 h-3.5 mr-1` + "Mark all read" |
+| Close | `Button ghost icon h-8 w-8` + `X w-4 h-4` |
+
+#### Filter tabs
+
+Wrapper: `px-4 pt-3`
+
+```
+<TabsList className="w-full bg-muted/50 h-9 text-foreground/60">
+  <TabsTrigger value="all" className="text-xs flex-1 data-[state=active]:text-foreground">All</TabsTrigger>
+  <TabsTrigger value="unread" className="text-xs flex-1 data-[state=active]:text-foreground">Unread</TabsTrigger>
+  <TabsTrigger value="critical" className="text-xs flex-1 data-[state=active]:text-foreground">Critical</TabsTrigger>
+</TabsList>
+```
+
+Inactive tabs use `text-foreground/60` for better light-mode legibility.
+
+| Tab | Filter logic |
+|-----|--------------|
+| All | All loaded notifications |
+| Unread | `!read_at` |
+| Critical | `isCriticalNotification()` — visual type `error` or `critical` |
+
+#### List states
+
+| State | Pattern |
+|-------|---------|
+| Loading | centered `py-12`; spinner `w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin` |
+| Empty | `py-16` centered; `Bell w-10 h-10 mb-3 opacity-30`; title `text-sm font-medium` "No notifications"; subtitle `text-xs text-foreground/60 dark:text-muted-foreground mt-1` "You're all caught up!" |
+| Populated | `space-y-2.5` of `NotificationItem` (§15.2) |
+
+#### Footer
+
+Container: `p-3 border-t border-border/50`
+
+`Link` → `/notifications` (closes panel on navigate):
+
+`Button outline w-full text-sm h-9` — "View All Notifications"
+
+#### Data & behavior
+
+| Behavior | Detail |
+|----------|--------|
+| Visibility | Desktop only — mobile uses `/notifications` route via bottom nav |
+| Trigger | TopBar bell toggles `notificationsOpen` state (§7.1) |
+| Fetch | `useNotifications(open)` — list refetches while panel open; max 50 items, sorted `created_at DESC` |
+| Unread count | `useUnreadNotificationCount` polls every 15s for TopBar badge |
+| Mark read / mark all | React Query mutations; invalidates list + unread count |
+| Snooze / Dismiss | UI present; shows `toast.info('…not available yet')` until API exists |
+| Activate | Navigate to `action_url` / `link`; panel closes on navigate |
+
+#### Reference JSX (panel shell)
+
+```jsx
+<AnimatePresence>
+  {open && (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
+        onClick={onClose}
+        /* fade in/out */
+      />
+      <motion.div
+        className={cn(
+          'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
+          'rounded-bl-2xl sm:rounded-none border-l',
+          glassPanelStyles
+        )}
+        /* slide from right */
+      >
+        {/* header → tabs → ScrollArea → footer */}
+      </motion.div>
+    </>
+  )}
+</AnimatePresence>
+```
+
+### 15.4 Notifications page
+
+**File:** `src/pages/Notifications.jsx`
+
+Full-page notification center (mobile bottom nav + “View All Notifications” from panel).
+
+| Element | Spec |
+|---------|------|
+| Header | `PageHeader` with Bell icon, “Mark all read” action when unread > 0 |
+| List container | `bg-card rounded-2xl border border-border p-2.5 space-y-2.5` |
+| Rows | `NotificationItem` (§15.2) — same styling as panel |
+| Loading | centered spinner (same as §15.3) |
+| Empty | `EmptyState` with Bell icon |
 
 ### 15.5 GlobalBroadcastStrip
 
@@ -1736,8 +1939,11 @@ Filters in collapsible card (mobile collapsed by default):
 | App browser | `frontend/src/pages/ApplicationBrowser.jsx` |
 | SSO credential picker | `frontend/src/components/applications/SsoCredentialPickerDialog.jsx` |
 | Broadcast strip | `frontend/src/components/broadcasts/GlobalBroadcastStrip.jsx` |
-| Notification panel | `frontend/src/components/notifications/NotificationPanel.jsx` |
-| Notification visuals | `frontend/src/lib/notificationVisuals.js` |
+| Notification panel | `src/components/notifications/NotificationPanel.jsx` |
+| Notification item | `src/components/notifications/NotificationItem.jsx` |
+| Notification badges | `src/components/notifications/NotificationVisualBadges.jsx` |
+| Notification visuals | `src/lib/notificationVisuals.js` |
+| Notifications page | `src/pages/Notifications.jsx` |
 | Media constants | `frontend/src/lib/media.js` |
 | Brand color | `frontend/src/lib/imageColor.js` |
 | Mobile hook | `frontend/src/hooks/use-mobile.jsx` |

@@ -8,6 +8,7 @@ import {
   NotificationPriorityBadge,
   NotificationSystemBadge,
 } from '@/components/notifications/NotificationVisualBadges';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
@@ -30,25 +31,39 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
   return (
     <div
       className={cn(
-        "group relative flex gap-3 p-3.5 rounded-xl transition-all duration-200 cursor-pointer border",
+        'group relative flex gap-3 p-3.5 rounded-xl border transition-all duration-200 cursor-pointer',
         notification.is_read
-          ? cn("border", config.border, "bg-muted/30 hover:bg-muted/50")
-          : cn("border", config.border, config.bg, "hover:opacity-90")
+          ? 'border-border bg-card/70 shadow-sm hover:border-border/90 hover:bg-muted/40 dark:bg-muted/30 dark:hover:bg-muted/50'
+          : cn(
+              config.border,
+              config.bg,
+              'shadow-sm ring-1 ring-black/[0.05] dark:ring-white/[0.08] hover:opacity-95'
+            )
       )}
       onClick={handleClick}
     >
-      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", config.bg)}>
-        <TypeIcon className={cn("w-4.5 h-4.5", config.color)} />
+      <div
+        className={cn(
+          'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-black/[0.06] dark:border-white/10',
+          config.bg
+        )}
+      >
+        <TypeIcon className={cn('w-[18px] h-[18px]', config.color)} />
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className={cn("text-sm font-medium leading-snug", !notification.is_read && "font-semibold")}>
+            <p
+              className={cn(
+                'text-sm text-foreground leading-snug font-medium',
+                !notification.is_read && 'font-semibold'
+              )}
+            >
               {notification.title}
             </p>
             {notification.message ? (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+              <p className="text-xs text-foreground/75 dark:text-muted-foreground mt-0.5 line-clamp-2">
                 {notification.message}
               </p>
             ) : null}
@@ -56,9 +71,14 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-all shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="opacity-0 group-hover:opacity-100 h-6 w-6 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               {!notification.is_read && (
@@ -69,7 +89,10 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSnooze?.(notification); }}>
                 <Clock className="w-3.5 h-3.5 mr-2" /> Snooze 1hr
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete?.(notification); }} className="text-destructive">
+              <DropdownMenuItem
+                onClick={(e) => { e.stopPropagation(); onDelete?.(notification); }}
+                className="text-destructive"
+              >
                 <BellOff className="w-3.5 h-3.5 mr-2" /> Dismiss
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -82,14 +105,14 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
           ) : null}
           <NotificationSystemBadge systemId={notification.system_id} />
           <NotificationPriorityBadge priority={notification.priority} />
-          <span className="text-[10px] text-muted-foreground ml-auto">
+          <span className="text-[10px] text-foreground/60 dark:text-muted-foreground ml-auto">
             {formatDistanceToNow(new Date(notification.created_date), { addSuffix: true })}
           </span>
         </div>
       </div>
 
       {!notification.is_read && (
-        <div className={cn("absolute top-3.5 right-3.5 w-2 h-2 rounded-full", config.dot)} />
+        <div className={cn('absolute top-3.5 right-3.5 w-2 h-2 rounded-full', config.dot)} />
       )}
     </div>
   );
