@@ -2,9 +2,9 @@
 
 namespace App\Services\Mcp\Tools;
 
-use App\Models\Application;
 use App\Models\User;
 use App\Services\ApplicationApiClient;
+use App\Services\Mcp\McpJsonSchema;
 use App\Services\Mcp\McpTool;
 use App\Support\UserApplicationAccess;
 
@@ -25,27 +25,16 @@ class CallApplicationApiTool implements McpTool
 
     public function inputSchema(): array
     {
-        return [
-            'type' => 'object',
-            'properties' => [
+        return McpJsonSchema::object(
+            properties: [
                 'slug' => ['type' => 'string', 'description' => 'Application slug from list_applications.'],
                 'method' => ['type' => 'string', 'enum' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], 'default' => 'GET'],
                 'path' => ['type' => 'string', 'description' => 'Path relative to the application\'s base_url, e.g. /api/leads/123.'],
-                'query' => [
-                    'type' => 'object',
-                    'description' => 'Query string parameters for GET requests.',
-                    'properties' => (object) [],
-                    'additionalProperties' => true,
-                ],
-                'body' => [
-                    'type' => 'object',
-                    'description' => 'JSON body for POST/PUT/PATCH requests.',
-                    'properties' => (object) [],
-                    'additionalProperties' => true,
-                ],
+                'query' => McpJsonSchema::openObject('Query string parameters for GET requests.'),
+                'body' => McpJsonSchema::openObject('JSON body for POST/PUT/PATCH requests.'),
             ],
-            'required' => ['slug', 'path'],
-        ];
+            required: ['slug', 'path'],
+        );
     }
 
     public function call(User $user, array $arguments): array
@@ -54,20 +43,7 @@ class CallApplicationApiTool implements McpTool
         $method = strtoupper((string) ($arguments['method'] ?? 'GET'));
         $path = (string) ($arguments['path'] ?? '');
 
-        $application = Application::query()
-            ->where('slug', $slug)
-            ->where('is_enabled', true)
-            ->where('mcp_enabled', true)
-            ->with('privateAccessEmails')
-            ->first();
-
-        if (! $application) {
-            throw new \RuntimeException("No enabled application found for slug \"{$slug}\".");
-        }
-
-        if (! $this->userCanAccess($user, $application)) {
-            throw new \RuntimeException("You don't have access to \"{$slug}\".");
-        }
+        $application = UserApplicationAccess::findMcpApplicationForUser($user, $slug);
 
         $options = [];
         if (! empty($arguments['query'])) {
@@ -83,21 +59,5 @@ class CallApplicationApiTool implements McpTool
             'status' => $response->status(),
             'body' => $response->json() ?? $response->body(),
         ];
-    }
-
-    private function userCanAccess(User $user, Application $application): bool
-    {
-        if ($user->role === 'admin') {
-            return true;
-        }
-
-        if ($application->visibility === 'public') {
-            $allowedPublicSlugs = UserApplicationAccess::allowedPublicSlugs($user);
-
-            return $allowedPublicSlugs === null || in_array($application->slug, $allowedPublicSlugs, true);
-        }
-
-        return $application->created_by_user_id === $user->id
-            || $application->privateAccessEmails->contains('email', $user->email);
     }
 }
