@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\AccessGroupController;
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\ApiTokenController;
 use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastController;
@@ -20,10 +21,12 @@ use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
+use App\Http\Controllers\Api\ApplicationMcpCatalogController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
+use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
@@ -41,6 +44,8 @@ Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
 
 Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback']);
+
+Route::post('/mcp', [McpController::class, 'handle']);
 
 Route::get('/app-settings', [AppSettingController::class, 'publicShow']);
 Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
@@ -91,6 +96,9 @@ Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);
 
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
+Route::get('/admin/api-tokens', [ApiTokenController::class, 'index']);
+Route::post('/admin/api-tokens', [ApiTokenController::class, 'store']);
+Route::delete('/admin/api-tokens/{apiToken}', [ApiTokenController::class, 'destroy']);
 Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::class, 'index']);
 Route::patch('/admin/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialAdminController::class, 'update']);
 Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
@@ -142,6 +150,7 @@ Route::post('applications/{application}/event-webhook', [ApplicationEventWebhook
 Route::post('applications/{application}/event-webhook/preview', [ApplicationEventWebhookController::class, 'preview']);
 Route::post('applications/{application}/calendar-webhook', [ApplicationCalendarWebhookController::class, 'store']);
 Route::post('applications/{application}/calendar-webhook/preview', [ApplicationCalendarWebhookController::class, 'preview']);
+Route::post('applications/{application}/mcp-catalog/test', [ApplicationMcpCatalogController::class, 'test']);
 Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('metabase-dashboards', MetabaseDashboardController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Calendar as CalendarIcon, KeyRound, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, Bot, Calendar as CalendarIcon, KeyRound, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import CornerRibbon from '@/components/applications/CornerRibbon';
@@ -35,6 +35,7 @@ export default function ApplicationCard({
   const environmentBadge = getEnvironmentBadge(system.environment);
   const notificationsEnabled = applicationNotificationsEnabled(system);
   const calendarSyncEnabled = applicationCalendarSyncEnabled(system);
+  const mcpEnabled = Boolean(system.mcp_enabled);
   const isInteractive = !readOnly && system.is_enabled && onLaunch;
   const footerDetail = footerSubtitle ?? (system.description?.trim() || 'No description provided');
   const showOverlayFooter = !footerOutside;
@@ -112,6 +113,19 @@ export default function ApplicationCard({
         >
           <CalendarIcon className="h-2.5 w-2.5 text-sky-300" aria-hidden />
           <span className="sr-only">Calendar sync enabled</span>
+        </span>
+      )}
+
+      {mcpEnabled && (
+        <span
+          className={cn(
+            'pointer-events-none absolute bottom-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]',
+            notificationsEnabled && calendarSyncEnabled ? 'left-14' : notificationsEnabled || calendarSyncEnabled ? 'left-8' : 'left-2'
+          )}
+          title="MCP access enabled"
+        >
+          <Bot className="h-3 w-3 text-violet-300" aria-hidden />
+          <span className="sr-only">MCP access enabled</span>
         </span>
       )}
 

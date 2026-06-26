@@ -635,6 +635,13 @@ export const db = {
 		});
 	},
 
+	async testApplicationMcpCatalog(applicationId, draft = {}) {
+		return request(`/applications/${applicationId}/mcp-catalog/test`, {
+			method: 'POST',
+			body: draft,
+		});
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */
@@ -700,6 +707,23 @@ export const db = {
 		return request('/admin/notifications/send', {
 			method: 'POST',
 			body: payload,
+		});
+	},
+
+	async listAdminApiTokens() {
+		return request('/admin/api-tokens');
+	},
+
+	async createAdminApiToken(payload) {
+		return request('/admin/api-tokens', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	async revokeAdminApiToken(tokenId) {
+		return request(`/admin/api-tokens/${tokenId}`, {
+			method: 'DELETE',
 		});
 	},
 

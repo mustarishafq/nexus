@@ -1,0 +1,89 @@
+{
+  "info": {
+    "name": "Nexus MCP",
+    "description": "JSON-RPC 2.0 calls against Nexus's MCP endpoint (POST {{base_url}}/api/mcp). Set base_url and token variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "slug", "value": "nxscr" }
+  ],
+  "item": [
+    {
+      "name": "initialize",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{base_url}}/api/mcp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\"\n}"
+        }
+      }
+    },
+    {
+      "name": "tools/list",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{base_url}}/api/mcp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"method\": \"tools/list\"\n}"
+        }
+      }
+    },
+    {
+      "name": "tools/call - list_applications",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{base_url}}/api/mcp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_applications\",\n    \"arguments\": {}\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "tools/call - describe_application_api",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{base_url}}/api/mcp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"describe_application_api\",\n    \"arguments\": {\n      \"slug\": \"{{slug}}\"\n    }\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "tools/call - call_application_api",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{base_url}}/api/mcp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"call_application_api\",\n    \"arguments\": {\n      \"slug\": \"{{slug}}\",\n      \"method\": \"GET\",\n      \"path\": \"/api/v1/complaints\"\n    }\n  }\n}"
+        }
+      }
+    }
+  ]
+}

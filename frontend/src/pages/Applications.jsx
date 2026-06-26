@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -46,6 +47,7 @@ import { applicationCalendarSyncEnabled, normalizeCalendarEventMapping } from '@
 import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import ApplicationIntegrationsSection from '@/components/applications/ApplicationIntegrationsSection';
+import ApplicationMcpConfigEditor from '@/components/applications/ApplicationMcpConfigEditor';
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import {
   DEFAULT_BRAND_COLOR,
@@ -258,6 +260,10 @@ export default function Applications() {
   const [logoUrl, setLogoUrl] = useState('');
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [mcpCatalogPath, setMcpCatalogPath] = useState('');
+  const [mcpApiKey, setMcpApiKey] = useState('');
+  const [mcpEnabled, setMcpEnabled] = useState(false);
   const [authMode, setAuthMode] = useState('jwt');
   const [openMode, setOpenMode] = useState('embedded');
   const [status, setStatus] = useState('online');
@@ -316,6 +322,10 @@ export default function Applications() {
     setLogoUrl(system?.icon_url || '');
     setBrandColor(system?.color || DEFAULT_BRAND_COLOR);
     setApiKey(system?.api_key || '');
+    setBaseUrl(system?.base_url || '');
+    setMcpCatalogPath(system?.mcp_catalog_path || '');
+    setMcpApiKey(system?.mcp_api_key || '');
+    setMcpEnabled(Boolean(system?.mcp_enabled));
     setAuthMode(system?.auth_mode || 'jwt');
     setOpenMode(system?.open_mode || 'embedded');
     setStatus(system?.status || 'online');
@@ -365,6 +375,10 @@ export default function Applications() {
     setLogoUrl('');
     setBrandColor(DEFAULT_BRAND_COLOR);
     setApiKey('');
+    setBaseUrl('');
+    setMcpCatalogPath('');
+    setMcpApiKey('');
+    setMcpEnabled(false);
     setAuthMode('jwt');
     setOpenMode('embedded');
     setStatus('online');
@@ -502,8 +516,11 @@ export default function Applications() {
       name: form.get('name'),
       slug: form.get('slug'),
       description: form.get('description'),
-      base_url: form.get('base_url'),
+      base_url: baseUrl || undefined,
       api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
+      mcp_catalog_path: mcpCatalogPath || undefined,
+      mcp_api_key: mcpApiKey || undefined,
+      mcp_enabled: mcpEnabled,
       auth_mode: authMode,
       open_mode: openMode,
       visibility: visibility,
@@ -602,7 +619,11 @@ export default function Applications() {
               </div>
               <div className="space-y-2">
                 <Label>Base URL</Label>
-                <Input name="base_url" defaultValue={editSystem?.base_url} placeholder="https://booking.company.com" />
+                <Input
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="https://booking.company.com"
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -747,6 +768,20 @@ export default function Applications() {
                   </label>
                 </div>
               </div>
+              <ApplicationMcpConfigEditor
+                applicationId={editSystem?.id}
+                enabled={mcpEnabled}
+                onEnabledChange={setMcpEnabled}
+                catalogPath={mcpCatalogPath}
+                onCatalogPathChange={setMcpCatalogPath}
+                mcpApiKey={mcpApiKey}
+                onMcpApiKeyChange={setMcpApiKey}
+                baseUrl={baseUrl}
+                apiKey={apiKey}
+                webhookSecret={notificationConfig?.webhook_secret}
+                notificationConfig={notificationConfig}
+                resetKey={integrationResetKey}
+              />
               <ApplicationIntegrationsSection
                 notificationConfig={notificationConfig}
                 onNotificationConfigChange={setNotificationConfig}

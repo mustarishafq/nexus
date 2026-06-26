@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ import ManagerCombobox from '@/components/profile/ManagerCombobox';
 import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
+import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
 
 function getUserProfileStrength(user) {
   if (user?.profile_completeness) {
@@ -301,7 +302,7 @@ export default function UserManagement() {
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const [searchParams] = useSearchParams();
-  const adminSections = new Set(['users', 'groups', 'analytics', 'sso-links']);
+  const adminSections = new Set(['users', 'groups', 'analytics', 'sso-links', 'api-tokens']);
   const [activeSection, setActiveSection] = useState(() => {
     const section = searchParams.get('section');
     return section && adminSections.has(section) ? section : 'users';
@@ -317,6 +318,8 @@ export default function UserManagement() {
     sendInApp: true,
     sendWebPush: true,
   });
+  const [apiTokenCreateUserId, setApiTokenCreateUserId] = useState(null);
+  const [apiTokenCreateSignal, setApiTokenCreateSignal] = useState(0);
   const csvRef = useRef(null);
   const hrOnboardingCsvRef = useRef(null);
   const assignGroupsCsvRef = useRef(null);
@@ -341,6 +344,12 @@ export default function UserManagement() {
     queryKey: ['metabase-dashboards-admin'],
     queryFn: () => db.entities.MetabaseDashboard.listAdmin('sort_order', 100),
   });
+
+  const { data: apiTokensData } = useQuery({
+    queryKey: API_TOKENS_QUERY_KEY,
+    queryFn: () => db.listAdminApiTokens(),
+  });
+  const apiTokenCount = apiTokensData?.items?.length ?? 0;
 
   const [accessGroups, setAccessGroups] = useState([]);
   const [metabaseDashboards, setMetabaseDashboards] = useState([]);
@@ -858,6 +867,12 @@ export default function UserManagement() {
     return parts.join(', ');
   };
 
+  const openApiTokenDialog = (user) => {
+    setApiTokenCreateUserId(user.id);
+    setApiTokenCreateSignal((value) => value + 1);
+    setActiveSection('api-tokens');
+  };
+
   const renderUserActionsMenu = (user, align = 'end') => {
     const profilePercent = getUserProfileStrength(user).percent;
     const canNudge = user.is_approved && profilePercent < 100;
@@ -890,6 +905,10 @@ export default function UserManagement() {
             Send notification
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem onClick={() => openApiTokenDialog(user)}>
+          <Key className="w-4 h-4 mr-2" />
+          Generate API token
+        </DropdownMenuItem>
         {user.role !== 'admin' && (
           <>
             <DropdownMenuItem onClick={() => openAssignDialog(user)}>
@@ -1416,7 +1435,7 @@ export default function UserManagement() {
       </motion.div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4 sm:inline-flex sm:h-10 sm:w-auto">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5 sm:inline-flex sm:h-10 sm:w-auto">
           <TabsTrigger value="users" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <UsersIcon className="w-4 h-4 shrink-0" />
             <span className="truncate">Users</span>
@@ -1436,10 +1455,23 @@ export default function UserManagement() {
             <KeyRound className="w-4 h-4 shrink-0" />
             <span className="truncate">SSO Links</span>
           </TabsTrigger>
+          <TabsTrigger value="api-tokens" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+            <Key className="w-4 h-4 shrink-0" />
+            <span className="truncate">API Tokens</span>
+            <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{apiTokenCount}</Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="sso-links" className="mt-0">
           <SsoCredentialApprovals />
+        </TabsContent>
+
+        <TabsContent value="api-tokens" className="mt-0">
+          <UserApiTokensPanel
+            users={users}
+            createForUserId={apiTokenCreateUserId}
+            createSignal={apiTokenCreateSignal}
+          />
         </TabsContent>
 
         <TabsContent value="users" className="mt-0">

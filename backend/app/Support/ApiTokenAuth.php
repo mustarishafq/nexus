@@ -9,16 +9,29 @@ use Illuminate\Support\Str;
 
 class ApiTokenAuth
 {
-    public static function issueToken(User $user): string
+    /**
+     * @param  array{label?: string|null, expires_at?: \DateTimeInterface|null}  $options
+     */
+    public static function issueToken(User $user, array $options = []): string
     {
         $plainToken = Str::random(80);
-        $lifetime = config('auth.api_token_lifetime');
+        $label = $options['label'] ?? null;
+
+        if (array_key_exists('expires_at', $options)) {
+            $expiresAt = $options['expires_at'];
+        } elseif ($label !== null) {
+            $expiresAt = null;
+        } else {
+            $lifetime = config('auth.api_token_lifetime');
+            $expiresAt = $lifetime ? now()->addMinutes((int) $lifetime) : null;
+        }
 
         AuthToken::create([
             'user_id' => $user->id,
             'token_hash' => hash('sha256', $plainToken),
+            'label' => $label,
             'last_used_at' => now(),
-            'expires_at' => $lifetime ? now()->addMinutes((int) $lifetime) : null,
+            'expires_at' => $expiresAt,
         ]);
 
         return $plainToken;

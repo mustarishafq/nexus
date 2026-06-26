@@ -10,6 +10,7 @@ class AuthToken extends Model
     protected $fillable = [
         'user_id',
         'token_hash',
+        'label',
         'last_used_at',
         'expires_at',
     ];

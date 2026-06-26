@@ -28,6 +28,9 @@ class Application extends Model
         'last_heartbeat',
         'notification_config',
         'calendar_config',
+        'mcp_catalog_path',
+        'mcp_api_key',
+        'mcp_enabled',
         'color',
         'sort_order',
     ];
@@ -43,6 +46,7 @@ class Application extends Model
     {
         return [
             'is_enabled' => 'boolean',
+            'mcp_enabled' => 'boolean',
             'last_heartbeat' => 'datetime',
             'notification_config' => 'array',
             'calendar_config' => 'array',
