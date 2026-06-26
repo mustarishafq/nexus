@@ -37,6 +37,26 @@ class ApiTokenAuth
         return $plainToken;
     }
 
+    /**
+     * Issue an access token on behalf of an OAuth client (used by the
+     * /oauth/token endpoint), tagged with oauth_client_id for auditing /
+     * revocation, separate from personal API tokens.
+     */
+    public static function issueOAuthAccessToken(User $user, string $clientId, int $ttlMinutes): array
+    {
+        $plainToken = Str::random(80);
+
+        $authToken = AuthToken::create([
+            'user_id' => $user->id,
+            'oauth_client_id' => $clientId,
+            'token_hash' => hash('sha256', $plainToken),
+            'last_used_at' => now(),
+            'expires_at' => now()->addMinutes($ttlMinutes),
+        ]);
+
+        return [$plainToken, $authToken];
+    }
+
     public static function userFromRequest(Request $request): ?User
     {
         $token = $request->bearerToken();

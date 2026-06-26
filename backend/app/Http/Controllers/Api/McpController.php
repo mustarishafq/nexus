@@ -21,7 +21,10 @@ class McpController extends Controller
         $user = ApiTokenAuth::userFromRequest($request);
 
         if (! $user) {
-            return $this->error(null, -32001, 'Unauthorized', 401);
+            $issuer = rtrim($request->getSchemeAndHttpHost(), '/');
+
+            return $this->error(null, -32001, 'Unauthorized', 401)
+                ->header('WWW-Authenticate', 'Bearer resource_metadata="'.$issuer.'/.well-known/oauth-protected-resource/mcp"');
         }
 
         $id = $request->input('id');

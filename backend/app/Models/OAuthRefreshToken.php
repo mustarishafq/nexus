@@ -5,22 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class AuthToken extends Model
+class OAuthRefreshToken extends Model
 {
+    protected $table = 'oauth_refresh_tokens';
+
     protected $fillable = [
-        'user_id',
-        'oauth_client_id',
         'token_hash',
-        'label',
-        'last_used_at',
+        'auth_token_id',
+        'client_id',
+        'user_id',
         'expires_at',
+        'revoked_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'last_used_at' => 'datetime',
             'expires_at' => 'datetime',
+            'revoked_at' => 'datetime',
         ];
     }
 
@@ -29,13 +31,13 @@ class AuthToken extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function isExpired(): bool
+    public function authToken(): BelongsTo
     {
-        return $this->expires_at !== null && $this->expires_at->isPast();
+        return $this->belongsTo(AuthToken::class);
     }
 
-    public function touchLastUsed(): void
+    public function isUsable(): bool
     {
-        $this->forceFill(['last_used_at' => now()])->save();
+        return $this->revoked_at === null && $this->expires_at->isFuture();
     }
 }

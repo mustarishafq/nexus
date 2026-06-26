@@ -38,7 +38,9 @@ export default function Login() {
       clearBirthdayShownKeys();
       clearBroadcastAckKeys();
       await checkUserAuth();
-      navigate('/', { replace: true });
+      const redirectTo = searchParams.get('redirect');
+      const safeRedirect = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/';
+      navigate(safeRedirect, { replace: true });
     } catch (err) {
       if (err?.status === 403 && err?.data?.code === 'account_not_approved') {
         setError('Your account is pending admin approval.');

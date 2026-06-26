@@ -192,6 +192,17 @@ export const db = {
 		},
 	},
 
+	oauth: {
+		async getClient(clientId, redirectUri) {
+			const query = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
+			return request(`/oauth/clients/${encodeURIComponent(clientId)}${query}`);
+		},
+
+		async decide(payload) {
+			return request('/oauth/authorize/decide', { method: 'POST', body: payload });
+		},
+	},
+
 	appSettings: {
 		async public() {
 			return request('/app-settings');

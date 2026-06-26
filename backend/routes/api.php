@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\NotificationController;
@@ -46,6 +47,11 @@ Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback']);
 
 Route::post('/mcp', [McpController::class, 'handle']);
+
+Route::post('/oauth/register', [OAuthController::class, 'register']);
+Route::get('/oauth/clients/{clientId}', [OAuthController::class, 'showClient']);
+Route::post('/oauth/authorize/decide', [OAuthController::class, 'decide']);
+Route::post('/oauth/token', [OAuthController::class, 'token']);
 
 Route::get('/app-settings', [AppSettingController::class, 'publicShow']);
 Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
