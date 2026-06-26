@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\OAuthPublicUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,19 +13,19 @@ class OAuthDiscoveryController extends Controller
      * "Add custom connector") can discover our OAuth endpoints automatically
      * instead of requiring manually pasted tokens.
      *
-     * Derived from the incoming request rather than config('app.url'),
-     * since that config value is repurposed elsewhere in this app to point
-     * at the frontend origin, not this API's own origin.
+     * Issuer comes from MCP_PUBLIC_URL / FRONTEND_URL when set, so discovery
+     * advertises the public SPA domain even if this response is served from
+     * a separate API host behind a reverse proxy.
      */
     public function metadata(Request $request): JsonResponse
     {
-        $issuer = rtrim($request->getSchemeAndHttpHost(), '/');
+        $issuer = OAuthPublicUrl::issuer($request);
 
         return response()->json([
             'issuer' => $issuer,
             'authorization_endpoint' => "{$issuer}/oauth/authorize",
-            'token_endpoint' => "{$issuer}/api/oauth/token",
-            'registration_endpoint' => "{$issuer}/api/oauth/register",
+            'token_endpoint' => "{$issuer}/oauth/token",
+            'registration_endpoint' => "{$issuer}/register",
             'scopes_supported' => ['mcp'],
             'response_types_supported' => ['code'],
             'grant_types_supported' => ['authorization_code', 'refresh_token'],
@@ -39,11 +40,13 @@ class OAuthDiscoveryController extends Controller
      */
     public function protectedResource(Request $request): JsonResponse
     {
-        $issuer = rtrim($request->getSchemeAndHttpHost(), '/');
+        $issuer = OAuthPublicUrl::issuer($request);
 
         return response()->json([
             'resource' => "{$issuer}/mcp",
             'authorization_servers' => [$issuer],
+            'scopes_supported' => ['mcp'],
+            'bearer_methods_supported' => ['header'],
         ]);
     }
 }

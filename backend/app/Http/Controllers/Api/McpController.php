@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\Mcp\ToolRegistry;
 use App\Support\ApiTokenAuth;
+use App\Support\OAuthPublicUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,7 +22,7 @@ class McpController extends Controller
         $user = ApiTokenAuth::userFromRequest($request);
 
         if (! $user) {
-            $issuer = rtrim($request->getSchemeAndHttpHost(), '/');
+            $issuer = OAuthPublicUrl::issuer($request);
 
             return $this->error(null, -32001, 'Unauthorized', 401)
                 ->header('WWW-Authenticate', 'Bearer resource_metadata="'.$issuer.'/.well-known/oauth-protected-resource/mcp"');

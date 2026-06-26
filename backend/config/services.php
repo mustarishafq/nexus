@@ -37,6 +37,11 @@ return [
         'timezone' => env('GOOGLE_OAUTH_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
     ],
 
+    // Public URL for MCP connector + OAuth discovery (usually FRONTEND_URL).
+    'mcp' => [
+        'public_url' => env('MCP_PUBLIC_URL', env('FRONTEND_URL')),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
