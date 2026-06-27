@@ -1,6 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import db from '@/api/base44Client';
-import ApplicationLaunchOverlay from '@/components/applications/ApplicationLaunchOverlay';
 import SsoCredentialPickerDialog from '@/components/applications/SsoCredentialPickerDialog';
 import { openApplicationTarget } from '@/lib/applications';
 import {
@@ -14,6 +13,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { pickSsoEmailForLaunch, registerSsoCredentialPicker, SSO_SELECTION_CANCELLED_MESSAGE, isSsoSelectionCancelled } from '@/lib/ssoCredentials';
 import { toast } from 'sonner';
 
+const ApplicationLaunchOverlay = lazy(() => import('@/components/applications/ApplicationLaunchOverlay'));
 const ApplicationLaunchContext = createContext(null);
 
 function lockBodyScroll(active) {
@@ -262,11 +262,13 @@ export function ApplicationLaunchProvider({ children }) {
   return (
     <ApplicationLaunchContext.Provider value={value}>
       {children}
-      <ApplicationLaunchOverlay
-        launch={launch}
-        onDismiss={finishLaunch}
-        durationCatalog={appPublicSettings?.launch_durations}
-      />
+      <Suspense fallback={null}>
+        <ApplicationLaunchOverlay
+          launch={launch}
+          onDismiss={finishLaunch}
+          durationCatalog={appPublicSettings?.launch_durations}
+        />
+      </Suspense>
       <SsoCredentialPickerDialog
         open={Boolean(credentialPicker)}
         application={credentialPicker?.application}

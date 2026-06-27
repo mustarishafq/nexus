@@ -34,7 +34,7 @@ export default function People() {
   });
 
   const filters = useMemo(() => {
-    const next = { limit: 100, sort: 'full_name' };
+    const next = { limit: 50, sort: 'full_name' };
     if (debouncedSearch) next.q = debouncedSearch;
     if (department !== 'all') next.department_id = Number(department);
     if (accessGroupId !== 'all') next.access_group_id = Number(accessGroupId);

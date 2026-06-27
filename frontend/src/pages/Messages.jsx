@@ -23,6 +23,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { displayMentionText } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
+import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
+import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
+import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { UnreadBadge } from '@/components/ui/unread-badge';
@@ -108,10 +111,12 @@ export default function Messages() {
     description: 'Direct messages with your colleagues',
   });
 
+  const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
+
   const { data: inboxData, isLoading: inboxLoading } = useQuery({
-    queryKey: ['messages-inbox'],
+    queryKey: MESSAGES_INBOX_QUERY_KEY,
     queryFn: () => db.messages.listConversations(),
-    refetchInterval: 15_000,
+    refetchInterval: pollInterval,
   });
 
   const conversations = Array.isArray(inboxData?.conversations) ? inboxData.conversations : [];
@@ -130,7 +135,7 @@ export default function Messages() {
     queryKey: ['messages-thread', conversationId],
     queryFn: () => db.messages.getThread(conversationId),
     enabled: Boolean(conversationId) && !isCompose,
-    refetchInterval: 10_000,
+    refetchInterval: pollInterval,
   });
 
   const messages = Array.isArray(threadData?.messages) ? threadData.messages : [];
@@ -151,12 +156,12 @@ export default function Messages() {
     onSuccess: (payload) => {
       setDraft('');
       if (isCompose && payload?.conversation?.id) {
-        queryClient.invalidateQueries({ queryKey: ['messages-inbox'] });
+        queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
         navigate(`/messages/${payload.conversation.id}`);
         return;
       }
       queryClient.invalidateQueries({ queryKey: ['messages-thread', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['messages-inbox'] });
+      queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
     },
     onError: (error) => {
       toast.error(error?.message || 'Failed to send message.');
@@ -169,7 +174,7 @@ export default function Messages() {
     mutationFn: (id) => db.messages.deleteConversation(id),
     onSuccess: (_payload, deletedId) => {
       setDeleteTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['messages-inbox'] });
+      queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
       queryClient.removeQueries({ queryKey: ['messages-thread', deletedId] });
       if (String(conversationId) === String(deletedId)) {
         navigate('/messages');

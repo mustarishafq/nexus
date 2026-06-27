@@ -10,8 +10,8 @@ import {
   RECENT_NOTIFICATIONS_QUERY_KEY,
   useRecentNotifications,
 } from '@/hooks/useNotifications';
-
-const POLL_INTERVAL_MS = 30_000;
+import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
+import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 
 export default function NotificationToastGate() {
   const { user, isAuthenticated } = useAuth();
@@ -23,6 +23,7 @@ export default function NotificationToastGate() {
   const { data: notifications } = useRecentNotifications({
     enabled: isAuthenticated && Boolean(user?.id),
   });
+  const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
   useEffect(() => {
     if (user?.notification_settings !== undefined) {
@@ -44,12 +45,16 @@ export default function NotificationToastGate() {
       userIdRef.current = user.id;
     }
 
+    if (!pollInterval) {
+      return undefined;
+    }
+
     const intervalId = window.setInterval(() => {
       queryClient.invalidateQueries({ queryKey: RECENT_NOTIFICATIONS_QUERY_KEY });
-    }, POLL_INTERVAL_MS);
+    }, pollInterval);
 
     return () => window.clearInterval(intervalId);
-  }, [isAuthenticated, queryClient, user?.id]);
+  }, [isAuthenticated, pollInterval, queryClient, user?.id]);
 
   useEffect(() => {
     if (!Array.isArray(notifications)) {

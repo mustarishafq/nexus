@@ -1,10 +1,11 @@
 import db from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { ACTION_ITEMS_QUERY_KEY } from '@/lib/actionItems';
+import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 
 export { ACTION_ITEMS_QUERY_KEY };
 
-export function useActionItems({ enabled = true, refetchInterval = 15_000 } = {}) {
+export function useActionItems({ enabled = true, refetchInterval = BACKGROUND_POLL_INTERVAL_MS } = {}) {
   return useQuery({
     queryKey: ACTION_ITEMS_QUERY_KEY,
     queryFn: () => db.dashboard.actionItems({ limit: 100 }),

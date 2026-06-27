@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, Suspense, lazy } from 'react';
 
-import SplashAnimationVariants from '@/components/pwa/splash-animations/SplashAnimationVariants';
 import MatrixRainOverlay, { usesFullScreenMatrixRain } from '@/components/pwa/splash-animations/MatrixRainOverlay';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
 import { buildSplashRuntime, isSplashAnimationInteractive, normalizeSplashConfig } from '@/lib/splashConfig';
 import { cn } from '@/lib/utils';
+
+const SplashAnimationVariants = lazy(() => import('@/components/pwa/splash-animations/SplashAnimationVariants'));
 
 /**
  * Shared splash renderer used by the app and admin previews.
@@ -48,13 +49,15 @@ export default function SplashStage({
         )}
       >
         <div className={cn('flex max-h-full max-w-full items-center justify-center', isThumbnail && 'pointer-events-none scale-[0.72]')}>
-          <SplashAnimationVariants
-            variant={variant}
-            config={splashConfig}
-            systemName={systemName}
-            preview={isThumbnail}
-            onComplete={onComplete}
-          />
+          <Suspense fallback={null}>
+            <SplashAnimationVariants
+              variant={variant}
+              config={splashConfig}
+              systemName={systemName}
+              preview={isThumbnail}
+              onComplete={onComplete}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

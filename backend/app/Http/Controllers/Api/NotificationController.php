@@ -30,7 +30,9 @@ class NotificationController extends Controller
         $query = $this->applyIndexQuery(
             $request,
             $query,
-            ['system_id', 'type', 'priority', 'category', 'is_read', 'is_broadcast']
+            ['system_id', 'type', 'priority', 'category', 'is_read', 'is_broadcast'],
+            '-created_at',
+            null,
         );
 
         if ($request->boolean('exclude_broadcasts')) {
@@ -60,7 +62,13 @@ class NotificationController extends Controller
                 });
         }
 
-        $items = $query->get();
+        $limit = max(1, min((int) $request->query('limit', 50), 200));
+
+        if ($request->filled('before_id')) {
+            $query->where('id', '<', (int) $request->query('before_id'));
+        }
+
+        $items = $query->limit($limit)->get();
 
         return response()->json($items);
     }

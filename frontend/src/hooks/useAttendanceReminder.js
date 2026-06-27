@@ -60,36 +60,23 @@ export function shouldRedirectToAttendance(status) {
   return !isAttendanceReminderDismissed(reminder);
 }
 
-/**
- * Gate attendance redirect until status is known.
- * Returns isChecking while the redirect decision is pending, and shouldRedirect
- * when the user must clock in (same rules as the top reminder strip).
- */
+/** Redirect to attendance when clock-in is required (same rules as the reminder strip). */
 export function useAttendanceClockInRedirect() {
   const location = useLocation();
   const { appPublicSettings } = useAuth();
   const attendanceConfig = normalizeAttendanceWatermarkConfig(appPublicSettings);
-  const attendanceEnabled = attendanceConfig.enabled;
-  const clockInRedirectEnabled = attendanceConfig.clock_in_redirect_enabled;
   const onAttendancePage = location.pathname === ATTENDANCE_PATH
     || location.pathname.startsWith(`${ATTENDANCE_PATH}/`);
-  const needsRedirectCheck = attendanceEnabled && clockInRedirectEnabled && !onAttendancePage;
+  const needsRedirectCheck = attendanceConfig.enabled
+    && attendanceConfig.clock_in_redirect_enabled
+    && !onAttendancePage;
 
   const { data: status, isPending } = useAttendanceStatus({
     enabled: needsRedirectCheck,
   });
 
-  if (!needsRedirectCheck) {
-    return { isChecking: false, shouldRedirect: false, fromPath: location.pathname };
-  }
-
-  if (isPending) {
-    return { isChecking: true, shouldRedirect: false, fromPath: location.pathname };
-  }
-
   return {
-    isChecking: false,
-    shouldRedirect: shouldRedirectToAttendance(status),
+    shouldRedirect: needsRedirectCheck && !isPending && shouldRedirectToAttendance(status),
     fromPath: location.pathname,
   };
 }

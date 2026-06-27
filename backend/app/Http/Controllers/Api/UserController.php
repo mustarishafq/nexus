@@ -31,9 +31,12 @@ class UserController extends Controller
         $users = $this->applyIndexQuery(
             $request,
             User::query()
-                ->with(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills'])
+                ->with(['accessGroups', 'department', 'manager'])
                 ->withExists('pushSubscriptions'),
-            ['role', 'email']
+            ['role', 'email'],
+            '-created_date',
+            50,
+            200,
         )->get();
 
         return response()->json(
@@ -763,6 +766,7 @@ class UserController extends Controller
                 ->with('department')
                 ->where('is_approved', true)
                 ->orderBy('full_name')
+                ->limit(500)
                 ->get();
         }
 
@@ -781,6 +785,15 @@ class UserController extends Controller
             ->whereIn('id', $seedIds)
             ->get(['id', 'department_id', 'manager_id']);
 
+        $managerIds = $seedUsers->pluck('manager_id')->filter()->unique()->values();
+        $managersById = $managerIds->isEmpty()
+            ? collect()
+            : User::query()
+                ->whereIn('id', $managerIds)
+                ->where('is_approved', true)
+                ->get(['id', 'department_id', 'manager_id'])
+                ->keyBy('id');
+
         foreach ($seedUsers as $seedUser) {
             $current = $seedUser;
 
@@ -789,10 +802,18 @@ class UserController extends Controller
                     break;
                 }
 
-                $manager = User::query()
-                    ->where('id', $current->manager_id)
-                    ->where('is_approved', true)
-                    ->first(['id', 'department_id', 'manager_id']);
+                $manager = $managersById->get($current->manager_id);
+
+                if (! $manager) {
+                    $manager = User::query()
+                        ->where('id', $current->manager_id)
+                        ->where('is_approved', true)
+                        ->first(['id', 'department_id', 'manager_id']);
+
+                    if ($manager) {
+                        $managersById->put($manager->id, $manager);
+                    }
+                }
 
                 if (! $manager) {
                     break;

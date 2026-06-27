@@ -4,7 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useUnreadNotifications, MESSAGE_INBOX_POLL_INTERVAL_MS } from '@/hooks/useNotifications';
+import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
+import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
+import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
+import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { glassDockStyles } from './glassStyles';
@@ -25,12 +28,13 @@ export default function BottomNav() {
   });
 
   const { data: unreadNotifications = [] } = useUnreadNotifications();
+  const messagePollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
   const { data: messageInbox } = useQuery({
-    queryKey: ['messages', 'inbox-badge'],
+    queryKey: MESSAGES_INBOX_QUERY_KEY,
     queryFn: () => db.messages.listConversations(),
     staleTime: 15_000,
-    refetchInterval: MESSAGE_INBOX_POLL_INTERVAL_MS,
+    refetchInterval: messagePollInterval,
   });
 
   const navItems = useMemo(() => {

@@ -5,18 +5,19 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import AppLayout from '@/components/layout/AppLayout';
 import PageLoader from '@/components/PageLoader';
-import Login from '@/pages/Login';
-import OAuthConsent from '@/pages/OAuthConsent';
-import Register from '@/pages/Register';
-import ForgotPassword from '@/pages/ForgotPassword';
-import ForcedPasswordChange from '@/pages/ForcedPasswordChange';
-import PrivacyPolicy from '@/pages/PrivacyPolicy';
-import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
-import PwaSplashScreen from '@/components/pwa/PwaSplashScreen';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
+
+const AppLayout = lazy(() => import('@/components/layout/AppLayout'));
+const Login = lazy(() => import('@/pages/Login'));
+const OAuthConsent = lazy(() => import('@/pages/OAuthConsent'));
+const Register = lazy(() => import('@/pages/Register'));
+const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
+const ForcedPasswordChange = lazy(() => import('@/pages/ForcedPasswordChange'));
+const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy'));
+const PwaInstallPrompt = lazy(() => import('@/components/pwa/PwaInstallPrompt'));
+const PwaSplashScreen = lazy(() => import('@/components/pwa/PwaSplashScreen'));
 
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const NotificationCenter = lazy(() => import('@/pages/NotificationCenter'));
@@ -68,7 +69,11 @@ const ProtectedRoutes = () => {
 
   // Redirect to forced password change if user needs to change password
   if (forcePasswordChange) {
-    return <ForcedPasswordChange />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <ForcedPasswordChange />
+      </Suspense>
+    );
   }
 
   return (
@@ -121,7 +126,9 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
-          <PwaSplashScreen />
+          <Suspense fallback={null}>
+            <PwaSplashScreen />
+          </Suspense>
           <Router>
             <Suspense fallback={<PageLoader />}>
               <Routes>
@@ -134,7 +141,9 @@ function App() {
               </Routes>
             </Suspense>
           </Router>
-          <PwaInstallPrompt />
+          <Suspense fallback={null}>
+            <PwaInstallPrompt />
+          </Suspense>
           <Toaster />
         </QueryClientProvider>
       </AuthProvider>

@@ -11,7 +11,6 @@ import NotificationToastGate from '@/components/notifications/NotificationToastG
 import NotificationClickGate from '@/components/notifications/NotificationClickGate';
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
 import TopAlertStrips from '@/components/layout/TopAlertStrips';
-import PageLoader from '@/components/PageLoader';
 import {
   ATTENDANCE_PATH,
   useAttendanceClockInRedirect,
@@ -20,7 +19,7 @@ import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 
 export default function AppLayout() {
   useNetworkHealthMonitor();
-  const { isChecking, shouldRedirect, fromPath } = useAttendanceClockInRedirect();
+  const { shouldRedirect, fromPath } = useAttendanceClockInRedirect();
   const isMobile = useIsMobile();
   const location = useLocation();
   const [topStripCount, setTopStripCount] = useState(0);
@@ -28,10 +27,6 @@ export default function AppLayout() {
   const handleTopStripLayout = useCallback(({ stripCount }) => {
     setTopStripCount(stripCount);
   }, []);
-
-  if (isChecking) {
-    return <PageLoader />;
-  }
 
   if (shouldRedirect) {
     return (

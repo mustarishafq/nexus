@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -43,7 +44,7 @@ class AttendanceController extends Controller
 
             return response($payload['bytes'], 200, [
                 'Content-Type' => $payload['mime'],
-                'Cache-Control' => 'private, max-age=3600',
+                'Cache-Control' => 'public, max-age=86400',
             ]);
         } catch (\Throwable $exception) {
             logger()->error('Unable to load attendance watermark logo.', [
@@ -57,6 +58,26 @@ class AttendanceController extends Controller
 
     /** @return array{bytes: string, mime: string}|null */
     private function loadWatermarkLogoBytes(string $relative): ?array
+    {
+        $cacheKey = 'attendance_watermark_logo:'.sha1($relative);
+        $cached = Cache::get($cacheKey);
+
+        if ($cached === 'miss') {
+            return null;
+        }
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $payload = $this->fetchWatermarkLogoBytes($relative);
+        Cache::put($cacheKey, $payload ?? 'miss', $payload ? 3600 : 300);
+
+        return $payload;
+    }
+
+    /** @return array{bytes: string, mime: string}|null */
+    private function fetchWatermarkLogoBytes(string $relative): ?array
     {
         $fullPath = $this->resolveWatermarkLogoPath($relative);
 
@@ -135,28 +156,36 @@ class AttendanceController extends Controller
             'longitude' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
-        $response = Http::withHeaders([
-            'User-Agent' => 'EMZI Nexus Attendance/1.0',
-            'Accept' => 'application/json',
-        ])->get('https://nominatim.openstreetmap.org/reverse', [
-            'lat' => $validated['latitude'],
-            'lon' => $validated['longitude'],
-            'format' => 'json',
-            'addressdetails' => 1,
-            'zoom' => 18,
-        ]);
+        $latitude = round((float) $validated['latitude'], 4);
+        $longitude = round((float) $validated['longitude'], 4);
+        $cacheKey = "reverse_geocode:{$latitude}:{$longitude}";
 
-        if (! $response->successful()) {
-            return response()->json(['location_label' => null]);
-        }
+        $locationLabel = Cache::remember($cacheKey, 86400, function () use ($latitude, $longitude) {
+            $response = Http::withHeaders([
+                'User-Agent' => 'EMZI Nexus Attendance/1.0',
+                'Accept' => 'application/json',
+            ])->get('https://nominatim.openstreetmap.org/reverse', [
+                'lat' => $latitude,
+                'lon' => $longitude,
+                'format' => 'json',
+                'addressdetails' => 1,
+                'zoom' => 18,
+            ]);
 
-        $payload = $response->json();
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $payload = $response->json();
+
+            return $this->formatAddressLabel(
+                $payload['address'] ?? [],
+                $payload['display_name'] ?? '',
+            );
+        });
 
         return response()->json([
-            'location_label' => $this->formatAddressLabel(
-                $payload['address'] ?? [],
-                $payload['display_name'] ?? ''
-            ),
+            'location_label' => $locationLabel,
         ]);
     }
 

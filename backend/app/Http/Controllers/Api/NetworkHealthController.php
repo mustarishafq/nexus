@@ -217,47 +217,35 @@ class NetworkHealthController extends Controller
             ->get();
 
         $slowestUsers = $isAdmin
-            ? (clone $baseQuery)
-                ->select('user_id')
-                ->selectRaw('AVG(latency_ms) as avg_latency_ms')
-                ->selectRaw('MAX(tested_at) as last_tested_at')
-                ->whereNotNull('latency_ms')
-                ->groupBy('user_id')
-                ->orderByDesc('avg_latency_ms')
-                ->limit(10)
-                ->get()
-                ->map(function ($row) {
-                    $rowUser = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
-
-                    return [
-                        'user_id' => $row->user_id,
-                        'user' => $rowUser,
-                        'avg_latency_ms' => round((float) $row->avg_latency_ms, 1),
-                        'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
-                    ];
-                })
+            ? $this->mapRankedNetworkUsers(
+                (clone $baseQuery)
+                    ->select('user_id')
+                    ->selectRaw('AVG(latency_ms) as avg_latency_ms')
+                    ->selectRaw('MAX(tested_at) as last_tested_at')
+                    ->whereNotNull('latency_ms')
+                    ->groupBy('user_id')
+                    ->orderByDesc('avg_latency_ms')
+                    ->limit(10)
+                    ->get(),
+                'avg_latency_ms',
+                'avg_latency_ms',
+            )
             : collect();
 
         $lowestDownloadUsers = $isAdmin
-            ? (clone $baseQuery)
-                ->select('user_id')
-                ->selectRaw('AVG(download_mbps) as avg_download_mbps')
-                ->selectRaw('MAX(tested_at) as last_tested_at')
-                ->whereNotNull('download_mbps')
-                ->groupBy('user_id')
-                ->orderBy('avg_download_mbps')
-                ->limit(10)
-                ->get()
-                ->map(function ($row) {
-                    $rowUser = User::query()->find($row->user_id, ['id', 'full_name', 'name', 'email']);
-
-                    return [
-                        'user_id' => $row->user_id,
-                        'user' => $rowUser,
-                        'avg_download_mbps' => round((float) $row->avg_download_mbps, 2),
-                        'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
-                    ];
-                })
+            ? $this->mapRankedNetworkUsers(
+                (clone $baseQuery)
+                    ->select('user_id')
+                    ->selectRaw('AVG(download_mbps) as avg_download_mbps')
+                    ->selectRaw('MAX(tested_at) as last_tested_at')
+                    ->whereNotNull('download_mbps')
+                    ->groupBy('user_id')
+                    ->orderBy('avg_download_mbps')
+                    ->limit(10)
+                    ->get(),
+                'avg_download_mbps',
+                'avg_download_mbps',
+            )
             : collect();
 
         $activeAlertsQuery = NetworkHealthAlert::query()
@@ -489,6 +477,33 @@ class NetworkHealthController extends Controller
             'avg_download_mbps' => $summary->avg_download_mbps ? round((float) $summary->avg_download_mbps, 2) : null,
             'avg_upload_mbps' => $summary->avg_upload_mbps ? round((float) $summary->avg_upload_mbps, 2) : null,
         ];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function mapRankedNetworkUsers($rows, string $metricKey, string $responseMetricKey)
+    {
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $usersById = User::query()
+            ->whereIn('id', $rows->pluck('user_id'))
+            ->get(['id', 'full_name', 'name', 'email'])
+            ->keyBy('id');
+
+        return $rows->map(function ($row) use ($usersById, $metricKey, $responseMetricKey) {
+            $precision = $responseMetricKey === 'avg_download_mbps' ? 2 : 1;
+
+            return [
+                'user_id' => $row->user_id,
+                'user' => $usersById->get($row->user_id),
+                $responseMetricKey => round((float) $row->{$metricKey}, $precision),
+                'last_tested_at' => Carbon::parse($row->last_tested_at)->toISOString(),
+            ];
+        });
     }
 
     private function authorizeUser(Request $request): ?JsonResponse

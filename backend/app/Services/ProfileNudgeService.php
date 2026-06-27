@@ -80,36 +80,36 @@ class ProfileNudgeService
      */
     public function nudgeIncompleteUsers(User $admin, bool $force = false): array
     {
-        $users = User::query()
-            ->with(['department', 'educations', 'workExperiences'])
-            ->where('is_approved', true)
-            ->where('role', '!=', 'admin')
-            ->get();
-
         $sent = 0;
         $skipped = 0;
         $errors = [];
 
-        foreach ($users as $user) {
-            $result = $this->nudge($user, $admin, $force);
+        User::query()
+            ->with(['department', 'educations', 'workExperiences'])
+            ->where('is_approved', true)
+            ->where('role', '!=', 'admin')
+            ->chunkById(100, function ($users) use ($admin, $force, &$sent, &$skipped, &$errors) {
+                foreach ($users as $user) {
+                    $result = $this->nudge($user, $admin, $force);
 
-            if ($result['sent']) {
-                $sent++;
-                continue;
-            }
+                    if ($result['sent']) {
+                        $sent++;
+                        continue;
+                    }
 
-            if (($result['reason'] ?? '') === 'Profile is already complete.') {
-                $skipped++;
-                continue;
-            }
+                    if (($result['reason'] ?? '') === 'Profile is already complete.') {
+                        $skipped++;
+                        continue;
+                    }
 
-            if (($result['reason'] ?? '') === 'A profile reminder was sent recently. Try again later.') {
-                $skipped++;
-                continue;
-            }
+                    if (($result['reason'] ?? '') === 'A profile reminder was sent recently. Try again later.') {
+                        $skipped++;
+                        continue;
+                    }
 
-            $errors[] = "{$user->email}: {$result['reason']}";
-        }
+                    $errors[] = "{$user->email}: {$result['reason']}";
+                }
+            });
 
         return [
             'sent' => $sent,

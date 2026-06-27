@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import UserSearchCombobox from '@/components/users/UserSearchCombobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
@@ -298,19 +299,12 @@ function AttendanceAdminReport() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">User</label>
-                  <Select value={userId || 'all'} onValueChange={(value) => setUserId(value === 'all' ? '' : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All users" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All users</SelectItem>
-                      {users.map((entry) => (
-                        <SelectItem key={entry.id} value={String(entry.id)}>
-                          {entry.full_name || entry.name || entry.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <UserSearchCombobox
+                    users={users}
+                    value={userId}
+                    onValueChange={setUserId}
+                    placeholder="All users"
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">Type</label>

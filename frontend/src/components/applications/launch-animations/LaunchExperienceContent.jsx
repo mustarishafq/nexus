@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
-import LaunchAnimationStage from '@/components/applications/launch-animations/LaunchAnimationStage';
 import LaunchProgressIndicator from '@/components/applications/launch-animations/LaunchProgressIndicator';
 import { LaunchHint, LaunchTitle } from '@/components/applications/launch-animations/shared';
 import {
@@ -10,6 +9,8 @@ import {
   isLightLaunchSurfaceOverlayMode,
   normalizeLaunchOverlayMode,
 } from '@/lib/launchConfig';
+
+const LaunchAnimationStage = lazy(() => import('@/components/applications/launch-animations/LaunchAnimationStage'));
 
 export default function LaunchExperienceContent({
   application,
@@ -42,18 +43,20 @@ export default function LaunchExperienceContent({
         <LaunchTitle application={application} />
       ) : null}
 
-      <LaunchAnimationStage
-        style={style}
-        application={application}
-        energy={energy}
-        onBoost={onBoost}
-        exiting={exiting}
-        compact={compact || isCompactShell || isDensePanel}
-        interactive={interactive}
-        catalog={animationCatalog}
-        showHint={showHint && !isDensePanel}
-        className={isDensePanel ? 'min-h-[96px]' : undefined}
-      />
+      <Suspense fallback={<div className={cn('flex w-full items-center justify-center', (compact || isCompactShell || isDensePanel) ? 'min-h-[120px]' : 'min-h-[220px]')} />}>
+        <LaunchAnimationStage
+          style={style}
+          application={application}
+          energy={energy}
+          onBoost={onBoost}
+          exiting={exiting}
+          compact={compact || isCompactShell || isDensePanel}
+          interactive={interactive}
+          catalog={animationCatalog}
+          showHint={showHint && !isDensePanel}
+          className={isDensePanel ? 'min-h-[96px]' : undefined}
+        />
+      </Suspense>
 
       <div className={cn('space-y-3', isDensePanel && 'space-y-2')}>
         <LaunchProgressIndicator

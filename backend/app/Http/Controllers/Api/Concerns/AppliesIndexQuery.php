@@ -12,10 +12,11 @@ trait AppliesIndexQuery
         Request $request,
         Builder $query,
         array $filterable = [],
-        string $defaultSort = '-created_date'
+        string $defaultSort = '-created_date',
+        ?int $defaultLimit = 200,
+        int $maxLimit = 500,
     ): Builder {
         $sort = (string) $request->query('sort', $defaultSort);
-        $limit = max(1, min((int) $request->query('limit', 200), 500));
 
         foreach ($filterable as $field) {
             if (! $request->has($field)) {
@@ -56,6 +57,11 @@ trait AppliesIndexQuery
             }
         }
 
-        return $query->limit($limit);
+        if ($defaultLimit !== null) {
+            $limit = max(1, min((int) $request->query('limit', $defaultLimit), $maxLimit));
+            $query->limit($limit);
+        }
+
+        return $query;
     }
 }

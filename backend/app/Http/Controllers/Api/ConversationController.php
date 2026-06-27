@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use App\Services\DirectMessageNotifier;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
@@ -25,10 +26,6 @@ class ConversationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        Conversation::query()
-            ->whereDoesntHave('messages')
-            ->delete();
-
         $conversations = Conversation::query()
             ->whereHas('participants', fn ($query) => $query->where('users.id', $viewer->id))
             ->whereHas('messages')
@@ -39,8 +36,16 @@ class ConversationController extends Controller
             ->orderByDesc('last_message_at')
             ->orderByDesc('updated_at')
             ->limit(50)
-            ->get()
-            ->map(fn (Conversation $conversation) => $this->serializeConversation($conversation, $viewer))
+            ->get();
+
+        $unreadCounts = $this->unreadCountsForViewer($conversations, $viewer);
+
+        $conversations = $conversations
+            ->map(fn (Conversation $conversation) => $this->serializeConversation(
+                $conversation,
+                $viewer,
+                (int) ($unreadCounts[$conversation->id] ?? 0),
+            ))
             ->values();
 
         return response()->json([
@@ -264,7 +269,35 @@ class ConversationController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function serializeConversation(Conversation $conversation, User $viewer): array
+    /**
+     * @param  Collection<int, Conversation>  $conversations
+     * @return array<int, int>
+     */
+    private function unreadCountsForViewer(Collection $conversations, User $viewer): array
+    {
+        if ($conversations->isEmpty()) {
+            return [];
+        }
+
+        return Message::query()
+            ->selectRaw('messages.conversation_id, COUNT(*) as unread_count')
+            ->join('conversation_participants', function ($join) use ($viewer) {
+                $join->on('conversation_participants.conversation_id', '=', 'messages.conversation_id')
+                    ->where('conversation_participants.user_id', '=', $viewer->id);
+            })
+            ->whereIn('messages.conversation_id', $conversations->pluck('id'))
+            ->where('messages.sender_user_id', '!=', $viewer->id)
+            ->where(function ($query) {
+                $query->whereNull('conversation_participants.last_read_at')
+                    ->orWhereColumn('messages.created_at', '>', 'conversation_participants.last_read_at');
+            })
+            ->groupBy('messages.conversation_id')
+            ->pluck('unread_count', 'conversation_id')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+    }
+
+    private function serializeConversation(Conversation $conversation, User $viewer, ?int $unreadCount = null): array
     {
         if (! $conversation->relationLoaded('participants')) {
             $conversation->load('participants');
@@ -273,15 +306,17 @@ class ConversationController extends Controller
         $other = $conversation->participants
             ->first(fn (User $user) => (int) $user->id !== (int) $viewer->id);
 
-        $pivot = $conversation->participants
-            ->firstWhere('id', $viewer->id)?->pivot;
+        if ($unreadCount === null) {
+            $pivot = $conversation->participants
+                ->firstWhere('id', $viewer->id)?->pivot;
 
-        $lastReadAt = $pivot?->last_read_at;
+            $lastReadAt = $pivot?->last_read_at;
 
-        $unreadCount = $conversation->messages()
-            ->where('sender_user_id', '!=', $viewer->id)
-            ->when($lastReadAt, fn ($query) => $query->where('created_at', '>', $lastReadAt))
-            ->count();
+            $unreadCount = $conversation->messages()
+                ->where('sender_user_id', '!=', $viewer->id)
+                ->when($lastReadAt, fn ($query) => $query->where('created_at', '>', $lastReadAt))
+                ->count();
+        }
 
         $latestMessage = $conversation->relationLoaded('messages')
             ? $conversation->messages->first()
