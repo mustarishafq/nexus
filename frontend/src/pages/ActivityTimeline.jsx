@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import VirtualList from '@/components/ui/virtual-list';
 import UserAvatar from '@/components/users/UserAvatar';
 
 const actionIcons = {
@@ -168,10 +167,15 @@ export default function ActivityTimeline() {
     return true;
   }), [activities, actionFilter, systemFilter, search, isAdmin, systemNames]);
 
-  const flatFiltered = useMemo(() => filtered.map((log) => ({
-    ...log,
-    dateLabel: getDateGroupLabel(log.created_date),
-  })), [filtered]);
+  const grouped = useMemo(() => {
+    const groups = {};
+    filtered.forEach((log) => {
+      const label = getDateGroupLabel(log.created_date);
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(log);
+    });
+    return groups;
+  }, [filtered]);
 
   const clearFilters = () => {
     setSearch('');
@@ -248,7 +252,7 @@ export default function ActivityTimeline() {
         <div className="flex justify-center py-16">
           <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
         </div>
-      ) : flatFiltered.length === 0 ? (
+      ) : Object.keys(grouped).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card rounded-2xl border">
           <Activity className="w-12 h-12 mb-4 opacity-20" />
           <p className="font-medium">No activity found</p>
@@ -262,31 +266,29 @@ export default function ActivityTimeline() {
           )}
         </div>
       ) : (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <VirtualList
-            items={flatFiltered}
-            height={560}
-            estimateSize={88}
-            renderItem={(log, index) => {
-              const showDate = index === 0 || flatFiltered[index - 1]?.dateLabel !== log.dateLabel;
-
-              return (
-                <div className="border-b border-border/60 px-1">
-                  {showDate ? (
-                    <p className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {log.dateLabel}
-                    </p>
-                  ) : null}
+        <div className="space-y-6">
+          {Object.entries(grouped).map(([date, logs]) => (
+            <div key={date}>
+              <div className="flex items-center gap-3 mb-2 px-1">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {date}
+                </h3>
+                <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  {logs.length}
+                </span>
+              </div>
+              <div className="bg-card rounded-2xl border border-border divide-y divide-border/60 overflow-hidden">
+                {logs.map((log) => (
                   <ActivityLogItem
+                    key={log.id}
                     log={log}
                     isAdmin={isAdmin}
                     systemName={systemNames[log.system_id]}
                   />
-                </div>
-              );
-            }}
-            getItemKey={(log) => log.id}
-          />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

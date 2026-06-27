@@ -18,6 +18,7 @@ export default function VirtualList({
     getScrollElement: () => parentRef.current,
     estimateSize: () => estimateSize,
     overscan,
+    measureElement: (element) => element?.getBoundingClientRect().height ?? estimateSize,
     getItemKey: getItemKey
       ? (index) => getItemKey(items[index], index)
       : (index) => items[index]?.id ?? index,
@@ -39,6 +40,8 @@ export default function VirtualList({
           return (
             <div
               key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
               className="absolute left-0 top-0 w-full"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
