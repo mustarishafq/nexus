@@ -2,9 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\AppSettings;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
@@ -24,11 +23,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         try {
-            if (! Schema::hasTable('app_settings')) {
+            $settings = AppSettings::row();
+
+            if (! $settings) {
                 return;
             }
-
-            $settings = DB::table('app_settings')->first();
             $systemName = $settings?->system_name ?: config('app.name', 'EMZI Nexus Brain');
 
             Config::set('app.name', $systemName);

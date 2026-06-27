@@ -1,5 +1,5 @@
 import db from '@/api/base44Client';
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
@@ -55,46 +55,13 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
 
-  useEffect(() => {
-    checkAppState();
-  }, []);
-
-  useEffect(() => {
-    const handleSettingsUpdated = () => {
-      refreshPublicSettings();
-    };
-
-    window.addEventListener('app-settings-updated', handleSettingsUpdated);
-    return () => window.removeEventListener('app-settings-updated', handleSettingsUpdated);
-  }, []);
-
-  useEffect(() => {
-    const updateThemeMeta = () => {
-      applyThemeColor(resolveThemeColor(appPublicSettings));
-    };
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const observer = new MutationObserver(updateThemeMeta);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    window.addEventListener('storage', updateThemeMeta);
-    mediaQuery.addEventListener('change', updateThemeMeta);
-    updateThemeMeta();
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('storage', updateThemeMeta);
-      mediaQuery.removeEventListener('change', updateThemeMeta);
-    };
-  }, [appPublicSettings]);
-
-  const refreshPublicSettings = async () => {
+  const refreshPublicSettings = useCallback(async () => {
     try {
       const publicSettings = await db.appSettings.public();
       setAppPublicSettings(publicSettings || { system_name: 'EMZI Nexus Brain' });
 
       if (publicSettings?.system_name) {
         document.title = publicSettings.system_name;
-        // Update apple-mobile-web-app-title meta tag for iOS PWA
         const appleTitle = document.getElementById('apple-app-title');
         if (appleTitle) {
           appleTitle.setAttribute('content', publicSettings.system_name);
@@ -106,42 +73,16 @@ export const AuthProvider = ({ children }) => {
       setAppPublicSettings({ system_name: 'EMZI Nexus Brain' });
       applyThemeColor(resolveThemeColor(null));
     }
-  };
+  }, []);
 
-  const checkAppState = async () => {
-    try {
-      setIsLoadingAuth(true);
-      setIsLoadingPublicSettings(true);
-      setAuthError(null);
-
-      await Promise.all([
-        refreshPublicSettings(),
-        checkUserAuth(),
-      ]);
-      setIsLoadingPublicSettings(false);
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      setAppPublicSettings({ system_name: 'EMZI Nexus Brain' });
-      setAuthError({
-        type: 'unknown',
-        message: error.message || 'An unexpected error occurred'
-      });
-      setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
-    }
-  };
-
-  const checkUserAuth = async () => {
+  const checkUserAuth = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
       const currentUser = await db.auth.me();
       syncNotificationSettingsCache(currentUser?.notification_settings);
       setUser(currentUser);
       setIsAuthenticated(true);
-      
-      // Check if user needs to force password change
       setForcePasswordChange(currentUser.force_password_change || false);
-      
       setIsLoadingAuth(false);
       setAuthChecked(true);
       setAuthError(null);
@@ -164,43 +105,111 @@ export const AuthProvider = ({ children }) => {
         message: 'Please login to continue.',
       });
     }
-  };
+  }, []);
 
-  const logout = (shouldRedirect = true) => {
+  const checkAppState = useCallback(async () => {
+    try {
+      setIsLoadingAuth(true);
+      setIsLoadingPublicSettings(true);
+      setAuthError(null);
+
+      await Promise.all([
+        refreshPublicSettings(),
+        checkUserAuth(),
+      ]);
+      setIsLoadingPublicSettings(false);
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setAppPublicSettings({ system_name: 'EMZI Nexus Brain' });
+      setAuthError({
+        type: 'unknown',
+        message: error.message || 'An unexpected error occurred',
+      });
+      setIsLoadingPublicSettings(false);
+      setIsLoadingAuth(false);
+    }
+  }, [refreshPublicSettings, checkUserAuth]);
+
+  useEffect(() => {
+    checkAppState();
+  }, [checkAppState]);
+
+  useEffect(() => {
+    const handleSettingsUpdated = () => {
+      refreshPublicSettings();
+    };
+
+    window.addEventListener('app-settings-updated', handleSettingsUpdated);
+    return () => window.removeEventListener('app-settings-updated', handleSettingsUpdated);
+  }, [refreshPublicSettings]);
+
+  useEffect(() => {
+    const updateThemeMeta = () => {
+      applyThemeColor(resolveThemeColor(appPublicSettings));
+    };
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const observer = new MutationObserver(updateThemeMeta);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('storage', updateThemeMeta);
+    mediaQuery.addEventListener('change', updateThemeMeta);
+    updateThemeMeta();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', updateThemeMeta);
+      mediaQuery.removeEventListener('change', updateThemeMeta);
+    };
+  }, [appPublicSettings]);
+
+  const logout = useCallback((shouldRedirect = true) => {
     clearBirthdayShownKeys();
     clearBroadcastAckKeys();
     setUser(null);
     setIsAuthenticated(false);
     setForcePasswordChange(false);
-    
+
     if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
       db.auth.logout('/login');
     } else {
-      // Just remove the token without redirect
       db.auth.logout();
     }
-  };
+  }, []);
 
-  const navigateToLogin = () => {
+  const navigateToLogin = useCallback(() => {
     db.auth.redirectToLogin('/login');
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    isLoadingPublicSettings,
+    authError,
+    appPublicSettings,
+    authChecked,
+    forcePasswordChange,
+    logout,
+    navigateToLogin,
+    checkUserAuth,
+    checkAppState,
+  }), [
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    isLoadingPublicSettings,
+    authError,
+    appPublicSettings,
+    authChecked,
+    forcePasswordChange,
+    logout,
+    navigateToLogin,
+    checkUserAuth,
+    checkAppState,
+  ]);
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
-      isLoadingAuth,
-      isLoadingPublicSettings,
-      authError,
-      appPublicSettings,
-      authChecked,
-      forcePasswordChange,
-      logout,
-      navigateToLogin,
-      checkUserAuth,
-      checkAppState
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

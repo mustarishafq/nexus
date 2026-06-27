@@ -17,6 +17,7 @@ import {
 import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
+const LIVE_DRAW_INTERVAL_MS = 50;
 const MIRROR_STORAGE_KEY = 'attendance-camera-mirror';
 
 function readMirrorPreference() {
@@ -116,6 +117,7 @@ export default function AttendanceCamera({
   const viewportRef = useRef(null);
   const streamRef = useRef(null);
   const frameRef = useRef(null);
+  const lastDrawAtRef = useRef(0);
   const displayAspectRef = useRef(3 / 4);
   const logoImageRef = useRef(null);
   const locationRef = useRef({
@@ -181,7 +183,7 @@ export default function AttendanceCamera({
     }
   }, []);
 
-  const drawLiveFrame = useCallback(() => {
+  const drawLiveFrame = useCallback((timestamp = performance.now()) => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -191,17 +193,21 @@ export default function AttendanceCamera({
       return;
     }
 
-    const ctx = canvas.getContext('2d');
-    drawVideoFrameWithWatermark(
-      ctx,
-      canvas,
-      video,
-      configRef.current,
-      buildContext(),
-      displayAspectRef.current,
-      logoImageRef.current,
-      mirrorRef.current,
-    );
+    if (timestamp - lastDrawAtRef.current >= LIVE_DRAW_INTERVAL_MS) {
+      lastDrawAtRef.current = timestamp;
+      const ctx = canvas.getContext('2d');
+      drawVideoFrameWithWatermark(
+        ctx,
+        canvas,
+        video,
+        configRef.current,
+        buildContext(),
+        displayAspectRef.current,
+        logoImageRef.current,
+        mirrorRef.current,
+      );
+    }
+
     frameRef.current = requestAnimationFrame(drawLiveFrame);
   }, [buildContext]);
 

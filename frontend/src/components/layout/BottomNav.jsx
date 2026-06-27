@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useUnreadNotifications } from '@/hooks/useNotifications';
+import { useUnreadNotifications, MESSAGE_INBOX_POLL_INTERVAL_MS } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { glassDockStyles } from './glassStyles';
@@ -24,8 +24,13 @@ export default function BottomNav() {
     enabled: !isMobile,
   });
 
-  const { data: unreadNotifications = [] } = useUnreadNotifications({
-    refetchInterval: 15_000,
+  const { data: unreadNotifications = [] } = useUnreadNotifications();
+
+  const { data: messageInbox } = useQuery({
+    queryKey: ['messages', 'inbox-badge'],
+    queryFn: () => db.messages.listConversations(),
+    staleTime: 15_000,
+    refetchInterval: MESSAGE_INBOX_POLL_INTERVAL_MS,
   });
 
   const navItems = useMemo(() => {
@@ -39,22 +44,11 @@ export default function BottomNav() {
   }, [isMobile, user?.role, metabaseDashboards.length]);
 
   useEffect(() => {
-    const loadMessageBadge = async () => {
-      try {
-        const inbox = await db.messages.listConversations();
-        setBadgeCounts((prev) => ({
-          ...prev,
-          messages: Number(inbox?.unread_total) || 0,
-        }));
-      } catch {
-        setBadgeCounts((prev) => ({ ...prev, messages: 0 }));
-      }
-    };
-
-    loadMessageBadge();
-    const interval = setInterval(loadMessageBadge, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    setBadgeCounts((prev) => ({
+      ...prev,
+      messages: Number(messageInbox?.unread_total) || 0,
+    }));
+  }, [messageInbox?.unread_total]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({

@@ -6,16 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\AppSettings;
 use App\Support\AttendancePolicyValidator;
 use App\Support\AttendanceReminderEvaluator;
-use App\Support\AttendanceWatermarkSettings;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -187,7 +186,7 @@ class AttendanceController extends Controller
             ->first();
 
         $nextType = $this->resolveNextType($lastRecord);
-        $reminder = AttendanceReminderEvaluator::evaluate($user, $lastRecord, $todayRecords);
+        $reminder = AttendanceReminderEvaluator::evaluate($user, $lastRecord, $todayRecords, null, $setting);
 
         return response()->json([
             'next_type' => $nextType,
@@ -197,9 +196,9 @@ class AttendanceController extends Controller
                 'clock_ins' => $todayRecords->where('type', 'clock_in')->count(),
                 'clock_outs' => $todayRecords->where('type', 'clock_out')->count(),
             ],
-            'policy' => AttendancePolicyValidator::policySummaryForUser($user),
+            'policy' => AttendancePolicyValidator::policySummaryForUser($user, $setting),
             'reminder' => $reminder,
-            'schedule_hint' => AttendanceReminderEvaluator::scheduleHintForUser($user),
+            'schedule_hint' => AttendanceReminderEvaluator::scheduleHintForUser($user, null, $setting),
         ]);
     }
 
@@ -332,15 +331,7 @@ class AttendanceController extends Controller
 
     private function isAttendanceEnabled(): bool
     {
-        $settings = DB::table('app_settings')->first();
-
-        if (! $settings) {
-            return true;
-        }
-
-        $attendance = AttendanceWatermarkSettings::normalizeConfig((array) $settings);
-
-        return (bool) $attendance['enabled'];
+        return AppSettings::isAttendanceEnabled();
     }
 
     public function dashboard(Request $request): JsonResponse
@@ -355,6 +346,7 @@ class AttendanceController extends Controller
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'type' => ['nullable', 'in:clock_in,clock_out'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'offset' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $query = AttendanceRecord::query()
@@ -364,18 +356,30 @@ class AttendanceController extends Controller
         $this->applyFilters($query, $validated);
 
         $limit = $validated['limit'] ?? 100;
-        $records = $query->limit($limit)->get();
+        $offset = $validated['offset'] ?? 0;
+        $records = $query->offset($offset)->limit($limit)->get();
 
         $summaryQuery = AttendanceRecord::query();
         $this->applyFilters($summaryQuery, $validated);
 
+        $summaryRow = (clone $summaryQuery)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN type = 'clock_in' THEN 1 ELSE 0 END) as clock_ins")
+            ->selectRaw("SUM(CASE WHEN type = 'clock_out' THEN 1 ELSE 0 END) as clock_outs")
+            ->selectRaw('COUNT(DISTINCT user_id) as unique_users')
+            ->first();
+
         return response()->json([
             'records' => $records->map(fn (AttendanceRecord $record) => $this->serializeRecord($record))->values(),
             'summary' => [
-                'total' => (clone $summaryQuery)->count(),
-                'clock_ins' => (clone $summaryQuery)->where('type', 'clock_in')->count(),
-                'clock_outs' => (clone $summaryQuery)->where('type', 'clock_out')->count(),
-                'unique_users' => (clone $summaryQuery)->distinct('user_id')->count('user_id'),
+                'total' => (int) ($summaryRow->total ?? 0),
+                'clock_ins' => (int) ($summaryRow->clock_ins ?? 0),
+                'clock_outs' => (int) ($summaryRow->clock_outs ?? 0),
+                'unique_users' => (int) ($summaryRow->unique_users ?? 0),
+            ],
+            'pagination' => [
+                'limit' => $limit,
+                'offset' => $offset,
             ],
         ]);
     }

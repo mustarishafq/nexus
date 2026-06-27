@@ -77,9 +77,9 @@ class AttendancePolicyValidator
     /**
      * @return array<string, mixed>|null
      */
-    public static function policySummaryForUser(User $user): ?array
+    public static function policySummaryForUser(User $user, ?DepartmentAttendanceSetting $setting = null): ?array
     {
-        $setting = self::resolveForUser($user);
+        $setting = $setting ?? self::resolveForUser($user);
 
         if (! $setting) {
             return null;

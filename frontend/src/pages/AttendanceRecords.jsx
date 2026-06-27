@@ -20,6 +20,8 @@ import { formatDurationMinutes } from '@/lib/formatDuration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+const ADMIN_PAGE_SIZE = 50;
+
 function formatRecordType(type) {
   return type === 'clock_in' ? 'Clock In' : 'Clock Out';
 }
@@ -182,6 +184,7 @@ function AttendanceAdminReport() {
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState('');
   const [type, setType] = useState('');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     if (isMobile) {
@@ -189,13 +192,18 @@ function AttendanceAdminReport() {
     }
   }, [isMobile]);
 
+  useEffect(() => {
+    setPage(0);
+  }, [dateFrom, dateTo, userId, type]);
+
   const filters = useMemo(() => ({
     date_from: dateFrom,
     date_to: dateTo,
-    limit: 500,
+    limit: ADMIN_PAGE_SIZE,
+    offset: page * ADMIN_PAGE_SIZE,
     ...(userId ? { user_id: userId } : {}),
     ...(type ? { type } : {}),
-  }), [dateFrom, dateTo, userId, type]);
+  }), [dateFrom, dateTo, userId, type, page]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-dashboard', filters],
@@ -205,9 +213,15 @@ function AttendanceAdminReport() {
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-attendance-admin'],
-    queryFn: () => db.entities.User.list('-created_date', 500),
+    queryFn: () => db.entities.User.list('-created_date', 200),
     enabled: isAdmin,
+    staleTime: 120_000,
   });
+
+  const totalRecords = data?.summary?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / ADMIN_PAGE_SIZE));
+  const pageStart = totalRecords === 0 ? 0 : page * ADMIN_PAGE_SIZE + 1;
+  const pageEnd = Math.min(totalRecords, (page + 1) * ADMIN_PAGE_SIZE);
 
   const handleExport = async () => {
     setExporting(true);
@@ -321,7 +335,9 @@ function AttendanceAdminReport() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Summary</CardTitle>
           <CardDescription>
-            Showing up to 500 records in the table. Export CSV includes all matching records.
+            {totalRecords > 0
+              ? `Showing ${pageStart}–${pageEnd} of ${totalRecords} matching records. Export CSV includes all matches.`
+              : 'Filter and review clock in/out activity across the organization.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -403,6 +419,33 @@ function AttendanceAdminReport() {
                       </TableBody>
                     </Table>
                   </div>
+                  {totalPages > 1 ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        Page {page + 1} of {totalPages}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={page === 0}
+                          onClick={() => setPage((current) => Math.max(0, current - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={page >= totalPages - 1}
+                          onClick={() => setPage((current) => current + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">

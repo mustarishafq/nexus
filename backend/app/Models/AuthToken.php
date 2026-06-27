@@ -34,8 +34,17 @@ class AuthToken extends Model
         return $this->expires_at !== null && $this->expires_at->isPast();
     }
 
+    private const LAST_USED_THROTTLE_MINUTES = 10;
+
     public function touchLastUsed(): void
     {
+        if (
+            $this->last_used_at !== null
+            && $this->last_used_at->gt(now()->subMinutes(self::LAST_USED_THROTTLE_MINUTES))
+        ) {
+            return;
+        }
+
         $this->forceFill(['last_used_at' => now()])->save();
     }
 }

@@ -4,6 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 export const UNREAD_NOTIFICATIONS_QUERY_KEY = ['notifications', 'unread'];
 export const RECENT_NOTIFICATIONS_QUERY_KEY = ['notifications', 'recent'];
 
+export const NOTIFICATION_POLL_INTERVAL_MS = 30_000;
+export const MESSAGE_INBOX_POLL_INTERVAL_MS = 30_000;
+
 const UNREAD_FILTERS = {
   is_read: false,
   exclude_broadcasts: true,
@@ -15,7 +18,7 @@ const RECENT_FILTERS = {
   exclude_direct_messages: true,
 };
 
-export function useUnreadNotifications({ enabled = true, refetchInterval = 15_000 } = {}) {
+export function useUnreadNotifications({ enabled = true, refetchInterval = NOTIFICATION_POLL_INTERVAL_MS } = {}) {
   return useQuery({
     queryKey: UNREAD_NOTIFICATIONS_QUERY_KEY,
     queryFn: () => db.entities.Notification.filter(UNREAD_FILTERS, '-created_date', 100),

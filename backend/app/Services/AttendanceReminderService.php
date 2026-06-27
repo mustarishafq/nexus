@@ -7,10 +7,9 @@ use App\Models\DepartmentAttendanceSetting;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\AttendanceReminderEvaluator;
-use App\Support\AttendanceWatermarkSettings;
+use App\Support\AppSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class AttendanceReminderService
 {
@@ -227,14 +226,6 @@ class AttendanceReminderService
 
     private function isAttendanceEnabled(): bool
     {
-        $settings = DB::table('app_settings')->first();
-
-        if (! $settings) {
-            return true;
-        }
-
-        $attendance = AttendanceWatermarkSettings::normalizeConfig((array) $settings);
-
-        return (bool) $attendance['enabled'];
+        return AppSettings::isAttendanceEnabled();
     }
 }

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { toAbsoluteUrl } from '@/lib/media';
-import { useUnreadNotifications } from '@/hooks/useNotifications';
+import { useUnreadNotifications, NOTIFICATION_POLL_INTERVAL_MS } from '@/hooks/useNotifications';
 
 import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import GlobalSearch, { GlobalSearchTrigger, useGlobalSearchShortcut } from './GlobalSearch';
@@ -26,7 +26,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { data: unreadNotifications = [] } = useUnreadNotifications({
     enabled: !isMobile,
-    refetchInterval: 15_000,
+    refetchInterval: NOTIFICATION_POLL_INTERVAL_MS,
   });
   const unreadCount = unreadNotifications.length;
 

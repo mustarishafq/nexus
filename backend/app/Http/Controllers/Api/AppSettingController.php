@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
+use App\Support\AppSettings;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\SplashAnimationSettings;
@@ -79,6 +80,8 @@ class AppSettingController extends Controller
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
         }
+
+        AppSettings::forget();
 
         return response()->json($this->adminPayload());
     }

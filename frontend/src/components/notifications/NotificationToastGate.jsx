@@ -11,7 +11,7 @@ import {
   useRecentNotifications,
 } from '@/hooks/useNotifications';
 
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 30_000;
 
 export default function NotificationToastGate() {
   const { user, isAuthenticated } = useAuth();

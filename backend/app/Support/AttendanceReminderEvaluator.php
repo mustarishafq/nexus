@@ -280,9 +280,12 @@ class AttendanceReminderEvaluator
     /**
      * @return array<string, mixed>|null
      */
-    public static function scheduleHintForUser(User $user, ?Carbon $now = null): ?array
-    {
-        $setting = AttendancePolicyValidator::resolveForUser($user);
+    public static function scheduleHintForUser(
+        User $user,
+        ?Carbon $now = null,
+        ?DepartmentAttendanceSetting $setting = null,
+    ): ?array {
+        $setting = $setting ?? AttendancePolicyValidator::resolveForUser($user);
 
         if (! $setting) {
             return null;
