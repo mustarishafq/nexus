@@ -35,7 +35,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin }) {
     }] : []),
     { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
-    { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' },
+    { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
     { path: '/profile', icon: User, label: 'Profile', match: (path) => path === '/profile' },
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
@@ -78,7 +78,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin }) {
     { path: '/notifications', icon: Bell, label: 'Notifications', match: (path) => path === '/notifications', badge: 'notifications' },
     { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
-    { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' },
+    { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
     ...(isAdmin ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast', match: (path) => path === '/admin/broadcast' },

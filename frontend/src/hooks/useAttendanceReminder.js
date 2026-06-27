@@ -71,7 +71,8 @@ export function useAttendanceClockInRedirect() {
   const attendanceConfig = normalizeAttendanceWatermarkConfig(appPublicSettings);
   const attendanceEnabled = attendanceConfig.enabled;
   const clockInRedirectEnabled = attendanceConfig.clock_in_redirect_enabled;
-  const onAttendancePage = location.pathname === ATTENDANCE_PATH;
+  const onAttendancePage = location.pathname === ATTENDANCE_PATH
+    || location.pathname.startsWith(`${ATTENDANCE_PATH}/`);
   const needsRedirectCheck = attendanceEnabled && clockInRedirectEnabled && !onAttendancePage;
 
   const { data: status, isPending } = useAttendanceStatus({

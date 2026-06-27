@@ -6,6 +6,7 @@ import {
   reminderDismissKey,
   useAttendanceReminder,
 } from '@/hooks/useAttendanceReminder';
+import { formatDurationMinutes, normalizeMinutes } from '@/lib/formatDuration';
 import { TopStripBadge, TopStripDismissButton, TOP_STRIP_ROW_CLASS } from '@/components/layout/TopStripBadge';
 import { cn } from '@/lib/utils';
 
@@ -60,9 +61,9 @@ export default function AttendanceReminderStrip({ embedded = false, onVisibility
   const isClockIn = reminder.type === 'clock_in';
   const ActionIcon = isClockIn ? LogIn : LogOut;
   const urgency = reminder.urgency === 'high' ? 'high' : 'medium';
-  const minutesLate = Math.max(0, Math.round(Number(reminder.minutes_late) || 0));
-  const shortMessage = minutesLate > 0
-    ? `${minutesLate} min late — tap to clock ${isClockIn ? 'in' : 'out'}`
+  const minutesLate = formatDurationMinutes(reminder.minutes_late, { style: 'long' });
+  const shortMessage = normalizeMinutes(reminder.minutes_late) > 0
+    ? `${minutesLate} late — tap to clock ${isClockIn ? 'in' : 'out'}`
     : `Tap to clock ${isClockIn ? 'in' : 'out'}`;
 
   const dismiss = () => {

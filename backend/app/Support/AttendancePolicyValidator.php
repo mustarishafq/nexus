@@ -303,7 +303,7 @@ class AttendancePolicyValidator
      */
     private static function calculateOvertime(Carbon $clockIn, Carbon $clockOut, DepartmentAttendanceSetting $setting): array
     {
-        $workedMinutes = $clockIn->diffInMinutes($clockOut);
+        $workedMinutes = (int) $clockIn->diffInMinutes($clockOut);
         $standardMinutes = (int) round((float) $setting->standard_hours_per_day * 60);
         $overtimeMinutes = max(0, $workedMinutes - $standardMinutes - $setting->overtime_threshold_minutes);
 

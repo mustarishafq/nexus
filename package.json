@@ -1,0 +1,12 @@
+{
+  "name": "nexus",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -c \"#93c5fd,#c4b5fd\" --names api,frontend --kill-others-on-fail \"npm run dev:api\" \"npm run dev:frontend\"",
+    "dev:api": "cd backend && php artisan serve",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

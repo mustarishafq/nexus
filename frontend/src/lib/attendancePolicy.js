@@ -1,3 +1,5 @@
+import { formatDecimalHours, formatDurationMinutes } from '@/lib/formatDuration';
+
 export const WEEKDAYS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -217,10 +219,10 @@ export function describeAttendancePolicy(policy) {
     parts.push(`Shifts: ${policy.shifts.map(formatShiftSummary).join(' · ')}`);
   }
   if (policy.overtime_enabled) {
-    parts.push(`Overtime after ${policy.standard_hours_per_day}h standard day`);
+    parts.push(`Overtime after ${formatDecimalHours(policy.standard_hours_per_day)} standard day`);
   }
   if (policy.grace_period_minutes) {
-    parts.push(`${policy.grace_period_minutes} min grace period`);
+    parts.push(`${formatDurationMinutes(policy.grace_period_minutes, { style: 'long' })} grace period`);
   }
 
   return parts.join(' · ');
