@@ -1,4 +1,4 @@
-import { AlertTriangle, Wifi, WifiOff, Wrench } from 'lucide-react';
+import { AlertTriangle, CircleDashed, Wifi, WifiOff, Wrench } from 'lucide-react';
 
 export const APPLICATION_STATUS = {
   online: {
@@ -31,6 +31,26 @@ export const APPLICATION_STATUS = {
   },
 };
 
+export const PROBE_PENDING_DISPLAY = {
+  icon: CircleDashed,
+  color: 'text-muted-foreground',
+  bg: 'bg-muted',
+  border: 'border-border',
+  label: 'Pending',
+};
+
 export function getApplicationStatus(status) {
   return APPLICATION_STATUS[status] || APPLICATION_STATUS.online;
+}
+
+export function isAwaitingHealthProbe(system) {
+  return system?.health_check_enabled !== false && !system?.last_heartbeat;
+}
+
+export function getSystemHealthDisplay(system) {
+  if (isAwaitingHealthProbe(system)) {
+    return PROBE_PENDING_DISPLAY;
+  }
+
+  return getApplicationStatus(system.status);
 }

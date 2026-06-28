@@ -10,6 +10,12 @@ class ApplicationApiClient
 {
     public const DEFAULT_CATALOG_PATH = '/api/mcp-catalog';
 
+    public const HEALTH_TIMEOUT = 5;
+
+    public const HEALTH_CONNECT_TIMEOUT = 3;
+
+    public const DEFAULT_TIMEOUT = 15;
+
     public const AUTH_MODE_BEARER = 'bearer';
 
     public const AUTH_MODE_X_API_KEY = 'x-api-key';
@@ -28,8 +34,13 @@ class ApplicationApiClient
     {
         $baseUrl = rtrim((string) $application->base_url, '/');
         $path = '/'.ltrim($path, '/');
+        $timeout = (int) ($options['timeout'] ?? self::DEFAULT_TIMEOUT);
+        $connectTimeout = (int) ($options['connect_timeout'] ?? min(5, $timeout));
 
-        $request = Http::baseUrl($baseUrl)->timeout(15)->acceptJson();
+        $request = Http::baseUrl($baseUrl)
+            ->timeout($timeout)
+            ->connectTimeout($connectTimeout)
+            ->acceptJson();
 
         return $this->applyAuth($request, $application)->send(strtoupper($method), $path, $options);
     }

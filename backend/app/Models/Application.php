@@ -11,6 +11,12 @@ class Application extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'health_check_enabled' => true,
+        'health_check_path' => '/api/health',
+        'health_check_mode' => 'json_ok',
+    ];
+
     protected $fillable = [
         'name',
         'slug',
@@ -26,6 +32,9 @@ class Application extends Model
         'created_by_user_id',
         'is_enabled',
         'last_heartbeat',
+        'health_check_enabled',
+        'health_check_path',
+        'health_check_mode',
         'notification_config',
         'calendar_config',
         'mcp_catalog_path',
@@ -47,6 +56,7 @@ class Application extends Model
     {
         return [
             'is_enabled' => 'boolean',
+            'health_check_enabled' => 'boolean',
             'mcp_enabled' => 'boolean',
             'last_heartbeat' => 'datetime',
             'notification_config' => 'array',

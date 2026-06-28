@@ -48,6 +48,7 @@ import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import ApplicationIntegrationsSection from '@/components/applications/ApplicationIntegrationsSection';
 import ApplicationMcpConfigEditor from '@/components/applications/ApplicationMcpConfigEditor';
+import ApplicationHealthConfigEditor from '@/components/applications/ApplicationHealthConfigEditor';
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import {
   DEFAULT_BRAND_COLOR,
@@ -265,6 +266,9 @@ export default function Applications() {
   const [mcpApiKey, setMcpApiKey] = useState('');
   const [mcpAuthMode, setMcpAuthMode] = useState('bearer');
   const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [healthCheckEnabled, setHealthCheckEnabled] = useState(true);
+  const [healthCheckPath, setHealthCheckPath] = useState('/api/health');
+  const [healthCheckMode, setHealthCheckMode] = useState('json_ok');
   const [authMode, setAuthMode] = useState('jwt');
   const [openMode, setOpenMode] = useState('embedded');
   const [status, setStatus] = useState('online');
@@ -328,6 +332,9 @@ export default function Applications() {
     setMcpApiKey(system?.mcp_api_key || '');
     setMcpAuthMode(system?.mcp_auth_mode || 'bearer');
     setMcpEnabled(Boolean(system?.mcp_enabled));
+    setHealthCheckEnabled(system?.health_check_enabled !== false);
+    setHealthCheckPath(system?.health_check_path || '/api/health');
+    setHealthCheckMode(system?.health_check_mode || 'json_ok');
     setAuthMode(system?.auth_mode || 'jwt');
     setOpenMode(system?.open_mode || 'embedded');
     setStatus(system?.status || 'online');
@@ -382,6 +389,9 @@ export default function Applications() {
     setMcpApiKey('');
     setMcpAuthMode('bearer');
     setMcpEnabled(false);
+    setHealthCheckEnabled(true);
+    setHealthCheckPath('/api/health');
+    setHealthCheckMode('json_ok');
     setAuthMode('jwt');
     setOpenMode('embedded');
     setStatus('online');
@@ -525,6 +535,9 @@ export default function Applications() {
       mcp_api_key: mcpApiKey || undefined,
       mcp_auth_mode: mcpAuthMode || 'bearer',
       mcp_enabled: mcpEnabled,
+      health_check_enabled: healthCheckEnabled,
+      health_check_path: healthCheckPath || undefined,
+      health_check_mode: healthCheckMode || undefined,
       auth_mode: authMode,
       open_mode: openMode,
       visibility: visibility,
@@ -772,6 +785,17 @@ export default function Applications() {
                   </label>
                 </div>
               </div>
+              <ApplicationHealthConfigEditor
+                applicationId={editSystem?.id}
+                enabled={healthCheckEnabled}
+                onEnabledChange={setHealthCheckEnabled}
+                healthPath={healthCheckPath}
+                onHealthPathChange={setHealthCheckPath}
+                healthMode={healthCheckMode}
+                onHealthModeChange={setHealthCheckMode}
+                baseUrl={baseUrl}
+                resetKey={integrationResetKey}
+              />
               <ApplicationMcpConfigEditor
                 applicationId={editSystem?.id}
                 enabled={mcpEnabled}

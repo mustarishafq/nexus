@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\PostReactionController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\ApplicationHealthController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\Api\UserTodoController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register']);
+Route::get('/health', [ApplicationHealthController::class, 'show']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -157,6 +159,8 @@ Route::post('applications/{application}/event-webhook/preview', [ApplicationEven
 Route::post('applications/{application}/calendar-webhook', [ApplicationCalendarWebhookController::class, 'store']);
 Route::post('applications/{application}/calendar-webhook/preview', [ApplicationCalendarWebhookController::class, 'preview']);
 Route::post('applications/{application}/mcp-catalog/test', [ApplicationMcpCatalogController::class, 'test']);
+Route::post('applications/{application}/health-check/test', [ApplicationHealthController::class, 'test']);
+Route::post('applications/health-check/run', [ApplicationHealthController::class, 'run']);
 Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('metabase-dashboards', MetabaseDashboardController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);

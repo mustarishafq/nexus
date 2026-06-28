@@ -653,6 +653,17 @@ export const db = {
 		});
 	},
 
+	async testApplicationHealth(applicationId, draft = {}) {
+		return request(`/applications/${applicationId}/health-check/test`, {
+			method: 'POST',
+			body: draft,
+		});
+	},
+
+	async runApplicationHealthChecks() {
+		return request('/applications/health-check/run', { method: 'POST' });
+	},
+
 	/**
 	 * Bulk-import users from a CSV File object.
 	 */
