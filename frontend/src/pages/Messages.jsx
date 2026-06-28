@@ -192,22 +192,23 @@ export default function Messages() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-10rem)] max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-3 sm:gap-4">
       <PageHeader
         icon={Mail}
         title="Messages"
         description="Direct messages with your colleagues."
+        className="shrink-0"
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className={cn('border-b border-border lg:border-b-0 lg:border-r', showThread && 'hidden lg:block')}>
-          <div className="border-b border-border/60 px-4 py-3">
+        <div className={cn('flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r', showThread && 'hidden lg:flex')}>
+          <div className="shrink-0 border-b border-border/60 px-4 py-3">
             <p className="text-sm font-semibold">Inbox</p>
             <p className="text-xs text-muted-foreground">
               {inboxData?.unread_total ? `${inboxData.unread_total} unread` : 'All caught up'}
             </p>
           </div>
-          <div className="max-h-full overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {inboxLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -239,7 +240,7 @@ export default function Messages() {
           </div>
         </div>
 
-        <div className={cn('flex min-h-0 flex-col', !showThread && 'hidden lg:flex')}>
+        <div className={cn('flex min-h-0 flex-col overflow-hidden', !showThread && 'hidden lg:flex')}>
           {!showThread ? (
             <EmptyState
               variant="inline"
@@ -250,7 +251,7 @@ export default function Messages() {
             />
           ) : (
             <>
-              <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+              <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-4 py-3">
                 <Button
                   type="button"
                   variant="ghost"
@@ -314,7 +315,7 @@ export default function Messages() {
               </div>
 
               <form
-                className="flex gap-2 border-t border-border/60 p-4"
+                className="flex shrink-0 gap-2 border-t border-border/60 p-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const body = draft.trim();

@@ -1,38 +1,39 @@
 <?php
 
-use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\AccessGroupController;
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\ApiTokenController;
+use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
+use App\Http\Controllers\Api\ApplicationController;
+use App\Http\Controllers\Api\ApplicationEventWebhookController;
+use App\Http\Controllers\Api\ApplicationHealthController;
+use App\Http\Controllers\Api\ApplicationMcpCatalogController;
+use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
+use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\AppSettingController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AttendanceLocationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastController;
 use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\AttendanceLocationController;
 use App\Http\Controllers\Api\DepartmentAttendanceController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
-use App\Http\Controllers\Api\PostCommentController;
-use App\Http\Controllers\Api\PostController;
-use App\Http\Controllers\Api\PostReactionController;
-use App\Http\Controllers\Api\AttendanceController;
-use App\Http\Controllers\Api\ApplicationHealthController;
-use App\Http\Controllers\Api\ApplicationController;
-use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
-use App\Http\Controllers\Api\ApplicationEventWebhookController;
-use App\Http\Controllers\Api\ApplicationMcpCatalogController;
-use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
-use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
+use App\Http\Controllers\Api\MailController;
 use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
-use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OAuthController;
+use App\Http\Controllers\Api\PostCommentController;
+use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PostReactionController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\SystemEventController;
 use App\Http\Controllers\Api\UserController;
@@ -93,6 +94,15 @@ Route::delete('/posts/{post}/reactions', [PostReactionController::class, 'destro
 Route::get('/posts/{post}/comments', [PostCommentController::class, 'index']);
 Route::post('/posts/{post}/comments', [PostCommentController::class, 'store']);
 Route::delete('/post-comments/{postComment}', [PostCommentController::class, 'destroy']);
+Route::get('/mail/status', [MailController::class, 'status']);
+Route::post('/mail/connect', [MailController::class, 'connect']);
+Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
+Route::get('/mail/messages', [MailController::class, 'index']);
+Route::get('/mail/messages/{uid}', [MailController::class, 'show']);
+Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);
+Route::patch('/mail/messages/{uid}/unread', [MailController::class, 'markUnread']);
+Route::post('/mail/send', [MailController::class, 'send']);
+
 Route::get('/conversations', [ConversationController::class, 'index']);
 Route::post('/conversations', [ConversationController::class, 'store']);
 Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
@@ -138,13 +148,13 @@ Route::delete('/users/{user}', [UserController::class, 'destroy']);
 
 Route::post('/uploads', [FileUploadController::class, 'store']);
 Route::get('/push-subscriptions', function () {
-	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->index(request());
+    return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->index(request());
 });
 Route::post('/push-subscriptions', function () {
-	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->store(request());
+    return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->store(request());
 });
 Route::delete('/push-subscriptions', function () {
-	return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
+    return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
 });
 
 Route::post('applications/reorder', [ApplicationController::class, 'reorder']);

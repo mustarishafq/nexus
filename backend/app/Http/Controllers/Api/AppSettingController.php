@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
-use App\Support\AppSettings;
 use App\Support\ApplicationLaunchSettings;
+use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\SplashAnimationSettings;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +44,9 @@ class AppSettingController extends Controller
             'smtp_encryption' => ['nullable', 'in:tls,ssl,null'],
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
+            'imap_host' => ['nullable', 'string', 'max:255'],
+            'imap_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'imap_encryption' => ['nullable', 'in:ssl,tls,null'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
         ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules()));
 
@@ -64,6 +67,9 @@ class AppSettingController extends Controller
                 'smtp_encryption' => $validated['smtp_encryption'] === 'null' ? null : ($validated['smtp_encryption'] ?? null),
                 'smtp_from_email' => $validated['smtp_from_email'] ?? null,
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
+                'imap_host' => $validated['imap_host'] ?? null,
+                'imap_port' => $validated['imap_port'] ?? null,
+                'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
         } else {
@@ -76,6 +82,9 @@ class AppSettingController extends Controller
                 'smtp_encryption' => $validated['smtp_encryption'] === 'null' ? null : ($validated['smtp_encryption'] ?? null),
                 'smtp_from_email' => $validated['smtp_from_email'] ?? null,
                 'smtp_from_name' => $validated['smtp_from_name'] ?? null,
+                'imap_host' => $validated['imap_host'] ?? null,
+                'imap_port' => $validated['imap_port'] ?? null,
+                'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'created_at' => now(),
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
@@ -112,6 +121,9 @@ class AppSettingController extends Controller
             'smtp_encryption' => null,
             'smtp_from_email' => config('mail.from.address'),
             'smtp_from_name' => config('mail.from.name'),
+            'imap_host' => null,
+            'imap_port' => 993,
+            'imap_encryption' => 'ssl',
             'splash_animation_style' => SplashAnimationSettings::DEFAULT_STYLE,
         ];
 
@@ -192,6 +204,9 @@ class AppSettingController extends Controller
             'smtp_encryption' => $settings->smtp_encryption,
             'smtp_from_email' => $settings->smtp_from_email ?: config('mail.from.address'),
             'smtp_from_name' => $settings->smtp_from_name ?: config('mail.from.name'),
+            'imap_host' => $settings->imap_host ?? null,
+            'imap_port' => $settings->imap_port ?? 993,
+            'imap_encryption' => $settings->imap_encryption ?? 'ssl',
             'splash' => $splash,
             'splash_animations' => SplashAnimationSettings::catalog(),
             'splash_system_name_animations' => SplashAnimationSettings::systemNameCatalog(),

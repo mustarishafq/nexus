@@ -3,6 +3,7 @@ const STORAGE_KEY = 'nexus_notification_settings';
 export const DEFAULT_NOTIFICATION_SETTINGS = {
   in_app: true,
   email: true,
+  mail_inbox: true,
   sound: true,
 };
 
@@ -27,6 +28,7 @@ export function parseNotificationSettings(raw) {
   return {
     in_app: parsed.in_app !== false,
     email: parsed.email !== false,
+    mail_inbox: parsed.mail_inbox !== false,
     sound: parsed.sound !== false,
   };
 }

@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Support\AppSettings;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
@@ -22,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('mail-imap', function () {
+            return Limit::perMinute(40);
+        });
+
         try {
             $settings = AppSettings::row();
 

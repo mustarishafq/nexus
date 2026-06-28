@@ -44,6 +44,9 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     smtp_encryption: payload?.smtp_encryption || 'tls',
     smtp_from_email: payload?.smtp_from_email || '',
     smtp_from_name: payload?.smtp_from_name || payload?.system_name || fallback.system_name || 'EMZI Nexus Brain',
+    imap_host: payload?.imap_host || '',
+    imap_port: payload?.imap_port || 993,
+    imap_encryption: payload?.imap_encryption || 'ssl',
     splash_animations: payload?.splash_animations || fallback.splash_animations || [],
     splash_system_name_animations: payload?.splash_system_name_animations || fallback.splash_system_name_animations || [],
     launch_animations: payload?.launch_animations || fallback.launch_animations || [],
@@ -242,6 +245,7 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection === 'email' ? (
+              <>
               <Card className="rounded-2xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">SMTP connection</CardTitle>
@@ -320,6 +324,47 @@ export default function AdminSettings({ embedded = false }) {
                   </div>
                 </CardContent>
               </Card>
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">IMAP connection</CardTitle>
+                  <CardDescription>Incoming mail for the staff email inbox. Leave host empty to use the SMTP host.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="imap_host">IMAP host</Label>
+                    <Input
+                      id="imap_host"
+                      value={settings.imap_host}
+                      onChange={(event) => setSettings((current) => ({ ...current, imap_host: event.target.value }))}
+                      placeholder="mail.example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="imap_port">IMAP port</Label>
+                    <Input
+                      id="imap_port"
+                      type="number"
+                      value={settings.imap_port}
+                      onChange={(event) => setSettings((current) => ({ ...current, imap_port: event.target.value }))}
+                      placeholder="993"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="imap_encryption">Encryption</Label>
+                    <Select value={settings.imap_encryption} onValueChange={(value) => setSettings((current) => ({ ...current, imap_encryption: value }))}>
+                      <SelectTrigger id="imap_encryption">
+                        <SelectValue placeholder="ssl" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ssl">SSL</SelectItem>
+                        <SelectItem value="tls">TLS</SelectItem>
+                        <SelectItem value="null">None</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+              </>
             ) : null}
 
             {activeSection !== 'attendance' ? (

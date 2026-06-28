@@ -18,7 +18,7 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0 });
+  const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0, email: 0 });
 
   const { data: metabaseDashboards = [] } = useQuery({
     queryKey: ['metabase-dashboards'],
@@ -30,11 +30,26 @@ export default function BottomNav() {
   const { data: unreadNotifications = [] } = useUnreadNotifications();
   const messagePollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
+  const { data: mailStatus } = useQuery({
+    queryKey: ['mail-status'],
+    queryFn: () => db.mail.status(),
+    staleTime: 60_000,
+  });
+
   const { data: messageInbox } = useQuery({
     queryKey: MESSAGES_INBOX_QUERY_KEY,
     queryFn: () => db.messages.listConversations(),
     staleTime: 15_000,
     refetchInterval: messagePollInterval,
+  });
+
+  const { data: mailInbox } = useQuery({
+    queryKey: ['mail-inbox'],
+    queryFn: () => db.mail.listMessages({ limit: 1 }),
+    staleTime: 15_000,
+    refetchInterval: messagePollInterval,
+    enabled: Boolean(mailStatus?.connected),
+    retry: false,
   });
 
   const navItems = useMemo(() => {
@@ -53,6 +68,13 @@ export default function BottomNav() {
       messages: Number(messageInbox?.unread_total) || 0,
     }));
   }, [messageInbox?.unread_total]);
+
+  useEffect(() => {
+    setBadgeCounts((prev) => ({
+      ...prev,
+      email: Number(mailInbox?.unread_count) || 0,
+    }));
+  }, [mailInbox?.unread_count]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({
@@ -91,6 +113,8 @@ export default function BottomNav() {
       <Link
         key={item.path}
         to={item.path}
+        aria-label={item.label}
+        title={item.label}
         className={cn(
           'relative flex flex-col items-center justify-center gap-0.5 px-1 transition-colors',
           isMobile ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',
@@ -108,9 +132,11 @@ export default function BottomNav() {
             </span>
           )}
         </span>
-        <span className={cn('text-[10px] font-medium leading-none', isActive && 'text-primary')}>
-          {item.label}
-        </span>
+        {!item.iconOnly ? (
+          <span className={cn('text-[10px] font-medium leading-none', isActive && 'text-primary')}>
+            {item.label}
+          </span>
+        ) : null}
       </Link>
     );
   };

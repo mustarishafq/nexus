@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, BarChart3, Monitor, Bell, User, Activity, Wifi, Calendar,
-  Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock,
+  Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
 } from 'lucide-react';
 
 export const MOBILE_BOTTOM_NAV_ITEMS = [
@@ -26,7 +26,8 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin }) {
       label: 'Organization',
       match: (path) => path === '/organization' || path.startsWith('/organization/'),
     },
-    { path: '/messages', icon: Mail, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
+    { path: '/messages', icon: MessageSquare, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
+    { path: '/email', icon: Mail, label: 'Email', match: (path) => path === '/email' || path.startsWith('/email/'), badge: 'email' },
     ...(showAnalytics ? [{
       path: '/analytics',
       icon: BarChart3,
@@ -62,7 +63,8 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin }) {
       match: (path) => path === '/organization' || path.startsWith('/organization/'),
     },
     { path: '/feed', icon: Newspaper, label: 'Feed', match: (path) => path === '/feed' },
-    { path: '/messages', icon: Mail, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
+    { path: '/messages', icon: MessageSquare, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
+    { path: '/email', icon: Mail, label: 'Email', match: (path) => path === '/email' || path.startsWith('/email/'), badge: 'email' },
     ...(showAnalytics ? [{
       path: '/analytics',
       icon: BarChart3,

@@ -41,6 +41,7 @@ const Analytics = lazy(() => import('@/pages/Analytics'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const AttendanceClockIn = lazy(() => import('@/pages/AttendanceClockIn'));
 const AttendanceRecords = lazy(() => import('@/pages/AttendanceRecords'));
+const Email = lazy(() => import('@/pages/Email'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -86,6 +87,9 @@ const ProtectedRoutes = () => {
           <Route path="/messages" element={<Messages />} />
           <Route path="/messages/new/:userId" element={<Messages />} />
           <Route path="/messages/:conversationId" element={<Messages />} />
+          <Route path="/email/compose" element={<Email />} />
+          <Route path="/email/:uid" element={<Email />} />
+          <Route path="/email" element={<Email />} />
           <Route path="/people" element={<People />} />
           <Route path="/organization" element={<OrgChart />} />
           <Route path="/people/org-chart" element={<LegacyOrgChartRedirect />} />

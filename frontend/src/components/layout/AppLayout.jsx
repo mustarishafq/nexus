@@ -10,6 +10,7 @@ import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
 import NotificationToastGate from '@/components/notifications/NotificationToastGate';
 import NotificationClickGate from '@/components/notifications/NotificationClickGate';
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
+import MailNotificationGate from '@/components/email/MailNotificationGate';
 import TopAlertStrips from '@/components/layout/TopAlertStrips';
 import {
   ATTENDANCE_PATH,
@@ -40,6 +41,9 @@ export default function AppLayout() {
 
   const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
   const isAnalyticsPage = location.pathname === '/analytics';
+  const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
+  const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
+  const isViewportFillPage = isAnalyticsPage || isEmailPage || isMessagesPage;
   const showBottomNav = !isFullBleed;
 
   return (
@@ -49,6 +53,7 @@ export default function AppLayout() {
       <WebPushPromptGate />
       <NotificationToastGate />
       <NotificationClickGate />
+      <MailNotificationGate />
       <NotificationAudioUnlock />
       {!isFullBleed ? (
         <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">
@@ -64,8 +69,8 @@ export default function AppLayout() {
         className={cn(
           'transition-all duration-200',
           isFullBleed ? 'min-h-screen overflow-hidden' : 'pt-16',
-          isAnalyticsPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
-          !isFullBleed && !isAnalyticsPage && 'min-h-screen',
+          isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
+          !isFullBleed && !isViewportFillPage && 'min-h-screen',
           !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
           !isFullBleed && topStripCount >= 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
           showBottomNav && 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
@@ -73,7 +78,7 @@ export default function AppLayout() {
       >
         {isFullBleed ? (
           <Outlet />
-        ) : isAnalyticsPage ? (
+        ) : isViewportFillPage ? (
           <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 pt-4 sm:pt-6 max-w-[1600px] mx-auto w-full">
             <Outlet />
           </div>

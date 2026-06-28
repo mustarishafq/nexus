@@ -1,5 +1,7 @@
 # Web Push Deployment & Testing Checklist
 
+> **Redeploying Nexus?** Start with the master checklist: [../install.md](../install.md) (cron, queue worker, VAPID keys, IMAP, frontend build). This document covers Web Push testing and debugging in depth.
+
 Complete guide for deploying web push notifications across local, staging, and production environments.
 
 ---
@@ -823,9 +825,16 @@ php artisan make:command CheckPushHealth
 // Alert if issues detected
 ```
 
-Schedule via cron:
+Schedule via cron (see [install.md](../install.md) §8 for full scheduler list):
+
 ```bash
-* * * * * php artisan schedule:run
+* * * * * cd /path/to/nexus/backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Queue worker must include the `mail-inbox` queue (see [install.md](../install.md) §9):
+
+```bash
+php artisan queue:work database --queue=mail-inbox,default --sleep=3 --tries=2
 ```
 
 ### **Metrics to Export**

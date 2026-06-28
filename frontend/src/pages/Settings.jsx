@@ -2,7 +2,7 @@ import db from '@/api/base44Client';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Settings as SettingsIcon, Bell, Mail, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Inbox, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun, Smartphone } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -39,6 +39,7 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     in_app: true,
     email: true,
+    mail_inbox: true,
     sound: true,
   });
   const [activeTab, setActiveTab] = useState('user');
@@ -54,7 +55,7 @@ export default function Settings() {
         ? JSON.parse(u.notification_settings || '{}')
         : (u.notification_settings || {});
 
-      const next = { in_app: true, email: true, sound: true, ...loaded };
+      const next = { in_app: true, email: true, mail_inbox: true, sound: true, ...loaded };
       setSettings(next);
       syncNotificationSettingsCache(next);
     }).catch(() => {});
@@ -242,6 +243,33 @@ export default function Settings() {
 
                       <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
                         <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+                            <Inbox className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <Label className="text-sm font-medium">New inbox alerts</Label>
+                            <p className="text-xs text-muted-foreground">Notify when new mail arrives. With Web Push enabled, alerts work even when Nexus is closed.</p>
+                          </div>
+                        </div>
+                        <Switch
+                          className="shrink-0 self-end sm:self-auto"
+                          checked={settings.mail_inbox}
+                          onCheckedChange={(enabled) => {
+                            setSettings((current) => {
+                              const next = { ...current, mail_inbox: enabled };
+                              syncNotificationSettingsCache(next);
+                              return next;
+                            });
+
+                            if (enabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                              void Notification.requestPermission();
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
                             <Mail className="w-4 h-4 text-info" />
                           </div>
@@ -295,7 +323,7 @@ export default function Settings() {
                       <CardTitle className="text-base flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-primary" /> Web push
                       </CardTitle>
-                      <CardDescription>Notifications when the browser is closed.</CardDescription>
+                      <CardDescription>Notifications when the browser is closed, including new inbox mail.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {!pushState.supported ? (

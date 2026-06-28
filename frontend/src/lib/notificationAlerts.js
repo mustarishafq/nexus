@@ -56,3 +56,75 @@ export function showNotificationAlert(payload = {}) {
     void playNotificationSound();
   }
 }
+
+export async function showSystemNotification({ title, body, tag, data = {} }) {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  const options = {
+    body,
+    icon: '/icons/pwa-icon-192.png',
+    badge: '/icons/pwa-icon-192.png',
+    tag,
+    data,
+  };
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch {
+    // Fall back to the page Notification API.
+  }
+
+  new Notification(title, options);
+}
+
+export function showMailInboxAlert(message = {}) {
+  const settings = getNotificationSettings();
+  if (settings.mail_inbox === false) {
+    return;
+  }
+
+  const uid = message.uid;
+  const dedupeId = uid ? `mail-${uid}` : null;
+  if (shouldSkipDuplicate(dedupeId)) {
+    return;
+  }
+
+  const title = message.from || 'New email';
+  const body = message.subject || '(No subject)';
+  const path = uid ? `/email/${uid}` : '/email';
+  const onEmailPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/email');
+  const isHidden = typeof document !== 'undefined' && document.hidden;
+
+  if (settings.in_app && (isHidden || !onEmailPage)) {
+    showPushNotificationToast({
+      id: dedupeId,
+      title,
+      message: body,
+      type: 'info',
+    }, toast);
+  }
+
+  if (settings.sound) {
+    void playNotificationSound();
+  }
+
+  void showSystemNotification({
+    title,
+    body,
+    tag: dedupeId || undefined,
+    data: {
+      url: path,
+      action_url: path,
+    },
+  });
+}

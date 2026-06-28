@@ -65,7 +65,10 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 	}
 
 	if (!response.ok) {
-		const error = new Error(payload?.message || `HTTP ${response.status}`);
+		const validationMessage = payload?.errors
+			? Object.values(payload.errors).flat().join(' ')
+			: null;
+		const error = new Error(payload?.message || validationMessage || `HTTP ${response.status}`);
 		error.status = response.status;
 		error.data = payload;
 		throw error;
@@ -507,6 +510,86 @@ export const db = {
 
 		async deleteConversation(conversationId) {
 			return request(`/conversations/${conversationId}`, { method: 'DELETE' });
+		},
+	},
+
+	mail: {
+		async status() {
+			return request('/mail/status');
+		},
+
+		async connect(password) {
+			return request('/mail/connect', { method: 'POST', body: { password } });
+		},
+
+		async disconnect() {
+			return request('/mail/disconnect', { method: 'DELETE' });
+		},
+
+		async listMessages({ limit = 50, q, unread } = {}) {
+			return request(`/mail/messages${buildQuery({ limit, q, unread: unread ? 1 : undefined })}`);
+		},
+
+		async getMessage(uid) {
+			return request(`/mail/messages/${uid}`);
+		},
+
+		async deleteMessage(uid) {
+			return request(`/mail/messages/${uid}`, { method: 'DELETE' });
+		},
+
+		async markUnread(uid) {
+			return request(`/mail/messages/${uid}/unread`, { method: 'PATCH' });
+		},
+
+		async send(payload) {
+			const { attachments = [], ...fields } = payload || {};
+
+			if (attachments.length > 0) {
+				const formData = new FormData();
+				Object.entries(fields).forEach(([key, value]) => {
+					if (value !== undefined && value !== null && value !== '') {
+						formData.append(key, String(value));
+					}
+				});
+				attachments.forEach((file) => formData.append('attachments[]', file));
+
+				const token = getAuthToken();
+				const response = await fetch(`${API_BASE_URL}/mail/send`, {
+					method: 'POST',
+					body: formData,
+					credentials: 'include',
+					headers: {
+						Accept: 'application/json',
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
+					},
+				});
+
+				if (response.status === 204) {
+					return null;
+				}
+
+				let result = null;
+				try {
+					result = await response.json();
+				} catch {
+					result = null;
+				}
+
+				if (!response.ok) {
+					const validationMessage = result?.errors
+						? Object.values(result.errors).flat().join(' ')
+						: null;
+					const error = new Error(result?.message || validationMessage || `HTTP ${response.status}`);
+					error.status = response.status;
+					error.data = result;
+					throw error;
+				}
+
+				return result;
+			}
+
+			return request('/mail/send', { method: 'POST', body: fields });
 		},
 	},
 

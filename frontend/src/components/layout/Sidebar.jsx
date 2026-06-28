@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/base44Client';
 import { 
   LayoutDashboard, Bell, Activity, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, GitBranch,
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -30,7 +30,8 @@ export default function Sidebar({
     { path: '/people', icon: Users, label: 'People' },
     { path: '/organization', icon: GitBranch, label: 'Organization' },
     { path: '/feed', icon: Newspaper, label: 'Feed' },
-    { path: '/messages', icon: Mail, label: 'Messages' },
+    { path: '/messages', icon: MessageSquare, label: 'Messages' },
+    { path: '/email', icon: Mail, label: 'Email' },
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
@@ -81,6 +82,8 @@ export default function Sidebar({
                 ? location.pathname === '/organization' || location.pathname.startsWith('/organization/')
               : item.path === '/messages'
                 ? location.pathname === '/messages' || location.pathname.startsWith('/messages/')
+              : item.path === '/email'
+                ? location.pathname === '/email' || location.pathname.startsWith('/email/')
                 : location.pathname === item.path;
           return (
             <Link
