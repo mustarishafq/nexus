@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ApplicationStatusBadge } from '@/components/ui/application-status-badge';
-import { getSystemHealthDisplay, isAwaitingHealthProbe } from '@/lib/applicationStatus';
+import {
+  getSystemHealthDisplay,
+  isAwaitingHealthProbe,
+  usesManualHealthDisplay,
+} from '@/lib/applicationStatus';
 
 function formatHeartbeat(value) {
   if (!value) return 'No probe yet';
@@ -108,8 +112,10 @@ export default function SystemHealthWidget({ systems }) {
           <div className="-mr-5 max-h-64 space-y-3 overflow-y-auto pr-5 scrollbar-on-hover">
             {systems.map((system) => {
               const awaitingProbe = isAwaitingHealthProbe(system);
+              const manualDisplay = usesManualHealthDisplay(system);
               const config = getSystemHealthDisplay(system);
               const StatusIcon = config.icon;
+              const useCustomBadge = awaitingProbe || manualDisplay;
 
               return (
                 <div key={system.id} className="group flex items-center justify-between">
@@ -126,7 +132,7 @@ export default function SystemHealthWidget({ systems }) {
                       </p>
                     </div>
                   </div>
-                  {awaitingProbe ? (
+                  {useCustomBadge ? (
                     <span
                       className={cn(
                         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',

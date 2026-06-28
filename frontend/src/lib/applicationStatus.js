@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleDashed, Wifi, WifiOff, Wrench } from 'lucide-react';
+import { AlertTriangle, CircleDashed, Minus, Wifi, WifiOff, Wrench } from 'lucide-react';
 
 export const APPLICATION_STATUS = {
   online: {
@@ -39,17 +39,37 @@ export const PROBE_PENDING_DISPLAY = {
   label: 'Pending',
 };
 
+export const MANUAL_STATUS_DISPLAY = {
+  icon: Minus,
+  color: 'text-muted-foreground',
+  bg: 'bg-muted',
+  border: 'border-border',
+  label: 'Manual',
+};
+
 export function getApplicationStatus(status) {
   return APPLICATION_STATUS[status] || APPLICATION_STATUS.online;
 }
 
+export function isHealthMonitoringEnabled(system) {
+  return system?.health_check_enabled !== false;
+}
+
 export function isAwaitingHealthProbe(system) {
-  return system?.health_check_enabled !== false && !system?.last_heartbeat;
+  return isHealthMonitoringEnabled(system) && !system?.last_heartbeat;
+}
+
+export function usesManualHealthDisplay(system) {
+  return !isHealthMonitoringEnabled(system) && system?.status === 'offline';
 }
 
 export function getSystemHealthDisplay(system) {
   if (isAwaitingHealthProbe(system)) {
     return PROBE_PENDING_DISPLAY;
+  }
+
+  if (usesManualHealthDisplay(system)) {
+    return MANUAL_STATUS_DISPLAY;
   }
 
   return getApplicationStatus(system.status);
