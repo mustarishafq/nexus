@@ -82,4 +82,23 @@ class UserPresenceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('user.is_online', false);
     }
+
+    public function test_roster_returns_all_approved_users_with_online_status(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true]);
+        $onlineUser = User::factory()->create([
+            'name' => 'Online Bob',
+            'is_approved' => true,
+        ]);
+        User::factory()->create(['is_approved' => false]);
+        $token = $this->issueToken($viewer);
+
+        app(UserPresenceService::class)->touch($onlineUser->id);
+
+        $this->withToken($token)
+            ->getJson('/api/users/roster')
+            ->assertOk()
+            ->assertJsonPath('total', 2)
+            ->assertJsonFragment(['name' => 'Online Bob', 'is_online' => true]);
+    }
 }

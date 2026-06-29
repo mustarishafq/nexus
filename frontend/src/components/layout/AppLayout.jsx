@@ -12,6 +12,7 @@ import NotificationClickGate from '@/components/notifications/NotificationClickG
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
 import MailNotificationGate from '@/components/email/MailNotificationGate';
 import UserPresenceGate from '@/components/presence/UserPresenceGate';
+import TeamRosterPanel from '@/components/presence/TeamRosterPanel';
 import TopAlertStrips from '@/components/layout/TopAlertStrips';
 import {
   ATTENDANCE_PATH,
@@ -91,6 +92,7 @@ export default function AppLayout() {
           )}
         </main>
         {showBottomNav && <BottomNav />}
+        <TeamRosterPanel hidden={isFullBleed || isViewportFillPage || isMobile} />
       </div>
     </UserPresenceGate>
   );

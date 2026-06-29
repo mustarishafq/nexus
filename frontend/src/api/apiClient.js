@@ -773,6 +773,10 @@ export const db = {
 		return request(`/users/directory${queryString}`);
 	},
 
+	async getUserRoster() {
+		return request('/users/roster');
+	},
+
 	async listDepartments() {
 		const payload = await request('/departments');
 		return Array.isArray(payload) ? payload : [];

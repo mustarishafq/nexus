@@ -135,6 +135,7 @@ Route::put('/admin/department-attendance/{department}', [DepartmentAttendanceCon
 Route::get('/departments', [DepartmentController::class, 'index']);
 Route::post('/departments', [DepartmentController::class, 'store']);
 Route::get('/users/directory', [UserController::class, 'directory']);
+Route::get('/users/roster', [UserController::class, 'roster']);
 Route::get('/users/org-chart', [UserController::class, 'orgChart']);
 Route::get('/users', [UserController::class, 'index']);
 Route::get('/users/search', [UserController::class, 'search']);

@@ -16,7 +16,7 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
-import { glassPanelStyles } from './glassStyles';
+import { glassDialogIconButton, glassDialogMutedText, glassDialogTitleText, glassTopBarStyles } from './glassStyles';
 
 export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const navigate = useNavigate();
@@ -44,7 +44,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
     <>
       <header
         className={cn(
-          glassPanelStyles,
+          glassTopBarStyles,
           'h-16 border-b flex items-center justify-between px-6 transition-all duration-200',
           embedded ? 'w-full' : 'fixed top-0 right-0 z-30'
         )}
@@ -62,9 +62,9 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
             <ThemeToggle />
             <button
               onClick={() => setPanelOpen(!panelOpen)}
-              className="relative p-2 rounded-lg hover:bg-muted transition-colors"
+              className={cn('relative rounded-lg p-2', glassDialogIconButton)}
             >
-              <Bell className="w-5 h-5 text-muted-foreground" />
+              <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center px-1 animate-pulse">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -84,11 +84,13 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
                     {getDisplayName(user, 'U')[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium leading-none">{getDisplayName(user)}</p>
-                  <p className="text-xs text-muted-foreground">{user?.role || 'user'}</p>
+                <div className="hidden text-left md:block">
+                  <p className={cn('text-sm font-medium leading-none', glassDialogTitleText)}>
+                    {getDisplayName(user)}
+                  </p>
+                  <p className={cn('text-xs capitalize', glassDialogMutedText)}>{user?.role || 'user'}</p>
                 </div>
-                <ChevronDown className="w-3 h-3 text-muted-foreground hidden md:block" />
+                <ChevronDown className={cn('hidden h-3 w-3 md:block', glassDialogMutedText)} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => navigate('/profile')}>

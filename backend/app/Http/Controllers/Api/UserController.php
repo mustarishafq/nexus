@@ -314,6 +314,32 @@ class UserController extends Controller
         ]);
     }
 
+    public function roster(Request $request): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $users = User::query()
+            ->with('department')
+            ->where('is_approved', true)
+            ->orderBy('full_name')
+            ->orderBy('name')
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'job_title']);
+
+        $payloads = $users
+            ->map(fn (User $user) => $this->publicUserSummary($user))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'users' => app(UserPresenceService::class)->enrichPayloads($payloads),
+            'total' => count($payloads),
+        ]);
+    }
+
     public function profile(Request $request, User $user): JsonResponse
     {
         $viewer = $this->authenticatedUser($request);

@@ -15,6 +15,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { glassDialogFaintText, glassDialogInputStyles, glassDialogMutedText } from '@/components/layout/glassStyles';
 
 function useDebouncedValue(value, delay = 250) {
   const [debounced, setDebounced] = useState(value);
@@ -158,13 +159,18 @@ export function GlobalSearchTrigger({ onClick, className }) {
       type="button"
       onClick={onClick}
       className={cn(
-        'relative flex w-full items-center rounded-lg bg-muted/50 pl-9 pr-3 h-10 text-sm text-left text-muted-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        'relative flex h-10 w-full items-center rounded-lg border pl-9 pr-3 text-left text-sm transition-colors',
+        'hover:bg-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        glassDialogInputStyles,
         className
       )}
     >
-      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <span className="truncate">Search people...</span>
-      <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:inline-flex">
+      <Search className={cn('absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2', glassDialogFaintText)} />
+      <span className={cn('truncate', glassDialogMutedText)}>Search people...</span>
+      <kbd className={cn(
+        'pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium sm:inline-flex',
+        'border-border/70 bg-muted/60 text-foreground/70 dark:bg-muted dark:text-muted-foreground'
+      )}>
         <span className="text-xs">⌘</span>K
       </kbd>
     </button>

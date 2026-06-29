@@ -18,7 +18,11 @@ export default function UserAvatar({
   return (
     <div className="relative inline-flex shrink-0">
       <Avatar className={cn('h-10 w-10 shrink-0', className)}>
-        <AvatarImage src={toAbsoluteUrl(user?.profile_picture)} alt={displayName} />
+        <AvatarImage
+          src={toAbsoluteUrl(user?.profile_picture)}
+          alt={displayName}
+          className="object-cover"
+        />
         <AvatarFallback
           className={cn(
             'bg-primary/10 text-sm font-semibold text-primary',
