@@ -33,7 +33,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\PostController;
-use App\Http\Controllers\Api\PostReactionController;
+use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\SystemEventController;
 use App\Http\Controllers\Api\UserController;
@@ -61,6 +61,8 @@ Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);
+Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat']);
+Route::get('/presence/online', [PresenceController::class, 'online']);
 Route::get('/attendance/export', [AttendanceController::class, 'exportCsv']);
 Route::get('/attendance/watermark-logo', [AttendanceController::class, 'watermarkLogo']);
 Route::get('/attendance/reverse-geocode', [AttendanceController::class, 'reverseGeocode']);
@@ -116,6 +118,7 @@ Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'discon
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
 Route::get('/admin/api-tokens', [ApiTokenController::class, 'index']);
 Route::post('/admin/api-tokens', [ApiTokenController::class, 'store']);
+Route::patch('/admin/api-tokens/users/{user}/mcp-access', [ApiTokenController::class, 'updateUserMcpAccess']);
 Route::delete('/admin/api-tokens/{apiToken}', [ApiTokenController::class, 'destroy']);
 Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::class, 'index']);
 Route::patch('/admin/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialAdminController::class, 'update']);

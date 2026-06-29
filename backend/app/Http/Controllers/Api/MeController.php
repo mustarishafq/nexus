@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserProfileSerializer;
+use App\Services\UserPresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -33,7 +34,11 @@ class MeController extends Controller
             ], 403);
         }
 
-        return response()->json(UserProfileSerializer::privateProfile($this->loadProfile($user)));
+        return response()->json(
+            app(UserPresenceService::class)->enrichPayload(
+                UserProfileSerializer::privateProfile($this->loadProfile($user))
+            )
+        );
     }
 
     /**

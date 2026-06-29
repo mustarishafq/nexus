@@ -1,7 +1,7 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Copy, Check, AlertTriangle, ChevronsUpDown, Search } from 'lucide-react';
+import { Plus, Trash2, Copy, Check, AlertTriangle, ChevronsUpDown, Search, Shield, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,120 @@ import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/profile';
 
 export const API_TOKENS_QUERY_KEY = ['admin-api-tokens'];
+
+const MCP_ACCESS_LABELS = {
+  none: 'No MCP access',
+  read: 'Read only',
+  write: 'Write only',
+  both: 'Read & write',
+};
+
+const MCP_ACCESS_OPTIONS = [
+  {
+    value: 'none',
+    label: MCP_ACCESS_LABELS.none,
+    description: 'Block all MCP tools. Existing tokens stop working.',
+  },
+  {
+    value: 'read',
+    label: MCP_ACCESS_LABELS.read,
+    description: 'List systems, describe APIs, and send GET requests only.',
+  },
+  {
+    value: 'write',
+    label: MCP_ACCESS_LABELS.write,
+    description: 'Send POST, PUT, PATCH, and DELETE requests only.',
+  },
+  {
+    value: 'both',
+    label: MCP_ACCESS_LABELS.both,
+    description: 'Full MCP access — read and write connected system APIs.',
+  },
+];
+
+function mcpAccessBadge(access, { pendingReview = false } = {}) {
+  if (access === 'both') {
+    return <Badge className="bg-success/15 text-success border-success/20">Read & write</Badge>;
+  }
+  if (access === 'write') {
+    return <Badge className="bg-sky-500/15 text-sky-600 border-sky-500/20 dark:text-sky-400">Write only</Badge>;
+  }
+  if (access === 'read') {
+    return (
+      <Badge className={cn(
+        'border-amber-500/20',
+        pendingReview
+          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+          : 'bg-muted text-muted-foreground'
+      )}>
+        {pendingReview ? 'Read only · needs review' : 'Read only'}
+      </Badge>
+    );
+  }
+  return <Badge variant="outline">No access</Badge>;
+}
+
+function McpAccessDialog({ target, saving, onClose, onSave }) {
+  const [selected, setSelected] = useState(target?.user?.mcp_access || 'none');
+
+  useEffect(() => {
+    setSelected(target?.user?.mcp_access || 'none');
+  }, [target]);
+
+  if (!target) return null;
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            Manage MCP access
+          </DialogTitle>
+          <DialogDescription>
+            Choose what <span className="font-medium text-foreground">{target.user?.name}</span> can do through MCP for all of their tokens and OAuth connections.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2 py-2">
+          {MCP_ACCESS_OPTIONS.map((option) => {
+            const isSelected = selected === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSelected(option.value)}
+                className={cn(
+                  'rounded-xl border px-4 py-3 text-left transition-colors',
+                  isSelected
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                    : 'border-border/70 hover:border-border hover:bg-muted/40'
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{option.label}</span>
+                  {isSelected ? <Check className="h-4 w-4 text-primary shrink-0" /> : null}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
+              </button>
+            );
+          })}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onSave(selected)}
+            disabled={saving || selected === (target.user?.mcp_access || 'none')}
+          >
+            {saving ? 'Saving...' : 'Save access'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function matchesUserSearch(user, term) {
   const haystack = [user.name, user.full_name, user.email, user.job_title]
@@ -232,6 +346,8 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
   const [expiresInDays, setExpiresInDays] = useState('never');
   const [revealedToken, setRevealedToken] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
+  const [mcpAccessTarget, setMcpAccessTarget] = useState(null);
+  const [pendingMcpAction, setPendingMcpAction] = useState(null);
 
   useEffect(() => {
     if (!createSignal || !createForUserId) return;
@@ -283,6 +399,37 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
     },
   });
 
+  const mcpAccessMutation = useMutation({
+    mutationFn: ({ userId, mcpAccess }) => db.updateAdminApiTokenUserMcpAccess(userId, mcpAccess),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: API_TOKENS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setMcpAccessTarget(null);
+      setPendingMcpAction(null);
+      toast.success('MCP access updated');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update MCP access');
+    },
+  });
+
+  const saveMcpAccess = (mcpAccess) => {
+    if (!mcpAccessTarget?.user?.id) return;
+    mcpAccessMutation.mutate({ userId: mcpAccessTarget.user.id, mcpAccess });
+  };
+
+  const confirmQuickMcpAction = () => {
+    if (!pendingMcpAction) return;
+    mcpAccessMutation.mutate({
+      userId: pendingMcpAction.item.user.id,
+      mcpAccess: pendingMcpAction.mcpAccess,
+    });
+  };
+
+  const isPendingOAuthReview = (item) => (
+    item.source === 'oauth' && item.user?.mcp_access === 'read' && item.user?.role !== 'admin'
+  );
+
   const items = data?.items ?? [];
 
   const handleCreate = (event) => {
@@ -302,7 +449,8 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
           <div>
             <CardTitle className="text-base">API tokens</CardTitle>
             <CardDescription>
-              Generate bearer tokens for MCP, system events, and other integrations.
+              MCP OAuth connections appear here automatically when a user clicks Allow on a custom connector.
+              New connections default to read-only until you change their MCP access below.
               Use <code className="rounded bg-muted px-1 text-xs">Authorization: Bearer</code> in requests.
             </CardDescription>
           </div>
@@ -315,18 +463,22 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading tokens...</p>
           ) : items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No API tokens yet. Generate one to get started.</p>
+            <p className="text-sm text-muted-foreground">
+              No API tokens or MCP connections yet. Tokens appear here when you generate them or when a user connects a custom MCP client.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Label</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead>User</TableHead>
+                    <TableHead>MCP access</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Last used</TableHead>
                     <TableHead>Expires</TableHead>
-                    <TableHead className="w-[80px]" />
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -334,8 +486,22 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.label}</TableCell>
                       <TableCell>
+                        <Badge variant={item.source === 'oauth' ? 'default' : 'outline'} className="text-xs">
+                          {item.source === 'oauth' ? 'OAuth' : 'Manual'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <div className="text-sm">{item.user?.name}</div>
                         <div className="text-xs text-muted-foreground">{item.user?.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        {item.user?.role === 'admin' ? (
+                          mcpAccessBadge('both')
+                        ) : (
+                          mcpAccessBadge(item.user?.mcp_access || 'none', {
+                            pendingReview: isPendingOAuthReview(item),
+                          })
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {item.created_at ? format(new Date(item.created_at), 'MMM d, yyyy') : '—'}
@@ -356,15 +522,56 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
                           <Badge variant="secondary">Never</Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setRevokeTarget(item)}
-                          aria-label={`Revoke ${item.label}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end items-center gap-1">
+                          {item.user?.role !== 'admin' && isPendingOAuthReview(item) ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={mcpAccessMutation.isPending}
+                                aria-label={`Revoke MCP access for ${item.user?.name || item.user?.email}`}
+                                onClick={() => setPendingMcpAction({ item, mcpAccess: 'none', action: 'revoke' })}
+                              >
+                                <Ban className="h-4 w-4 text-destructive" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={mcpAccessMutation.isPending}
+                                aria-label={`Grant full MCP access for ${item.user?.name || item.user?.email}`}
+                                onClick={() => setPendingMcpAction({ item, mcpAccess: 'both', action: 'grant' })}
+                              >
+                                <Check className="h-4 w-4 text-success" />
+                              </Button>
+                            </>
+                          ) : item.user?.role !== 'admin' ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={mcpAccessMutation.isPending}
+                              aria-label={`Manage MCP access for ${item.user?.name || item.user?.email}`}
+                              onClick={() => setMcpAccessTarget(item)}
+                            >
+                              <Shield className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setRevokeTarget(item)}
+                            aria-label={`Revoke ${item.label}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -381,7 +588,7 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
             <DialogHeader>
               <DialogTitle>Generate API token</DialogTitle>
               <DialogDescription>
-                Create a named token for API access. The token inherits the selected user&apos;s permissions.
+                Create a named token for API access. MCP tools available depend on the selected user&apos;s MCP access level.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -435,6 +642,47 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
       {revealedToken ? (
         <TokenRevealDialog token={revealedToken} onClose={() => setRevealedToken(null)} />
       ) : null}
+
+      {mcpAccessTarget ? (
+        <McpAccessDialog
+          target={mcpAccessTarget}
+          saving={mcpAccessMutation.isPending}
+          onClose={() => setMcpAccessTarget(null)}
+          onSave={saveMcpAccess}
+        />
+      ) : null}
+
+      <AlertDialog open={Boolean(pendingMcpAction)} onOpenChange={(open) => { if (!open) setPendingMcpAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingMcpAction?.action === 'grant' ? 'Grant full MCP access?' : 'Revoke MCP access?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingMcpAction?.action === 'grant' ? (
+                <>
+                  Allow <span className="font-medium text-foreground">{pendingMcpAction.item.user?.name}</span> to read and write through MCP for{' '}
+                  <span className="font-medium text-foreground">{pendingMcpAction.item.label}</span>?
+                </>
+              ) : (
+                <>
+                  Block MCP access for <span className="font-medium text-foreground">{pendingMcpAction?.item.user?.name}</span>. Their connector will stop working until access is granted again.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={mcpAccessMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={mcpAccessMutation.isPending}
+              className={pendingMcpAction?.action === 'revoke' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+              onClick={confirmQuickMcpAction}
+            >
+              {pendingMcpAction?.action === 'grant' ? 'Grant full access' : 'Revoke access'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={Boolean(revokeTarget)} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
         <AlertDialogContent>

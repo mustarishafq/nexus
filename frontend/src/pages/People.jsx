@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Search, Users, X } from 'lucide-react';

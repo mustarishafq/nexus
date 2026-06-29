@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toAbsoluteUrl } from '@/lib/media';

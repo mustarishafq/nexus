@@ -1,7 +1,7 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SmilePlus } from 'lucide-react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 

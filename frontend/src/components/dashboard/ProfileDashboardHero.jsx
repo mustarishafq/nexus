@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
 import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
@@ -47,6 +48,8 @@ function CoverPhotoImage({ coverPicture, userReady }) {
 export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = false }) {
   const todayLabel = format(new Date(), 'EEEE, MMMM d');
   const userReady = user != null;
+  const presenceOnline = useIsUserOnline(user?.id);
+  const isOnline = user?.is_online ?? presenceOnline;
 
   return (
     <motion.div
@@ -92,6 +95,11 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
                   {user?.role || 'member'}
                 </Badge>
               )}
+              {readOnly && isOnline ? (
+                <Badge className="gap-1 shrink-0 h-5 border-success/30 bg-success/10 text-[10px] text-success sm:h-auto sm:text-xs">
+                  Online
+                </Badge>
+              ) : null}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
               {[user?.job_title, user?.department].filter(Boolean).join(' · ') || user?.email}

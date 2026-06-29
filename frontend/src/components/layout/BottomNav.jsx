@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';

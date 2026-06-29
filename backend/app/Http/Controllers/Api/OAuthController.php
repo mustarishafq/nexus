@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\OAuthAuthCode;
 use App\Models\OAuthClient;
 use App\Models\OAuthRefreshToken;
+use App\Services\McpConnectionNotificationService;
+use App\Services\McpOAuthProvisioningService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -113,6 +115,8 @@ class OAuthController extends Controller
             return response()->json(['message' => 'Invalid client or redirect_uri.'], 400);
         }
 
+        app(McpOAuthProvisioningService::class)->provisionOnConsent($user);
+
         $plainCode = Str::random(64);
 
         OAuthAuthCode::create([
@@ -196,7 +200,7 @@ class OAuthController extends Controller
         $user = $authCode->user;
 
         return response()->json(
-            $this->issueTokenPair($user, $client->client_id)
+            $this->issueTokenPair($user, $client)
         );
     }
 
@@ -227,27 +231,36 @@ class OAuthController extends Controller
         $refreshToken->authToken?->delete();
 
         return response()->json(
-            $this->issueTokenPair($refreshToken->user, $client->client_id)
+            $this->issueTokenPair($refreshToken->user, $client)
         );
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function issueTokenPair(\App\Models\User $user, string $clientId): array
+    private function issueTokenPair(\App\Models\User $user, OAuthClient $client): array
     {
+        $notifier = app(McpConnectionNotificationService::class);
+        $isFirstConnection = $notifier->isFirstOAuthConnection($user);
+        $label = $this->mcpTokenLabel($client);
+
         [$accessToken, $authTokenModel] = ApiTokenAuth::issueOAuthAccessToken(
             $user,
-            $clientId,
-            self::ACCESS_TOKEN_TTL_MINUTES
+            $client->client_id,
+            self::ACCESS_TOKEN_TTL_MINUTES,
+            $label
         );
+
+        if ($isFirstConnection) {
+            $notifier->notifyAdminsOfNewConnection($user->fresh(), $client, $authTokenModel);
+        }
 
         $plainRefreshToken = Str::random(80);
 
         OAuthRefreshToken::create([
             'token_hash' => hash('sha256', $plainRefreshToken),
             'auth_token_id' => $authTokenModel->id,
-            'client_id' => $clientId,
+            'client_id' => $client->client_id,
             'user_id' => $user->id,
             'expires_at' => now()->addDays(self::REFRESH_TOKEN_TTL_DAYS),
         ]);
@@ -259,6 +272,13 @@ class OAuthController extends Controller
             'refresh_token' => $plainRefreshToken,
             'scope' => 'mcp',
         ];
+    }
+
+    private function mcpTokenLabel(OAuthClient $client): string
+    {
+        $name = trim((string) $client->name);
+
+        return 'MCP: '.($name !== '' ? $name : 'Unnamed client');
     }
 
     private function clientSecretValid(OAuthClient $client, ?string $providedSecret): bool

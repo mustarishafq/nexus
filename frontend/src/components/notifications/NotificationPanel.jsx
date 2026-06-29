@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 

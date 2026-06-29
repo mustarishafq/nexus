@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import SsoCredentialPickerDialog from '@/components/applications/SsoCredentialPickerDialog';
 import { openApplicationTarget } from '@/lib/applications';
 import {

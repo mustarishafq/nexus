@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Moon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';

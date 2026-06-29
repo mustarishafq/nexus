@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useMemo, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';

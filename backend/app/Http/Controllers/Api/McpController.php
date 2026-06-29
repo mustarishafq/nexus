@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Mcp\McpJsonSchema;
 use App\Services\Mcp\ToolRegistry;
 use App\Support\ApiTokenAuth;
+use App\Support\McpUserAccess;
 use App\Support\OAuthPublicUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,10 @@ class McpController extends Controller
                 ->header('WWW-Authenticate', 'Bearer resource_metadata="'.$issuer.'/.well-known/oauth-protected-resource/mcp"');
         }
 
+        if (! McpUserAccess::canUseMcp($user)) {
+            return $this->error(null, -32003, 'MCP access is disabled for this user.', 403);
+        }
+
         $id = $request->input('id');
         $method = (string) $request->input('method');
         $params = (array) $request->input('params', []);
@@ -46,7 +51,10 @@ class McpController extends Controller
                         'description' => $tool->description(),
                         'inputSchema' => McpJsonSchema::normalize($tool->inputSchema()),
                     ],
-                    array_values($this->tools->all())
+                    array_values(array_filter(
+                        $this->tools->all(),
+                        fn ($tool) => McpUserAccess::canListTool($user, $tool->name())
+                    ))
                 ),
             ]),
             'tools/call' => $this->callTool($id, $user, $params),
@@ -66,6 +74,15 @@ class McpController extends Controller
 
         if (! $tool) {
             return $this->error($id, -32602, "Unknown tool: {$name}");
+        }
+
+        if (! McpUserAccess::canCallTool($user, $name, $arguments)) {
+            return $this->error(
+                $id,
+                -32003,
+                McpUserAccess::denialMessage($user, $name, $arguments),
+                403
+            );
         }
 
         try {

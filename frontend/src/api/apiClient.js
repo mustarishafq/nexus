@@ -794,6 +794,15 @@ export const db = {
 		return request(`/users/org-chart${queryString}`);
 	},
 
+	async sendPresenceHeartbeat() {
+		return request('/presence/heartbeat', { method: 'POST' });
+	},
+
+	async getOnlineUserIds() {
+		const payload = await request('/presence/online');
+		return Array.isArray(payload?.user_ids) ? payload.user_ids : [];
+	},
+
 	async sendProfileNudge(userId, options = {}) {
 		return request(`/users/${userId}/profile-nudge`, {
 			method: 'POST',
@@ -832,6 +841,13 @@ export const db = {
 		});
 	},
 
+	async updateAdminApiTokenUserMcpAccess(userId, mcpAccess) {
+		return request(`/admin/api-tokens/users/${userId}/mcp-access`, {
+			method: 'PATCH',
+			body: { mcp_access: mcpAccess },
+		});
+	},
+
 	async uploadUsersCsv(file, path) {
 		const token = getAuthToken();
 		const formData = new FormData();
@@ -857,5 +873,4 @@ export const db = {
 	},
 };
 
-export const base44 = db;
 export default db;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { 
   LayoutDashboard, Bell, Activity, Shield, Settings, 
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch,

@@ -61,6 +61,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'mcp_access',
         'is_approved',
         'force_password_change',
         'notification_settings',

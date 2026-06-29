@@ -1,5 +1,5 @@
 // @ts-nocheck
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -46,6 +46,26 @@ import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getP
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
+
+const MCP_ACCESS_OPTIONS = [
+  { value: 'none', label: 'No MCP access' },
+  { value: 'read', label: 'Read only' },
+  { value: 'write', label: 'Write only' },
+  { value: 'both', label: 'Read & write' },
+];
+
+function McpAccessSelect({ value, onChange, disabled = false }) {
+  return (
+    <Select value={value || 'none'} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {MCP_ACCESS_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 function getUserProfileStrength(user) {
   if (user?.profile_completeness) {
@@ -265,6 +285,7 @@ export default function UserManagement() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [assigningGroups, setAssigningGroups] = useState(false);
   const [newUserRole, setNewUserRole] = useState('user');
+  const [newUserMcpAccess, setNewUserMcpAccess] = useState('none');
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -979,6 +1000,7 @@ export default function UserManagement() {
         email: form.get('email'),
         password: form.get('password'),
         role: newUserRole,
+        mcp_access: newUserRole === 'admin' ? 'both' : newUserMcpAccess,
         access_group_ids: [...newUserGroupIds].map(Number),
         is_approved: true,
       });
@@ -986,6 +1008,7 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['access-groups'] });
       setCreateOpen(false);
       setNewUserRole('user');
+      setNewUserMcpAccess('none');
       setNewUserGroupIds(new Set());
       toast.success('User created successfully');
     } catch (err) {
@@ -1001,6 +1024,7 @@ export default function UserManagement() {
       full_name: user.full_name || '',
       name: user.name || '',
       role: user.role || 'user',
+      mcp_access: user.mcp_access || 'none',
       is_approved: Boolean(user.is_approved),
       access_group_ids: new Set(getUserGroupIds(user)),
       password: '',
@@ -1026,6 +1050,7 @@ export default function UserManagement() {
         full_name: editForm.full_name,
         name: editForm.name,
         role: editForm.role,
+        mcp_access: editForm.role === 'admin' ? 'both' : (editForm.mcp_access || 'none'),
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
         date_of_birth: editForm.date_of_birth || null,
@@ -2130,6 +2155,22 @@ export default function UserManagement() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label>MCP access</Label>
+                  {editForm.role === 'admin' ? (
+                    <p className="text-sm text-muted-foreground">Admins always have full MCP read &amp; write access.</p>
+                  ) : (
+                    <>
+                      <McpAccessSelect
+                        value={editForm.mcp_access || 'none'}
+                        onChange={(value) => setEditForm((prev) => ({ ...prev, mcp_access: value }))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Controls which MCP tools this user can use via API tokens or OAuth.
+                      </p>
+                    </>
+                  )}
+                </div>
                 {editForm.role !== 'admin' && (
                   <div className="space-y-2">
                     <Label>Access Groups</Label>
@@ -2306,6 +2347,15 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
             </div>
+            {newUserRole !== 'admin' && (
+              <div className="space-y-2">
+                <Label>MCP access</Label>
+                <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
+                <p className="text-xs text-muted-foreground">
+                  Controls which MCP tools this user can use via API tokens or OAuth.
+                </p>
+              </div>
+            )}
             {newUserRole !== 'admin' && (
               <div className="space-y-2">
                 <Label>Access Groups</Label>

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useState } from 'react';
 import { Lock, Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

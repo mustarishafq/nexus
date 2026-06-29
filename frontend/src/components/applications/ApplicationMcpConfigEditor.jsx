@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import {
   Bot,
   Check,

@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';

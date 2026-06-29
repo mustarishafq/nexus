@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {

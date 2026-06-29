@@ -10,7 +10,9 @@ use App\Models\AccessGroup;
 use App\Models\Department;
 use App\Models\User;
 use App\Services\ProfileNudgeService;
+use App\Services\UserPresenceService;
 use App\Support\ApiTokenAuth;
+use App\Support\McpUserAccess;
 use App\Support\ProfileCompleteness;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserHrCsvImporter;
@@ -102,7 +104,9 @@ class UserController extends Controller
      */
     private function publicUserProfile(User $user): array
     {
-        return UserProfileSerializer::publicProfile($user);
+        return app(UserPresenceService::class)->enrichPayload(
+            UserProfileSerializer::publicProfile($user)
+        );
     }
 
     /**
@@ -110,7 +114,7 @@ class UserController extends Controller
      */
     private function publicUserSummary(User $user): array
     {
-        return [
+        return app(UserPresenceService::class)->enrichPayload([
             'id' => $user->id,
             'name' => $user->displayName(),
             'email' => $user->email,
@@ -120,7 +124,7 @@ class UserController extends Controller
             'department' => $user->department?->name,
             'job_title' => $user->job_title,
             'location' => $user->location,
-        ];
+        ]);
     }
 
     public function orgChart(Request $request): JsonResponse
@@ -182,15 +186,39 @@ class UserController extends Controller
             return response()->json([
                 'department' => $department ? ['id' => $department->id, 'name' => $department->name] : null,
                 'departments' => $departments,
-                'tree' => $buildBranch(null),
+                'tree' => $this->enrichOrgChartTree($buildBranch(null)),
             ]);
         }
 
         return response()->json([
             'department' => null,
             'departments' => $departments,
-            'tree' => $buildBranch(null),
+            'tree' => $this->enrichOrgChartTree($buildBranch(null)),
         ]);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $branches
+     * @return array<int, array<string, mixed>>
+     */
+    private function enrichOrgChartTree(array $branches): array
+    {
+        $presence = app(UserPresenceService::class);
+
+        return collect($branches)
+            ->map(function (array $branch) use ($presence) {
+                if (isset($branch['user']) && is_array($branch['user'])) {
+                    $branch['user'] = $presence->enrichPayload($branch['user']);
+                }
+
+                if (! empty($branch['reports'])) {
+                    $branch['reports'] = $this->enrichOrgChartTree($branch['reports']);
+                }
+
+                return $branch;
+            })
+            ->values()
+            ->all();
     }
 
     public function search(Request $request): JsonResponse
@@ -321,6 +349,7 @@ class UserController extends Controller
             'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8'],
             'role'      => ['sometimes', 'string', 'max:50'],
+            'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
@@ -337,6 +366,7 @@ class UserController extends Controller
             'email'                  => $validated['email'] ?? null,
             'password'               => Hash::make($validated['password']),
             'role'                   => $validated['role'] ?? 'user',
+            'mcp_access'             => $validated['mcp_access'] ?? McpUserAccess::NONE,
             'is_approved'            => $validated['is_approved'] ?? true,
             'force_password_change'  => true,
         ]);
@@ -656,6 +686,7 @@ class UserController extends Controller
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['sometimes', 'string', 'max:50'],
+            'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],

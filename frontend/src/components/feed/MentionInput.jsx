@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';

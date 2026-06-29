@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
 
 const INITIAL_STATE = {

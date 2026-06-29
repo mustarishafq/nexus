@@ -1,5 +1,5 @@
 // @ts-nocheck
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { Camera, ImageIcon, Loader2, Megaphone, MessageCircle, Send, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

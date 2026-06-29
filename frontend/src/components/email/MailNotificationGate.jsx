@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { showMailInboxAlert } from '@/lib/notificationAlerts';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';

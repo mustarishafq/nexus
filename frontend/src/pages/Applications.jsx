@@ -1,4 +1,4 @@
-import db, { API_ORIGIN } from '@/api/base44Client';
+import db, { API_ORIGIN } from '@/api/apiClient';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 

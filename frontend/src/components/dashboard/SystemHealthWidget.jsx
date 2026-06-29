@@ -2,7 +2,7 @@ import React from 'react';
 import { Monitor, RefreshCw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';

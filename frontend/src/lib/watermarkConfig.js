@@ -513,7 +513,7 @@ export async function loadWatermarkLogo(url) {
     // API proxy first — works in production when frontend and API/storage are on different hosts.
     if (storagePath) {
       try {
-        const { default: db } = await import('@/api/base44Client');
+        const { default: db } = await import('@/api/apiClient');
         const blob = await db.attendance.fetchWatermarkLogo(storagePath);
         if (blob) {
           const image = await loadImageFromBlob(blob);
@@ -678,7 +678,7 @@ export async function reverseGeocodeAddress(latitude, longitude, geocodeRequest 
       return payload?.location_label || null;
     }
 
-    const { default: db } = await import('@/api/base44Client');
+    const { default: db } = await import('@/api/apiClient');
     const payload = await db.attendance.reverseGeocode({ latitude, longitude });
     return payload?.location_label || null;
   } catch {

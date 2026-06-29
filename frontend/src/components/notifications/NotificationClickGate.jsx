@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { followNotificationAction } from '@/lib/notificationAction';
 import {
   clearPendingNotificationOpen,

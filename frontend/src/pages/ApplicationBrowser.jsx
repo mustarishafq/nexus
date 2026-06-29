@@ -1,4 +1,4 @@
-import db, { API_ORIGIN } from '@/api/base44Client';
+import db, { API_ORIGIN } from '@/api/apiClient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';

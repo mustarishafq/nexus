@@ -14,7 +14,14 @@ const SECTIONS = [
 
 function AttendanceSectionNav({ activeSection }) {
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className={cn(
+        'flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'sm:gap-1.5',
+      )}
+      role="tablist"
+      aria-label="Attendance sections"
+    >
       {SECTIONS.map((section) => {
         const Icon = section.icon;
         const active = activeSection === section.id;
@@ -23,8 +30,10 @@ function AttendanceSectionNav({ activeSection }) {
           <Link
             key={section.id}
             to={section.path}
+            role="tab"
+            aria-selected={active}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors min-h-[40px]',
+              'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition-colors touch-manipulation sm:min-h-[40px] sm:flex-none sm:px-4',
               active
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground',
@@ -64,13 +73,13 @@ export default function Attendance() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4">
+    <div className={cn('mx-auto w-full space-y-4', activeSection === 'records' ? 'max-w-none' : 'max-w-5xl')}>
       <div className="space-y-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Clock className="h-6 w-6 text-primary" /> Attendance
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+            <Clock className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" /> Attendance
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
             {activeSection === 'clock-in'
               ? 'Take a watermarked photo to clock in or out with date, time, and location.'
               : 'Review your attendance history and export organization-wide records.'}

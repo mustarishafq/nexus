@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, Loader2 } from 'lucide-react';
 
@@ -90,7 +90,8 @@ export default function OAuthConsent() {
           </h1>
           <p className="text-sm text-muted-foreground">
             {currentUser?.email ? `Signed in as ${currentUser.email}. ` : ''}
-            This will let it list connected systems, look up their APIs, and call them on your behalf via Nexus's MCP server.
+            This will let it list connected systems, look up their APIs, and call them on your behalf via Nexus&apos;s MCP server.
+            First-time connections are granted read-only access until an admin approves more.
           </p>
         </div>
 

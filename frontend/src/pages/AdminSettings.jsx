@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock } from 'lucide-react';

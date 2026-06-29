@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 

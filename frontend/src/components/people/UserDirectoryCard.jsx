@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { Briefcase, MessageCircle, Sparkles } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
+import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,6 +12,8 @@ import { formatTenure, getDisplayName } from '@/lib/profile';
 export default function UserDirectoryCard({ user, className }) {
   const navigate = useNavigate();
   const displayName = getDisplayName(user);
+  const presenceOnline = useIsUserOnline(user?.id);
+  const isOnline = user?.is_online ?? presenceOnline;
   const skills = Array.isArray(user?.skills) ? user.skills.filter(Boolean).slice(0, 4) : [];
   const groups = (user?.access_group_names || []).filter(Boolean).slice(0, 2);
   const tenure = formatTenure(user?.joined_at);
@@ -31,6 +34,9 @@ export default function UserDirectoryCard({ user, className }) {
           >
             {displayName}
           </Link>
+          {isOnline ? (
+            <p className="mt-0.5 text-[11px] font-medium text-success">Online</p>
+          ) : null}
           {user?.job_title ? (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.job_title}</p>
           ) : null}

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useCallback, useRef, useState } from 'react';
 import Cropper from 'react-easy-crop';
 import { Camera, Loader2, Trash2 } from 'lucide-react';

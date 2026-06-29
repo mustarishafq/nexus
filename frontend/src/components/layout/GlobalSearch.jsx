@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Loader2, Search } from 'lucide-react';
@@ -131,7 +131,9 @@ export default function GlobalSearch({ open, onOpenChange }) {
                   <UserAvatar user={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{getDisplayName(user)}</p>
-                    {user.department ? (
+                    {user.is_online ? (
+                      <p className="truncate text-xs font-medium text-success">Online</p>
+                    ) : user.department ? (
                       <p className="truncate text-xs text-muted-foreground">{user.department}</p>
                     ) : user.email ? (
                       <p className="truncate text-xs text-muted-foreground">{user.email}</p>

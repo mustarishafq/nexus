@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuthToken;
+use App\Models\OAuthClient;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\McpUserAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ApiTokenController extends Controller
 {
@@ -18,8 +21,11 @@ class ApiTokenController extends Controller
         }
 
         $tokens = AuthToken::query()
-            ->with('user:id,name,full_name,email')
-            ->whereNotNull('label')
+            ->with('user:id,name,full_name,email,role,mcp_access')
+            ->where(function ($query) {
+                $query->whereNotNull('label')
+                    ->orWhereNotNull('oauth_client_id');
+            })
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (AuthToken $token) => $this->serializeToken($token));
@@ -57,7 +63,7 @@ class ApiTokenController extends Controller
         $authToken = AuthToken::query()
             ->where('user_id', $owner->id)
             ->where('token_hash', hash('sha256', $plainToken))
-            ->with('user:id,name,full_name,email')
+            ->with('user:id,name,full_name,email,role,mcp_access')
             ->firstOrFail();
 
         return response()->json([
@@ -66,14 +72,36 @@ class ApiTokenController extends Controller
         ], 201);
     }
 
+    public function updateUserMcpAccess(Request $request, User $user): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        if ($user->role === 'admin') {
+            return response()->json(['message' => 'Admins always have full MCP access.'], 422);
+        }
+
+        $validated = $request->validate([
+            'mcp_access' => ['required', 'string', Rule::in(McpUserAccess::LEVELS)],
+        ]);
+
+        $user->forceFill(['mcp_access' => $validated['mcp_access']])->save();
+
+        return response()->json([
+            'user_id' => $user->id,
+            'mcp_access' => $user->mcp_access,
+        ]);
+    }
+
     public function destroy(Request $request, AuthToken $apiToken): JsonResponse
     {
         if ($response = $this->authorizeAdmin($request)) {
             return $response;
         }
 
-        if ($apiToken->label === null) {
-            return response()->json(['message' => 'Only labeled API tokens can be revoked here.'], 422);
+        if ($apiToken->label === null && $apiToken->oauth_client_id === null) {
+            return response()->json(['message' => 'Only managed API tokens can be revoked here.'], 422);
         }
 
         $apiToken->delete();
@@ -90,11 +118,14 @@ class ApiTokenController extends Controller
 
         return [
             'id' => $token->id,
-            'label' => $token->label,
+            'label' => $token->label ?: ($token->oauth_client_id ? 'MCP connection' : null),
+            'source' => $token->oauth_client_id ? 'oauth' : 'manual',
+            'oauth_client_id' => $token->oauth_client_id,
             'user' => $user ? [
                 'id' => $user->id,
                 'name' => $user->full_name ?: $user->name ?: $user->email,
                 'email' => $user->email,
+                'mcp_access' => $user->mcp_access ?? 'none',
             ] : null,
             'last_used_at' => $token->last_used_at?->toIso8601String(),
             'expires_at' => $token->expires_at?->toIso8601String(),

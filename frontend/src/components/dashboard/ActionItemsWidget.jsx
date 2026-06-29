@@ -5,7 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, ExternalLink, ListTodo } from 'lucide-react';
 import { toast } from 'sonner';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';

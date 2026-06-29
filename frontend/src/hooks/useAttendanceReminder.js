@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { normalizeAttendanceWatermarkConfig } from '@/lib/watermarkConfig';

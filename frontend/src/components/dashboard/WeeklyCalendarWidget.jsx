@@ -1,7 +1,8 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight, User } from 'lucide-react';
+import { getDisplayName } from '@/lib/profile';
 import { format, isToday, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,24 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
       ),
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['calendar-users'],
+    queryFn: () => db.entities.User.list('full_name', 500),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const organizerNameByEmail = useMemo(() => {
+    const map = new Map();
+
+    users.forEach((user) => {
+      if (user.email) {
+        map.set(user.email.toLowerCase(), getDisplayName(user, user.email));
+      }
+    });
+
+    return map;
+  }, [users]);
 
   const displayEvents = useMemo(
     () =>
@@ -85,7 +104,12 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
           ) : (
             <div className="space-y-1.5">
               {displayEvents.map((event, index) => (
-                <EventItem key={event.id} event={event} index={index} />
+                <EventItem
+                  key={event.id}
+                  event={event}
+                  index={index}
+                  organizerNameByEmail={organizerNameByEmail}
+                />
               ))}
 
               {hiddenCount > 0 ? (
@@ -165,11 +189,14 @@ function EventDateBadge({ date }) {
   );
 }
 
-function EventItem({ event, index }) {
+function EventItem({ event, index, organizerNameByEmail }) {
   const startTime = parseISO(event.start_at);
   const endTime = parseISO(event.end_at);
   const today = isToday(startTime);
   const subtitle = event.description || event.location;
+  const organizer = event.created_by
+    ? organizerNameByEmail.get(event.created_by.toLowerCase()) || event.created_by
+    : null;
 
   return (
     <motion.div
@@ -222,6 +249,12 @@ function EventItem({ event, index }) {
               <span className="inline-flex items-center gap-1">
                 <MapPin className="h-3 w-3 shrink-0 opacity-70" />
                 <span className="line-clamp-1">{event.location}</span>
+              </span>
+            ) : null}
+            {organizer ? (
+              <span className="inline-flex items-center gap-1">
+                <User className="h-3 w-3 shrink-0 opacity-70" />
+                <span className="line-clamp-1">{organizer}</span>
               </span>
             ) : null}
           </div>

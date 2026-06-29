@@ -29,6 +29,11 @@ class AuthToken extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function oauthClient(): BelongsTo
+    {
+        return $this->belongsTo(OAuthClient::class, 'oauth_client_id', 'client_id');
+    }
+
     public function isExpired(): bool
     {
         return $this->expires_at !== null && $this->expires_at->isPast();

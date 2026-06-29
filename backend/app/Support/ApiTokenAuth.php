@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AuthToken;
 use App\Models\User;
+use App\Services\UserPresenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -38,11 +39,9 @@ class ApiTokenAuth
     }
 
     /**
-     * Issue an access token on behalf of an OAuth client (used by the
-     * /oauth/token endpoint), tagged with oauth_client_id for auditing /
-     * revocation, separate from personal API tokens.
+     * @param  array{label?: string|null, expires_at?: \DateTimeInterface|null, oauth_client_id?: string|null}  $options
      */
-    public static function issueOAuthAccessToken(User $user, string $clientId, int $ttlMinutes): array
+    public static function issueOAuthAccessToken(User $user, string $clientId, int $ttlMinutes, ?string $label = null): array
     {
         $plainToken = Str::random(80);
 
@@ -50,6 +49,7 @@ class ApiTokenAuth
             'user_id' => $user->id,
             'oauth_client_id' => $clientId,
             'token_hash' => hash('sha256', $plainToken),
+            'label' => $label,
             'last_used_at' => now(),
             'expires_at' => now()->addMinutes($ttlMinutes),
         ]);
@@ -82,12 +82,23 @@ class ApiTokenAuth
 
             $authToken->touchLastUsed();
 
-            return User::query()->find($authToken->user_id);
+            $user = User::query()->find($authToken->user_id);
+            if ($user) {
+                app(UserPresenceService::class)->touchIfNeeded($user->id);
+            }
+
+            return $user;
         }
 
-        return User::query()
+        $user = User::query()
             ->where('remember_token', $hash)
             ->first();
+
+        if ($user) {
+            app(UserPresenceService::class)->touchIfNeeded($user->id);
+        }
+
+        return $user;
     }
 
     public static function revoke(User $user, ?string $plainToken = null): void

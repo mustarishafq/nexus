@@ -1,39 +1,37 @@
-**Welcome to your Base44 project** 
+# EMZI Nexus — Frontend
 
-**About**
+React + Vite SPA for **EMZI Nexus Brain**.
 
-View and Edit  your app on [db.com](http://db.com) 
+## Prerequisites
 
-This project contains everything you need to run your app locally.
+- Node.js 18+
+- Running Nexus backend (see [install.md](../install.md))
 
-**Edit the code in your local development environment**
+## Setup
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
-
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.db.app
+```bash
+npm install
 ```
 
-Run the app: `npm run dev`
+Create `.env` (or `.env.local`) in this directory:
 
-**Publish your changes**
+```
+VITE_API_BASE_URL=http://localhost:8000
+VITE_SYSTEM_NAME=EMZI Nexus Brain
+```
 
-Open [db.com](http://db.com) and click on Publish.
+## Development
 
-**Docs & Support**
+```bash
+npm run dev
+```
 
-Documentation: [https://docs.db.com/Integrations/Using-GitHub](https://docs.db.com/Integrations/Using-GitHub)
+The dev server proxies `/api`, `/storage`, and MCP/OAuth paths to the backend.
 
-Support: [https://app.db.com/support](https://app.db.com/support)
+## Build
+
+```bash
+npm run build
+```
+
+Output is written to `dist/`. See [install.md](../install.md) for deployment.

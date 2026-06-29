@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 
 export const ACTIVE_BROADCASTS_QUERY_KEY = ['active-broadcasts'];

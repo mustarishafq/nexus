@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2, Newspaper } from 'lucide-react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { FeedComposer, FeedItem } from '@/components/feed/FeedItems';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';

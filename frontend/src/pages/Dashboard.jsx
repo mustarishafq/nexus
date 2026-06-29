@@ -1,4 +1,4 @@
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import React from 'react';
 
 import ActionItemsWidget from '@/components/dashboard/ActionItemsWidget';

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, MessageCircle } from 'lucide-react';
-import db from '@/api/base44Client';
+import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { motion } from 'framer-motion';
