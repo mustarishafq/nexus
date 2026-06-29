@@ -10,7 +10,7 @@ import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
-import { glassDockStyles } from './glassStyles';
+import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
 import AppsOrbNavItem from './AppsOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
 
@@ -118,7 +118,7 @@ export default function BottomNav() {
         className={cn(
           'relative flex flex-col items-center justify-center gap-0.5 px-1 transition-colors',
           isMobile ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',
-          isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          isActive ? 'text-primary' : glassDockNavItemInactive
         )}
       >
         {isActive && (
@@ -133,7 +133,7 @@ export default function BottomNav() {
           )}
         </span>
         {!item.iconOnly ? (
-          <span className={cn('text-[10px] font-medium leading-none', isActive && 'text-primary')}>
+          <span className={cn(glassDockNavLabel, isActive && 'text-primary')}>
             {item.label}
           </span>
         ) : null}

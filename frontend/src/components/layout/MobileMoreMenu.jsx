@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Moon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
-import { glassDialogMutedText, glassPanelStyles } from './glassStyles';
+import { glassDialogMutedText, glassDockNavItemInactive, glassDockNavLabel, glassPanelStyles } from './glassStyles';
 import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -66,7 +66,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
           type="button"
           className={cn(
             'relative flex flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-colors',
-            isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            isActive ? 'text-primary' : glassDockNavItemInactive
           )}
           aria-label="Open more menu"
         >
@@ -74,7 +74,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
             <span className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
           )}
           {TriggerIcon ? <TriggerIcon className={cn('h-5 w-5', isActive && 'text-primary')} /> : null}
-          <span className={cn('text-[10px] font-medium leading-none', isActive && 'text-primary')}>
+          <span className={cn(glassDockNavLabel, isActive && 'text-primary')}>
             {label}
           </span>
         </button>

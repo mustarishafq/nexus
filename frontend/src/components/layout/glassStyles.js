@@ -47,4 +47,20 @@ export const glassTopBarStyles = cn(
   'dark:bg-card/35 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10'
 );
 
-export const glassDockStyles = cn(glassPanelStyles, 'rounded-2xl border');
+/** Bottom navigation dock — opaque enough for legible labels over busy backgrounds */
+export const glassDockStyles = cn(
+  'backdrop-blur-2xl text-foreground',
+  'bg-card/50 border-border shadow-[0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5',
+  'supports-[backdrop-filter]:bg-card/50',
+  'dark:bg-card/50 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] dark:ring-white/10',
+  'rounded-2xl border'
+);
+
+/** Inactive bottom-nav item (icon + label) */
+export const glassDockNavItemInactive = cn(
+  'text-foreground/75 hover:text-foreground',
+  'dark:text-foreground/90 dark:hover:text-foreground'
+);
+
+/** Bottom-nav label typography */
+export const glassDockNavLabel = 'text-[11px] font-medium leading-tight';

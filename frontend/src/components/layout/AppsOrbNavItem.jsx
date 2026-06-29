@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { glassDockNavItemInactive, glassDockNavLabel } from './glassStyles';
 
 export default function AppsOrbNavItem({ isActive, to = '/applications', label = 'Apps' }) {
   return (
@@ -46,8 +47,8 @@ export default function AppsOrbNavItem({ isActive, to = '/applications', label =
 
       <span
         className={cn(
-          'mt-0.5 text-[10px] font-semibold leading-none',
-          isActive ? 'text-primary' : 'text-muted-foreground'
+          glassDockNavLabel,
+          isActive ? 'text-primary font-semibold' : glassDockNavItemInactive
         )}
       >
         {label}
