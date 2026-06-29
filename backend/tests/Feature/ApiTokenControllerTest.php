@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AuthToken;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\McpUserAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -51,6 +52,36 @@ class ApiTokenControllerTest extends TestCase
         $this->withToken($plainToken)
             ->getJson('/api/me')
             ->assertUnauthorized();
+    }
+
+    public function test_api_token_list_includes_user_role_and_effective_mcp_access(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'mcp_access' => McpUserAccess::NONE,
+        ]);
+        $member = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'mcp_access' => McpUserAccess::READ,
+        ]);
+        $adminToken = ApiTokenAuth::issueToken($admin);
+
+        ApiTokenAuth::issueToken($admin, ['label' => 'Admin MCP token']);
+        ApiTokenAuth::issueToken($member, ['label' => 'Member MCP token']);
+
+        $response = $this->withToken($adminToken)
+            ->getJson('/api/admin/api-tokens')
+            ->assertOk()
+            ->assertJsonCount(2, 'items');
+
+        $items = collect($response->json('items'))->keyBy('user.id');
+
+        $this->assertSame('admin', $items[$admin->id]['user']['role']);
+        $this->assertSame(McpUserAccess::BOTH, $items[$admin->id]['user']['mcp_access']);
+        $this->assertSame('user', $items[$member->id]['user']['role']);
+        $this->assertSame(McpUserAccess::READ, $items[$member->id]['user']['mcp_access']);
     }
 
     public function test_non_admin_cannot_manage_api_tokens(): void

@@ -154,6 +154,62 @@ export function detectSplashMediaType(url) {
   return 'unknown';
 }
 
+export function shouldUseFullscreenVideoSplash(runtime) {
+  return Boolean(
+    runtime?.media?.show
+    && runtime.media.type === 'video'
+    && runtime.media.customUrl,
+  );
+}
+
+/** Sample edge pixels from a video frame to match the splash backdrop to the clip. */
+export function sampleVideoBackgroundColor(video) {
+  if (!video?.videoWidth || !video?.videoHeight) return null;
+
+  try {
+    const canvas = document.createElement('canvas');
+    const width = Math.min(video.videoWidth, 128);
+    const height = Math.min(video.videoHeight, 128);
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+
+    context.drawImage(video, 0, 0, width, height);
+
+    const samplePoints = [];
+    const edgeInset = Math.max(1, Math.floor(Math.min(width, height) * 0.02));
+
+    for (let x = edgeInset; x < width; x += Math.max(4, Math.floor(width / 16))) {
+      samplePoints.push([x, edgeInset], [x, height - edgeInset - 1]);
+    }
+    for (let y = edgeInset; y < height; y += Math.max(4, Math.floor(height / 16))) {
+      samplePoints.push([edgeInset, y], [width - edgeInset - 1, y]);
+    }
+
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+
+    for (const [x, y] of samplePoints) {
+      const [pixelRed, pixelGreen, pixelBlue] = context.getImageData(x, y, 1, 1).data;
+      red += pixelRed;
+      green += pixelGreen;
+      blue += pixelBlue;
+    }
+
+    if (samplePoints.length === 0) return null;
+
+    const count = samplePoints.length;
+    const toHex = (value) => Math.round(value / count).toString(16).padStart(2, '0');
+
+    return `#${toHex(red)}${toHex(green)}${toHex(blue)}`.toUpperCase();
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeSplashAnimation(value) {
   return SPLASH_ANIMATION_MAP[value] ? value : DEFAULT_SPLASH_ANIMATION;
 }
@@ -384,9 +440,10 @@ export function buildSplashRuntime(config, animationStyle, systemName = '') {
       customUrl: normalized.logo_url,
       type: mediaType,
       show: normalized.show_logo,
-      fit: normalized.media_fit,
+      fit: mediaType === 'video' ? 'cover' : normalized.media_fit,
       loop: normalized.video_loop,
       muted: normalized.video_muted,
+      fullscreen: mediaType === 'video' && Boolean(normalized.logo_url) && normalized.show_logo,
     },
     title: {
       show: normalized.show_system_name,

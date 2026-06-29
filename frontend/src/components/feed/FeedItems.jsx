@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, ImageIcon, Loader2, Megaphone, MessageCircle, Send, Trash2, X } from 'lucide-react';
+import { Camera, ImageIcon, Loader2, Megaphone, MessageCircle, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -11,6 +11,7 @@ import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostReactions from '@/components/feed/PostReactions';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
@@ -385,6 +386,7 @@ export function FeedItem({ item, compact = false, initialExpanded = false }) {
 
 export function FeedComposer({ className }) {
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [body, setBody] = useState('');
@@ -454,8 +456,12 @@ export function FeedComposer({ className }) {
       <MentionInput
         value={body}
         onChange={setBody}
-        placeholder="Share an update... Type @ to mention someone"
-        rows={3}
+        placeholder={
+          isMobile
+            ? 'Share an update...'
+            : 'Share an update... Type @ to mention someone'
+        }
+        rows={isMobile ? 2 : 3}
         maxLength={2000}
         className="text-sm"
       />
@@ -481,56 +487,55 @@ export function FeedComposer({ className }) {
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-start">
-          <div className="flex shrink-0 items-center gap-0.5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isSubmitting}
-              title="Upload photo"
-            >
-              <ImageIcon className="mr-1.5 h-4 w-4" />
-              Photo
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-muted-foreground hover:text-foreground"
-              onClick={() => cameraInputRef.current?.click()}
-              disabled={isSubmitting}
-              title="Take photo"
-            >
-              <Camera className="mr-1.5 h-4 w-4" />
-              Camera
-            </Button>
-          </div>
-          <p className="shrink-0 text-xs text-muted-foreground">{body.length}/2000</p>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSubmitting}
+            title="Upload photo"
+          >
+            <ImageIcon className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Photo</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isSubmitting}
+            title="Take photo"
+          >
+            <Camera className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Camera</span>
+          </Button>
         </div>
+        <p className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{body.length}/2000</p>
         <Button
           type="button"
-          size="sm"
-          className="w-full shrink-0 sm:w-auto"
+          size="icon"
+          className="h-10 w-10 shrink-0 touch-manipulation rounded-full sm:h-9 sm:w-9"
           disabled={isSubmitting || !canPost}
+          title="Post"
           onClick={() =>
             createPost.mutate({
               text: body.trim(),
@@ -538,8 +543,11 @@ export function FeedComposer({ className }) {
             })
           }
         >
-          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Post
+          {isSubmitting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <SendHorizontal className="h-4 w-4" />
+          )}
         </Button>
       </div>
     </div>

@@ -136,45 +136,52 @@ export default function NotificationCenter() {
       />
 
       {/* Filters */}
-      <div className="bg-card rounded-2xl border border-border p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-card rounded-2xl border border-border p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notifications..." className="pl-9 h-9 bg-muted/50 border-0" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search notifications..."
+              className="pl-9 h-10 sm:h-9 bg-muted/50 border-0"
+            />
           </div>
-          <Tabs value={filter} onValueChange={setFilter}>
-            <TabsList className="h-9 bg-muted/50">
+          <Tabs value={filter} onValueChange={setFilter} className="w-full sm:w-auto">
+            <TabsList className="h-10 sm:h-9 bg-muted/50 w-full grid grid-cols-3 sm:inline-flex sm:w-auto">
               <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
               <TabsTrigger value="unread" className="text-xs">Unread</TabsTrigger>
               <TabsTrigger value="read" className="text-xs">Read</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-32 h-9 text-xs">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              {NOTIFICATION_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {getNotificationTypeVisual(type).label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-36 h-9 text-xs">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {NOTIFICATION_CATEGORIES.filter((c) => c !== 'other').map((category) => (
-                <SelectItem key={category} value={category}>
-                  {getNotificationCategoryVisual(category).label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-2 gap-2 sm:contents">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-full h-10 sm:h-9 sm:w-32 text-xs">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {NOTIFICATION_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {getNotificationTypeVisual(type).label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full h-10 sm:h-9 sm:w-36 text-xs">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {NOTIFICATION_CATEGORIES.filter((c) => c !== 'other').map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {getNotificationCategoryVisual(category).label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

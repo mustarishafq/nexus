@@ -67,12 +67,13 @@ export default function CompanyFeed() {
   }, [focusTarget, isLoading, items, searchParams, setSearchParams]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-3xl space-y-3 sm:space-y-6">
       <PageHeader
         icon={Newspaper}
         title="Company Feed"
         description="Announcements from leadership and updates shared by your colleagues."
         meta={isFetching ? 'Refreshing...' : `${items.length} items`}
+        className="gap-2 sm:gap-4"
       />
 
       <FeedComposer />

@@ -1,8 +1,9 @@
-import React, { useMemo, Suspense, lazy } from 'react';
+import React, { useMemo, Suspense, lazy, useState } from 'react';
 
 import MatrixRainOverlay, { usesFullScreenMatrixRain } from '@/components/pwa/splash-animations/MatrixRainOverlay';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
-import { buildSplashRuntime, isSplashAnimationInteractive, normalizeSplashConfig } from '@/lib/splashConfig';
+import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
+import { buildSplashRuntime, isSplashAnimationInteractive, normalizeSplashConfig, shouldUseFullscreenVideoSplash } from '@/lib/splashConfig';
 import { cn } from '@/lib/utils';
 
 const SplashAnimationVariants = lazy(() => import('@/components/pwa/splash-animations/SplashAnimationVariants'));
@@ -21,17 +22,32 @@ export default function SplashStage({
   showBackground = true,
 }) {
   const splashConfig = useMemo(() => normalizeSplashConfig(config), [config]);
+  const runtime = useMemo(() => buildSplashRuntime(splashConfig, variant, systemName), [splashConfig, variant, systemName]);
+  const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
   const isThumbnail = mode === 'thumbnail';
   const isLive = mode === 'live';
   const fullScreenMatrix = usesFullScreenMatrixRain(variant);
   const interactive = isSplashAnimationInteractive(variant);
+  const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
+  const stageBackgroundColor = videoBackgroundColor || splashConfig.background_color;
   const matrixColumnCount = variant === 'matrix-rain'
     ? (isThumbnail ? 16 : 40)
     : (isThumbnail ? 12 : 24);
 
   return (
-    <div className={className}>
-      {showBackground ? <SplashBackground config={splashConfig} /> : null}
+    <div
+      className={cn(className, fullscreenVideo && 'overflow-hidden')}
+      style={fullscreenVideo ? { backgroundColor: stageBackgroundColor } : undefined}
+    >
+      {showBackground && !fullscreenVideo ? <SplashBackground config={splashConfig} /> : null}
+
+      {fullscreenVideo ? (
+        <SplashMedia
+          runtime={runtime}
+          mode="fullscreen"
+          onBackgroundColor={setVideoBackgroundColor}
+        />
+      ) : null}
 
       {fullScreenMatrix ? (
         <MatrixRainOverlay

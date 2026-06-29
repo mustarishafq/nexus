@@ -14,6 +14,9 @@ function useSplashRuntime() {
 
 function SplashLogo({ className = 'h-24 w-24 sm:h-28 sm:w-28' }) {
   const runtime = useSplashRuntime();
+  if (runtime.media.fullscreen) {
+    return null;
+  }
   return <SplashMedia runtime={runtime} className={className} />;
 }
 

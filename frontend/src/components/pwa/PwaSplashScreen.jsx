@@ -7,7 +7,8 @@ import SplashBackground from '@/components/pwa/splash-animations/SplashBackgroun
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
 import { useAuth } from '@/lib/AuthContext';
-import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings } from '@/lib/splashConfig';
+import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings, shouldUseFullscreenVideoSplash } from '@/lib/splashConfig';
+import { cn } from '@/lib/utils';
 
 const SPLASH_SRC = '/lottie/splash.lottie';
 const SPLASH_CACHE_KEY = 'nexus_splash_public_cache_v1';
@@ -97,6 +98,7 @@ export default function PwaSplashScreen() {
   const { appPublicSettings, isLoadingPublicSettings } = useAuth();
   const [active, setActive] = useState(shouldShowSplash);
   const [exiting, setExiting] = useState(false);
+  const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
   const animCompleteRef = useRef(false);
   const minElapsedRef = useRef(false);
   const dismissedRef = useRef(false);
@@ -122,7 +124,9 @@ export default function PwaSplashScreen() {
   const systemName = systemNameRef.current || appPublicSettings?.system_name || 'EMZI Nexus Brain';
   const runtime = splashConfig ? buildSplashRuntime(splashConfig, splashConfig.animation_style, systemName) : null;
   const usesLottie = splashConfig?.animation_style === 'lottie';
+  const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
   const interactive = isSplashAnimationInteractive(splashConfig?.animation_style);
+  const splashBackgroundColor = videoBackgroundColor || splashConfig?.background_color;
 
   const dismiss = useCallback(() => {
     if (dismissedRef.current) return;
@@ -231,10 +235,12 @@ export default function PwaSplashScreen() {
       {!exiting && (
         <motion.div
           key="pwa-splash"
-          className={interactive
-            ? 'fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-manipulation'
-            : 'fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none touch-none'}
-          style={{ backgroundColor: splashConfig?.background_color }}
+          className={cn(
+            'fixed inset-0 z-[9999] overflow-hidden overscroll-none',
+            !fullscreenVideo && 'flex items-center justify-center',
+            interactive ? 'touch-manipulation' : 'touch-none',
+          )}
+          style={{ backgroundColor: splashBackgroundColor }}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: exitFadeSeconds, ease: 'easeInOut' }}
@@ -242,27 +248,39 @@ export default function PwaSplashScreen() {
         >
           {usesLottie ? (
             <>
-              <SplashBackground config={splashConfig ?? {}} />
-              <div className="relative z-10 flex flex-col items-center justify-center gap-4">
-                {runtime.title.position === 'above' ? <SplashSystemName runtime={runtime} /> : null}
-                <div className="h-48 w-48 sm:h-56 sm:w-56">
-                  {runtime.media.show && runtime.media.customUrl && runtime.media.type === 'video' ? (
-                    <SplashMedia runtime={runtime} className="h-full w-full" />
-                  ) : runtime.media.show && runtime.media.customUrl ? (
-                    <SplashMedia runtime={runtime} className="h-full w-full" />
-                  ) : (
-                    <DotLottieReact
-                      src={SPLASH_SRC}
-                      autoplay
-                      loop={false}
-                      className="size-full"
-                      layout={{ fit: 'contain', align: [0.5, 0.5] }}
-                      dotLottieRefCallback={handleDotLottieRef}
-                    />
-                  )}
+              {!fullscreenVideo ? <SplashBackground config={splashConfig ?? {}} /> : null}
+              {fullscreenVideo ? (
+                <>
+                  <SplashMedia
+                    runtime={runtime}
+                    mode="fullscreen"
+                    onBackgroundColor={setVideoBackgroundColor}
+                  />
+                  <div className="relative z-10 flex flex-col items-center justify-center gap-4">
+                    {runtime.title.position === 'above' ? <SplashSystemName runtime={runtime} /> : null}
+                    {runtime.title.position === 'below' ? <SplashSystemName runtime={runtime} /> : null}
+                  </div>
+                </>
+              ) : (
+                <div className="relative z-10 flex flex-col items-center justify-center gap-4">
+                  {runtime.title.position === 'above' ? <SplashSystemName runtime={runtime} /> : null}
+                  <div className="h-48 w-48 sm:h-56 sm:w-56">
+                    {runtime.media.show && runtime.media.customUrl ? (
+                      <SplashMedia runtime={runtime} className="h-full w-full" />
+                    ) : (
+                      <DotLottieReact
+                        src={SPLASH_SRC}
+                        autoplay
+                        loop={false}
+                        className="size-full"
+                        layout={{ fit: 'contain', align: [0.5, 0.5] }}
+                        dotLottieRefCallback={handleDotLottieRef}
+                      />
+                    )}
+                  </div>
+                  {runtime.title.position === 'below' ? <SplashSystemName runtime={runtime} /> : null}
                 </div>
-                {runtime.title.position === 'below' ? <SplashSystemName runtime={runtime} /> : null}
-              </div>
+              )}
             </>
           ) : (
             <SplashStage

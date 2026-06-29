@@ -162,6 +162,11 @@ export default function SplashSettingsPanel({ settings, onChange }) {
                 <SelectItem value="fill">Fill</SelectItem>
               </SelectContent>
             </Select>
+            {mediaType === 'video' ? (
+              <p className="text-xs text-muted-foreground">
+                Videos play full screen. The backdrop color is sampled from the clip so it matches before the first frame appears.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-3 rounded-xl border p-3">

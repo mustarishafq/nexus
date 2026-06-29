@@ -3,6 +3,9 @@ import { Monitor, Smartphone, Tablet } from 'lucide-react';
 
 import SplashStage from '@/components/pwa/splash-animations/SplashStage';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
+import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
+import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
+import { buildSplashRuntime, detectSplashMediaType, shouldUseFullscreenVideoSplash } from '@/lib/splashConfig';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +37,15 @@ export const SPLASH_PREVIEW_DEVICES = {
 };
 
 function PreviewCanvas({ settings, splashConfig }) {
+  const runtime = useMemo(
+    () => buildSplashRuntime(splashConfig, splashConfig.animation_style, settings.system_name),
+    [splashConfig, settings.system_name],
+  );
+  const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
+  const mediaType = splashConfig.logo_url ? detectSplashMediaType(splashConfig.logo_url) : 'default';
+  const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
+  const previewBackgroundColor = videoBackgroundColor || splashConfig.background_color;
+
   if (!settings.splash_enabled) {
     return (
       <div className="flex h-full items-center justify-center bg-muted/20 px-6 text-center text-sm text-muted-foreground">
@@ -43,6 +55,41 @@ function PreviewCanvas({ settings, splashConfig }) {
   }
 
   if (settings.splash_animation_style === 'lottie') {
+    if (fullscreenVideo) {
+      return (
+        <div
+          className="relative h-full w-full overflow-hidden"
+          style={{ backgroundColor: previewBackgroundColor }}
+        >
+          <SplashMedia
+            runtime={runtime}
+            mode="fullscreen"
+            onBackgroundColor={setVideoBackgroundColor}
+          />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4 text-center">
+            {runtime.title.show && runtime.title.position === 'above' ? (
+              <SplashSystemName runtime={runtime} />
+            ) : null}
+            {runtime.title.show && runtime.title.position === 'below' ? (
+              <SplashSystemName runtime={runtime} />
+            ) : null}
+          </div>
+        </div>
+      );
+    }
+
+    if (mediaType === 'image' && splashConfig.logo_url && splashConfig.show_logo) {
+      return (
+        <div className="relative h-full w-full overflow-hidden">
+          <SplashBackground config={splashConfig} />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4">
+            <SplashMedia runtime={runtime} className="h-40 w-40" />
+            {runtime.title.show ? <SplashSystemName runtime={runtime} /> : null}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="relative h-full w-full overflow-hidden">
         <SplashBackground config={splashConfig} />
