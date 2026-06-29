@@ -7,7 +7,7 @@ import SplashBackground from '@/components/pwa/splash-animations/SplashBackgroun
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
 import { useAuth } from '@/lib/AuthContext';
-import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings, shouldUseFullscreenVideoSplash } from '@/lib/splashConfig';
+import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
 import { cn } from '@/lib/utils';
 
 const SPLASH_SRC = '/lottie/splash.lottie';
@@ -126,7 +126,8 @@ export default function PwaSplashScreen() {
   const usesLottie = splashConfig?.animation_style === 'lottie';
   const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
   const interactive = isSplashAnimationInteractive(splashConfig?.animation_style);
-  const splashBackgroundColor = videoBackgroundColor || splashConfig?.background_color;
+  const splashBackgroundColor = videoBackgroundColor
+    || (fullscreenVideo ? SPLASH_VIDEO_BACKDROP_FALLBACK : splashConfig?.background_color);
 
   const dismiss = useCallback(() => {
     if (dismissedRef.current) return;
@@ -162,8 +163,18 @@ export default function PwaSplashScreen() {
     };
   }, [active, dismiss, runtime, tryDismiss]);
 
+  const handleVideoEnded = useCallback(() => {
+    if (!runtime?.media.loop) {
+      markAnimationComplete();
+    }
+  }, [markAnimationComplete, runtime?.media.loop]);
+
   useEffect(() => {
     if (!active || !runtime) return undefined;
+
+    const isVideoSplash = runtime.media.type === 'video'
+      && runtime.media.customUrl
+      && runtime.media.show;
 
     if (!usesLottie) {
       animCompleteRef.current = false;
@@ -175,6 +186,20 @@ export default function PwaSplashScreen() {
         fallbackMs,
       );
       return () => window.clearTimeout(fallbackTimer);
+    }
+
+    if (isVideoSplash) {
+      animCompleteRef.current = false;
+
+      if (runtime.media.loop) {
+        const durationTimer = window.setTimeout(
+          markAnimationComplete,
+          runtime.timing.minDurationMs,
+        );
+        return () => window.clearTimeout(durationTimer);
+      }
+
+      return undefined;
     }
 
     if (runtime.media.customUrl) {
@@ -255,6 +280,7 @@ export default function PwaSplashScreen() {
                     runtime={runtime}
                     mode="fullscreen"
                     onBackgroundColor={setVideoBackgroundColor}
+                    onEnded={handleVideoEnded}
                   />
                   <div className="relative z-10 flex flex-col items-center justify-center gap-4">
                     {runtime.title.position === 'above' ? <SplashSystemName runtime={runtime} /> : null}

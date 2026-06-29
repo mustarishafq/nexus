@@ -5,7 +5,7 @@ import SplashStage from '@/components/pwa/splash-animations/SplashStage';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
-import { buildSplashRuntime, detectSplashMediaType, shouldUseFullscreenVideoSplash } from '@/lib/splashConfig';
+import { buildSplashRuntime, detectSplashMediaType, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +44,8 @@ function PreviewCanvas({ settings, splashConfig }) {
   const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
   const mediaType = splashConfig.logo_url ? detectSplashMediaType(splashConfig.logo_url) : 'default';
   const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
-  const previewBackgroundColor = videoBackgroundColor || splashConfig.background_color;
+  const previewBackgroundColor = videoBackgroundColor
+    || (fullscreenVideo ? SPLASH_VIDEO_BACKDROP_FALLBACK : splashConfig.background_color);
 
   if (!settings.splash_enabled) {
     return (

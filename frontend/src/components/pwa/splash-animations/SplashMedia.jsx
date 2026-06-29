@@ -1,6 +1,11 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 
-import { DEFAULT_LOGO_SRC, sampleVideoBackgroundColor } from '@/lib/splashConfig';
+import {
+  buildFullscreenVideoStyle,
+  DEFAULT_LOGO_SRC,
+  sampleVideoBackgroundColor,
+  SPLASH_VIDEO_BACKDROP_FALLBACK,
+} from '@/lib/splashConfig';
 import { toAbsoluteUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 
@@ -20,25 +25,43 @@ export function applySplashBackdropColor(color) {
   }
 }
 
-const FULLSCREEN_VIDEO_STYLE = {
+const AMBIENT_VIDEO_STYLE = {
   position: 'absolute',
   top: '50%',
   left: '50%',
-  minWidth: '100%',
-  minHeight: '100%',
+  minWidth: '112%',
+  minHeight: '112%',
   width: 'auto',
   height: 'auto',
-  transform: 'translate(-50%, -50%) scale(1.06)',
+  transform: 'translate(-50%, -50%)',
   transformOrigin: 'center center',
   objectFit: 'cover',
   objectPosition: 'center',
+  filter: 'blur(36px)',
+  opacity: 0.92,
 };
+
+function AmbientVideoLayer({ src, muted, loop }) {
+  return (
+    <video
+      src={src}
+      autoPlay
+      muted={muted}
+      loop={loop}
+      playsInline
+      tabIndex={-1}
+      aria-hidden="true"
+      style={AMBIENT_VIDEO_STYLE}
+    />
+  );
+}
 
 export default function SplashMedia({
   runtime,
   className = 'h-24 w-24 sm:h-28 sm:w-28',
   mode = 'inline',
   onBackgroundColor,
+  onEnded,
 }) {
   const sampledRef = useRef(false);
 
@@ -46,12 +69,20 @@ export default function SplashMedia({
     if (sampledRef.current) return;
 
     const sampled = sampleVideoBackgroundColor(event.currentTarget);
-    if (!sampled) return;
-
+    const resolved = sampled || SPLASH_VIDEO_BACKDROP_FALLBACK;
     sampledRef.current = true;
-    applySplashBackdropColor(sampled);
-    onBackgroundColor?.(sampled);
+    applySplashBackdropColor(resolved);
+    onBackgroundColor?.(resolved);
   }, [onBackgroundColor]);
+
+  const handleVideoEnded = useCallback(() => {
+    onEnded?.();
+  }, [onEnded]);
+
+  const fullscreenStyle = useMemo(
+    () => (runtime ? buildFullscreenVideoStyle(runtime) : undefined),
+    [runtime],
+  );
 
   if (!runtime.media.show) {
     return null;
@@ -59,11 +90,19 @@ export default function SplashMedia({
 
   const isFullscreen = mode === 'fullscreen' || runtime.media.fullscreen;
   const src = toAbsoluteUrl(runtime.media.customUrl || DEFAULT_LOGO_SRC);
+  const useAmbientBackdrop = isFullscreen && runtime.media.fit === 'contain';
 
   if (runtime.media.type === 'video' && runtime.media.customUrl) {
     if (isFullscreen) {
       return (
-        <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+        <div
+          className="absolute inset-0 z-0 overflow-hidden"
+          style={{ backgroundColor: SPLASH_VIDEO_BACKDROP_FALLBACK }}
+          aria-hidden="true"
+        >
+          {useAmbientBackdrop ? (
+            <AmbientVideoLayer src={src} muted={runtime.media.muted} loop={runtime.media.loop} />
+          ) : null}
           <video
             src={src}
             autoPlay
@@ -72,7 +111,11 @@ export default function SplashMedia({
             playsInline
             onLoadedData={handleVideoFrame}
             onCanPlay={handleVideoFrame}
-            style={FULLSCREEN_VIDEO_STYLE}
+            onEnded={handleVideoEnded}
+            style={{
+              ...fullscreenStyle,
+              zIndex: 1,
+            }}
           />
         </div>
       );
@@ -86,6 +129,7 @@ export default function SplashMedia({
         loop={runtime.media.loop}
         playsInline
         aria-hidden="true"
+        onEnded={handleVideoEnded}
         style={{
           objectFit: runtime.media.fit,
           transform: `scale(${runtime.timing.logoScale})`,

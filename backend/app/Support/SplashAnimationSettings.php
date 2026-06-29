@@ -306,12 +306,12 @@ class SplashAnimationSettings
         $config['min_duration_ms'] = self::clampInt(
             $values['splash_min_duration_ms'] ?? $values['min_duration_ms'] ?? $config['min_duration_ms'],
             400,
-            5000
+            15000
         );
         $config['max_duration_ms'] = self::clampInt(
             $values['splash_max_duration_ms'] ?? $values['max_duration_ms'] ?? $config['max_duration_ms'],
             2000,
-            12000
+            30000
         );
 
         if ($config['min_duration_ms'] >= $config['max_duration_ms']) {
@@ -330,8 +330,8 @@ class SplashAnimationSettings
         );
         $config['logo_scale_percent'] = self::clampInt(
             $values['splash_logo_scale_percent'] ?? $values['logo_scale_percent'] ?? $config['logo_scale_percent'],
-            70,
-            150
+            50,
+            200
         );
 
         $config['logo_url'] = self::normalizeUrl($values['splash_logo_url'] ?? $values['logo_url'] ?? null);
@@ -488,11 +488,11 @@ class SplashAnimationSettings
             'splash_background_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'splash_accent_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'splash_secondary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'splash_min_duration_ms' => ['nullable', 'integer', 'min:400', 'max:5000'],
-            'splash_max_duration_ms' => ['nullable', 'integer', 'min:2000', 'max:12000'],
+            'splash_min_duration_ms' => ['nullable', 'integer', 'min:400', 'max:15000'],
+            'splash_max_duration_ms' => ['nullable', 'integer', 'min:2000', 'max:30000'],
             'splash_speed_percent' => ['nullable', 'integer', 'min:50', 'max:200'],
             'splash_exit_fade_ms' => ['nullable', 'integer', 'min:150', 'max:1200'],
-            'splash_logo_scale_percent' => ['nullable', 'integer', 'min:70', 'max:150'],
+            'splash_logo_scale_percent' => ['nullable', 'integer', 'min:50', 'max:200'],
             'splash_logo_url' => ['nullable', 'string', 'max:2048'],
             'splash_show_logo' => ['nullable', 'boolean'],
             'splash_media_fit' => ['nullable', 'in:contain,cover,fill'],

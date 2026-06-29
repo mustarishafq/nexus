@@ -164,10 +164,24 @@ export default function SplashSettingsPanel({ settings, onChange }) {
             </Select>
             {mediaType === 'video' ? (
               <p className="text-xs text-muted-foreground">
-                Videos play full screen. The backdrop color is sampled from the clip so it matches before the first frame appears.
+                Cover fills the screen. Contain keeps the full frame visible with a soft blurred fill behind it. Fill stretches edge to edge.
               </p>
             ) : null}
           </div>
+
+          {mediaType === 'video' ? (
+            <SliderField
+              id="splash_logo_scale_percent_video"
+              label="Video size"
+              hint="Zoom the splash video in or out."
+              value={settings.splash_logo_scale_percent}
+              min={50}
+              max={200}
+              step={5}
+              formatValue={(value) => `${value}%`}
+              onChange={(splash_logo_scale_percent) => patch({ splash_logo_scale_percent })}
+            />
+          ) : null}
 
           <div className="flex flex-col gap-3 rounded-xl border p-3">
             <div className="flex items-center justify-between gap-3">
@@ -191,6 +205,35 @@ export default function SplashSettingsPanel({ settings, onChange }) {
             </div>
           </div>
         </div>
+
+        {mediaType === 'video' ? (
+          <div className="grid gap-4 rounded-xl border border-dashed p-3 sm:grid-cols-2">
+            <SliderField
+              id="splash_min_duration_ms_video"
+              label="Display duration"
+              hint={settings.splash_video_loop
+                ? 'How long the looping splash stays visible before the app opens.'
+                : 'Minimum time on screen. Splash also closes when the video ends.'}
+              value={settings.splash_min_duration_ms}
+              min={400}
+              max={15000}
+              step={100}
+              formatValue={(value) => `${(value / 1000).toFixed(1)}s`}
+              onChange={(splash_min_duration_ms) => patch({ splash_min_duration_ms })}
+            />
+            <SliderField
+              id="splash_max_duration_ms_video"
+              label="Maximum duration"
+              hint="Safety limit — splash always closes after this, even if the video is still playing."
+              value={settings.splash_max_duration_ms}
+              min={2000}
+              max={30000}
+              step={250}
+              formatValue={(value) => `${(value / 1000).toFixed(1)}s`}
+              onChange={(splash_max_duration_ms) => patch({ splash_max_duration_ms })}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 rounded-2xl border p-3 sm:p-4">
@@ -363,7 +406,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
           hint="Splash stays visible at least this long."
           value={settings.splash_min_duration_ms}
           min={400}
-          max={5000}
+          max={15000}
           step={100}
           formatValue={(value) => `${(value / 1000).toFixed(1)}s`}
           onChange={(splash_min_duration_ms) => patch({ splash_min_duration_ms })}
@@ -374,7 +417,7 @@ export default function SplashSettingsPanel({ settings, onChange }) {
           hint="Splash dismisses automatically after this limit."
           value={settings.splash_max_duration_ms}
           min={2000}
-          max={12000}
+          max={30000}
           step={250}
           formatValue={(value) => `${(value / 1000).toFixed(1)}s`}
           onChange={(splash_max_duration_ms) => patch({ splash_max_duration_ms })}
@@ -403,10 +446,10 @@ export default function SplashSettingsPanel({ settings, onChange }) {
         />
         <SliderField
           id="splash_logo_scale_percent"
-          label="Logo size"
+          label={mediaType === 'video' ? 'Video size' : 'Logo size'}
           value={settings.splash_logo_scale_percent}
-          min={70}
-          max={150}
+          min={50}
+          max={200}
           step={5}
           formatValue={(value) => `${value}%`}
           onChange={(splash_logo_scale_percent) => patch({ splash_logo_scale_percent })}

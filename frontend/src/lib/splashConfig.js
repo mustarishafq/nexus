@@ -162,6 +162,54 @@ export function shouldUseFullscreenVideoSplash(runtime) {
   );
 }
 
+export function buildFullscreenVideoStyle(runtime) {
+  const scale = runtime.timing.logoScale;
+  const fit = runtime.media.fit;
+  const base = {
+    transformOrigin: 'center center',
+    objectPosition: 'center',
+  };
+
+  if (fit === 'fill') {
+    return {
+      ...base,
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: '100%',
+      height: '100%',
+      objectFit: 'fill',
+      transform: `translate(-50%, -50%) scale(${scale})`,
+    };
+  }
+
+  if (fit === 'contain') {
+    return {
+      ...base,
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      transform: `translate(-50%, -50%) scale(${scale})`,
+    };
+  }
+
+  return {
+    ...base,
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    minWidth: '100%',
+    minHeight: '100%',
+    width: 'auto',
+    height: 'auto',
+    objectFit: 'cover',
+    transform: `translate(-50%, -50%) scale(${scale * 1.02})`,
+  };
+}
+
 /** Sample edge pixels from a video frame to match the splash backdrop to the clip. */
 export function sampleVideoBackgroundColor(video) {
   if (!video?.videoWidth || !video?.videoHeight) return null;
@@ -178,37 +226,49 @@ export function sampleVideoBackgroundColor(video) {
 
     context.drawImage(video, 0, 0, width, height);
 
-    const samplePoints = [];
-    const edgeInset = Math.max(1, Math.floor(Math.min(width, height) * 0.02));
+    const corners = [
+      [0, 0],
+      [width - 1, 0],
+      [0, height - 1],
+      [width - 1, height - 1],
+    ];
 
-    for (let x = edgeInset; x < width; x += Math.max(4, Math.floor(width / 16))) {
+    const samplePoints = [...corners];
+    const edgeInset = Math.max(1, Math.floor(Math.min(width, height) * 0.04));
+
+    for (let x = edgeInset; x < width; x += Math.max(4, Math.floor(width / 12))) {
       samplePoints.push([x, edgeInset], [x, height - edgeInset - 1]);
     }
-    for (let y = edgeInset; y < height; y += Math.max(4, Math.floor(height / 16))) {
+    for (let y = edgeInset; y < height; y += Math.max(4, Math.floor(height / 12))) {
       samplePoints.push([edgeInset, y], [width - edgeInset - 1, y]);
     }
 
     let red = 0;
     let green = 0;
     let blue = 0;
+    let weight = 0;
 
     for (const [x, y] of samplePoints) {
+      const isCorner = corners.some(([cx, cy]) => cx === x && cy === y);
+      const pixelWeight = isCorner ? 3 : 1;
       const [pixelRed, pixelGreen, pixelBlue] = context.getImageData(x, y, 1, 1).data;
-      red += pixelRed;
-      green += pixelGreen;
-      blue += pixelBlue;
+      red += pixelRed * pixelWeight;
+      green += pixelGreen * pixelWeight;
+      blue += pixelBlue * pixelWeight;
+      weight += pixelWeight;
     }
 
-    if (samplePoints.length === 0) return null;
+    if (weight === 0) return null;
 
-    const count = samplePoints.length;
-    const toHex = (value) => Math.round(value / count).toString(16).padStart(2, '0');
+    const toHex = (value) => Math.round(value / weight).toString(16).padStart(2, '0');
 
     return `#${toHex(red)}${toHex(green)}${toHex(blue)}`.toUpperCase();
   } catch {
     return null;
   }
 }
+
+export const SPLASH_VIDEO_BACKDROP_FALLBACK = '#000000';
 
 export function normalizeSplashAnimation(value) {
   return SPLASH_ANIMATION_MAP[value] ? value : DEFAULT_SPLASH_ANIMATION;
@@ -245,8 +305,8 @@ export function mergeSystemNameAnimationCatalog(serverCatalog) {
 
 export function normalizeSplashConfig(input) {
   const values = input && typeof input === 'object' ? input : {};
-  const minDuration = clamp(Number(values.min_duration_ms ?? values.splash_min_duration_ms ?? DEFAULT_SPLASH_CONFIG.min_duration_ms), 400, 5000);
-  let maxDuration = clamp(Number(values.max_duration_ms ?? values.splash_max_duration_ms ?? DEFAULT_SPLASH_CONFIG.max_duration_ms), 2000, 12000);
+  const minDuration = clamp(Number(values.min_duration_ms ?? values.splash_min_duration_ms ?? DEFAULT_SPLASH_CONFIG.min_duration_ms), 400, 15000);
+  let maxDuration = clamp(Number(values.max_duration_ms ?? values.splash_max_duration_ms ?? DEFAULT_SPLASH_CONFIG.max_duration_ms), 2000, 30000);
 
   if (minDuration >= maxDuration) {
     maxDuration = Math.max(minDuration + 500, 2000);
@@ -262,7 +322,7 @@ export function normalizeSplashConfig(input) {
     max_duration_ms: maxDuration,
     speed_percent: clamp(Number(values.speed_percent ?? values.splash_speed_percent ?? DEFAULT_SPLASH_CONFIG.speed_percent), 50, 200),
     exit_fade_ms: clamp(Number(values.exit_fade_ms ?? values.splash_exit_fade_ms ?? DEFAULT_SPLASH_CONFIG.exit_fade_ms), 150, 1200),
-    logo_scale_percent: clamp(Number(values.logo_scale_percent ?? values.splash_logo_scale_percent ?? DEFAULT_SPLASH_CONFIG.logo_scale_percent), 70, 150),
+    logo_scale_percent: clamp(Number(values.logo_scale_percent ?? values.splash_logo_scale_percent ?? DEFAULT_SPLASH_CONFIG.logo_scale_percent), 50, 200),
     logo_url: normalizeUrl(values.logo_url ?? values.splash_logo_url),
     show_logo: values.splash_show_logo ?? values.show_logo ?? DEFAULT_SPLASH_CONFIG.show_logo,
     media_fit: normalizeMediaFit(values.media_fit ?? values.splash_media_fit ?? DEFAULT_SPLASH_CONFIG.media_fit),
@@ -440,7 +500,7 @@ export function buildSplashRuntime(config, animationStyle, systemName = '') {
       customUrl: normalized.logo_url,
       type: mediaType,
       show: normalized.show_logo,
-      fit: mediaType === 'video' ? 'cover' : normalized.media_fit,
+      fit: normalized.media_fit,
       loop: normalized.video_loop,
       muted: normalized.video_muted,
       fullscreen: mediaType === 'video' && Boolean(normalized.logo_url) && normalized.show_logo,
