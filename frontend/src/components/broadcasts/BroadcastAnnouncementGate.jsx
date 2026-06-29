@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
-import { acknowledgeBroadcasts, getUnacknowledgedBroadcasts } from '@/lib/broadcast';
+import {
+  acknowledgeBroadcasts,
+  getUnacknowledgedBroadcasts,
+  isBroadcastModalSnoozedToday,
+  snoozeBroadcastModalForToday,
+} from '@/lib/broadcast';
 import BroadcastAnnouncementModal from './BroadcastAnnouncementModal';
 
 const EMPTY_BROADCASTS = [];
@@ -23,6 +28,12 @@ export default function BroadcastAnnouncementGate() {
       return;
     }
 
+    if (isBroadcastModalSnoozedToday(user.id)) {
+      setPendingBroadcasts((prev) => (prev.length === 0 ? prev : EMPTY_BROADCASTS));
+      setOpen(false);
+      return;
+    }
+
     const unacknowledged = getUnacknowledgedBroadcasts(user.id, data);
     const nextIds = getBroadcastIds(unacknowledged);
 
@@ -37,7 +48,12 @@ export default function BroadcastAnnouncementGate() {
       open={open}
       onOpenChange={setOpen}
       broadcasts={pendingBroadcasts}
-      onAcknowledge={(ids) => acknowledgeBroadcasts(user.id, ids)}
+      onAcknowledge={(ids, { snoozeForToday = false } = {}) => {
+        acknowledgeBroadcasts(user.id, ids);
+        if (snoozeForToday) {
+          snoozeBroadcastModalForToday(user.id);
+        }
+      }}
     />
   );
 }

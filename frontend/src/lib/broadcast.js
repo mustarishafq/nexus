@@ -13,6 +13,34 @@ function getAckStorageKey(userId) {
   return `nexus_broadcast_ack_${userId}`;
 }
 
+function getSnoozeStorageKey(userId) {
+  return `nexus_broadcast_snooze_${userId}`;
+}
+
+function getStartOfTomorrowTimestamp() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  return tomorrow.getTime();
+}
+
+export function isBroadcastModalSnoozedToday(userId) {
+  if (!userId || typeof localStorage === 'undefined') return false;
+
+  try {
+    const snoozedUntil = Number(localStorage.getItem(getSnoozeStorageKey(userId)) || 0);
+    return snoozedUntil > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export function snoozeBroadcastModalForToday(userId) {
+  if (!userId || typeof localStorage === 'undefined') return;
+
+  localStorage.setItem(getSnoozeStorageKey(userId), String(getStartOfTomorrowTimestamp()));
+}
+
 export function getAcknowledgedBroadcastIds(userId) {
   if (!userId) return new Set();
 
@@ -44,6 +72,11 @@ export function clearBroadcastAckKeys() {
   Object.keys(sessionStorage).forEach((key) => {
     if (key.startsWith('nexus_broadcast_ack_')) {
       sessionStorage.removeItem(key);
+    }
+  });
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('nexus_broadcast_snooze_')) {
+      localStorage.removeItem(key);
     }
   });
 }

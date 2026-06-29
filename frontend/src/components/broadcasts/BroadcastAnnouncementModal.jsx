@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertOctagon, AlertTriangle, Info, Megaphone } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { getNotificationPriorityVisual } from '@/lib/notificationVisuals';
 import { cn } from '@/lib/utils';
 
@@ -68,15 +68,24 @@ function BroadcastAnnouncementCard({ broadcast }) {
 
 export default function BroadcastAnnouncementModal({ open, onOpenChange, broadcasts = [], onAcknowledge }) {
   const topPriority = broadcasts[0]?.priority || 'medium';
+  const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setDontShowAgainToday(false);
+    }
+  }, [open]);
 
   const handleAcknowledge = () => {
-    onAcknowledge?.(broadcasts.map((broadcast) => broadcast.id));
+    onAcknowledge?.(broadcasts.map((broadcast) => broadcast.id), {
+      snoozeForToday: dontShowAgainToday,
+    });
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid max-h-[min(36rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-primary/20 p-0 sm:max-w-md">
+      <DialogContent className="grid w-[calc(100vw-1.5rem)] max-w-md max-h-[min(36rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-lg border-primary/20 p-0 sm:w-full">
         <div
           className={cn(
             'border-b bg-gradient-to-b px-4 py-3',
@@ -106,14 +115,29 @@ export default function BroadcastAnnouncementModal({ open, onOpenChange, broadca
           ))}
         </div>
 
-        <DialogFooter className="gap-2 border-t border-border/60 px-4 py-3 sm:items-center sm:justify-between">
-          <p className="hidden text-[11px] text-muted-foreground sm:block">
-            Review again from your dashboard.
-          </p>
-          <Button size="sm" className="w-full sm:w-auto sm:min-w-[7rem]" onClick={handleAcknowledge}>
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3.5">
+          <label
+            htmlFor="broadcast-dont-show-today"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md transition-colors hover:bg-muted/30 sm:min-h-9 sm:flex-initial"
+          >
+            <Checkbox
+              id="broadcast-dont-show-today"
+              checked={dontShowAgainToday}
+              onCheckedChange={(checked) => setDontShowAgainToday(checked === true)}
+              className="h-[1.125rem] w-[1.125rem] rounded-[4px] border-2 border-muted-foreground/50 bg-background shadow-none data-[state=checked]:border-primary data-[state=checked]:bg-primary"
+            />
+            <span className="text-sm leading-snug text-foreground/90 select-none">
+              Don&apos;t show again today
+            </span>
+          </label>
+          <Button
+            size="sm"
+            className="h-9 shrink-0 px-6 sm:min-w-[7rem]"
+            onClick={handleAcknowledge}
+          >
             Got it
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
