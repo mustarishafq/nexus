@@ -62,6 +62,92 @@ class ApplicationApiClient
     }
 
     /**
+     * Accept both the documented flat array shape and common wrapper objects
+     * returned by connected apps, e.g. {"endpoints": [...]} or {"data": [...]}.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function parseCatalogEndpoints(mixed $payload): array
+    {
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        if ($this->looksLikeEndpointList($payload)) {
+            return $this->onlyEndpointRecords($payload);
+        }
+
+        foreach (['endpoints', 'data', 'items', 'routes', 'apis'] as $key) {
+            if (! isset($payload[$key]) || ! is_array($payload[$key])) {
+                continue;
+            }
+
+            $parsed = $this->parseCatalogEndpoints($payload[$key]);
+            if ($parsed !== []) {
+                return $parsed;
+            }
+        }
+
+        return $this->onlyEndpointRecords(array_values($payload));
+    }
+
+    /**
+     * @param  array<mixed>  $payload
+     */
+    private function looksLikeEndpointList(array $payload): bool
+    {
+        if ($payload === []) {
+            return true;
+        }
+
+        if (! array_is_list($payload)) {
+            return false;
+        }
+
+        $first = $payload[0] ?? null;
+
+        return is_array($first) && $this->looksLikeEndpointRecord($first);
+    }
+
+    /**
+     * @param  array<mixed>  $record
+     */
+    private function looksLikeEndpointRecord(array $record): bool
+    {
+        return isset($record['path'])
+            || isset($record['method'])
+            || isset($record['uri'])
+            || isset($record['url']);
+    }
+
+    /**
+     * @param  array<mixed>  $items
+     * @return list<array<string, mixed>>
+     */
+    private function onlyEndpointRecords(array $items): array
+    {
+        $endpoints = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item) || ! $this->looksLikeEndpointRecord($item)) {
+                continue;
+            }
+
+            if (! isset($item['path'])) {
+                if (isset($item['uri'])) {
+                    $item['path'] = $item['uri'];
+                } elseif (isset($item['url'])) {
+                    $item['path'] = $item['url'];
+                }
+            }
+
+            $endpoints[] = $item;
+        }
+
+        return $endpoints;
+    }
+
+    /**
      * @return array{token: ?string, source: ?string, mode: string}
      */
     public function resolveAuth(Application $application): array
@@ -157,16 +243,16 @@ class ApplicationApiClient
             ];
         }
 
-        $endpoints = $response->json();
+        $endpoints = $this->parseCatalogEndpoints($response->json());
 
-        if (! is_array($endpoints)) {
+        if ($endpoints === [] && is_array($response->json()) && $response->json() !== []) {
             return [
                 'ok' => false,
                 'catalog_url' => $catalogUrl,
                 'catalog_path' => $path,
                 'auth_source' => $auth['source'],
                 'http_status' => $response->status(),
-                'message' => 'Catalog response must be a JSON array of endpoints.',
+                'message' => 'Catalog response was JSON but did not contain a recognizable endpoint list.',
             ];
         }
 

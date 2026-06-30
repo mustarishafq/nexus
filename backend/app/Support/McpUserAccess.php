@@ -67,7 +67,15 @@ class McpUserAccess
 
         return array_values(array_filter(
             $endpoints,
-            fn (array $endpoint) => isset($allowed[strtoupper((string) ($endpoint['method'] ?? 'GET'))])
+            function ($endpoint) use ($allowed) {
+                if (! is_array($endpoint)) {
+                    return false;
+                }
+
+                $method = strtoupper((string) ($endpoint['method'] ?? 'GET'));
+
+                return isset($allowed[$method]);
+            }
         ));
     }
 

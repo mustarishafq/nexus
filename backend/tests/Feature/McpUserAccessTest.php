@@ -137,6 +137,8 @@ class McpUserAccessTest extends TestCase
             ['method' => 'GET', 'path' => '/api/items'],
             ['method' => 'POST', 'path' => '/api/items'],
             ['method' => 'DELETE', 'path' => '/api/items/{id}'],
+            'invalid-entry',
+            false,
         ];
 
         $this->assertSame(
