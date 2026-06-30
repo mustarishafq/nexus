@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Application;
 use App\Models\AuthToken;
-use App\Models\OAuthClient;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\McpUserAccess;
+use App\Support\UserApplicationAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -84,6 +85,15 @@ class ApiTokenController extends Controller
         ], 201);
     }
 
+    public function showUserMcpAccess(Request $request, User $user): JsonResponse
+    {
+        if ($response = $this->authorizeAdmin($request)) {
+            return $response;
+        }
+
+        return response()->json($this->serializeUserMcpAccess($user));
+    }
+
     public function updateUserMcpAccess(Request $request, User $user): JsonResponse
     {
         if ($response = $this->authorizeAdmin($request)) {
@@ -92,14 +102,20 @@ class ApiTokenController extends Controller
 
         $validated = $request->validate([
             'mcp_access' => ['required', 'string', Rule::in(McpUserAccess::LEVELS)],
+            'application_overrides' => ['sometimes', 'array'],
+            'application_overrides.*.application_id' => ['required', 'integer', 'exists:applications,id'],
+            'application_overrides.*.mcp_access' => ['nullable', 'string', Rule::in(array_merge(McpUserAccess::LEVELS, ['inherit']))],
         ]);
 
         $user->forceFill(['mcp_access' => $validated['mcp_access']])->save();
 
-        return response()->json([
-            'user_id' => $user->id,
-            'mcp_access' => $user->mcp_access,
-        ]);
+        if (array_key_exists('application_overrides', $validated)) {
+            McpUserAccess::syncApplicationOverrides($user, $validated['application_overrides']);
+        }
+
+        McpUserAccess::forgetCachedOverrides($user);
+
+        return response()->json($this->serializeUserMcpAccess($user->fresh()));
     }
 
     public function destroy(Request $request, AuthToken $apiToken): JsonResponse
@@ -135,11 +151,40 @@ class ApiTokenController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'mcp_access' => McpUserAccess::effectiveLevel($user),
+                'has_application_overrides' => $user->applicationMcpAccess()->exists(),
             ] : null,
             'last_used_at' => $token->last_used_at?->toIso8601String(),
             'expires_at' => $token->expires_at?->toIso8601String(),
             'created_at' => $token->created_at?->toIso8601String(),
             'is_expired' => $token->isExpired(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeUserMcpAccess(User $user): array
+    {
+        $user->loadMissing('applicationMcpAccess');
+        $overridesByAppId = $user->applicationMcpAccess->keyBy('application_id');
+
+        $applications = UserApplicationAccess::accessibleMcpApplicationsQuery($user)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug'])
+            ->map(fn (Application $application) => [
+                'application_id' => $application->id,
+                'slug' => $application->slug,
+                'name' => $application->name,
+                'override' => $overridesByAppId->get($application->id)?->mcp_access,
+                'effective_mcp_access' => McpUserAccess::effectiveLevelForApplication($user, $application),
+            ])
+            ->values();
+
+        return [
+            'user_id' => $user->id,
+            'mcp_access' => McpUserAccess::effectiveLevel($user),
+            'has_application_overrides' => $user->applicationMcpAccess->isNotEmpty(),
+            'applications' => $applications,
         ];
     }
 

@@ -36,7 +36,7 @@ class CallApplicationApiTool implements McpTool
                 .'Use describe_application_api to see available write endpoints, then pass slug and path here.';
         }
 
-        return $this->description();
+        return $this->description().' Allowed methods depend on the target application slug.';
     }
 
     public function inputSchema(): array

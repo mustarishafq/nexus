@@ -6,6 +6,7 @@ use App\Models\Application;
 use App\Models\User;
 use App\Services\Mcp\McpJsonSchema;
 use App\Services\Mcp\McpTool;
+use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
 
 class ListApplicationsTool implements McpTool
@@ -31,7 +32,9 @@ class ListApplicationsTool implements McpTool
             ->get(['id', 'name', 'slug', 'description', 'status', 'environment']);
 
         return [
-            'applications' => $applications->map(fn (Application $application) => [
+            'applications' => $applications
+                ->filter(fn (Application $application) => McpUserAccess::canUseMcpForApplication($user, $application))
+                ->map(fn (Application $application) => [
                 'id' => $application->id,
                 'name' => $application->name,
                 'slug' => $application->slug,

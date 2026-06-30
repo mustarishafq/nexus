@@ -232,6 +232,11 @@ class User extends Authenticatable
         return $this->belongsToMany(AccessGroup::class)->withTimestamps();
     }
 
+    public function applicationMcpAccess(): HasMany
+    {
+        return $this->hasMany(UserApplicationMcpAccess::class);
+    }
+
     public function networkHealthLogs(): HasMany
     {
         return $this->hasMany(NetworkHealthLog::class);

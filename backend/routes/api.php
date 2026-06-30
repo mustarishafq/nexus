@@ -118,6 +118,7 @@ Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'discon
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
 Route::get('/admin/api-tokens', [ApiTokenController::class, 'index']);
 Route::post('/admin/api-tokens', [ApiTokenController::class, 'store']);
+Route::get('/admin/api-tokens/users/{user}/mcp-access', [ApiTokenController::class, 'showUserMcpAccess']);
 Route::patch('/admin/api-tokens/users/{user}/mcp-access', [ApiTokenController::class, 'updateUserMcpAccess']);
 Route::delete('/admin/api-tokens/{apiToken}', [ApiTokenController::class, 'destroy']);
 Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::class, 'index']);

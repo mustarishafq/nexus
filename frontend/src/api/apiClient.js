@@ -845,10 +845,14 @@ export const db = {
 		});
 	},
 
-	async updateAdminApiTokenUserMcpAccess(userId, mcpAccess) {
+	async getAdminApiTokenUserMcpAccess(userId) {
+		return request(`/admin/api-tokens/users/${userId}/mcp-access`);
+	},
+
+	async updateAdminApiTokenUserMcpAccess(userId, payload) {
 		return request(`/admin/api-tokens/users/${userId}/mcp-access`, {
 			method: 'PATCH',
-			body: { mcp_access: mcpAccess },
+			body: payload,
 		});
 	},
 
