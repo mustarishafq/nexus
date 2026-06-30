@@ -21,7 +21,7 @@ export default function UserAvatar({
         <AvatarImage
           src={toAbsoluteUrl(user?.profile_picture)}
           alt={displayName}
-          className="object-cover"
+          className="rounded-full object-cover"
         />
         <AvatarFallback
           className={cn(

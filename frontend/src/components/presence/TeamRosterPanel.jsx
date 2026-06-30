@@ -117,10 +117,11 @@ function RosterRow({ user, isOnline, onChat, opening }) {
         online && 'bg-success/[0.03] hover:bg-success/[0.06]'
       )}
     >
-      <div className={cn(
-        'rounded-full p-0.5',
-        online ? 'ring-2 ring-success/35 ring-offset-1 ring-offset-background' : 'ring-1 ring-border/60'
-      )}
+      <div
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-[2px]',
+          online ? 'bg-success/40' : 'bg-border/60'
+        )}
       >
         <UserAvatar
           user={{ ...user, is_online: online }}
