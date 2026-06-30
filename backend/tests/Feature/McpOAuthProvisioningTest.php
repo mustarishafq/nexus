@@ -17,6 +17,43 @@ class McpOAuthProvisioningTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_oauth_decide_grants_read_only_mcp_access_for_admin(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'mcp_access' => McpUserAccess::NONE,
+        ]);
+        $client = $this->createOAuthClient();
+        $token = ApiTokenAuth::issueToken($admin);
+
+        $this->withToken($token)
+            ->postJson('/api/oauth/authorize/decide', $this->decidePayload($client))
+            ->assertOk();
+
+        $this->assertSame(McpUserAccess::READ, $admin->fresh()->mcp_access);
+    }
+
+    public function test_admin_can_change_admin_mcp_access_from_api_tokens_endpoint(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $otherAdmin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'mcp_access' => McpUserAccess::READ,
+        ]);
+        $adminToken = ApiTokenAuth::issueToken($admin);
+
+        $this->withToken($adminToken)
+            ->patchJson("/api/admin/api-tokens/users/{$otherAdmin->id}/mcp-access", [
+                'mcp_access' => McpUserAccess::BOTH,
+            ])
+            ->assertOk()
+            ->assertJsonPath('mcp_access', McpUserAccess::BOTH);
+
+        $this->assertSame(McpUserAccess::BOTH, $otherAdmin->fresh()->mcp_access);
+    }
+
     public function test_oauth_decide_grants_read_only_mcp_access(): void
     {
         $user = User::factory()->create([

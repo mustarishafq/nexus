@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\ApplicationApiClient;
 use App\Services\Mcp\McpJsonSchema;
 use App\Services\Mcp\McpTool;
+use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
 
 class CallApplicationApiTool implements McpTool
@@ -23,6 +24,21 @@ class CallApplicationApiTool implements McpTool
             .'Use list_applications first to find the right "slug".';
     }
 
+    public function descriptionForUser(User $user): string
+    {
+        if (McpUserAccess::canRead($user) && ! McpUserAccess::canWrite($user)) {
+            return 'Call a connected system\'s API with GET requests only. '
+                .'Use describe_application_api to see available read endpoints, then pass slug and path here.';
+        }
+
+        if (McpUserAccess::canWrite($user) && ! McpUserAccess::canRead($user)) {
+            return 'Call a connected system\'s API with POST, PUT, PATCH, or DELETE requests only. '
+                .'Use describe_application_api to see available write endpoints, then pass slug and path here.';
+        }
+
+        return $this->description();
+    }
+
     public function inputSchema(): array
     {
         return McpJsonSchema::object(
@@ -33,6 +49,30 @@ class CallApplicationApiTool implements McpTool
                 'query' => McpJsonSchema::openObject('Query string parameters for GET requests.'),
                 'body' => McpJsonSchema::openObject('JSON body for POST/PUT/PATCH requests.'),
             ],
+            required: ['slug', 'path'],
+        );
+    }
+
+    public function inputSchemaForUser(User $user): array
+    {
+        $methods = McpUserAccess::allowedHttpMethods($user);
+
+        $properties = [
+            'slug' => ['type' => 'string', 'description' => 'Application slug from list_applications.'],
+            'method' => ['type' => 'string', 'enum' => $methods, 'default' => $methods[0] ?? 'GET'],
+            'path' => ['type' => 'string', 'description' => 'Path relative to the application\'s base_url, e.g. /api/leads/123.'],
+        ];
+
+        if (McpUserAccess::canRead($user)) {
+            $properties['query'] = McpJsonSchema::openObject('Query string parameters for GET requests.');
+        }
+
+        if (McpUserAccess::canWrite($user)) {
+            $properties['body'] = McpJsonSchema::openObject('JSON body for POST/PUT/PATCH requests.');
+        }
+
+        return McpJsonSchema::object(
+            properties: $properties,
             required: ['slug', 'path'],
         );
     }

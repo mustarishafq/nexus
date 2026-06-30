@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Copy, Check, AlertTriangle, ChevronsUpDown, Search, Shield, Ban } from 'lucide-react';
+import { Plus, Trash2, Copy, Check, AlertTriangle, ChevronsUpDown, Search, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,7 +79,7 @@ const MCP_ACCESS_OPTIONS = [
   },
 ];
 
-function mcpAccessBadge(access, { pendingReview = false } = {}) {
+function mcpAccessBadge(access) {
   if (access === 'both') {
     return <Badge className="bg-success/15 text-success border-success/20">Read & write</Badge>;
   }
@@ -87,16 +87,7 @@ function mcpAccessBadge(access, { pendingReview = false } = {}) {
     return <Badge className="bg-sky-500/15 text-sky-600 border-sky-500/20 dark:text-sky-400">Write only</Badge>;
   }
   if (access === 'read') {
-    return (
-      <Badge className={cn(
-        'border-amber-500/20',
-        pendingReview
-          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-          : 'bg-muted text-muted-foreground'
-      )}>
-        {pendingReview ? 'Read only · needs review' : 'Read only'}
-      </Badge>
-    );
+    return <Badge className="bg-muted text-muted-foreground border-border/70">Read only</Badge>;
   }
   return <Badge variant="outline">No access</Badge>;
 }
@@ -347,7 +338,6 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
   const [revealedToken, setRevealedToken] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [mcpAccessTarget, setMcpAccessTarget] = useState(null);
-  const [pendingMcpAction, setPendingMcpAction] = useState(null);
 
   useEffect(() => {
     if (!createSignal || !createForUserId) return;
@@ -405,7 +395,6 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
       queryClient.invalidateQueries({ queryKey: API_TOKENS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setMcpAccessTarget(null);
-      setPendingMcpAction(null);
       toast.success('MCP access updated');
     },
     onError: (error) => {
@@ -417,18 +406,6 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
     if (!mcpAccessTarget?.user?.id) return;
     mcpAccessMutation.mutate({ userId: mcpAccessTarget.user.id, mcpAccess });
   };
-
-  const confirmQuickMcpAction = () => {
-    if (!pendingMcpAction) return;
-    mcpAccessMutation.mutate({
-      userId: pendingMcpAction.item.user.id,
-      mcpAccess: pendingMcpAction.mcpAccess,
-    });
-  };
-
-  const isPendingOAuthReview = (item) => (
-    item.source === 'oauth' && item.user?.mcp_access === 'read' && item.user?.role !== 'admin'
-  );
 
   const items = data?.items ?? [];
 
@@ -450,7 +427,7 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
             <CardTitle className="text-base">API tokens</CardTitle>
             <CardDescription>
               MCP OAuth connections appear here automatically when a user clicks Allow on a custom connector.
-              New connections default to read-only until you change their MCP access below.
+              New connections default to read-only. Use Manage access to change permissions.
               Use <code className="rounded bg-muted px-1 text-xs">Authorization: Bearer</code> in requests.
             </CardDescription>
           </div>
@@ -495,13 +472,7 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
                         <div className="text-xs text-muted-foreground">{item.user?.email}</div>
                       </TableCell>
                       <TableCell>
-                        {item.user?.role === 'admin' ? (
-                          mcpAccessBadge('both')
-                        ) : (
-                          mcpAccessBadge(item.user?.mcp_access || 'none', {
-                            pendingReview: isPendingOAuthReview(item),
-                          })
-                        )}
+                        {mcpAccessBadge(item.user?.mcp_access || 'none')}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {item.created_at ? format(new Date(item.created_at), 'MMM d, yyyy') : '—'}
@@ -524,44 +495,17 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end items-center gap-1">
-                          {item.user?.role !== 'admin' && isPendingOAuthReview(item) ? (
-                            <>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                disabled={mcpAccessMutation.isPending}
-                                aria-label={`Revoke MCP access for ${item.user?.name || item.user?.email}`}
-                                onClick={() => setPendingMcpAction({ item, mcpAccess: 'none', action: 'revoke' })}
-                              >
-                                <Ban className="h-4 w-4 text-destructive" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                disabled={mcpAccessMutation.isPending}
-                                aria-label={`Grant full MCP access for ${item.user?.name || item.user?.email}`}
-                                onClick={() => setPendingMcpAction({ item, mcpAccess: 'both', action: 'grant' })}
-                              >
-                                <Check className="h-4 w-4 text-success" />
-                              </Button>
-                            </>
-                          ) : item.user?.role !== 'admin' ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              disabled={mcpAccessMutation.isPending}
-                              aria-label={`Manage MCP access for ${item.user?.name || item.user?.email}`}
-                              onClick={() => setMcpAccessTarget(item)}
-                            >
-                              <Shield className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          ) : null}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            disabled={mcpAccessMutation.isPending}
+                            onClick={() => setMcpAccessTarget(item)}
+                          >
+                            <Shield className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+                            Manage access
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -651,38 +595,6 @@ export default function UserApiTokensPanel({ users = [], createForUserId = null,
           onSave={saveMcpAccess}
         />
       ) : null}
-
-      <AlertDialog open={Boolean(pendingMcpAction)} onOpenChange={(open) => { if (!open) setPendingMcpAction(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingMcpAction?.action === 'grant' ? 'Grant full MCP access?' : 'Revoke MCP access?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingMcpAction?.action === 'grant' ? (
-                <>
-                  Allow <span className="font-medium text-foreground">{pendingMcpAction.item.user?.name}</span> to read and write through MCP for{' '}
-                  <span className="font-medium text-foreground">{pendingMcpAction.item.label}</span>?
-                </>
-              ) : (
-                <>
-                  Block MCP access for <span className="font-medium text-foreground">{pendingMcpAction?.item.user?.name}</span>. Their connector will stop working until access is granted again.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={mcpAccessMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={mcpAccessMutation.isPending}
-              className={pendingMcpAction?.action === 'revoke' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
-              onClick={confirmQuickMcpAction}
-            >
-              {pendingMcpAction?.action === 'grant' ? 'Grant full access' : 'Revoke access'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={Boolean(revokeTarget)} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
         <AlertDialogContent>

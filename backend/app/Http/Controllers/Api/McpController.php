@@ -46,11 +46,7 @@ class McpController extends Controller
             ]),
             'tools/list' => $this->result($id, [
                 'tools' => array_map(
-                    fn ($tool) => [
-                        'name' => $tool->name(),
-                        'description' => $tool->description(),
-                        'inputSchema' => McpJsonSchema::normalize($tool->inputSchema()),
-                    ],
+                    fn ($tool) => $this->serializeToolForUser($tool, $user),
                     array_values(array_filter(
                         $this->tools->all(),
                         fn ($tool) => McpUserAccess::canListTool($user, $tool->name())
@@ -60,6 +56,26 @@ class McpController extends Controller
             'tools/call' => $this->callTool($id, $user, $params),
             default => $this->error($id, -32601, "Method not found: {$method}"),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function serializeToolForUser(\App\Services\Mcp\McpTool $tool, $user): array
+    {
+        $description = method_exists($tool, 'descriptionForUser')
+            ? $tool->descriptionForUser($user)
+            : $tool->description();
+
+        $inputSchema = method_exists($tool, 'inputSchemaForUser')
+            ? $tool->inputSchemaForUser($user)
+            : $tool->inputSchema();
+
+        return [
+            'name' => $tool->name(),
+            'description' => $description,
+            'inputSchema' => McpJsonSchema::normalize($inputSchema),
+        ];
     }
 
     /**

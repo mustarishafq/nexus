@@ -27,10 +27,22 @@ class ApiTokenController extends Controller
                     ->orWhereNotNull('oauth_client_id');
             })
             ->orderByDesc('created_at')
-            ->get()
+            ->get();
+
+        $manual = $tokens->filter(fn (AuthToken $token) => $token->oauth_client_id === null);
+        $oauth = $tokens
+            ->filter(fn (AuthToken $token) => $token->oauth_client_id !== null)
+            ->groupBy(fn (AuthToken $token) => $token->user_id.'|'.$token->oauth_client_id)
+            ->map(fn ($group) => $group->sortByDesc(fn (AuthToken $token) => $token->last_used_at ?? $token->created_at)->first())
+            ->values();
+
+        $items = $manual
+            ->concat($oauth)
+            ->sortByDesc('created_at')
+            ->values()
             ->map(fn (AuthToken $token) => $this->serializeToken($token));
 
-        return response()->json(['items' => $tokens]);
+        return response()->json(['items' => $items]);
     }
 
     public function store(Request $request): JsonResponse
@@ -76,10 +88,6 @@ class ApiTokenController extends Controller
     {
         if ($response = $this->authorizeAdmin($request)) {
             return $response;
-        }
-
-        if ($user->role === 'admin') {
-            return response()->json(['message' => 'Admins always have full MCP access.'], 422);
         }
 
         $validated = $request->validate([

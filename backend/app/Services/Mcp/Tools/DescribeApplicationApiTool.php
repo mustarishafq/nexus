@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\ApplicationApiClient;
 use App\Services\Mcp\McpJsonSchema;
 use App\Services\Mcp\McpTool;
+use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
 
 class DescribeApplicationApiTool implements McpTool
@@ -21,6 +22,21 @@ class DescribeApplicationApiTool implements McpTool
     {
         return 'List the API endpoints (method, path, params, description) a connected system exposes right now, '
             .'so you know what to pass to call_application_api. Fetched live from the system itself, not cached.';
+    }
+
+    public function descriptionForUser(User $user): string
+    {
+        if (McpUserAccess::canRead($user) && ! McpUserAccess::canWrite($user)) {
+            return 'List read-only API endpoints (GET) that a connected system exposes right now. '
+                .'Use the results with call_application_api. Fetched live, not cached.';
+        }
+
+        if (McpUserAccess::canWrite($user) && ! McpUserAccess::canRead($user)) {
+            return 'List write API endpoints (POST, PUT, PATCH, DELETE) that a connected system exposes right now. '
+                .'Use the results with call_application_api. Fetched live, not cached.';
+        }
+
+        return $this->description();
     }
 
     public function inputSchema(): array
@@ -49,6 +65,13 @@ class DescribeApplicationApiTool implements McpTool
             ];
         }
 
-        return ['slug' => $slug, 'endpoints' => $response->json() ?? []];
+        $endpoints = $response->json() ?? [];
+        if (is_array($endpoints)) {
+            $endpoints = McpUserAccess::filterCatalogEndpoints($user, $endpoints);
+        } else {
+            $endpoints = [];
+        }
+
+        return ['slug' => $slug, 'endpoints' => $endpoints];
     }
 }

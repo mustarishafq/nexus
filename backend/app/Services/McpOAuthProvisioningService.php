@@ -13,10 +13,6 @@ class McpOAuthProvisioningService
      */
     public function provisionOnConsent(User $user): bool
     {
-        if ($user->role === 'admin') {
-            return false;
-        }
-
         $current = (string) ($user->mcp_access ?? McpUserAccess::NONE);
 
         if ($current !== McpUserAccess::NONE) {

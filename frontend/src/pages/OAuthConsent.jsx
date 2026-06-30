@@ -91,7 +91,7 @@ export default function OAuthConsent() {
           <p className="text-sm text-muted-foreground">
             {currentUser?.email ? `Signed in as ${currentUser.email}. ` : ''}
             This will let it list connected systems, look up their APIs, and call them on your behalf via Nexus&apos;s MCP server.
-            First-time connections are granted read-only access until an admin approves more.
+            First-time connections start with read-only access. An admin can grant more from API tokens.
           </p>
         </div>
 

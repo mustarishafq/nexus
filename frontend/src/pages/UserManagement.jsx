@@ -1000,7 +1000,7 @@ export default function UserManagement() {
         email: form.get('email'),
         password: form.get('password'),
         role: newUserRole,
-        mcp_access: newUserRole === 'admin' ? 'both' : newUserMcpAccess,
+        mcp_access: newUserMcpAccess,
         access_group_ids: [...newUserGroupIds].map(Number),
         is_approved: true,
       });
@@ -1050,7 +1050,7 @@ export default function UserManagement() {
         full_name: editForm.full_name,
         name: editForm.name,
         role: editForm.role,
-        mcp_access: editForm.role === 'admin' ? 'both' : (editForm.mcp_access || 'none'),
+        mcp_access: editForm.mcp_access || 'none',
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
         date_of_birth: editForm.date_of_birth || null,
@@ -2157,19 +2157,13 @@ export default function UserManagement() {
                 </div>
                 <div className="space-y-2">
                   <Label>MCP access</Label>
-                  {editForm.role === 'admin' ? (
-                    <p className="text-sm text-muted-foreground">Admins always have full MCP read &amp; write access.</p>
-                  ) : (
-                    <>
-                      <McpAccessSelect
-                        value={editForm.mcp_access || 'none'}
-                        onChange={(value) => setEditForm((prev) => ({ ...prev, mcp_access: value }))}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Controls which MCP tools this user can use via API tokens or OAuth.
-                      </p>
-                    </>
-                  )}
+                  <McpAccessSelect
+                    value={editForm.mcp_access || 'none'}
+                    onChange={(value) => setEditForm((prev) => ({ ...prev, mcp_access: value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls which MCP tools this user can use via API tokens or OAuth.
+                  </p>
                 </div>
                 {editForm.role !== 'admin' && (
                   <div className="space-y-2">
@@ -2347,15 +2341,13 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
             </div>
-            {newUserRole !== 'admin' && (
-              <div className="space-y-2">
-                <Label>MCP access</Label>
-                <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
-                <p className="text-xs text-muted-foreground">
-                  Controls which MCP tools this user can use via API tokens or OAuth.
-                </p>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label>MCP access</Label>
+              <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
+              <p className="text-xs text-muted-foreground">
+                Controls which MCP tools this user can use via API tokens or OAuth.
+              </p>
+            </div>
             {newUserRole !== 'admin' && (
               <div className="space-y-2">
                 <Label>Access Groups</Label>

@@ -41,15 +41,21 @@ class McpUserAccessTest extends TestCase
         ]);
         $token = ApiTokenAuth::issueToken($user);
 
-        $this->withToken($token)
+        $response = $this->withToken($token)
             ->postJson('/api/mcp', [
                 'jsonrpc' => '2.0',
                 'id' => 1,
                 'method' => 'tools/list',
             ])
-            ->assertOk()
-            ->assertJsonFragment(['name' => 'list_applications'])
+            ->assertOk();
+
+        $response->assertJsonFragment(['name' => 'list_applications'])
             ->assertJsonFragment(['name' => 'call_application_api']);
+
+        $callTool = collect($response->json('result.tools'))->firstWhere('name', 'call_application_api');
+        $this->assertSame(['GET'], $callTool['inputSchema']['properties']['method']['enum']);
+        $this->assertArrayHasKey('query', $callTool['inputSchema']['properties']);
+        $this->assertArrayNotHasKey('body', $callTool['inputSchema']['properties']);
 
         $this->withToken($token)
             ->postJson('/api/mcp', [
@@ -91,6 +97,11 @@ class McpUserAccessTest extends TestCase
         $this->assertNotContains('describe_application_api', $toolNames);
         $this->assertContains('call_application_api', $toolNames);
 
+        $callTool = collect($response->json('result.tools'))->firstWhere('name', 'call_application_api');
+        $this->assertSame(['POST', 'PUT', 'PATCH', 'DELETE'], $callTool['inputSchema']['properties']['method']['enum']);
+        $this->assertArrayHasKey('body', $callTool['inputSchema']['properties']);
+        $this->assertArrayNotHasKey('query', $callTool['inputSchema']['properties']);
+
         $this->withToken($token)
             ->postJson('/api/mcp', [
                 'jsonrpc' => '2.0',
@@ -107,6 +118,38 @@ class McpUserAccessTest extends TestCase
             ])
             ->assertForbidden()
             ->assertJsonPath('error.message', 'This user only has MCP write access.');
+    }
+
+    public function test_filter_catalog_endpoints_respects_mcp_access(): void
+    {
+        $readUser = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'mcp_access' => McpUserAccess::READ,
+        ]);
+        $writeUser = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'mcp_access' => McpUserAccess::WRITE,
+        ]);
+
+        $catalog = [
+            ['method' => 'GET', 'path' => '/api/items'],
+            ['method' => 'POST', 'path' => '/api/items'],
+            ['method' => 'DELETE', 'path' => '/api/items/{id}'],
+        ];
+
+        $this->assertSame(
+            [['method' => 'GET', 'path' => '/api/items']],
+            McpUserAccess::filterCatalogEndpoints($readUser, $catalog)
+        );
+        $this->assertSame(
+            [
+                ['method' => 'POST', 'path' => '/api/items'],
+                ['method' => 'DELETE', 'path' => '/api/items/{id}'],
+            ],
+            McpUserAccess::filterCatalogEndpoints($writeUser, $catalog)
+        );
     }
 
     public function test_admin_can_update_user_mcp_access(): void

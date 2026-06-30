@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthToken;
 use App\Models\OAuthAuthCode;
 use App\Models\OAuthClient;
 use App\Models\OAuthRefreshToken;
@@ -243,6 +244,11 @@ class OAuthController extends Controller
         $notifier = app(McpConnectionNotificationService::class);
         $isFirstConnection = $notifier->isFirstOAuthConnection($user);
         $label = $this->mcpTokenLabel($client);
+
+        AuthToken::query()
+            ->where('user_id', $user->id)
+            ->where('oauth_client_id', $client->client_id)
+            ->delete();
 
         [$accessToken, $authTokenModel] = ApiTokenAuth::issueOAuthAccessToken(
             $user,

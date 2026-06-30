@@ -19,10 +19,6 @@ class McpUserAccess
 
     public static function effectiveLevel(User $user): string
     {
-        if ($user->role === 'admin') {
-            return self::BOTH;
-        }
-
         $level = (string) ($user->mcp_access ?? self::NONE);
 
         return in_array($level, self::LEVELS, true) ? $level : self::NONE;
@@ -41,6 +37,38 @@ class McpUserAccess
     public static function canWrite(User $user): bool
     {
         return in_array(self::effectiveLevel($user), [self::WRITE, self::BOTH], true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function allowedHttpMethods(User $user): array
+    {
+        $methods = [];
+
+        if (self::canRead($user)) {
+            $methods[] = 'GET';
+        }
+
+        if (self::canWrite($user)) {
+            array_push($methods, 'POST', 'PUT', 'PATCH', 'DELETE');
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $endpoints
+     * @return list<array<string, mixed>>
+     */
+    public static function filterCatalogEndpoints(User $user, array $endpoints): array
+    {
+        $allowed = array_flip(self::allowedHttpMethods($user));
+
+        return array_values(array_filter(
+            $endpoints,
+            fn (array $endpoint) => isset($allowed[strtoupper((string) ($endpoint['method'] ?? 'GET'))])
+        ));
     }
 
     public static function canListTool(User $user, string $toolName): bool
