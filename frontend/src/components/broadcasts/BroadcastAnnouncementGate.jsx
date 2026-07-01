@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { shouldShowBirthdayCelebration } from '@/lib/birthday';
+import { useCelebrationGate } from '@/lib/CelebrationGateContext';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import {
   acknowledgeBroadcasts,
@@ -17,6 +19,7 @@ function getBroadcastIds(broadcasts) {
 
 export default function BroadcastAnnouncementGate() {
   const { user } = useAuth();
+  const { birthdayModalOpen } = useCelebrationGate();
   const { data } = useActiveBroadcasts({ enabled: Boolean(user?.id) });
   const [open, setOpen] = useState(false);
   const [pendingBroadcasts, setPendingBroadcasts] = useState(EMPTY_BROADCASTS);
@@ -38,8 +41,10 @@ export default function BroadcastAnnouncementGate() {
     const nextIds = getBroadcastIds(unacknowledged);
 
     setPendingBroadcasts((prev) => (getBroadcastIds(prev) === nextIds ? prev : unacknowledged));
-    setOpen(unacknowledged.length > 0);
-  }, [user?.id, data]);
+
+    const birthdayBlocking = birthdayModalOpen || shouldShowBirthdayCelebration(user);
+    setOpen(unacknowledged.length > 0 && !birthdayBlocking);
+  }, [user, data, birthdayModalOpen]);
 
   if (!user) return null;
 

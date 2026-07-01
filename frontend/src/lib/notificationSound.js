@@ -1,7 +1,7 @@
 let audioContext = null;
 let unlockListenersAttached = false;
 
-function getAudioContext() {
+export function getAudioContext() {
   if (typeof window === 'undefined') {
     return null;
   }

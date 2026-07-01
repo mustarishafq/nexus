@@ -6,6 +6,7 @@ import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
 import BroadcastAnnouncementGate from '@/components/broadcasts/BroadcastAnnouncementGate';
+import { CelebrationGateProvider } from '@/lib/CelebrationGateContext';
 import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
 import NotificationToastGate from '@/components/notifications/NotificationToastGate';
 import NotificationClickGate from '@/components/notifications/NotificationClickGate';
@@ -51,8 +52,10 @@ export default function AppLayout() {
   return (
     <UserPresenceGate>
       <div className="min-h-screen bg-background">
-        <BirthdayCelebrationGate />
-        <BroadcastAnnouncementGate />
+        <CelebrationGateProvider>
+          <BirthdayCelebrationGate />
+          <BroadcastAnnouncementGate />
+        </CelebrationGateProvider>
         <WebPushPromptGate />
         <NotificationToastGate />
         <NotificationClickGate />

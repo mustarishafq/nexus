@@ -1,29 +1,54 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getBirthdayShownKey, isBirthdayToday } from '@/lib/birthday';
+import {
+  markBirthdayCelebrationShown,
+  shouldShowBirthdayCelebration,
+  snoozeBirthdayCelebrationForToday,
+} from '@/lib/birthday';
+import { useCelebrationGate } from '@/lib/CelebrationGateContext';
 import BirthdayCelebrationModal from '@/components/celebrations/BirthdayCelebrationModal';
 
 export default function BirthdayCelebrationGate() {
   const { user } = useAuth();
+  const { setBirthdayModalOpen } = useCelebrationGate();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!user?.id || !user?.date_of_birth) return;
-    if (!isBirthdayToday(user.date_of_birth)) return;
+    if (!shouldShowBirthdayCelebration(user)) {
+      setOpen(false);
+      setBirthdayModalOpen(false);
+      return;
+    }
 
-    const storageKey = getBirthdayShownKey(user.id);
-    if (sessionStorage.getItem(storageKey)) return;
-
-    sessionStorage.setItem(storageKey, '1');
     setOpen(true);
-  }, [user]);
+    setBirthdayModalOpen(true);
+  }, [user, setBirthdayModalOpen]);
+
+  const handleOpenChange = useCallback((nextOpen) => {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      setBirthdayModalOpen(false);
+      if (user?.id) {
+        markBirthdayCelebrationShown(user.id);
+      }
+    }
+  }, [setBirthdayModalOpen, user?.id]);
+
+  const handleDismiss = useCallback(({ snoozeForToday = false } = {}) => {
+    if (snoozeForToday && user?.id) {
+      snoozeBirthdayCelebrationForToday(user.id);
+    }
+    handleOpenChange(false);
+  }, [handleOpenChange, user?.id]);
 
   if (!user) return null;
 
   return (
     <BirthdayCelebrationModal
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
+      onDismiss={handleDismiss}
       user={user}
     />
   );
