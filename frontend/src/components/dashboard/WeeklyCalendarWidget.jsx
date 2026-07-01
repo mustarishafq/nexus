@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight, User } from 'lucide-react';
 import { getDisplayName } from '@/lib/profile';
-import { format, isToday, parseISO, startOfWeek, endOfWeek } from 'date-fns';
+import { format, isPast, isToday, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -49,15 +49,24 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
     return map;
   }, [users]);
 
-  const displayEvents = useMemo(
+  const upcomingEvents = useMemo(
     () =>
-      [...weekEvents]
-        .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
-        .slice(0, DISPLAY_LIMIT),
+      weekEvents.filter((event) => {
+        const endTime = parseISO(event.end_at || event.start_at);
+        return !isPast(endTime);
+      }),
     [weekEvents]
   );
 
-  const eventCount = weekEvents.length;
+  const displayEvents = useMemo(
+    () =>
+      [...upcomingEvents]
+        .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+        .slice(0, DISPLAY_LIMIT),
+    [upcomingEvents]
+  );
+
+  const eventCount = upcomingEvents.length;
   const hiddenCount = Math.max(0, eventCount - DISPLAY_LIMIT);
 
   const containerClass = embedded
