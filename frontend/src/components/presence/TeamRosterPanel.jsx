@@ -119,7 +119,7 @@ function RosterRow({ user, isOnline, onChat, opening }) {
     >
       <div
         className={cn(
-          'rounded-full p-0.5',
+          'flex size-10 shrink-0 items-center justify-center rounded-full p-0.5',
           online ? 'ring-2 ring-primary/35 ring-offset-1 ring-offset-background' : 'ring-1 ring-border/60'
         )}
       >
