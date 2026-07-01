@@ -120,6 +120,12 @@ class McpPerApplicationAccessTest extends TestCase
             ->assertOk()
             ->assertJsonPath('result.isError', false);
 
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://management.test/api/items'
+                && $request->method() === 'POST'
+                && $request->body() === json_encode(['name' => 'Test']);
+        });
+
         $this->withToken($token)
             ->postJson('/api/mcp', [
                 'jsonrpc' => '2.0',
@@ -190,5 +196,93 @@ class McpPerApplicationAccessTest extends TestCase
 
         $this->assertContains('GET', $methods);
         $this->assertContains('POST', $methods);
+    }
+
+    public function test_call_application_api_decodes_json_string_bodies(): void
+    {
+        Http::fake([
+            'https://management.test/*' => Http::response(['ok' => true], 200),
+        ]);
+
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'mcp_access' => McpUserAccess::READ,
+        ]);
+        Application::factory()->create([
+            'slug' => 'nxsmn',
+            'base_url' => 'https://management.test',
+            'mcp_enabled' => true,
+            'mcp_api_key' => 'secret',
+            'visibility' => 'public',
+            'is_enabled' => true,
+        ]);
+
+        UserApplicationMcpAccess::create([
+            'user_id' => $user->id,
+            'application_id' => Application::query()->where('slug', 'nxsmn')->value('id'),
+            'mcp_access' => McpUserAccess::BOTH,
+        ]);
+
+        $token = ApiTokenAuth::issueToken($user);
+
+        $this->withToken($token)
+            ->postJson('/api/mcp', [
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/call',
+                'params' => [
+                    'name' => 'call_application_api',
+                    'arguments' => [
+                        'slug' => 'nxsmn',
+                        'path' => '/api/projects',
+                        'method' => 'POST',
+                        'body' => json_encode(['name' => 'EMZI Nexus Utilisation']),
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('result.isError', false);
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://management.test/api/projects'
+                && $request->method() === 'POST'
+                && $request->body() === json_encode(['name' => 'EMZI Nexus Utilisation']);
+        });
+    }
+
+    public function test_read_only_default_with_full_override_exposes_write_body_in_tool_schema(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'mcp_access' => McpUserAccess::READ,
+        ]);
+        $management = Application::factory()->create([
+            'slug' => 'nxsmn',
+            'mcp_enabled' => true,
+            'visibility' => 'public',
+            'is_enabled' => true,
+        ]);
+
+        UserApplicationMcpAccess::create([
+            'user_id' => $user->id,
+            'application_id' => $management->id,
+            'mcp_access' => McpUserAccess::BOTH,
+        ]);
+
+        $token = ApiTokenAuth::issueToken($user);
+
+        $response = $this->withToken($token)
+            ->postJson('/api/mcp', [
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/list',
+            ])
+            ->assertOk();
+
+        $callTool = collect($response->json('result.tools'))->firstWhere('name', 'call_application_api');
+        $this->assertContains('POST', $callTool['inputSchema']['properties']['method']['enum']);
+        $this->assertArrayHasKey('body', $callTool['inputSchema']['properties']);
     }
 }

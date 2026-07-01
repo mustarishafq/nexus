@@ -67,7 +67,7 @@ class CallApplicationApiTool implements McpTool
             $properties['query'] = McpJsonSchema::openObject('Query string parameters for GET requests.');
         }
 
-        if (McpUserAccess::canWrite($user)) {
+        if (self::supportsRequestBody($methods)) {
             $properties['body'] = McpJsonSchema::openObject('JSON body for POST/PUT/PATCH requests.');
         }
 
@@ -89,8 +89,10 @@ class CallApplicationApiTool implements McpTool
         if (! empty($arguments['query'])) {
             $options['query'] = $arguments['query'];
         }
-        if (! empty($arguments['body'])) {
-            $options['json'] = $arguments['body'];
+
+        $body = self::normalizeRequestBody($arguments['body'] ?? null);
+        if ($body !== null) {
+            $options['json'] = $body;
         }
 
         $response = $this->client->request($application, $method, $path, $options);
@@ -99,5 +101,42 @@ class CallApplicationApiTool implements McpTool
             'status' => $response->status(),
             'body' => $response->json() ?? $response->body(),
         ];
+    }
+
+    /**
+     * @param  list<string>  $methods
+     */
+    private static function supportsRequestBody(array $methods): bool
+    {
+        return array_intersect($methods, ['POST', 'PUT', 'PATCH', 'DELETE']) !== [];
+    }
+
+    /**
+     * MCP clients sometimes pass JSON bodies as strings; Laravel's HTTP client
+     * must receive an array/object or it forwards a quoted JSON string instead.
+     *
+     * @return array<string, mixed>|list<mixed>|null
+     */
+    private static function normalizeRequestBody(mixed $body): ?array
+    {
+        if ($body === null || $body === '') {
+            return null;
+        }
+
+        if (is_string($body)) {
+            $decoded = json_decode($body, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        if (is_array($body)) {
+            return $body;
+        }
+
+        if (is_object($body)) {
+            return (array) $body;
+        }
+
+        return null;
     }
 }
