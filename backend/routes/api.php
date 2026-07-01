@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PostReactionController;
 use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\SystemEventController;
