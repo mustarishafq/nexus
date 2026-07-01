@@ -343,16 +343,13 @@ class MailMailboxService
         $password = Crypt::decryptString($credential->password);
         $config = $this->serverConfig($user);
 
-        $encryption = $config['smtp_encryption'];
-        $scheme = in_array($encryption, ['ssl', 'tls'], true) ? $encryption : null;
-
         config([
             'mail.default' => 'smtp',
             'mail.mailers.smtp.host' => $config['host'],
             'mail.mailers.smtp.port' => $config['smtp_port'],
             'mail.mailers.smtp.username' => $user->email,
             'mail.mailers.smtp.password' => $password,
-            'mail.mailers.smtp.scheme' => $scheme,
+            'mail.mailers.smtp.scheme' => AppSettings::smtpSchemeFromEncryption($config['smtp_encryption']),
             'mail.from.address' => $user->email,
             'mail.from.name' => $user->full_name ?? $user->name ?? $user->email,
         ]);

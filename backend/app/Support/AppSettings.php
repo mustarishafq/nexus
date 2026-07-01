@@ -40,4 +40,17 @@ class AppSettings
 
         return (bool) $attendance['enabled'];
     }
+
+    /**
+     * Map admin/user-facing encryption labels to Laravel's SMTP mailer scheme.
+     * Symfony Mailer supports "smtp" (STARTTLS) and "smtps" (implicit SSL) only.
+     */
+    public static function smtpSchemeFromEncryption(?string $encryption): ?string
+    {
+        return match (strtolower(trim((string) $encryption))) {
+            'ssl' => 'smtps',
+            'tls', '' => null,
+            default => null,
+        };
+    }
 }

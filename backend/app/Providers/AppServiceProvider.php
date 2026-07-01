@@ -44,7 +44,7 @@ class AppServiceProvider extends ServiceProvider
                 Config::set('mail.mailers.smtp.port', (int) ($settings->smtp_port ?: 587));
                 Config::set('mail.mailers.smtp.username', $settings->smtp_username);
                 Config::set('mail.mailers.smtp.password', $settings->smtp_password);
-                Config::set('mail.mailers.smtp.scheme', $settings->smtp_encryption ?: null);
+                Config::set('mail.mailers.smtp.scheme', AppSettings::smtpSchemeFromEncryption($settings->smtp_encryption));
             }
 
             if (! empty($settings?->smtp_from_email)) {
