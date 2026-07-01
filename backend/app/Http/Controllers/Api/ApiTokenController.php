@@ -170,11 +170,13 @@ class ApiTokenController extends Controller
 
         $applications = UserApplicationAccess::accessibleMcpApplicationsQuery($user)
             ->orderBy('name')
-            ->get(['id', 'name', 'slug'])
+            ->get(['id', 'name', 'slug', 'icon_url', 'color'])
             ->map(fn (Application $application) => [
                 'application_id' => $application->id,
                 'slug' => $application->slug,
                 'name' => $application->name,
+                'icon_url' => $application->icon_url,
+                'color' => $application->color,
                 'override' => $overridesByAppId->get($application->id)?->mcp_access,
                 'effective_mcp_access' => McpUserAccess::effectiveLevelForApplication($user, $application),
             ])

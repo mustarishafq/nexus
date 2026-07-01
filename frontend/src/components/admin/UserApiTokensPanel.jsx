@@ -47,6 +47,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/profile';
+import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
+import { toAbsoluteUrl } from '@/lib/media';
 
 export const API_TOKENS_QUERY_KEY = ['admin-api-tokens'];
 
@@ -96,7 +98,8 @@ function effectiveAccessForApp(defaultAccess, overrideValue) {
 function ApplicationAccessRow({ app, defaultAccess, value, onChange }) {
   const effective = effectiveAccessForApp(defaultAccess, value);
   const isOverride = value && value !== 'inherit';
-  const initials = (app.name || app.slug || '?').trim().slice(0, 2).toUpperCase();
+  const logoUrl = app.icon_url ? toAbsoluteUrl(app.icon_url) : null;
+  const brandColor = app.color || DEFAULT_BRAND_COLOR;
 
   return (
     <div
@@ -109,9 +112,20 @@ function ApplicationAccessRow({ app, defaultAccess, value, onChange }) {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
-            {initials}
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={app.name}
+              className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-black/10"
+            />
+          ) : (
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-semibold text-white ring-1 ring-black/10"
+              style={{ backgroundColor: brandColor }}
+            >
+              {app.name?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium truncate">{app.name}</p>
