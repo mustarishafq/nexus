@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import PageLoader from '@/components/PageLoader';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
+import { SplashGateProvider } from '@/lib/SplashGateContext';
 
 const AppLayout = lazy(() => import('@/components/layout/AppLayout'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -130,6 +131,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
+          <SplashGateProvider>
           <Suspense fallback={null}>
             <PwaSplashScreen />
           </Suspense>
@@ -148,6 +150,7 @@ function App() {
           <Suspense fallback={null}>
             <PwaInstallPrompt />
           </Suspense>
+          </SplashGateProvider>
           <Toaster />
         </QueryClientProvider>
       </AuthProvider>

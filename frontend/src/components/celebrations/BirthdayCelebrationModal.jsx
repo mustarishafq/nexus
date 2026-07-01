@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Cake, PartyPopper, Sparkles, Star } from 'lucide-react';
+import { Cake, Music, PartyPopper, Sparkles, Star } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -63,10 +63,18 @@ export default function BirthdayCelebrationModal({ open, onOpenChange, onDismiss
   const name = user?.name?.trim() || user?.full_name?.trim() || user?.email || 'there';
   const age = getBirthdayAge(user?.date_of_birth);
   const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+
+  const startBirthdaySong = useCallback(async (fromUserGesture = false) => {
+    const started = await playBirthdaySong({ fromUserGesture });
+    setAudioBlocked(!started);
+    return started;
+  }, []);
 
   useEffect(() => {
     if (open) {
       setDontShowAgainToday(false);
+      setAudioBlocked(false);
     }
   }, [open]);
 
@@ -78,13 +86,18 @@ export default function BirthdayCelebrationModal({ open, onOpenChange, onDismiss
 
     fireBirthdayConfetti();
     const confettiTimer = setTimeout(() => fireBirthdayConfetti(), 600);
-    void playBirthdaySong();
+    void startBirthdaySong(false);
 
     return () => {
       clearTimeout(confettiTimer);
       stopBirthdaySong();
     };
-  }, [open]);
+  }, [open, startBirthdaySong]);
+
+  const handleGestureUnlock = useCallback(() => {
+    if (!audioBlocked) return;
+    void startBirthdaySong(true);
+  }, [audioBlocked, startBirthdaySong]);
 
   const handleDismiss = () => {
     onDismiss?.({ snoozeForToday: dontShowAgainToday });
@@ -108,6 +121,7 @@ export default function BirthdayCelebrationModal({ open, onOpenChange, onDismiss
           variants={containerVariants}
           initial="hidden"
           animate={open ? 'visible' : 'hidden'}
+          onPointerDown={handleGestureUnlock}
         >
           <motion.div variants={itemVariants} className="relative mx-auto mb-5 w-fit">
             <motion.div
@@ -178,6 +192,18 @@ export default function BirthdayCelebrationModal({ open, onOpenChange, onDismiss
           >
             Hope your special day is filled with joy, laughter, and great moments with the team.
           </motion.p>
+
+          {audioBlocked ? (
+            <motion.button
+              type="button"
+              variants={itemVariants}
+              className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-pink-500/25 bg-pink-500/10 px-4 py-2 text-sm font-medium text-pink-700 transition-colors hover:bg-pink-500/15 dark:text-pink-300"
+              onClick={() => void startBirthdaySong(true)}
+            >
+              <Music className="h-4 w-4" />
+              Tap for birthday music
+            </motion.button>
+          ) : null}
 
           <motion.div variants={itemVariants} className="mt-6 space-y-4">
             <div className="flex items-center justify-between gap-3 border-t border-pink-500/15 pt-4">

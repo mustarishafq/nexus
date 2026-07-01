@@ -8,43 +8,12 @@ import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
 import { useAuth } from '@/lib/AuthContext';
 import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
+import { markSplashCompleted, shouldShowPwaSplash } from '@/lib/splashSession';
+import { useSplashGate } from '@/lib/SplashGateContext';
 import { cn } from '@/lib/utils';
 
 const SPLASH_SRC = '/lottie/splash.lottie';
 const SPLASH_CACHE_KEY = 'nexus_splash_public_cache_v1';
-/** Cleared when the app process is killed (e.g. removed from phone recents). */
-const SPLASH_SESSION_KEY = 'nexus_splash_session_done';
-
-function hasCompletedSessionSplash() {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    return window.sessionStorage.getItem(SPLASH_SESSION_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function shouldShowSplash() {
-  if (typeof window === 'undefined') return false;
-  if (hasCompletedSessionSplash()) return false;
-
-  const isStandalone =
-    window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone === true;
-
-  return isStandalone;
-}
-
-function markSplashCompleted() {
-  try {
-    window.sessionStorage.setItem(SPLASH_SESSION_KEY, '1');
-    // Legacy key from an earlier build — no longer used for gating.
-    window.localStorage.removeItem('nexus_splash_first_launch_done');
-  } catch {
-    // ignore storage errors
-  }
-}
 
 function readCachedSplashSeed() {
   if (typeof window === 'undefined') return null;
@@ -96,7 +65,8 @@ function getNeutralStartupSeed() {
 
 export default function PwaSplashScreen() {
   const { appPublicSettings, isLoadingPublicSettings } = useAuth();
-  const [active, setActive] = useState(shouldShowSplash);
+  const { markSplashComplete } = useSplashGate();
+  const [active, setActive] = useState(shouldShowPwaSplash);
   const [exiting, setExiting] = useState(false);
   const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
   const animCompleteRef = useRef(false);
@@ -251,12 +221,21 @@ export default function PwaSplashScreen() {
     });
   }, [markAnimationComplete]);
 
+  useEffect(() => {
+    if (!active || splashConfig?.enabled === false) {
+      markSplashComplete();
+    }
+  }, [active, markSplashComplete, splashConfig?.enabled]);
+
   if (!active || splashConfig?.enabled === false) return null;
 
   const exitFadeSeconds = (runtime?.timing.exitFadeMs ?? 450) / 1000;
 
   return (
-    <AnimatePresence onExitComplete={() => setActive(false)}>
+    <AnimatePresence onExitComplete={() => {
+      setActive(false);
+      markSplashComplete();
+    }}>
       {!exiting && (
         <motion.div
           key="pwa-splash"

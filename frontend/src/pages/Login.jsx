@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
+import { primeAudioContext } from '@/lib/notificationSound';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getRememberMePreference, setRememberMePreference } from '@/lib/authStorage';
 
@@ -24,6 +25,8 @@ export default function Login() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    primeAudioContext();
+
     const form = new FormData(event.currentTarget);
 
     setLoading(true);

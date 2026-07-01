@@ -18,6 +18,32 @@ export function getAudioContext() {
   return audioContext;
 }
 
+function playSilentUnlockTone(context) {
+  const buffer = context.createBuffer(1, 1, 22050);
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.start(0);
+}
+
+/** Call synchronously inside a user gesture (tap/click) to unlock iOS audio. */
+export function primeAudioContext() {
+  const context = getAudioContext();
+  if (!context) {
+    return false;
+  }
+
+  try {
+    playSilentUnlockTone(context);
+    if (context.state === 'suspended') {
+      void context.resume();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isNotificationAudioReady() {
   const context = getAudioContext();
   return context?.state === 'running';
@@ -30,6 +56,10 @@ export async function unlockNotificationAudio() {
   }
 
   try {
+    if (context.state !== 'running') {
+      playSilentUnlockTone(context);
+    }
+
     if (context.state === 'suspended') {
       await context.resume();
     }
@@ -48,6 +78,7 @@ export function setupNotificationAudioUnlock() {
   unlockListenersAttached = true;
 
   const unlock = () => {
+    primeAudioContext();
     void unlockNotificationAudio();
   };
 

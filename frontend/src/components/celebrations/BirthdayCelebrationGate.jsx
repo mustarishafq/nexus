@@ -6,15 +6,17 @@ import {
   snoozeBirthdayCelebrationForToday,
 } from '@/lib/birthday';
 import { useCelebrationGate } from '@/lib/CelebrationGateContext';
+import { useSplashGate } from '@/lib/SplashGateContext';
 import BirthdayCelebrationModal from '@/components/celebrations/BirthdayCelebrationModal';
 
 export default function BirthdayCelebrationGate() {
   const { user } = useAuth();
+  const { splashComplete } = useSplashGate();
   const { setBirthdayModalOpen } = useCelebrationGate();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!shouldShowBirthdayCelebration(user)) {
+    if (!splashComplete || !shouldShowBirthdayCelebration(user)) {
       setOpen(false);
       setBirthdayModalOpen(false);
       return;
@@ -22,7 +24,7 @@ export default function BirthdayCelebrationGate() {
 
     setOpen(true);
     setBirthdayModalOpen(true);
-  }, [user, setBirthdayModalOpen]);
+  }, [user, splashComplete, setBirthdayModalOpen]);
 
   const handleOpenChange = useCallback((nextOpen) => {
     setOpen(nextOpen);

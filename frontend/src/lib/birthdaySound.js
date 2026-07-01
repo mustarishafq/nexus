@@ -1,4 +1,4 @@
-import { getAudioContext, unlockNotificationAudio } from '@/lib/notificationSound';
+import { getAudioContext, primeAudioContext, unlockNotificationAudio } from '@/lib/notificationSound';
 
 // "Happy Birthday" melody in C major (public domain).
 const MELODY = [
@@ -108,9 +108,13 @@ export function stopBirthdaySong() {
   clearActiveNodes();
 }
 
-export async function playBirthdaySong() {
+export async function playBirthdaySong({ fromUserGesture = false } = {}) {
   const context = getAudioContext();
   if (!context) return false;
+
+  if (fromUserGesture) {
+    primeAudioContext();
+  }
 
   const ready = await unlockNotificationAudio();
   if (!ready) return false;
