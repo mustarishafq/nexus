@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, BarChart3, Monitor, Bell, User, Activity, Wifi, Calendar,
+  LayoutDashboard, BarChart3, Monitor, User, Activity, Wifi, Calendar,
   Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
 } from 'lucide-react';
 
@@ -13,7 +13,6 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
     label: 'Apps',
     match: (path) => path === '/applications' || path.startsWith('/applications/'),
   },
-  { path: '/notifications', icon: Bell, label: 'Notifications', match: (path) => path === '/notifications', badge: 'notifications' },
   { type: 'more', icon: Grip, label: 'More' },
 ];
 
@@ -77,7 +76,6 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin }) {
       label: 'Application',
       match: (path) => path === '/applications' || path.startsWith('/applications/'),
     },
-    { path: '/notifications', icon: Bell, label: 'Notifications', match: (path) => path === '/notifications', badge: 'notifications' },
     { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },

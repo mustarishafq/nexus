@@ -7,7 +7,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
-import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
@@ -18,7 +17,7 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0, email: 0 });
+  const [badgeCounts, setBadgeCounts] = useState({ messages: 0, email: 0 });
 
   const { data: metabaseDashboards = [] } = useQuery({
     queryKey: ['metabase-dashboards'],
@@ -27,7 +26,6 @@ export default function BottomNav() {
     enabled: !isMobile,
   });
 
-  const { data: unreadNotifications = [] } = useUnreadNotifications();
   const messagePollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
   const { data: mailStatus } = useQuery({
@@ -75,13 +73,6 @@ export default function BottomNav() {
       email: Number(mailInbox?.unread_count) || 0,
     }));
   }, [mailInbox?.unread_count]);
-
-  useEffect(() => {
-    setBadgeCounts((prev) => ({
-      ...prev,
-      notifications: unreadNotifications.length,
-    }));
-  }, [unreadNotifications.length]);
 
   const renderNavItem = (item) => {
     if (item.type === 'apps-orb') {
