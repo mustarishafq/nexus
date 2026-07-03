@@ -37,7 +37,7 @@ class OAuthAuthorizeRedirectController extends Controller
             abort(400, 'redirect_uri is not registered for this client.');
         }
 
-        $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
+        $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
 
         return redirect()->away($frontendUrl.'/mcp-consent?'.http_build_query($validated));
     }

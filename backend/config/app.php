@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend URL
+    |--------------------------------------------------------------------------
+    |
+    | Origin of the React SPA (OAuth consent, privacy policy redirects).
+    | Defaults to APP_URL for single-host setups; set FRONTEND_URL when the
+    | API and SPA run on different domains.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

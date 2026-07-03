@@ -19,6 +19,12 @@ class OAuthPublicUrl
             return rtrim($configured, '/');
         }
 
+        $frontendUrl = config('app.frontend_url');
+
+        if (is_string($frontendUrl) && $frontendUrl !== '') {
+            return rtrim($frontendUrl, '/');
+        }
+
         if ($request !== null) {
             return rtrim($request->getSchemeAndHttpHost(), '/');
         }

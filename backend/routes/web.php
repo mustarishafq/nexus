@@ -27,7 +27,7 @@ Route::post('/register', [OAuthController::class, 'register']);
 Route::post('/mcp', [McpController::class, 'handle']);
 
 Route::get('/privacy-policy', function () {
-    $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
+    $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
 
     return redirect()->away("{$frontendUrl}/privacy-policy");
 });

@@ -15,7 +15,7 @@ class PwaController extends Controller
     {
         $settings = $this->currentSettings();
         $name = $settings->system_name ?: config('app.name', 'EMZI Nexus Brain');
-        $frontendUrl = rtrim((string) env('FRONTEND_URL', env('APP_URL', 'http://localhost:5173')), '/');
+        $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
         $themeColor = $this->normalizeHexColor($settings->splash_background_color ?? null);
 
         return response()->json([
