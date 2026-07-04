@@ -710,6 +710,10 @@ class ApplicationController extends Controller
         // Additional SSO emails authenticate an existing app account — do not push Nexus profile fields.
         if (! $isAdditionalSsoEmail) {
             $payload['name'] = $user->name ?? '';
+
+            if ($user->profile_picture) {
+                $payload['profile_picture'] = $user->profile_picture;
+            }
         }
 
         if ($redirectTo) {

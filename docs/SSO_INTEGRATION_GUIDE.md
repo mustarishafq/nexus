@@ -66,6 +66,7 @@ value in the JWT `redirect_to` claim.
    | `sub`   | string | Nexus user ID                                |
    | `email` | string | User's email address (use this to look up)   |
    | `name`  | string | User's SSO display name (`users.name` in Nexus, not `full_name`). **Omitted** when the user launches with an additional approved SSO email — only `email` is sent so your app can sign in without overwriting the local account profile. |
+   | `profile_picture` | string | Absolute URL to the user's profile picture in Nexus. **Omitted** when no picture is set or when the user launches with an additional SSO email. Use this to sync the avatar into your system on each login. |
    | `sys`   | string | Slug of the application being launched  |
     | `return_to` | string | Nexus URL to redirect user to after logout |
    | `redirect_to` | string | Optional in-app URL to open after SSO login |
@@ -73,10 +74,11 @@ value in the JWT `redirect_to` claim.
    | `exp`   | int    | Expiry timestamp (Unix seconds, iat + 60)    |
 
 4. **Find or provision the user** by `email`
-5. **Create a session** (set cookie / issue your own session token)
-6. **Redirect** the user to `redirect_to` (query param or JWT claim) when provided,
+5. **Sync profile picture** — if `profile_picture` is present, store or update the user's avatar URL in your system
+6. **Create a session** (set cookie / issue your own session token)
+7. **Redirect** the user to `redirect_to` (query param or JWT claim) when provided,
    otherwise your default landing page
-7. Store `return_to` in session so logout can send user back to Nexus
+8. Store `return_to` in session so logout can send user back to Nexus
 
 ---
 
@@ -96,6 +98,24 @@ https://nexus.example.com/systems
 
 ---
 
+## Profile Picture Syncing
+
+When a user has a profile picture in Nexus, the JWT includes a `profile_picture` claim
+containing an absolute URL to their avatar image.
+
+**Recommended behavior:**
+
+- On every SSO login, check if `profile_picture` is present in the token
+- Store or update the URL in your user record (e.g. `avatar_url` column)
+- Use this URL when displaying the user's avatar in your application
+- The URL points to Nexus storage — no need to download/re-upload the image
+- If the claim is absent, do **not** clear an existing avatar (the user may not have set one yet)
+
+The picture updates automatically on each login — whenever the user changes their
+profile picture in Nexus, the next SSO launch propagates the new URL.
+
+---
+
 ## WordPress
 
 Nexus ships a ready-made must-use plugin for WordPress. See **[wordpress/README.md](wordpress/README.md)** for install steps.
@@ -107,6 +127,8 @@ Quick summary:
 3. Define `NEXUS_API_KEY` and `NEXUS_ISSUER` in `wp-config.php` (same key as the Nexus application)
 4. Register WordPress in Nexus with **JWT SSO**, matching Base URL and API Key
 5. Click **Launch** in Nexus to auto-login
+
+The WordPress plugin automatically syncs the user's Nexus profile picture and uses it as their WordPress avatar (overrides Gravatar).
 
 ---
 
@@ -133,6 +155,10 @@ Route::get('/sso/nexus', function (Request $request) {
         ['email' => $payload->email],
         ['name'  => $payload->name, 'password' => \Illuminate\Support\Str::random(32)],
     );
+
+    if (! empty($payload->profile_picture)) {
+        $user->update(['avatar_url' => $payload->profile_picture]);
+    }
 
     Auth::login($user);
 
@@ -165,7 +191,9 @@ app.get('/sso/nexus', (req, res) => {
     }
 
     // Find or create user by payload.email, then create session
+    // Sync profile picture: payload.profile_picture (URL string or undefined)
     req.session.userId = payload.sub;
+    req.session.avatarUrl = payload.profile_picture || null;
     res.redirect('/dashboard');
 });
 ```
@@ -191,6 +219,12 @@ def sso_nexus(request):
         email=payload['email'],
         defaults={'name': payload.get('name', '')}
     )
+
+    profile_picture = payload.get('profile_picture')
+    if profile_picture:
+        user.avatar_url = profile_picture
+        user.save(update_fields=['avatar_url'])
+
     login(request, user)
     return redirect('/dashboard/')
 ```

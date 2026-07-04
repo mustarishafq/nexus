@@ -6,7 +6,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('NEXUS_SSO_VERSION', '1.0.3');
+define('NEXUS_SSO_VERSION', '1.1.0');
 
 $configFile = __DIR__ . '/config.php';
 if (is_readable($configFile)) {
@@ -75,6 +75,7 @@ final class Nexus_Sso
         add_action('template_redirect', [self::class, 'handle_sso_request']);
         add_filter('logout_redirect', [self::class, 'logout_redirect'], 10, 3);
         add_filter('allowed_redirect_hosts', [self::class, 'allowed_redirect_hosts']);
+        add_filter('pre_get_avatar_url', [self::class, 'override_avatar_url'], 10, 3);
     }
 
     public static function register_rewrite_rules(): void
@@ -151,6 +152,8 @@ final class Nexus_Sso
         wp_set_auth_cookie($user->ID, true, is_ssl());
         do_action('wp_login', $user->user_login, $user);
 
+        self::sync_profile_picture($user, $claims);
+
         $returnTo = self::resolve_return_to($claims);
         if ($returnTo !== '') {
             update_user_meta($user->ID, self::RETURN_TO_META_KEY, $returnTo);
@@ -193,6 +196,40 @@ final class Nexus_Sso
         }
 
         return array_values(array_unique($hosts));
+    }
+
+    /**
+     * Use the Nexus profile picture as the WordPress avatar when available.
+     *
+     * @param string|null $url
+     * @param mixed       $idOrEmail
+     * @param array       $args
+     * @return string|null
+     */
+    public static function override_avatar_url($url, $idOrEmail, $args)
+    {
+        $user = null;
+
+        if ($idOrEmail instanceof \WP_User) {
+            $user = $idOrEmail;
+        } elseif ($idOrEmail instanceof \WP_Comment) {
+            $user = $idOrEmail->user_id ? get_user_by('id', $idOrEmail->user_id) : null;
+        } elseif (is_numeric($idOrEmail)) {
+            $user = get_user_by('id', (int) $idOrEmail);
+        } elseif (is_string($idOrEmail)) {
+            $user = get_user_by('email', $idOrEmail);
+        }
+
+        if (! $user instanceof \WP_User) {
+            return $url;
+        }
+
+        $nexusAvatar = get_user_meta($user->ID, 'nexus_profile_picture', true);
+        if (is_string($nexusAvatar) && $nexusAvatar !== '') {
+            return $nexusAvatar;
+        }
+
+        return $url;
     }
 
     private static function default_return_to(): string
@@ -312,6 +349,20 @@ final class Nexus_Sso
             'ID' => $user->ID,
             'display_name' => $name,
         ]);
+    }
+
+    private static function sync_profile_picture(?\WP_User $user, array $claims): void
+    {
+        if (! $user instanceof \WP_User) {
+            return;
+        }
+
+        $url = isset($claims['profile_picture']) ? esc_url_raw((string) $claims['profile_picture']) : '';
+        if ($url === '') {
+            return;
+        }
+
+        update_user_meta($user->ID, 'nexus_profile_picture', $url);
     }
 
     private static function resolve_post_login_redirect(array $claims = []): string
