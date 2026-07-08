@@ -15,6 +15,7 @@ const Login = lazy(() => import('@/pages/Login'));
 const OAuthConsent = lazy(() => import('@/pages/OAuthConsent'));
 const Register = lazy(() => import('@/pages/Register'));
 const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const ForcedPasswordChange = lazy(() => import('@/pages/ForcedPasswordChange'));
 const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy'));
 const PwaInstallPrompt = lazy(() => import('@/components/pwa/PwaInstallPrompt'));
@@ -142,6 +143,7 @@ function App() {
                 <Route path="/mcp-consent" element={<OAuthConsent />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>

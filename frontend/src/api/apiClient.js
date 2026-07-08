@@ -158,6 +158,14 @@ export const db = {
 			return request('/auth/forgot-password', { method: 'POST', body: data });
 		},
 
+		async resetPassword(data) {
+			return request('/auth/reset-password', { method: 'POST', body: data });
+		},
+
+		async resetPassword(data) {
+			return request('/auth/reset-password', { method: 'POST', body: data });
+		},
+
 		async isAuthenticated() {
 			try {
 				await request('/me');
