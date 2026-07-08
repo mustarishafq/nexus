@@ -34,7 +34,7 @@ return [
         'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI'),
         'frontend_redirect_url' => env('GOOGLE_OAUTH_FRONTEND_REDIRECT_URL'),
         'calendar_id' => env('GOOGLE_OAUTH_CALENDAR_ID', 'primary'),
-        'timezone' => env('GOOGLE_OAUTH_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+        'timezone' => env('GOOGLE_OAUTH_TIMEZONE', env('APP_TIMEZONE', 'Asia/Kuala_Lumpur')),
     ],
 
     // Public URL for MCP connector + OAuth discovery (usually FRONTEND_URL).
