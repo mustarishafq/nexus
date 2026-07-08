@@ -116,4 +116,51 @@ class CalendarEventMapperServiceTest extends TestCase
         $this->assertArrayHasKey('start_at', $payload);
         $this->assertArrayHasKey('end_at', $payload);
     }
+
+    public function test_parses_timezone_less_scheduled_start_in_configured_timezone(): void
+    {
+        config(['app.timezone' => 'Asia/Kuala_Lumpur']);
+
+        $application = Application::factory()->create([
+            'calendar_config' => CalendarEventMapping::defaults(),
+        ]);
+
+        $payload = app(CalendarEventMapperService::class)->map($application, [
+            'event' => 'meeting.created',
+            'data' => [
+                'id' => '44',
+                'title' => 'NEXUS DRIVE BIL 23/2026',
+                'scheduled_start' => '2026-07-09 10:30:00',
+                'scheduled_end' => '2026-07-09 13:00:00',
+                'action' => 'created',
+            ],
+        ]);
+
+        $this->assertSame('created', $payload['action']);
+        $this->assertTrue($payload['start_at']->equalTo(
+            \Illuminate\Support\Carbon::parse('2026-07-09 10:30:00', 'Asia/Kuala_Lumpur')
+        ));
+        $this->assertTrue($payload['end_at']->equalTo(
+            \Illuminate\Support\Carbon::parse('2026-07-09 13:00:00', 'Asia/Kuala_Lumpur')
+        ));
+        $this->assertSame('2026-07-09T02:30:00.000000Z', $payload['start_at']->toISOString());
+    }
+
+    public function test_preserves_explicit_timezone_in_datetime_values(): void
+    {
+        $application = Application::factory()->create([
+            'calendar_config' => CalendarEventMapping::defaults(),
+        ]);
+
+        $payload = app(CalendarEventMapperService::class)->map($application, [
+            'event' => 'calendar.created',
+            'title' => 'Planning',
+            'external_event_id' => 'meet-tz',
+            'start_at' => '2026-06-25T10:00:00Z',
+            'end_at' => '2026-06-25T11:00:00Z',
+        ]);
+
+        $this->assertSame('2026-06-25T10:00:00.000000Z', $payload['start_at']->toISOString());
+        $this->assertSame('2026-06-25T11:00:00.000000Z', $payload['end_at']->toISOString());
+    }
 }

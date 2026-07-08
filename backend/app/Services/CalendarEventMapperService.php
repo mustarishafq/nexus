@@ -18,6 +18,9 @@ class CalendarEventMapperService
         );
         $fieldMappings = $config['field_mappings'];
         $defaults = $config['defaults'];
+        $timezone = filled($defaults['timezone'] ?? null)
+            ? (string) $defaults['timezone']
+            : (string) config('app.timezone', 'UTC');
 
         $title = $this->resolveField(
             $event,
@@ -66,8 +69,8 @@ class CalendarEventMapperService
                 $event,
                 $this->pathsFor($fieldMappings, 'location', ['location', 'venue'])
             )),
-            'start_at' => isset($startAt) && filled($startAt) ? $this->parseDateTime($startAt) : null,
-            'end_at' => isset($endAt) && filled($endAt) ? $this->parseDateTime($endAt) : null,
+            'start_at' => isset($startAt) && filled($startAt) ? $this->parseDateTime($startAt, $timezone) : null,
+            'end_at' => isset($endAt) && filled($endAt) ? $this->parseDateTime($endAt, $timezone) : null,
             'is_all_day' => $this->resolveBoolean(
                 $this->resolveField(
                     $event,
@@ -202,13 +205,28 @@ class CalendarEventMapperService
         return 'created';
     }
 
-    private function parseDateTime(mixed $value): Carbon
+    private function parseDateTime(mixed $value, string $timezone): Carbon
     {
+        $string = trim((string) $value);
+
+        if ($string === '') {
+            throw new InvalidArgumentException('Invalid date/time value in event payload');
+        }
+
         try {
-            return Carbon::parse($value);
+            if ($this->hasExplicitTimezone($string)) {
+                return Carbon::parse($string);
+            }
+
+            return Carbon::parse($string, $timezone);
         } catch (\Throwable) {
             throw new InvalidArgumentException('Invalid date/time value in event payload');
         }
+    }
+
+    private function hasExplicitTimezone(string $value): bool
+    {
+        return (bool) preg_match('/(Z|[+-]\d{2}:?\d{2})$/i', $value);
     }
 
     private function resolveBoolean(mixed $value, bool $fallback): bool
