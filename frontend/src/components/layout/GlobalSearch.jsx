@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Loader2, Search } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
 import { getDisplayName } from '@/lib/profile';
-import RoleBadge from '@/components/users/RoleBadge';
+import { getRoleLabel } from '@/lib/roles';
 import {
   CommandDialog,
   CommandEmpty,
@@ -15,6 +15,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { glassDialogFaintText, glassDialogInputStyles, glassDialogMutedText } from '@/components/layout/glassStyles';
 
 function useDebouncedValue(value, delay = 250) {
@@ -140,8 +141,8 @@ export default function GlobalSearch({ open, onOpenChange }) {
                       <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                     ) : null}
                   </div>
-                  <Badge variant="secondary" className="capitalize shrink-0 text-[10px]">
-                    {user.role || 'user'}
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    {getRoleLabel(user.role)}
                   </Badge>
                 </CommandItem>
               ))}

@@ -47,7 +47,7 @@ import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
 import { useAuth } from '@/lib/AuthContext';
-import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES } from '@/lib/roles';
+import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES, getRoleLabel } from '@/lib/roles';
 
 const MCP_ACCESS_OPTIONS = [
   { value: 'none', label: 'No MCP access' },
@@ -1623,8 +1623,8 @@ export default function UserManagement() {
                       {renderUserActionsMenu(user)}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant={roleBadgeVariant(user.role)} className="text-xs capitalize">
-                        {user.role || 'user'}
+                      <Badge variant={roleBadgeVariant(user.role)} className="text-xs">
+                        {getRoleLabel(user.role)}
                       </Badge>
                       <Badge
                         variant={user.is_approved ? 'default' : 'outline'}
@@ -1677,8 +1677,8 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={roleBadgeVariant(user.role)} className="text-xs capitalize">
-                          {user.role || 'user'}
+                        <Badge variant={roleBadgeVariant(user.role)} className="text-xs">
+                          {getRoleLabel(user.role)}
                         </Badge>
                       </TableCell>
                       <TableCell>

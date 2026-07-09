@@ -7,6 +7,7 @@ import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
 import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
+import { getRoleLabel } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -91,8 +92,8 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
                   Admin
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="capitalize shrink-0 h-5 text-[10px] sm:h-auto sm:text-xs">
-                  {user?.role || 'member'}
+                <Badge variant="secondary" className="shrink-0 h-5 text-[10px] sm:h-auto sm:text-xs">
+                  {getRoleLabel(user?.role)}
                 </Badge>
               )}
               {readOnly && isOnline ? (
