@@ -47,7 +47,8 @@ import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
 import { useAuth } from '@/lib/AuthContext';
-import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES, getRoleLabel } from '@/lib/roles';
+import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES } from '@/lib/roles';
+import RoleBadge from '@/components/users/RoleBadge';
 
 const MCP_ACCESS_OPTIONS = [
   { value: 'none', label: 'No MCP access' },
@@ -55,12 +56,6 @@ const MCP_ACCESS_OPTIONS = [
   { value: 'write', label: 'Write only' },
   { value: 'both', label: 'Read & write' },
 ];
-
-function roleBadgeVariant(role) {
-  if (role === ROLES.ADMIN) return 'default';
-  if (role === ROLES.HR) return 'outline';
-  return 'secondary';
-}
 
 function McpAccessSelect({ value, onChange, disabled = false }) {
   return (
@@ -1623,9 +1618,7 @@ export default function UserManagement() {
                       {renderUserActionsMenu(user)}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant={roleBadgeVariant(user.role)} className="text-xs">
-                        {getRoleLabel(user.role)}
-                      </Badge>
+                      <RoleBadge role={user.role} size="sm" />
                       <Badge
                         variant={user.is_approved ? 'default' : 'outline'}
                         className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
@@ -1677,9 +1670,7 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={roleBadgeVariant(user.role)} className="text-xs">
-                          {getRoleLabel(user.role)}
-                        </Badge>
+                        <RoleBadge role={user.role} size="sm" />
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">

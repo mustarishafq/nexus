@@ -16,6 +16,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { getCroppedImageBlob, PROFILE_PHOTO_MAX_SIZE, toAbsoluteUrl } from '@/lib/media';
+import RoleAvatarRing from '@/components/users/RoleAvatarRing';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -27,6 +28,8 @@ export default function ProfilePictureUploader({
   className,
   avatarClassName,
   readOnly = false,
+  role,
+  immersiveRing = false,
 }) {
   const fileInputRef = useRef(null);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
@@ -174,20 +177,31 @@ export default function ProfilePictureUploader({
   );
 
   if (variant === 'overlay') {
+    const avatar = (
+      <Avatar
+        className={cn(
+          'h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 shadow-lg',
+          role ? 'border-0' : 'border-[3px] border-background',
+          avatarClassName
+        )}
+      >
+        <AvatarImage src={avatarUrl} alt={displayName || 'Profile picture'} />
+        <AvatarFallback className="text-2xl sm:text-3xl lg:text-4xl font-semibold bg-primary/10 text-primary">
+          {initial}
+        </AvatarFallback>
+      </Avatar>
+    );
+
     return (
       <>
         <div className={cn('relative w-fit shrink-0 group', className)}>
-          <Avatar
-            className={cn(
-              'h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 border-[5px] border-background shadow-xl ring-1 ring-border',
-              avatarClassName
-            )}
-          >
-            <AvatarImage src={avatarUrl} alt={displayName || 'Profile picture'} />
-            <AvatarFallback className="text-2xl sm:text-3xl lg:text-4xl font-semibold bg-primary/10 text-primary">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
+          {role ? (
+            <RoleAvatarRing role={role} immersive={immersiveRing}>
+              {avatar}
+            </RoleAvatarRing>
+          ) : (
+            avatar
+          )}
 
           {!readOnly ? (
             <>

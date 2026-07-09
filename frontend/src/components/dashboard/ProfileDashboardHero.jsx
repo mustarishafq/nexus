@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
 import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
-import { getRoleLabel } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -77,8 +75,10 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
             displayName={getDisplayName(user, '')}
             onUpdated={onUserUpdated}
             readOnly={readOnly}
+            role={user?.role}
+            immersiveRing
             className="-mt-[5.5rem] sm:-mt-20 lg:-mt-[5.5rem] mx-auto sm:mx-0 self-center sm:self-start"
-            avatarClassName="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 border-[5px]"
+            avatarClassName="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
           />
 
           <div className="flex-1 min-w-0 w-full sm:w-auto sm:pb-1">
@@ -86,16 +86,6 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
               <h1 className="text-lg sm:text-3xl font-bold tracking-tight leading-tight">
                 {getDisplayName(user, 'Your Profile')}
               </h1>
-              {user?.role === 'admin' ? (
-                <Badge className="gap-1 shrink-0 h-5 text-[10px] sm:h-auto sm:text-xs">
-                  <ShieldCheck className="w-3 h-3" />
-                  Admin
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="shrink-0 h-5 text-[10px] sm:h-auto sm:text-xs">
-                  {getRoleLabel(user?.role)}
-                </Badge>
-              )}
               {readOnly && isOnline ? (
                 <Badge className="gap-1 shrink-0 h-5 border-success/30 bg-success/10 text-[10px] text-success sm:h-auto sm:text-xs">
                   Online

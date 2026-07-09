@@ -20,6 +20,12 @@ export function getRoleLabel(role) {
   return ROLE_LABELS[role] ?? role ?? 'User';
 }
 
+export function resolveRole(role) {
+  if (role === ROLES.ADMIN) return ROLES.ADMIN;
+  if (role === ROLES.HR) return ROLES.HR;
+  return ROLES.USER;
+}
+
 export function isAdmin(user) {
   return user?.role === ROLES.ADMIN;
 }

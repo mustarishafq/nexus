@@ -15,7 +15,6 @@ import {
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getDisplayName } from '@/lib/profile';
-import { getRoleLabel } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { glassDialogIconButton, glassDialogMutedText, glassDialogTitleText, glassTopBarStyles } from './glassStyles';
 
@@ -89,7 +88,6 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
                   <p className={cn('text-sm font-medium leading-none', glassDialogTitleText)}>
                     {getDisplayName(user)}
                   </p>
-                  <p className={cn('text-xs', glassDialogMutedText)}>{getRoleLabel(user?.role)}</p>
                 </div>
                 <ChevronDown className={cn('hidden h-3 w-3 md:block', glassDialogMutedText)} />
               </DropdownMenuTrigger>
