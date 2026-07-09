@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\SplashAnimationSettings;
+use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +17,8 @@ use Illuminate\Support\Facades\Schema;
 
 class AppSettingController extends Controller
 {
+    use AuthorizesRoles;
+
     public function publicShow(): JsonResponse
     {
         return response()->json($this->publicPayload());
@@ -22,6 +26,16 @@ class AppSettingController extends Controller
 
     public function show(Request $request): JsonResponse
     {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (UserRoles::isHr($user) && ! UserRoles::isAdmin($user)) {
+            return response()->json($this->hrAttendancePayload());
+        }
+
         if ($response = $this->authorizeAdmin($request)) {
             return $response;
         }
@@ -31,6 +45,16 @@ class AppSettingController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (UserRoles::isHr($user) && ! UserRoles::isAdmin($user)) {
+            return $this->updateHrAttendanceSettings($request);
+        }
+
         if ($response = $this->authorizeAdmin($request)) {
             return $response;
         }
@@ -95,19 +119,44 @@ class AppSettingController extends Controller
         return response()->json($this->adminPayload());
     }
 
-    private function authorizeAdmin(Request $request): ?JsonResponse
+    private function updateHrAttendanceSettings(Request $request): JsonResponse
     {
-        $user = ApiTokenAuth::userFromRequest($request);
+        $validated = $request->validate(AttendanceWatermarkSettings::validationRules());
 
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        $current = (array) $this->currentSettings();
+        $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
+
+        $settings = DB::table('app_settings')->first();
+
+        if ($settings) {
+            DB::table('app_settings')->where('id', $settings->id)->update(array_merge(
+                AttendanceWatermarkSettings::toDatabaseColumns($attendance),
+                ['updated_at' => now()],
+            ));
+        } else {
+            DB::table('app_settings')->insert(array_merge([
+                'system_name' => config('app.name', 'EMZI Nexus Brain'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
         }
 
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        AppSettings::forget();
 
-        return null;
+        return response()->json($this->hrAttendancePayload());
+    }
+
+    private function hrAttendancePayload(): array
+    {
+        $settings = $this->currentSettings();
+        $attendance = $this->attendancePayload($settings);
+
+        return array_merge([
+            'attendance' => $attendance,
+            'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
+            'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
+            'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
+        ], AttendanceWatermarkSettings::toDatabaseColumns($attendance));
     }
 
     private function currentSettings(): object

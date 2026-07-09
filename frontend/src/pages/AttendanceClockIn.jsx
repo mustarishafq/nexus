@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAttendanceReminder';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageAttendance } from '@/lib/roles';
 import {
   describeAttendancePolicy,
   findActiveShift,
@@ -28,7 +29,7 @@ function formatRecordType(type) {
 export default function AttendanceClockIn() {
   const { user, appPublicSettings } = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const canViewAllRecords = canManageAttendance(user);
 
   const [capture, setCapture] = useState(null);
 
@@ -77,7 +78,7 @@ export default function AttendanceClockIn() {
       setCapture(null);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_STATUS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
-      if (isAdmin) {
+      if (canViewAllRecords) {
         queryClient.invalidateQueries({ queryKey: ['attendance-dashboard'] });
       }
     },

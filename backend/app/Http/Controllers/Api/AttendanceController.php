@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
@@ -22,6 +23,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
+    use AuthorizesRoles;
+
     public function watermarkLogo(Request $request)
     {
         try {
@@ -365,7 +368,7 @@ class AttendanceController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -415,7 +418,7 @@ class AttendanceController extends Controller
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -497,7 +500,7 @@ class AttendanceController extends Controller
 
     public function userHistory(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -586,21 +589,6 @@ class AttendanceController extends Controller
 
         if (! $user || ! $user->is_approved) {
             return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        return null;
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         return null;

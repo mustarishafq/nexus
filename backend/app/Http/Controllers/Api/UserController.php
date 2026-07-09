@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
@@ -17,6 +18,7 @@ use App\Support\ProfileCompleteness;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserHrCsvImporter;
 use App\Support\UserProfileSerializer;
+use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -25,11 +27,16 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     use AppliesIndexQuery;
+    use AuthorizesRoles;
     use ResolvesDepartmentInput;
     use ValidatesHrProfileFields;
 
     public function index(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
+            return $response;
+        }
+
         $users = $this->applyIndexQuery(
             $request,
             User::query()
@@ -48,11 +55,11 @@ class UserController extends Controller
 
     public function profileNudge(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
-        $admin = ApiTokenAuth::userFromRequest($request);
+        $admin = $this->authenticatedUser($request);
         $validated = $request->validate([
             'force' => ['sometimes', 'boolean'],
         ]);
@@ -79,11 +86,11 @@ class UserController extends Controller
 
     public function nudgeIncompleteProfiles(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
-        $admin = ApiTokenAuth::userFromRequest($request);
+        $admin = $this->authenticatedUser($request);
         $validated = $request->validate([
             'force' => ['sometimes', 'boolean'],
         ]);
@@ -366,15 +373,17 @@ class UserController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
+
+        $actor = $this->authenticatedUser($request);
 
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8'],
-            'role'      => ['sometimes', 'string', 'max:50'],
+            'role'      => ['sometimes', 'string', Rule::in(UserRoles::ALL)],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
@@ -386,12 +395,19 @@ class UserController extends Controller
         $groupIds = $validated['access_group_ids'] ?? null;
         unset($validated['access_group_ids']);
 
+        $role = $validated['role'] ?? UserRoles::USER;
+        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
+            $role = UserRoles::USER;
+            $groupIds = null;
+            unset($validated['mcp_access']);
+        }
+
         $user = User::create([
             'name'                   => '',
             'full_name'              => $validated['full_name'],
             'email'                  => $validated['email'] ?? null,
             'password'               => Hash::make($validated['password']),
-            'role'                   => $validated['role'] ?? 'user',
+            'role'                   => $role,
             'mcp_access'             => $validated['mcp_access'] ?? McpUserAccess::NONE,
             'is_approved'            => $validated['is_approved'] ?? true,
             'force_password_change'  => true,
@@ -539,7 +555,7 @@ class UserController extends Controller
      */
     public function importHrOnboardingCsv(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -703,15 +719,21 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
+        }
+
+        $actor = $this->authenticatedUser($request);
+
+        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor) && UserRoles::hasRole($user, [UserRoles::ADMIN, UserRoles::HR])) {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $validated = $request->validate(array_merge([
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'role' => ['sometimes', 'string', 'max:50'],
+            'role' => ['sometimes', 'string', Rule::in(UserRoles::ALL)],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
@@ -751,6 +773,15 @@ class UserController extends Controller
             'work_history.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
         ], $this->hrProfileValidationRules()));
 
+        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
+            unset($validated['role'], $validated['mcp_access']);
+            if (array_key_exists('role', $request->all()) && $request->input('role') !== UserRoles::USER) {
+                return response()->json([
+                    'message' => 'HR users can only manage standard user accounts.',
+                ], 403);
+            }
+        }
+
         if (array_key_exists('manager_id', $validated) && $this->wouldCreateManagerCycle($user, $validated['manager_id'])) {
             return response()->json([
                 'message' => 'Invalid manager assignment.',
@@ -760,6 +791,10 @@ class UserController extends Controller
 
         $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;
         unset($validated['access_group_ids']);
+
+        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
+            $groupIds = null;
+        }
 
         $educationHistory = array_key_exists('education_history', $validated) ? $validated['education_history'] : null;
         $workHistory = array_key_exists('work_history', $validated) ? $validated['work_history'] : null;
@@ -966,41 +1001,12 @@ class UserController extends Controller
         return false;
     }
 
-    private function authenticatedUser(Request $request): ?User
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user || ! $user->is_approved) {
-            return null;
-        }
-
-        return $user;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
     private function adminUserPayload(User $user): array
     {
         return array_merge($user->toArray(), [
             'profile_completeness' => ProfileCompleteness::forUser($user),
             'has_push_subscription' => (bool) $user->pushSubscriptions_exists,
         ]);
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return null;
     }
 
 }

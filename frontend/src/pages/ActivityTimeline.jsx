@@ -1,4 +1,5 @@
 import db from '@/api/apiClient';
+import { canViewAllActivity } from '@/lib/roles';
 import React, { useMemo, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
@@ -135,7 +136,7 @@ export default function ActivityTimeline() {
     retry: false,
   });
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canViewAllActivity(user);
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ['activities-full'],

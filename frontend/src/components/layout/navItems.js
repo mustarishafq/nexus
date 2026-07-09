@@ -17,7 +17,7 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
   { type: 'more', icon: Grip, label: 'More' },
 ];
 
-export function buildMobileMoreItems({ showAnalytics, isAdmin }) {
+export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers }) {
   return [
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
     {
@@ -40,10 +40,12 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin }) {
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
     { path: '/profile', icon: User, label: 'Profile', match: (path) => path === '/profile' },
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
+    ...(canManageUsers ? [
+      { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
+    ] : []),
     ...(isAdmin ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast', match: (path) => path === '/admin/broadcast' },
       { path: '/admin/events', icon: Shield, label: 'Events', match: (path) => path === '/admin/events' },
-      { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
     ] : []),
   ];
 }
@@ -52,7 +54,7 @@ export function matchMobileMorePath(pathname, moreItems) {
   return moreItems.some((item) => item.match(pathname));
 }
 
-export function buildDesktopNavItems({ showAnalytics, isAdmin }) {
+export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers }) {
   return [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', match: (path) => path === '/' },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
@@ -81,10 +83,12 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin }) {
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
+    ...(canManageUsers ? [
+      { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
+    ] : []),
     ...(isAdmin ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast', match: (path) => path === '/admin/broadcast' },
       { path: '/admin/events', icon: Shield, label: 'Events', match: (path) => path === '/admin/events' },
-      { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
   ];

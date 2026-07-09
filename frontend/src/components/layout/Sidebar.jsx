@@ -7,6 +7,7 @@ import {
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -23,7 +24,9 @@ export default function Sidebar({
     staleTime: 60_000,
   });
 
-  const showAnalytics = user?.role === 'admin' || metabaseDashboards.length > 0;
+  const showAnalytics = userIsAdmin(user) || metabaseDashboards.length > 0;
+  const isAdmin = userIsAdmin(user);
+  const showUserManagement = canManageUsers(user);
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -38,10 +41,12 @@ export default function Sidebar({
     { path: '/activity', icon: Activity, label: 'Activity Feed' },
     { path: '/network-health', icon: Wifi, label: 'Network Health' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
-    ...(user?.role === 'admin' ? [
+    ...(showUserManagement ? [
+      { path: '/admin/users', icon: Users, label: isAdmin ? 'User Management' : 'HR Management' },
+    ] : []),
+    ...(isAdmin ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
       { path: '/admin/events', icon: Shield, label: 'System Events' },
-      { path: '/admin/users', icon: Users, label: 'User Management' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];

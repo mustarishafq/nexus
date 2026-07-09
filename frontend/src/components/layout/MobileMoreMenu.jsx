@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { cn } from '@/lib/utils';
 import { glassDialogMutedText, glassDockNavItemInactive, glassDockNavLabel, glassPanelStyles } from './glassStyles';
 import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
+import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
@@ -23,9 +24,13 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
     staleTime: 60_000,
   });
 
-  const showAnalytics = user?.role === 'admin' || metabaseDashboards.length > 0;
-  const isAdmin = user?.role === 'admin';
-  const moreItems = buildMobileMoreItems({ showAnalytics, isAdmin });
+  const showAnalytics = userIsAdmin(user) || metabaseDashboards.length > 0;
+  const isAdmin = userIsAdmin(user);
+  const moreItems = buildMobileMoreItems({
+    showAnalytics,
+    isAdmin,
+    canManageUsers: canManageUsers(user),
+  });
   const adminItems = moreItems.filter((item) => item.path.startsWith('/admin/'));
   const regularItems = moreItems.filter((item) => !item.path.startsWith('/admin/'));
   const isActive = matchMobileMorePath(location.pathname, moreItems);

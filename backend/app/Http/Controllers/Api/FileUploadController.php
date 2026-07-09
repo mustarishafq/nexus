@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Rules\File;
 
 class FileUploadController extends Controller
 {
+    use AuthorizesRoles;
+
     private const IMAGE_FOLDERS = [
         'profile-pictures',
         'cover-pictures',
@@ -40,7 +43,7 @@ class FileUploadController extends Controller
                 ],
             ]);
         } elseif ($folder === 'attendance-watermark-logos') {
-            if ($response = $this->authorizeAdmin($request)) {
+            if ($response = $this->authorizeHrOrAdmin($request)) {
                 return $response;
             }
 
@@ -72,20 +75,5 @@ class FileUploadController extends Controller
             'media_type' => str_starts_with($mime, 'video/') ? 'video' : 'image',
             'mime_type' => $mime,
         ], 201);
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return null;
     }
 }

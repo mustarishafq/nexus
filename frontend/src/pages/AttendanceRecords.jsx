@@ -17,6 +17,7 @@ import UserSearchCombobox from '@/components/users/UserSearchCombobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageAttendance } from '@/lib/roles';
 import { formatDurationMinutes } from '@/lib/formatDuration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -402,7 +403,7 @@ function MyAttendanceHistory() {
 function AttendanceAdminReport() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const canViewAllRecords = canManageAttendance(user);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
@@ -433,13 +434,13 @@ function AttendanceAdminReport() {
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-dashboard', filters],
     queryFn: () => db.attendance.dashboard(filters),
-    enabled: isAdmin,
+    enabled: canViewAllRecords,
   });
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-attendance-admin'],
     queryFn: () => db.entities.User.list('-created_date', 200),
-    enabled: isAdmin,
+    enabled: canViewAllRecords,
     staleTime: 120_000,
   });
 
@@ -466,7 +467,7 @@ function AttendanceAdminReport() {
     }
   };
 
-  if (!isAdmin) {
+  if (!canViewAllRecords) {
     return null;
   }
 

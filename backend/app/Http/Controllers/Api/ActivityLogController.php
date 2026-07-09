@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -25,14 +26,14 @@ class ActivityLogController extends Controller
 
         $query = ActivityLog::query();
 
-        if ($user->role !== 'admin') {
+        if (! UserRoles::isHrOrAdmin($user)) {
             $query->where('user_id', (string) $user->id);
         }
 
         $items = $this->applyIndexQuery(
             $request,
             $query,
-            $user->role === 'admin'
+            UserRoles::isHrOrAdmin($user)
                 ? ['user_id', 'system_id', 'action', 'resource_type', 'resource_id']
                 : ['system_id', 'action', 'resource_type', 'resource_id']
         )->get();
@@ -132,7 +133,7 @@ class ActivityLogController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin' && $activityLog->user_id !== (string) $user->id) {
+        if (! UserRoles::isHrOrAdmin($user) && $activityLog->user_id !== (string) $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

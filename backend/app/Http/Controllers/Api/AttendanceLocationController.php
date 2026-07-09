@@ -2,18 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceLocation;
-use App\Support\ApiTokenAuth;
 use App\Support\AttendanceLocationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AttendanceLocationController extends Controller
 {
+    use AuthorizesRoles;
+
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -31,7 +33,7 @@ class AttendanceLocationController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -49,7 +51,7 @@ class AttendanceLocationController extends Controller
 
     public function update(Request $request, AttendanceLocation $attendanceLocation): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -67,7 +69,7 @@ class AttendanceLocationController extends Controller
 
     public function destroy(Request $request, AttendanceLocation $attendanceLocation): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -86,20 +88,5 @@ class AttendanceLocationController extends Controller
         $attendanceLocation->delete();
 
         return response()->json(['message' => 'Location deleted']);
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return null;
     }
 }

@@ -14,6 +14,7 @@ import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
 import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
 import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
 import { normalizeSplashAnimation } from '@/lib/splashAnimations';
 import { resetSplashFormState, splashConfigToFormState } from '@/lib/splashConfig';
@@ -66,15 +67,22 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
   };
 }
 
+const HR_SECTIONS = ADMIN_SECTIONS.filter((section) => section.id === 'attendance');
+
 export default function AdminSettings({ embedded = false }) {
   const { user } = useAuth();
+  const isAdmin = userIsAdmin(user);
+  const canAccessSettings = canManageAttendance(user);
+  const visibleSections = isAdmin ? ADMIN_SECTIONS : HR_SECTIONS;
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState(() => mergeSettingsFromPayload({}));
 
   const sectionParam = searchParams.get('section');
-  const activeSection = ADMIN_SECTION_IDS.has(sectionParam) ? sectionParam : 'branding';
+  const activeSection = visibleSections.some((section) => section.id === sectionParam)
+    ? sectionParam
+    : visibleSections[0]?.id || 'attendance';
 
   const setActiveSection = (section) => {
     setSearchParams((current) => {
@@ -86,7 +94,7 @@ export default function AdminSettings({ embedded = false }) {
   };
 
   useEffect(() => {
-    if (user?.role !== 'admin') {
+    if (!canAccessSettings) {
       setLoading(false);
       return;
     }
@@ -99,14 +107,19 @@ export default function AdminSettings({ embedded = false }) {
         toast.error(error?.data?.message || error.message || 'Failed to load settings');
       })
       .finally(() => setLoading(false));
-  }, [user?.role]);
+  }, [canAccessSettings]);
 
   const save = async () => {
     setSaving(true);
     try {
-      const payload = await db.appSettings.update(settings);
+      const payload = isAdmin
+        ? await db.appSettings.update(settings)
+        : await db.appSettings.update({
+            ...attendanceWatermarkConfigToFormState(settings),
+            attendance_enabled: settings.attendance_enabled,
+          });
       setSettings((current) => mergeSettingsFromPayload(payload, current));
-      toast.success('Admin settings saved');
+      toast.success(isAdmin ? 'Admin settings saved' : 'Attendance settings saved');
       window.dispatchEvent(new Event('app-settings-updated'));
     } catch (error) {
       toast.error(error?.data?.message || error.message || 'Failed to save settings');
@@ -115,14 +128,14 @@ export default function AdminSettings({ embedded = false }) {
     }
   };
 
-  if (user?.role !== 'admin') {
+  if (!canAccessSettings) {
     return (
       <Card className="rounded-2xl w-full">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" /> Admin access required
+            <Shield className="w-4 h-4 text-primary" /> Access required
           </CardTitle>
-          <CardDescription>This section is only available to administrators.</CardDescription>
+          <CardDescription>This section is only available to administrators and HR staff.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -133,10 +146,12 @@ export default function AdminSettings({ embedded = false }) {
       {!embedded ? (
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Shield className="w-6 h-6 text-primary" /> Admin Settings
+            <Shield className="w-6 h-6 text-primary" /> {isAdmin ? 'Admin Settings' : 'HR Settings'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Branding, splash screen, application launch, attendance watermark, and email delivery.
+            {isAdmin
+              ? 'Branding, splash screen, application launch, attendance watermark, and email delivery.'
+              : 'Attendance watermark, locations, and department policies.'}
           </p>
         </div>
       ) : null}
@@ -148,7 +163,7 @@ export default function AdminSettings({ embedded = false }) {
       ) : (
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
           <SettingsSectionNav
-            items={ADMIN_SECTIONS}
+            items={visibleSections}
             value={activeSection}
             onChange={setActiveSection}
             className="md:w-48 lg:w-52 shrink-0"

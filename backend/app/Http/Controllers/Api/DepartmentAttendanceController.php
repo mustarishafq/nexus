@@ -2,19 +2,21 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
-use App\Support\ApiTokenAuth;
 use App\Support\DepartmentAttendanceSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DepartmentAttendanceController extends Controller
 {
+    use AuthorizesRoles;
+
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -44,7 +46,7 @@ class DepartmentAttendanceController extends Controller
 
     public function show(Request $request, Department $department): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -64,7 +66,7 @@ class DepartmentAttendanceController extends Controller
 
     public function update(Request $request, Department $department): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
             return $response;
         }
 
@@ -83,20 +85,5 @@ class DepartmentAttendanceController extends Controller
             'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
         ]);
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return null;
     }
 }

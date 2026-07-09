@@ -46,6 +46,8 @@ import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getP
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
+import { useAuth } from '@/lib/AuthContext';
+import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES } from '@/lib/roles';
 
 const MCP_ACCESS_OPTIONS = [
   { value: 'none', label: 'No MCP access' },
@@ -53,6 +55,12 @@ const MCP_ACCESS_OPTIONS = [
   { value: 'write', label: 'Write only' },
   { value: 'both', label: 'Read & write' },
 ];
+
+function roleBadgeVariant(role) {
+  if (role === ROLES.ADMIN) return 'default';
+  if (role === ROLES.HR) return 'outline';
+  return 'secondary';
+}
 
 function McpAccessSelect({ value, onChange, disabled = false }) {
   return (
@@ -276,6 +284,9 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 }
 
 export default function UserManagement() {
+  const { user: currentUser } = useAuth();
+  const isAdmin = userIsAdmin(currentUser);
+  const isHrUser = isHr(currentUser);
   const [approvingUser, setApprovingUser] = useState(null);
   const [pendingUserApproval, setPendingUserApproval] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -323,7 +334,7 @@ export default function UserManagement() {
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
   const [searchParams] = useSearchParams();
-  const adminSections = new Set(['users', 'groups', 'analytics', 'sso-links', 'api-tokens']);
+  const adminSections = new Set(isAdmin ? ['users', 'groups', 'analytics', 'sso-links', 'api-tokens'] : ['users']);
   const [activeSection, setActiveSection] = useState(() => {
     const section = searchParams.get('section');
     return section && adminSections.has(section) ? section : 'users';
@@ -411,6 +422,7 @@ export default function UserManagement() {
 
   const getUserAccessLabel = (user) => {
     if (user.role === 'admin') return 'All apps (admin)';
+    if (user.role === 'hr') return 'HR access';
     const groupIds = getUserGroupIds(user);
     if (groupIds.length === 0) return 'No app access';
     const names = Array.isArray(user.access_group_names) && user.access_group_names.length > 0
@@ -462,6 +474,7 @@ export default function UserManagement() {
   const stats = {
     total: users.length,
     admins: users.filter(user => user.role === 'admin').length,
+    hrStaff: users.filter(user => user.role === 'hr').length,
     approved: users.filter(user => user.is_approved).length,
     pending: users.filter(user => !user.is_approved).length,
     incompleteProfiles: users.filter((user) => user.is_approved && getUserProfileStrength(user).percent < 100).length,
@@ -907,7 +920,10 @@ export default function UserManagement() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-52">
-        <DropdownMenuItem onClick={() => openEditUser(user)}>
+        <DropdownMenuItem
+          onClick={() => openEditUser(user)}
+          disabled={isHrUser && !isAdmin && (user.role === 'admin' || user.role === 'hr')}
+        >
           <Edit className="w-4 h-4 mr-2" />
           Edit user
         </DropdownMenuItem>
@@ -920,17 +936,19 @@ export default function UserManagement() {
             {nudgingUser === user.id ? 'Sending reminder...' : 'Send profile reminder'}
           </DropdownMenuItem>
         ) : null}
-        {user.is_approved ? (
+        {isAdmin && user.is_approved ? (
           <DropdownMenuItem onClick={() => openNotificationDialog(user)}>
             <Send className="w-4 h-4 mr-2" />
             Send notification
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem onClick={() => openApiTokenDialog(user)}>
-          <Key className="w-4 h-4 mr-2" />
-          Generate API token
-        </DropdownMenuItem>
-        {user.role !== 'admin' && (
+        {isAdmin ? (
+          <DropdownMenuItem onClick={() => openApiTokenDialog(user)}>
+            <Key className="w-4 h-4 mr-2" />
+            Generate API token
+          </DropdownMenuItem>
+        ) : null}
+        {isAdmin && user.role !== 'admin' && user.role !== 'hr' ? (
           <>
             <DropdownMenuItem onClick={() => openAssignDialog(user)}>
               <Layers className="w-4 h-4 mr-2" />
@@ -941,12 +959,12 @@ export default function UserManagement() {
               Assign analytics
             </DropdownMenuItem>
           </>
-        )}
+        ) : null}
         <DropdownMenuSeparator />
         {user.is_approved ? (
           <DropdownMenuItem
             onClick={() => setPendingUserApproval({ user, isApproved: false })}
-            disabled={approvingUser === user.id}
+            disabled={approvingUser === user.id || (isHrUser && !isAdmin && user.role === 'admin')}
           >
             <UserX className="w-4 h-4 mr-2" />
             Revoke access
@@ -960,13 +978,15 @@ export default function UserManagement() {
             Approve user
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          onClick={() => setPendingDeleteUser(user)}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Remove user
-        </DropdownMenuItem>
+        {isAdmin ? (
+          <DropdownMenuItem
+            onClick={() => setPendingDeleteUser(user)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Remove user
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
     );
@@ -1381,9 +1401,13 @@ export default function UserManagement() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> User Management
+            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> {isHrUser && !isAdmin ? 'HR Management' : 'User Management'}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage users, access groups, and analytics dashboards.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isHrUser && !isAdmin
+              ? 'Manage employee profiles, approvals, and HR onboarding.'
+              : 'Manage users, access groups, and analytics dashboards.'}
+          </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
             <span><span className="font-semibold text-foreground">{stats.total}</span> users</span>
             <span className="hidden sm:inline text-border">·</span>
@@ -1427,15 +1451,17 @@ export default function UserManagement() {
           <Button size="sm" className="gap-1.5 w-full sm:w-auto min-h-[40px]" onClick={() => setCreateOpen(true)}>
             <UserPlus className="w-4 h-4" /> Create User
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 w-full sm:w-auto min-h-[40px]"
-            onClick={() => openNotificationDialog()}
-          >
-            <Send className="w-4 h-4 shrink-0" />
-            <span className="truncate">Send notification</span>
-          </Button>
+          {isAdmin ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 w-full sm:w-auto min-h-[40px]"
+              onClick={() => openNotificationDialog()}
+            >
+              <Send className="w-4 h-4 shrink-0" />
+              <span className="truncate">Send notification</span>
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -1460,12 +1486,14 @@ export default function UserManagement() {
       </motion.div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5 sm:inline-flex sm:h-10 sm:w-auto">
+        <TabsList className={`grid h-auto w-full gap-1 sm:inline-flex sm:h-10 sm:w-auto ${isAdmin ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-1'}`}>
           <TabsTrigger value="users" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <UsersIcon className="w-4 h-4 shrink-0" />
             <span className="truncate">Users</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{stats.total}</Badge>
           </TabsTrigger>
+          {isAdmin ? (
+            <>
           <TabsTrigger value="groups" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <Layers className="w-4 h-4 shrink-0" />
             <span className="truncate">Groups</span>
@@ -1485,6 +1513,8 @@ export default function UserManagement() {
             <span className="truncate">API Tokens</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{apiTokenCount}</Badge>
           </TabsTrigger>
+            </>
+          ) : null}
         </TabsList>
 
         <TabsContent value="sso-links" className="mt-0">
@@ -1524,8 +1554,9 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All roles</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {ROLE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -1592,7 +1623,7 @@ export default function UserManagement() {
                       {renderUserActionsMenu(user)}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
+                      <Badge variant={roleBadgeVariant(user.role)} className="text-xs capitalize">
                         {user.role || 'user'}
                       </Badge>
                       <Badge
@@ -1646,7 +1677,7 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
+                        <Badge variant={roleBadgeVariant(user.role)} className="text-xs capitalize">
                           {user.role || 'user'}
                         </Badge>
                       </TableCell>
@@ -2145,27 +2176,32 @@ export default function UserManagement() {
                   <Label>Email</Label>
                   <Input value={editUser.email || ''} disabled className="bg-muted/40" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Role</Label>
-                  <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>MCP access</Label>
-                  <McpAccessSelect
-                    value={editForm.mcp_access || 'none'}
-                    onChange={(value) => setEditForm((prev) => ({ ...prev, mcp_access: value }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Controls which MCP tools this user can use via API tokens or OAuth.
-                  </p>
-                </div>
-                {editForm.role !== 'admin' && (
+                {isAdmin ? (
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                {isAdmin ? (
+                  <div className="space-y-2">
+                    <Label>MCP access</Label>
+                    <McpAccessSelect
+                      value={editForm.mcp_access || 'none'}
+                      onChange={(value) => setEditForm((prev) => ({ ...prev, mcp_access: value }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Controls which MCP tools this user can use via API tokens or OAuth.
+                    </p>
+                  </div>
+                ) : null}
+                {isAdmin && editForm.role !== 'admin' && editForm.role !== 'hr' && (
                   <div className="space-y-2">
                     <Label>Access Groups</Label>
                     <GroupMultiSelect
@@ -2331,24 +2367,29 @@ export default function UserManagement() {
               <Label>Password</Label>
               <Input name="password" type="password" placeholder="Min 8 characters" minLength={8} required />
             </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={newUserRole} onValueChange={setNewUserRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>MCP access</Label>
-              <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
-              <p className="text-xs text-muted-foreground">
-                Controls which MCP tools this user can use via API tokens or OAuth.
-              </p>
-            </div>
-            {newUserRole !== 'admin' && (
+            {isAdmin ? (
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={newUserRole} onValueChange={setNewUserRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            {isAdmin ? (
+              <div className="space-y-2">
+                <Label>MCP access</Label>
+                <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
+                <p className="text-xs text-muted-foreground">
+                  Controls which MCP tools this user can use via API tokens or OAuth.
+                </p>
+              </div>
+            ) : null}
+            {isAdmin && newUserRole !== 'admin' && newUserRole !== 'hr' && (
               <div className="space-y-2">
                 <Label>Access Groups</Label>
                 <GroupMultiSelect
@@ -2585,17 +2626,19 @@ export default function UserManagement() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
-            <CsvImportOption
-              icon={UserPlus}
-              title="New users"
-              description="Create accounts with name, email, password, and role."
-              disabled={importBusy}
-              onUpload={() => {
-                setImportDialogOpen(false);
-                csvRef.current?.click();
-              }}
-              onTemplate={downloadSampleCsv}
-            />
+            {isAdmin ? (
+              <CsvImportOption
+                icon={UserPlus}
+                title="New users"
+                description="Create accounts with name, email, password, and role."
+                disabled={importBusy}
+                onUpload={() => {
+                  setImportDialogOpen(false);
+                  csvRef.current?.click();
+                }}
+                onTemplate={downloadSampleCsv}
+              />
+            ) : null}
             <CsvImportOption
               icon={Briefcase}
               title="HR onboarding"
@@ -2607,17 +2650,19 @@ export default function UserManagement() {
               }}
               onTemplate={downloadHrOnboardingSampleCsv}
             />
-            <CsvImportOption
-              icon={Layers}
-              title="Access groups"
-              description="Assign existing users to groups in bulk by email."
-              disabled={importBusy}
-              onUpload={() => {
-                setImportDialogOpen(false);
-                assignGroupsCsvRef.current?.click();
-              }}
-              onTemplate={downloadAssignGroupsSampleCsv}
-            />
+            {isAdmin ? (
+              <CsvImportOption
+                icon={Layers}
+                title="Access groups"
+                description="Assign existing users to groups in bulk by email."
+                disabled={importBusy}
+                onUpload={() => {
+                  setImportDialogOpen(false);
+                  assignGroupsCsvRef.current?.click();
+                }}
+                onTemplate={downloadAssignGroupsSampleCsv}
+              />
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

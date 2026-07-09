@@ -10,6 +10,7 @@ import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
+import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
 import AppsOrbNavItem from './AppsOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
@@ -57,10 +58,11 @@ export default function BottomNav() {
   const navItems = useMemo(() => {
     if (isMobile) return MOBILE_BOTTOM_NAV_ITEMS;
 
-    const showAnalytics = user?.role === 'admin' || metabaseDashboards.length > 0;
+    const showAnalytics = userIsAdmin(user) || metabaseDashboards.length > 0;
     return buildDesktopNavItems({
       showAnalytics,
-      isAdmin: user?.role === 'admin',
+      isAdmin: userIsAdmin(user),
+      canManageUsers: canManageUsers(user),
     });
   }, [isMobile, user?.role, metabaseDashboards.length]);
 

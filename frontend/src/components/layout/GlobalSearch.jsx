@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Loader2, Search } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
 import { getDisplayName } from '@/lib/profile';
-import { Badge } from '@/components/ui/badge';
+import RoleBadge from '@/components/users/RoleBadge';
 import {
   CommandDialog,
   CommandEmpty,

@@ -23,6 +23,7 @@ import {
 } from '@/lib/pwa';
 import AdminSettings from '@/pages/AdminSettings';
 import SettingsSectionNav from '@/components/settings/SettingsSectionNav';
+import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 
 const USER_SECTIONS = [
   { id: 'general', label: 'General', icon: Moon },
@@ -35,7 +36,8 @@ const USER_SECTION_IDS = new Set(USER_SECTIONS.map((item) => item.id));
 export default function Settings() {
   const { appPublicSettings, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = userIsAdmin(user);
+  const canAccessHrSettings = canManageAttendance(user);
   const [settings, setSettings] = useState({
     in_app: true,
     email: true,
@@ -63,9 +65,9 @@ export default function Settings() {
 
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    const nextTab = isAdmin && tabFromUrl === 'admin' ? 'admin' : 'user';
+    const nextTab = canAccessHrSettings && tabFromUrl === 'admin' ? 'admin' : 'user';
     setActiveTab(nextTab);
-  }, [isAdmin, searchParams]);
+  }, [canAccessHrSettings, searchParams]);
 
   const userSectionParam = searchParams.get('section');
   const userSection = activeTab === 'user' && USER_SECTION_IDS.has(userSectionParam)
@@ -132,12 +134,16 @@ export default function Settings() {
   const handleTabChange = (value) => {
     setActiveTab(value);
 
-    if (value === 'admin' && isAdmin) {
+    if (value === 'admin' && canAccessHrSettings) {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('tab', 'admin');
-        if (!next.get('section') || !['branding', 'splash', 'launch', 'attendance', 'email'].includes(next.get('section'))) {
-          next.set('section', 'branding');
+        const allowedSections = isAdmin
+          ? ['branding', 'splash', 'launch', 'attendance', 'email']
+          : ['attendance'];
+        const defaultSection = isAdmin ? 'branding' : 'attendance';
+        if (!next.get('section') || !allowedSections.includes(next.get('section'))) {
+          next.set('section', defaultSection);
         }
         return next;
       });
@@ -168,9 +174,9 @@ export default function Settings() {
           <TabsTrigger value="user" className="gap-2 min-h-[40px] sm:min-h-0">
             <SettingsIcon className="w-4 h-4 shrink-0" /> Settings
           </TabsTrigger>
-          {isAdmin ? (
+          {canAccessHrSettings ? (
             <TabsTrigger value="admin" className="gap-2 min-h-[40px] sm:min-h-0">
-              <Shield className="w-4 h-4 shrink-0" /> Admin
+              <Shield className="w-4 h-4 shrink-0" /> {isAdmin ? 'Admin' : 'HR'}
             </TabsTrigger>
           ) : null}
         </TabsList>
@@ -420,7 +426,7 @@ export default function Settings() {
           </div>
         </TabsContent>
 
-        {isAdmin ? (
+        {canAccessHrSettings ? (
           <TabsContent value="admin" className="mt-4 min-w-0">
             <AdminSettings embedded />
           </TabsContent>
