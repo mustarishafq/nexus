@@ -64,11 +64,10 @@ export function findApplicationBySystemId(applications, systemId) {
 
 function openExternalUrl(url, { newTab = true } = {}) {
   if (newTab) {
-    const tab = window.open(url, '_blank', 'noopener,noreferrer');
-    if (tab) {
-      tab.opener = null;
-      return;
-    }
+    // With "noopener", browsers may open the tab and still return null.
+    // Never fall through to same-tab navigation in that case.
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
   }
 
   window.location.href = url;

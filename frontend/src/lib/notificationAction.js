@@ -55,13 +55,9 @@ export function resolveNotificationActionUrl(notification) {
 }
 
 function openExternalUrl(url) {
-  const tab = window.open(url, '_blank', 'noopener,noreferrer');
-  if (tab) {
-    tab.opener = null;
-    return;
-  }
-
-  window.location.href = url;
+  // With "noopener", browsers may open the tab and still return null.
+  // Never fall through to same-tab navigation in that case.
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export async function followNotificationAction(
