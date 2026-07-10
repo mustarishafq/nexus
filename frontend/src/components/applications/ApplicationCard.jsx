@@ -43,9 +43,14 @@ export default function ApplicationCard({
   const isLaunching = launching === system.id;
 
   const handleLaunch = (event, openMode) => {
+    event?.preventDefault?.();
     event?.stopPropagation?.();
     if (!isInteractive || isLaunching) return;
     onLaunch(system, openMode ? { openMode } : undefined);
+  };
+
+  const stopCardActionPropagation = (event) => {
+    event.stopPropagation();
   };
 
   const card = (
@@ -97,7 +102,12 @@ export default function ApplicationCard({
       {isInteractive && (
         <div className={cn('pointer-events-none absolute inset-0 z-[3] hidden md:block', hoverRevealClass)}>
           <TooltipProvider delayDuration={200}>
-            <div className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 scale-95 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:scale-100">
+            <div
+              data-app-card-action
+              className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 scale-95 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:scale-100"
+              onClick={stopCardActionPropagation}
+              onPointerDown={stopCardActionPropagation}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -276,7 +286,10 @@ export default function ApplicationCard({
         tabIndex={isInteractive && !hasAdminActions ? 0 : undefined}
         aria-label={system.name}
         aria-disabled={isInteractive && isLaunching ? true : undefined}
-        onClick={isInteractive ? (event) => handleLaunch(event) : undefined}
+        onClick={isInteractive ? (event) => {
+          if (event.target.closest('[data-app-card-action]')) return;
+          handleLaunch(event);
+        } : undefined}
         onKeyDown={!hasAdminActions ? handleLaunchKeyDown : undefined}
         className={cn(
           'group/tile flex w-full flex-col items-center gap-1 text-center',

@@ -66,6 +66,7 @@ export function ApplicationLaunchProvider({ children }) {
   const previewReadyTimerRef = useRef(null);
   const previewResolveRef = useRef(null);
   const credentialPickerResolveRef = useRef(null);
+  const launchingIdRef = useRef(null);
   const launchConfig = useMemo(
     () => resolveLaunchConfigFromSettings(appPublicSettings),
     [appPublicSettings],
@@ -112,6 +113,7 @@ export function ApplicationLaunchProvider({ children }) {
     }
 
     setLaunch(null);
+    launchingIdRef.current = null;
     setLaunchingId(null);
 
     if (pendingTarget) {
@@ -123,11 +125,12 @@ export function ApplicationLaunchProvider({ children }) {
   }, []);
 
   const launchWithAnimation = useCallback(async (application, navigate, options = {}) => {
-    if (!application?.is_enabled || launchingId === application.id) {
+    if (!application?.is_enabled || launchingIdRef.current === application.id) {
       return;
     }
 
     const openMode = options.openMode;
+    launchingIdRef.current = application.id;
 
     try {
       let selectedSsoEmail = null;
@@ -149,6 +152,7 @@ export function ApplicationLaunchProvider({ children }) {
           });
           resolveLaunchTarget(result, navigate);
         } finally {
+          launchingIdRef.current = null;
           setLaunchingId(null);
         }
         return;
@@ -189,6 +193,7 @@ export function ApplicationLaunchProvider({ children }) {
 
       if (launchError) {
         setLaunch(null);
+        launchingIdRef.current = null;
         setLaunchingId(null);
         pendingTargetRef.current = null;
         throw launchError;
@@ -198,6 +203,7 @@ export function ApplicationLaunchProvider({ children }) {
       setLaunch((current) => (current?.key === launchKey ? { ...current, ready: true } : current));
     } catch (error) {
       setLaunch(null);
+      launchingIdRef.current = null;
       setLaunchingId(null);
       pendingTargetRef.current = null;
 
@@ -208,7 +214,7 @@ export function ApplicationLaunchProvider({ children }) {
 
       toast.error(error?.message || 'Unable to launch application.');
     }
-  }, [appPublicSettings?.launch_animations, durationPreset.min_ms, launchConfig, launchingId]);
+  }, [appPublicSettings?.launch_animations, durationPreset.min_ms, launchConfig]);
 
   const previewLaunchAnimation = useCallback((config, options = {}) => {
     const normalizedConfig = normalizeLaunchConfig(config);
@@ -217,7 +223,7 @@ export function ApplicationLaunchProvider({ children }) {
       return Promise.resolve({ skipped: true, reason: 'instant' });
     }
 
-    if (launch || launchingId) {
+    if (launch || launchingId || launchingIdRef.current) {
       return Promise.resolve({ skipped: true, reason: 'busy' });
     }
 
@@ -234,6 +240,7 @@ export function ApplicationLaunchProvider({ children }) {
       previewResolveRef.current = resolve;
 
       const launchKey = `preview-${Date.now()}`;
+      launchingIdRef.current = application.id;
       setLaunchingId(application.id);
       pendingTargetRef.current = null;
 
