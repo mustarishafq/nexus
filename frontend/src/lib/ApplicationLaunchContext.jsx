@@ -122,10 +122,12 @@ export function ApplicationLaunchProvider({ children }) {
     previewResolveRef.current = null;
   }, []);
 
-  const launchWithAnimation = useCallback(async (application, navigate) => {
+  const launchWithAnimation = useCallback(async (application, navigate, options = {}) => {
     if (!application?.is_enabled || launchingId === application.id) {
       return;
     }
+
+    const openMode = options.openMode;
 
     try {
       let selectedSsoEmail = null;
@@ -142,6 +144,7 @@ export function ApplicationLaunchProvider({ children }) {
           const result = await openApplicationTarget(db, application, {
             navigate,
             deferNavigation: true,
+            openMode,
             ssoEmail: selectedSsoEmail,
           });
           resolveLaunchTarget(result, navigate);
@@ -169,6 +172,7 @@ export function ApplicationLaunchProvider({ children }) {
       const launchPromise = openApplicationTarget(db, application, {
         navigate,
         deferNavigation: true,
+        openMode,
         ssoEmail: selectedSsoEmail,
       })
         .then((result) => {

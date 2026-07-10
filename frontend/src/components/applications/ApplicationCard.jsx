@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Bot, Calendar as CalendarIcon, KeyRound, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, KeyRound, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import CornerRibbon from '@/components/applications/CornerRibbon';
 import { cn } from '@/lib/utils';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
@@ -39,6 +40,13 @@ export default function ApplicationCard({
   const isInteractive = !readOnly && system.is_enabled && onLaunch;
   const footerDetail = footerSubtitle ?? (system.description?.trim() || 'No description provided');
   const showOverlayFooter = !footerOutside;
+  const isLaunching = launching === system.id;
+
+  const handleLaunch = (event, openMode) => {
+    event?.stopPropagation?.();
+    if (!isInteractive || isLaunching) return;
+    onLaunch(system, openMode ? { openMode } : undefined);
+  };
 
   const card = (
     <motion.div
@@ -60,7 +68,7 @@ export default function ApplicationCard({
         isInteractive && 'hover:border-white/25 hover:shadow-[0_18px_36px_-14px_color-mix(in_srgb,var(--app-glow)_55%,transparent),0_10px_24px_-12px_rgba(0,0,0,0.35)] hover:brightness-[1.03]',
         !footerOutside && (readOnly ? 'cursor-default' : system.is_enabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed')
       )}
-      onClick={footerOutside ? undefined : isInteractive ? () => onLaunch(system) : undefined}
+      onClick={footerOutside ? undefined : isInteractive ? (event) => handleLaunch(event) : undefined}
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/10" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-white/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -80,9 +88,52 @@ export default function ApplicationCard({
         </div>
       )}
 
-      {launching === system.id && (
+      {isLaunching && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        </div>
+      )}
+
+      {isInteractive && (
+        <div className={cn('pointer-events-none absolute inset-0 z-[3] hidden md:block', hoverRevealClass)}>
+          <TooltipProvider delayDuration={200}>
+            <div className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 scale-95 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:scale-100">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-white hover:bg-white/15 hover:text-white"
+                    aria-label={`Open ${system.name} in new tab`}
+                    disabled={isLaunching}
+                    onClick={(event) => handleLaunch(event, 'new_tab')}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-popover text-popover-foreground border border-border shadow-md">
+                  Open in new tab
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-white hover:bg-white/15 hover:text-white"
+                    aria-label={`Open ${system.name} in same tab`}
+                    disabled={isLaunching}
+                    onClick={(event) => handleLaunch(event, 'same_window')}
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-popover text-popover-foreground border border-border shadow-md">
+                  Open in same tab
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
       )}
 
@@ -215,7 +266,7 @@ export default function ApplicationCard({
       if (!isInteractive) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        onLaunch(system);
+        handleLaunch(event);
       }
     };
 
@@ -224,8 +275,8 @@ export default function ApplicationCard({
         role={isInteractive && !hasAdminActions ? 'button' : undefined}
         tabIndex={isInteractive && !hasAdminActions ? 0 : undefined}
         aria-label={system.name}
-        aria-disabled={isInteractive && launching === system.id ? true : undefined}
-        onClick={isInteractive ? () => onLaunch(system) : undefined}
+        aria-disabled={isInteractive && isLaunching ? true : undefined}
+        onClick={isInteractive ? (event) => handleLaunch(event) : undefined}
         onKeyDown={!hasAdminActions ? handleLaunchKeyDown : undefined}
         className={cn(
           'group/tile flex w-full flex-col items-center gap-1 text-center',

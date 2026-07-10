@@ -496,13 +496,13 @@ export default function Applications() {
   const [ssoCredentialsSystem, setSsoCredentialsSystem] = useState(null);
   const { launchingId, launchWithAnimation } = useApplicationLaunch();
 
-  const handleLaunch = async (system) => {
+  const handleLaunch = async (system, options = {}) => {
     if (!system.is_enabled || launching === system.id || launchingId === system.id) return;
 
     setLaunching(system.id);
 
     try {
-      await launchWithAnimation(system, navigate);
+      await launchWithAnimation(system, navigate, options);
     } finally {
       setLaunching(null);
     }

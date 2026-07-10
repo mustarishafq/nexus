@@ -8,7 +8,9 @@ use App\Services\PushNotificationService;
 
 class MentionService
 {
-    public const TOKEN_PATTERN = '/@\[(\d+)\|([^\]]+)\]/';
+    public const TOKEN_PATTERN = '/@\[(\d+|all)\|([^\]]+)\]/';
+
+    public const ALL_MENTION_ID = 'all';
 
     /**
      * @return array<int, int>
@@ -21,7 +23,20 @@ class MentionService
             return [];
         }
 
-        return collect($matches[1])
+        $ids = collect($matches[1]);
+
+        if ($ids->contains(self::ALL_MENTION_ID)) {
+            return User::query()
+                ->where('is_approved', true)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return $ids
+            ->filter(fn ($id) => $id !== self::ALL_MENTION_ID)
             ->map(fn ($id) => (int) $id)
             ->filter(fn ($id) => $id > 0)
             ->unique()

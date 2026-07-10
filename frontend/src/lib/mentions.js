@@ -1,8 +1,30 @@
-export const MENTION_TOKEN_REGEX = /@\[(\d+)\|([^\]]+)\]/g;
+export const ALL_MENTION_ID = 'all';
+export const ALL_MENTION_LABEL = 'all';
+export const ALL_MENTION_OPTION = {
+  id: ALL_MENTION_ID,
+  name: ALL_MENTION_LABEL,
+  full_name: ALL_MENTION_LABEL,
+  isAll: true,
+};
+
+export const MENTION_TOKEN_REGEX = /@\[(\d+|all)\|([^\]]+)\]/g;
+
+export function isAllMention(userId) {
+  return String(userId) === ALL_MENTION_ID;
+}
 
 export function buildMentionToken(user) {
+  if (user?.isAll || isAllMention(user?.id)) {
+    return `@[${ALL_MENTION_ID}|${ALL_MENTION_LABEL}]`;
+  }
+
   const name = (user?.name?.trim() || user?.full_name?.trim() || 'User').replace(/\]/g, '');
   return `@[${user.id}|${name}]`;
+}
+
+export function matchesAllMentionQuery(query = '') {
+  const normalized = String(query).trim().toLowerCase();
+  return normalized === '' || 'all'.startsWith(normalized);
 }
 
 export function displayMentionText(text = '') {

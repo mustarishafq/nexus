@@ -28,13 +28,13 @@ export default function ProfileRecentApplicationsWidget({
     [applications, activities]
   );
 
-  const handleLaunch = async (app) => {
+  const handleLaunch = async (app, options = {}) => {
     if (!app.is_enabled || launching === app.id || launchingId === app.id) return;
 
     setLaunching(app.id);
 
     try {
-      await launchWithAnimation(app, navigate);
+      await launchWithAnimation(app, navigate, options);
     } finally {
       setLaunching(null);
     }

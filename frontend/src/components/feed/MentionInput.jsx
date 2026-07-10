@@ -1,11 +1,13 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+  ALL_MENTION_OPTION,
   getMentionQueryFromEditor,
   getSerializedCursorOffset,
+  matchesAllMentionQuery,
   renderMentionEditor,
   replaceActiveMentionQuery,
   serializeMentionEditor,
@@ -58,12 +60,20 @@ export default function MentionInput({
 
     loadUsers
       .then((users) => {
-        if (!cancelled) {
-          setResults(Array.isArray(users) ? users : []);
+        if (cancelled) return;
+
+        const next = Array.isArray(users) ? users.filter((user) => !user?.isAll) : [];
+        if (matchesAllMentionQuery(debouncedQuery)) {
+          setResults([ALL_MENTION_OPTION, ...next]);
+          return;
         }
+
+        setResults(next);
       })
       .catch(() => {
-        if (!cancelled) setResults([]);
+        if (!cancelled) {
+          setResults(matchesAllMentionQuery(debouncedQuery) ? [ALL_MENTION_OPTION] : []);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -251,10 +261,20 @@ export default function MentionInput({
                     onClick={() => handleSelect(user)}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-muted/70"
                   >
-                    <UserAvatar user={user} className="h-7 w-7" fallbackClassName="text-[10px]" />
+                    {user.isAll ? (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Users className="h-3.5 w-3.5" />
+                      </div>
+                    ) : (
+                      <UserAvatar user={user} className="h-7 w-7" fallbackClassName="text-[10px]" />
+                    )}
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{user.name || user.full_name || 'User'}</p>
-                      {user.department ? (
+                      <p className="truncate text-sm font-medium">
+                        {user.isAll ? '@all' : user.name || user.full_name || 'User'}
+                      </p>
+                      {user.isAll ? (
+                        <p className="truncate text-[11px] text-muted-foreground">Notify everyone</p>
+                      ) : user.department ? (
                         <p className="truncate text-[11px] text-muted-foreground">{user.department}</p>
                       ) : null}
                     </div>

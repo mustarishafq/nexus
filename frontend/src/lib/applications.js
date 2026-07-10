@@ -78,6 +78,7 @@ export async function openApplicationTarget(db, system, {
   actionUrl,
   navigate,
   deferNavigation = false,
+  openMode,
   ssoEmail,
   resolveSsoEmail,
 } = {}) {
@@ -86,7 +87,7 @@ export async function openApplicationTarget(db, system, {
   }
 
   const redirectTo = actionUrl?.trim() || undefined;
-  const resolvedOpenMode = system.open_mode || 'embedded';
+  const resolvedOpenMode = openMode || system.open_mode || 'embedded';
   let selectedSsoEmail = ssoEmail ?? null;
 
   if (!selectedSsoEmail && system.auth_mode !== 'redirect') {
