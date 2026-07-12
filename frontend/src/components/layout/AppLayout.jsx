@@ -20,12 +20,14 @@ import {
   useAttendanceClockInRedirect,
 } from '@/hooks/useAttendanceReminder';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
+import { isRunningStandalone } from '@/lib/pwa';
 
 export default function AppLayout() {
   useNetworkHealthMonitor();
   const { shouldRedirect, fromPath } = useAttendanceClockInRedirect();
   const isMobile = useIsMobile();
   const location = useLocation();
+  const standalone = isRunningStandalone();
   const [topStripCount, setTopStripCount] = useState(0);
 
   const handleTopStripLayout = useCallback(({ stripCount }) => {
@@ -79,7 +81,10 @@ export default function AppLayout() {
             !isFullBleed && !isViewportFillPage && 'min-h-screen',
             !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
             !isFullBleed && topStripCount >= 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
-            showBottomNav && 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
+            showBottomNav
+              && (standalone
+                ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
+                : 'pb-[5.25rem]')
           )}
         >
           {isFullBleed ? (

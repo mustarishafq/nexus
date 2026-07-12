@@ -15,6 +15,8 @@ Portable spec for recreating the Nexus **glass dock** bottom navigation across *
 | `frontend/src/components/layout/TopBar.jsx` | Top chrome (desktop actions) |
 | `frontend/src/index.css` | Apps orb keyframes + class rules (§14) |
 | `frontend/src/hooks/use-mobile.jsx` | Breakpoint detection (`768px`) |
+| `frontend/src/hooks/useVisualViewportBottomOffset.js` | iOS Safari visual-viewport pin (§2.1) |
+| `frontend/src/lib/pwa.js` | `isRunningStandalone()` — safe-area only in PWA (§2.1) |
 
 ---
 
@@ -60,7 +62,7 @@ Both mobile and desktop use the same outer shell.
 │    ┌────────────────────────────────┐    │  ← horizontal inset
 │    │  … nav items …                 │    │  ← glass dock
 │    └────────────────────────────────┘    │
-│         ↑ safe-area bottom padding       │
+│         ↑ bottom inset (safe-area in PWA)│
 └──────────────────────────────────────────┘
 ```
 
@@ -68,12 +70,41 @@ Both mobile and desktop use the same outer shell.
 
 | Property | Value |
 |----------|-------|
-| Position | `fixed`, `bottom: 0`, `left: 0`, `right: 0`, `z-index: 40` |
-| Outer bottom padding | `12px + env(safe-area-inset-bottom)` → `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` |
+| Position | `fixed`, `left: 0`, `right: 0`, `z-index: 40` |
+| Bottom offset | Visual-viewport offset (see §2.1) — not a hard-coded `bottom: 0` alone |
+| Outer bottom padding | **Standalone / PWA:** `12px + env(safe-area-inset-bottom)` → `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` |
+|  | **Browser tab (Safari/Chrome):** `12px` only → `pb-3` (no safe-area — browser chrome already clears the home indicator) |
 | Horizontal wrapper | `flex justify-center px-3 sm:px-4` (12px mobile, 16px at `sm+`) |
 | Dock surface | `glassDockStyles` = `glassPanelStyles` + `rounded-2xl border` |
 | Internal horizontal padding | `4px` (`px-1`) |
 | Dock corner radius | `16px` (`rounded-2xl`) |
+
+### 2.1 iOS Safari / visual viewport (required)
+
+Safari’s collapsing URL / toolbar changes the **visual** viewport while the **layout** viewport stays tall. A plain `position: fixed; bottom: 0` dock will:
+
+1. Leave a **large gap** above the Safari chrome (looks fine in Chrome, wrong in Safari)
+2. **Jump mid-screen** while the user scrolls (toolbar expand/collapse)
+
+**Pin the dock to the visual viewport** with `useVisualViewportBottomOffset()`:
+
+```js
+// offset = max(0, round(innerHeight - visualViewport.height - visualViewport.offsetTop))
+style={{ bottom: viewportBottomOffset }}  // pixels; 0 on Chrome / steady viewports
+```
+
+Listen to `visualViewport` `resize` + `scroll`, and `window` `resize`, batched via `requestAnimationFrame`.
+
+**Safe-area policy** (`isRunningStandalone()` from `pwa.js`):
+
+| Mode | Outer `pb` | Why |
+|------|------------|-----|
+| Installed PWA / standalone | `0.75rem + env(safe-area-inset-bottom)` | No browser chrome; need home-indicator inset |
+| In-browser tab | `0.75rem` (`pb-3`) only | Safari/Chrome chrome already clears the indicator; adding safe-area double-counts and creates the large bottom gap |
+
+Also require `viewport-fit=cover` in the document `<meta name="viewport">` so `env(safe-area-inset-*)` works in standalone.
+
+Any other fixed UI that sits above the dock (e.g. PWA install prompt) must use the **same** visual-viewport bottom offset and the same standalone-aware safe-area rule.
 
 ### Glass surface (`glassPanelStyles` / `glassDockStyles`)
 
@@ -89,14 +120,15 @@ Both mobile and desktop use the same outer shell.
 
 When the bottom nav is visible, add bottom padding to `<main>` so content is not obscured:
 
-```
-pb-[calc(5.25rem+env(safe-area-inset-bottom))]
-```
+| Mode | Class |
+|------|-------|
+| Standalone / PWA | `pb-[calc(5.25rem+env(safe-area-inset-bottom))]` |
+| Browser tab | `pb-[5.25rem]` |
 
 | Token | Value | Breakdown |
 |-------|-------|-----------|
 | `5.25rem` | `84px` | Dock footprint + bottom inset (works for mobile orb label clearance) |
-| Safe area | `env(safe-area-inset-bottom)` | Home indicator on iOS |
+| Safe area | `env(safe-area-inset-bottom)` | Home indicator — **standalone only** |
 
 Top padding: `pt-16` (`64px`) for fixed TopBar. Adjust upward when alert strips are present (see `AppLayout.jsx`).
 
@@ -515,7 +547,7 @@ Triggered by **More** tab. Not part of dock chrome.
 - [ ] 5-column auto-layout; center column taller (orb overflow)
 - [ ] Variants: inactive / active / pressed per tab
 - [ ] Orb component: pulse, nerve ring, gradient, icon cross-fade
-- [ ] Safe area: `12px` + home indicator inset
+- [ ] Bottom inset: `12px` in browser; `12px` + home indicator in standalone/PWA
 - [ ] Badge on Notifications
 - [ ] More sheet variant (grid + theme footer)
 
@@ -525,13 +557,14 @@ Triggered by **More** tab. Not part of dock chrome.
 - [ ] 12–15 tabs, `min-width 72px` each, no orb
 - [ ] TopBar with search, theme, bell, avatar
 - [ ] Hidden scrollbar state
-- [ ] Main content bottom padding `84px + safe area`
+- [ ] Main content bottom padding `84px` (+ safe area in standalone only)
 
 ### Shared
 
 - [ ] Light + dark mode glass tokens
 - [ ] Active top pill indicator
 - [ ] `prefers-reduced-motion` orb fallback
+- [ ] iOS Safari: visual-viewport bottom pin (§2.1) — no mid-scroll jump / large gap
 
 ---
 
@@ -807,13 +840,23 @@ Full animation block from `frontend/src/index.css`. Include when porting to anot
 ```jsx
 const MOBILE_BREAKPOINT = 768;
 const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
+const standalone = isRunningStandalone();
+const viewportBottomOffset = useVisualViewportBottomOffset();
 
 const navItems = isMobile
   ? MOBILE_BOTTOM_NAV_ITEMS   // 5 items incl. orb + more
   : buildDesktopNavItems({ showAnalytics, isAdmin });
 
-// Outer nav shell — same for both
-<nav className="fixed bottom-0 inset-x-0 z-40 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+// Outer nav shell — same for both; pin to visual viewport (§2.1)
+<nav
+  className={cn(
+    'fixed inset-x-0 z-40',
+    standalone
+      ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
+      : 'pb-3'
+  )}
+  style={{ bottom: viewportBottomOffset }}
+>
   <div className="flex justify-center px-3 sm:px-4">
     <div className={cn(
       'flex items-stretch px-1 rounded-2xl border glassPanelStyles',
@@ -826,11 +869,17 @@ const navItems = isMobile
   </div>
 </nav>
 
-// Main content
-<main className={showBottomNav ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]' : ''} />
+// Main content — safe-area clearance only in standalone
+<main className={cn(
+  showBottomNav && (standalone
+    ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
+    : 'pb-[5.25rem]')
+)} />
 ```
 
 **Do not** render `AppsOrbNavItem` when `!isMobile`. **Do not** render `MobileMoreMenu` on desktop.
+
+**Do not** use bare `fixed bottom-0` without the visual-viewport offset when shipping to iOS Safari.
 
 ---
 
@@ -843,6 +892,7 @@ const navItems = isMobile
 5. **Subtle active cue** — thin top bar, not a full background fill
 6. **Dark-first** — navy UI with blue accent; light mode via same tokens
 7. **Progressive density** — mobile consolidates into More sheet; desktop exposes all routes
+8. **Visual-viewport pinned** — dock tracks the visible bottom on iOS Safari; safe-area only in standalone (§2.1)
 
 ---
 

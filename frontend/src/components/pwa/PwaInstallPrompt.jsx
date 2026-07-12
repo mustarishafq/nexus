@@ -6,18 +6,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
+import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset';
 import {
   canShowManualInstallPrompt,
   CHROMIUM_INSTALL_STEPS,
   dismissManualInstallPrompt,
   getManualInstallPlatform,
   getManualInstallSteps,
+  isRunningStandalone,
 } from '@/lib/pwa';
 
 export default function PwaInstallPrompt() {
   const isMobile = useIsMobile();
   const pwaInstall = usePwaInstall();
   const { isOffline: networkOffline } = useOnlineStatus();
+  const viewportBottomOffset = useVisualViewportBottomOffset();
+  const standalone = isRunningStandalone();
   const [showPrompt, setShowPrompt] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [manualInstallPlatform, setManualInstallPlatform] = useState(null);
@@ -80,8 +84,17 @@ export default function PwaInstallPrompt() {
           exit={{ opacity: 0, y: 24 }}
           className={
             isMobile
-              ? 'fixed inset-x-4 z-50 bottom-[calc(4.5rem+env(safe-area-inset-bottom))]'
+              ? 'fixed inset-x-4 z-50'
               : 'fixed bottom-4 right-4 z-50 w-[min(92vw,360px)]'
+          }
+          style={
+            isMobile
+              ? {
+                  bottom: `calc(4.5rem + ${viewportBottomOffset}px${
+                    standalone ? ' + env(safe-area-inset-bottom)' : ''
+                  })`,
+                }
+              : undefined
           }
         >
           <div className="rounded-2xl border border-border/70 bg-card/95 backdrop-blur-xl shadow-xl p-4 space-y-3">

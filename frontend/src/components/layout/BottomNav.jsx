@@ -7,9 +7,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
+import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { cn } from '@/lib/utils';
+import { isRunningStandalone } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
@@ -20,6 +22,8 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const viewportBottomOffset = useVisualViewportBottomOffset();
+  const standalone = isRunningStandalone();
   const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0, email: 0, whatsNew: 0 });
 
   const { data: metabaseDashboards = [] } = useQuery({
@@ -158,7 +162,15 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+      className={cn(
+        'fixed left-0 right-0 z-40',
+        // In Safari (browser tab), chrome already clears the home indicator — adding
+        // safe-area on top creates the large bottom gap. Keep safe-area for PWA only.
+        standalone
+          ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
+          : 'pb-3'
+      )}
+      style={{ bottom: viewportBottomOffset }}
       aria-label="Main navigation"
     >
       <div className="flex justify-center px-3 sm:px-4">
