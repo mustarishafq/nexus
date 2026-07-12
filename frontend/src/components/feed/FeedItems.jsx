@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, ImageIcon, Loader2, Megaphone, MessageCircle, Send, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Camera, Check, ImageIcon, Loader2, Megaphone, MessageCircle, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -10,12 +10,15 @@ import { Button } from '@/components/ui/button';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostReactions from '@/components/feed/PostReactions';
+import PostImageGrid from '@/components/feed/PostImageGrid';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getDisplayName } from '@/lib/profile';
+import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
-import { toAbsoluteUrl } from '@/lib/media';
 import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
+
+const MAX_POST_IMAGES = 10;
 
 function BroadcastFeedItem({ item, compact = false }) {
   return (
@@ -237,6 +240,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(initialExpanded);
+  const isPending = Boolean(item.is_pending || item.approval_status === 'pending');
 
   useEffect(() => {
     if (initialExpanded) {
@@ -255,14 +259,38 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     },
   });
 
+  const approvePost = useMutation({
+    mutationFn: () => db.feed.approvePost(item.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      toast.success('Post approved.');
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to approve post.');
+    },
+  });
+
+  const rejectPost = useMutation({
+    mutationFn: () => db.feed.rejectPost(item.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      toast.success('Post rejected.');
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to reject post.');
+    },
+  });
+
   const timeAgo = formatDistanceToNow(new Date(item.created_date), { addSuffix: true });
+  const moderationBusy = approvePost.isPending || rejectPost.isPending;
 
   return (
     <article
       id={feedPostElementId(item.id)}
       className={cn(
         'group scroll-mt-24 border-b border-border/50 transition-shadow last:border-b-0',
-        compact ? 'px-3 py-3 md:px-5 md:py-4' : 'px-3 py-4 md:px-5 md:py-5'
+        compact ? 'px-3 py-3 md:px-5 md:py-4' : 'px-3 py-4 md:px-5 md:py-5',
+        isPending && 'bg-amber-500/5'
       )}
     >
       <div className="grid grid-cols-[auto_1fr] gap-x-2.5 md:gap-x-3">
@@ -273,12 +301,22 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
         <div className="col-start-2 row-start-1 min-w-0">
           <div className="flex items-start justify-between gap-2 md:gap-3">
             <div className="min-w-0">
-              <Link
-                to={`/people/${item.author?.id}`}
-                className="text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
-              >
-                {getDisplayName(item.author)}
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to={`/people/${item.author?.id}`}
+                  className="text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
+                >
+                  {getDisplayName(item.author)}
+                </Link>
+                {isPending ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 bg-amber-500/15 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                  >
+                    Pending approval
+                  </Badge>
+                ) : null}
+              </div>
               {item.author?.department ? (
                 <p className="mt-0.5 max-md:truncate text-xs text-muted-foreground">
                   {item.author.department}
@@ -311,22 +349,49 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
               <MentionText text={item.body} />
             </div>
           ) : null}
+        </div>
 
-          {item.image_url ? (
-            <div className="mt-2 overflow-hidden rounded-xl border border-border/50 bg-muted/20">
-              <img
-                src={toAbsoluteUrl(item.image_url)}
-                alt="Post attachment"
-                className="max-h-72 w-full object-cover sm:max-h-80 md:max-h-96"
-                loading="lazy"
-              />
-            </div>
-          ) : null}
+        {item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0) ? (
+          <div className="col-span-2 mt-2.5 min-w-0">
+            <PostImageGrid item={item} />
+          </div>
+        ) : null}
 
+        {item.can_moderate ? (
+          <div className="col-span-2 mt-2.5 flex items-center justify-end gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 gap-1 px-2.5 text-xs bg-emerald-600 text-white hover:bg-emerald-600/90"
+              onClick={() => approvePost.mutate()}
+              disabled={moderationBusy}
+            >
+              {approvePost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+              Approve
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2.5 text-xs border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive"
+              onClick={() => rejectPost.mutate()}
+              disabled={moderationBusy}
+            >
+              {rejectPost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+              Reject
+            </Button>
+          </div>
+        ) : isPending ? (
+          <p className="col-span-2 mt-3 text-xs text-muted-foreground">
+            This post is hidden from the company feed until an admin or HR approves it.
+          </p>
+        ) : null}
+
+        {!isPending ? (
           <div
             className={cn(
-              'mt-3 border-t border-border/40 pt-3',
-              !item.body && !item.image_url && 'mt-2 border-t-0 pt-0'
+              'col-start-2 mt-3 min-w-0 border-t border-border/40 pt-3',
+              !item.body && !(item.image_url || item.image_urls?.length) && 'mt-2 border-t-0 pt-0'
             )}
           >
             <PostReactions item={item} />
@@ -360,15 +425,15 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
               </div>
             ) : null}
           </div>
-        </div>
+        ) : null}
 
-        {expanded ? (
+        {!isPending && expanded ? (
           <PostComments
             postId={item.id}
             commentsCount={item.comments_count || 0}
             compact={compact}
             onCollapse={() => setExpanded(false)}
-            className="col-span-2 row-start-2 md:col-span-1 md:col-start-2"
+            className="col-span-2 mt-2 md:col-span-1 md:col-start-2"
           />
         ) : null}
       </div>
@@ -386,56 +451,92 @@ export function FeedItem({ item, compact = false, initialExpanded = false }) {
 
 export function FeedComposer({ className }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [body, setBody] = useState('');
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imageItems, setImageItems] = useState([]);
+  const requiresApproval = Boolean(user?.feed_post_requires_approval);
 
-  const clearImage = () => {
-    setImageFile(null);
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
-    setImagePreview(null);
+  const clearImages = () => {
+    setImageItems((current) => {
+      current.forEach((item) => {
+        if (item.preview) URL.revokeObjectURL(item.preview);
+      });
+      return [];
+    });
   };
 
-  const applySelectedImage = (file) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file.');
-      return;
-    }
+  const addImageFiles = (files) => {
+    const incoming = Array.isArray(files) ? files.filter(Boolean) : Array.from(files || []).filter(Boolean);
+    if (incoming.length === 0) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be 10 MB or smaller.');
-      return;
-    }
+    setImageItems((current) => {
+      const remaining = MAX_POST_IMAGES - current.length;
+      if (remaining <= 0) {
+        toast.error(`You can attach up to ${MAX_POST_IMAGES} images.`);
+        return current;
+      }
 
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
+      const accepted = [];
+      for (const file of incoming.slice(0, remaining)) {
+        const type = String(file.type || '').toLowerCase();
+        const looksLikeImage = type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name || '');
+        if (!looksLikeImage) {
+          toast.error('Please choose image files only.');
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error('Each image must be 10 MB or smaller.');
+          continue;
+        }
+        accepted.push({
+          id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+          file,
+          preview: URL.createObjectURL(file),
+        });
+      }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+      if (accepted.length === 0) {
+        return current;
+      }
+
+      if (incoming.length > remaining) {
+        toast.error(`Only ${remaining} more image${remaining === 1 ? '' : 's'} can be added.`);
+      }
+
+      return [...current, ...accepted].slice(0, MAX_POST_IMAGES);
+    });
+  };
+
+  const removeImage = (id) => {
+    setImageItems((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target?.preview) URL.revokeObjectURL(target.preview);
+      return current.filter((item) => item.id !== id);
+    });
   };
 
   const createPost = useMutation({
-    mutationFn: async ({ text, file }) => {
-      let image_url = null;
+    mutationFn: async ({ text, files }) => {
+      const image_urls = [];
 
-      if (file) {
+      for (const file of files) {
         const upload = await db.integrations.Core.UploadFile({ file, folder: 'post-images' });
-        image_url = upload?.file_url || null;
+        if (upload?.file_url) {
+          image_urls.push(upload.file_url);
+        }
       }
 
-      return db.feed.createPost({ body: text, image_url });
+      return db.feed.createPost({ body: text, image_urls });
     },
-    onSuccess: () => {
+    onSuccess: (payload) => {
       setBody('');
-      clearImage();
+      clearImages();
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
-      toast.success('Post shared.');
+      const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';
+      toast.success(pending ? 'Post submitted for approval.' : 'Post shared.');
     },
     onError: (error) => {
       toast.error(error?.message || 'Failed to share post.');
@@ -443,12 +544,13 @@ export function FeedComposer({ className }) {
   });
 
   const handleImageSelect = (event) => {
-    const file = event.target.files?.[0];
+    // FileList is live — copy before resetting the input value.
+    const selected = Array.from(event.target.files || []);
     event.target.value = '';
-    if (file) applySelectedImage(file);
+    addImageFiles(selected);
   };
 
-  const canPost = Boolean(body.trim() || imageFile);
+  const canPost = Boolean(body.trim() || imageItems.length > 0);
   const isSubmitting = createPost.isPending;
 
   return (
@@ -466,24 +568,45 @@ export function FeedComposer({ className }) {
         className="text-sm"
       />
 
-      {imagePreview ? (
-        <div className="relative mt-3 overflow-hidden rounded-xl border border-border/60 bg-muted/20">
-          <img
-            src={imagePreview}
-            alt="Selected photo preview"
-            className="max-h-56 w-full object-cover sm:max-h-64"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            className="absolute right-2 top-2 h-8 w-8 rounded-full bg-background/90 shadow-sm"
-            onClick={clearImage}
-            disabled={isSubmitting}
-            title="Remove photo"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+      {requiresApproval ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Your posts need admin or HR approval before they appear in the company feed.
+        </p>
+      ) : null}
+
+      {imageItems.length > 0 ? (
+        <div
+          className={cn(
+            'mt-3 grid gap-2',
+            imageItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'
+          )}
+        >
+          {imageItems.map((item) => (
+            <div
+              key={item.id}
+              className="relative overflow-hidden rounded-xl border border-border/60 bg-muted/20"
+            >
+              <img
+                src={item.preview}
+                alt="Selected photo preview"
+                className={cn(
+                  'w-full object-cover',
+                  imageItems.length === 1 ? 'max-h-56 sm:max-h-64' : 'h-28 sm:h-32'
+                )}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full bg-background/90 shadow-sm"
+                onClick={() => removeImage(item.id)}
+                disabled={isSubmitting}
+                title="Remove photo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
         </div>
       ) : null}
 
@@ -492,7 +615,8 @@ export function FeedComposer({ className }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+            accept="image/*,image/jpeg,image/jpg,image/png,image/webp,image/gif,.heic,.heif"
+            multiple
             className="hidden"
             onChange={handleImageSelect}
           />
@@ -510,8 +634,8 @@ export function FeedComposer({ className }) {
             size="sm"
             className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isSubmitting}
-            title="Upload photo"
+            disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
+            title="Upload photos"
           >
             <ImageIcon className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Photo</span>
@@ -522,12 +646,17 @@ export function FeedComposer({ className }) {
             size="sm"
             className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
             onClick={() => cameraInputRef.current?.click()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
             title="Take photo"
           >
             <Camera className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Camera</span>
           </Button>
+          {imageItems.length > 0 ? (
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              {imageItems.length}/{MAX_POST_IMAGES}
+            </span>
+          ) : null}
         </div>
         <p className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{body.length}/2000</p>
         <Button
@@ -539,7 +668,7 @@ export function FeedComposer({ className }) {
           onClick={() =>
             createPost.mutate({
               text: body.trim(),
-              file: imageFile,
+              files: imageItems.map((item) => item.file),
             })
           }
         >

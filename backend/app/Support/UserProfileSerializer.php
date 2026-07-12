@@ -107,6 +107,7 @@ class UserProfileSerializer
         ])->toArray();
 
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
+        $array['feed_post_requires_approval'] = AppSettings::userRequiresFeedPostApproval($user);
 
         return $array;
     }

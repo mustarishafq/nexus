@@ -36,6 +36,7 @@ class FeedController extends Controller
         $focusPostId = isset($validated['focus_post']) ? (int) $validated['focus_post'] : null;
 
         $posts = Post::query()
+            ->visibleTo($viewer)
             ->with(['author.department', 'reactions'])
             ->withCount('comments')
             ->latest()
@@ -81,6 +82,7 @@ class FeedController extends Controller
         }
 
         $post = Post::query()
+            ->visibleTo($viewer)
             ->with(['author.department', 'reactions'])
             ->withCount('comments')
             ->find($postId);

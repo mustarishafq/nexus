@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\Post;
 use App\Models\User;
+use App\Support\UserRoles;
 
 trait SerializesPosts
 {
@@ -29,12 +30,17 @@ trait SerializesPosts
         }
 
         $reactionsCount = array_sum($reactionCounts);
+        $isPending = $post->isPending();
+        $canModerate = UserRoles::isHrOrAdmin($viewer);
+        $imageUrls = $post->resolvedImageUrls();
 
         return [
             'type' => 'post',
             'id' => $post->id,
             'body' => $post->body,
-            'image_url' => $post->image_url,
+            'image_url' => $imageUrls[0] ?? null,
+            'image_urls' => $imageUrls,
+            'approval_status' => $post->approval_status ?? Post::APPROVAL_APPROVED,
             'author' => $this->serializeFeedAuthor($post->author),
             'comments_count' => (int) ($post->comments_count ?? $post->comments()->count()),
             'reactions_count' => $reactionsCount,
@@ -42,7 +48,9 @@ trait SerializesPosts
             'my_reaction' => $myReaction,
             'available_reactions' => self::POST_REACTIONS,
             'created_date' => $post->created_date,
-            'can_delete' => $viewer->id === $post->author_user_id || $viewer->role === 'admin',
+            'can_delete' => $viewer->id === $post->author_user_id || $canModerate,
+            'can_moderate' => $canModerate && $isPending,
+            'is_pending' => $isPending,
         ];
     }
 }

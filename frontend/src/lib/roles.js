@@ -46,6 +46,10 @@ export function canManageAttendance(user) {
   return isHrOrAdmin(user);
 }
 
+export function canModerateFeed(user) {
+  return isHrOrAdmin(user);
+}
+
 export function canViewAllActivity(user) {
   return isHrOrAdmin(user);
 }

@@ -26,6 +26,10 @@ class PostCommentController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if ($response = $this->ensurePostIsInteractable($post, $viewer)) {
+            return $response;
+        }
+
         $comments = $post->comments()
             ->with('author.department')
             ->orderBy('created_at')
@@ -45,6 +49,10 @@ class PostCommentController extends Controller
 
         if (! $viewer) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($response = $this->ensurePostIsInteractable($post, $viewer)) {
+            return $response;
         }
 
         $validated = $request->validate([
@@ -117,5 +125,18 @@ class PostCommentController extends Controller
         }
 
         return $user;
+    }
+
+    private function ensurePostIsInteractable(Post $post, User $viewer): ?JsonResponse
+    {
+        if ($post->isApproved()) {
+            return null;
+        }
+
+        if ($post->isPending() && ((int) $post->author_user_id === (int) $viewer->id || \App\Support\UserRoles::isHrOrAdmin($viewer))) {
+            return response()->json(['message' => 'This post is awaiting approval.'], 422);
+        }
+
+        return response()->json(['message' => 'Post not found.'], 404);
     }
 }

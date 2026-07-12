@@ -77,8 +77,11 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     return typeof unsub === 'function' ? unsub : undefined;
   }, [onCountChange]);
 
+  const isUnreadNotification = (n) =>
+    n.is_read !== true && n.is_read !== 1 && n.is_read !== '1';
+
   const markRead = async (notif) => {
-    if (notif.is_read) return;
+    if (!isUnreadNotification(notif)) return;
 
     const readAt = new Date().toISOString();
     setNotifications((prev) =>
@@ -98,12 +101,12 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   };
 
   const markAllRead = async () => {
-    const unread = notifications.filter((n) => !n.is_read);
+    const unread = notifications.filter(isUnreadNotification);
     if (unread.length === 0) return;
 
     const readAt = new Date().toISOString();
     setNotifications((prev) =>
-      prev.map((n) => (n.is_read ? n : { ...n, is_read: true, read_at: readAt }))
+      prev.map((n) => (isUnreadNotification(n) ? { ...n, is_read: true, read_at: readAt } : n))
     );
     clearUnreadNotificationsCache(queryClient);
     onCountChange?.(0);
@@ -140,7 +143,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
 
   const dismiss = async (notif) => {
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-    if (!notif.is_read) {
+    if (isUnreadNotification(notif)) {
       removeUnreadNotificationFromCache(queryClient, notif.id);
       onCountChange?.((prev) => Math.max(0, (typeof prev === 'number' ? prev : 0) - 1));
     }
@@ -164,29 +167,36 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   }, [applications, navigate, onClose]);
 
   const filtered = notifications.filter(n => {
-    if (filter === 'unread') return !n.read_at && !n.is_read;
+    if (filter === 'unread') return isUnreadNotification(n);
     if (filter === 'critical') return isCriticalNotification(n);
     return true;
   });
 
+  const unreadCount = notifications.filter(isUnreadNotification).length;
+
   return createPortal(
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
+    <>
+      <AnimatePresence>
+        {open ? (
           <motion.div
+            key="notification-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={onClose}
             className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
           />
+        ) : null}
+      </AnimatePresence>
 
-          {/* Panel */}
+      <AnimatePresence>
+        {open ? (
           <motion.div
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '100%', opacity: 0 }}
+            key="notification-drawer"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className={cn(
               'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
@@ -199,9 +209,9 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-primary" />
                 <h2 className="font-semibold text-lg">Notifications</h2>
-                {notifications.filter(n => !n.is_read).length > 0 && (
+                {unreadCount > 0 && (
                   <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium">
-                    {notifications.filter(n => !n.is_read).length}
+                    {unreadCount}
                   </span>
                 )}
               </div>
@@ -248,6 +258,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
                       onSnooze={snooze}
                       onDelete={dismiss}
                       onActivate={activateNotification}
+                      onClose={onClose}
                     />
                   ))}
                 </div>
@@ -263,9 +274,9 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
               </Link>
             </div>
           </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
+        ) : null}
+      </AnimatePresence>
+    </>,
     document.body
   );
 }

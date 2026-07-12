@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock } from 'lucide-react';
+import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock, Newspaper } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,7 @@ import LaunchSettingsPanel from '@/components/admin/LaunchSettingsPanel';
 import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
 import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
 import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
+import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettingsPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ const ADMIN_SECTIONS = [
   { id: 'branding', label: 'Branding', icon: PenLine },
   { id: 'splash', label: 'Splash', icon: Sparkles },
   { id: 'launch', label: 'App Launch', icon: Rocket },
+  { id: 'feed', label: 'Feed', icon: Newspaper },
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'email', label: 'Email', icon: Server },
 ];
@@ -48,6 +50,19 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     imap_host: payload?.imap_host || '',
     imap_port: payload?.imap_port || 993,
     imap_encryption: payload?.imap_encryption || 'ssl',
+    feed_posts_require_approval: Boolean(
+      payload?.feed_posts_require_approval ?? fallback.feed_posts_require_approval ?? false
+    ),
+    feed_post_approval_exempt_user_ids: Array.isArray(payload?.feed_post_approval_exempt_user_ids)
+      ? payload.feed_post_approval_exempt_user_ids.map((id) => Number(id))
+      : Array.isArray(fallback.feed_post_approval_exempt_user_ids)
+        ? fallback.feed_post_approval_exempt_user_ids
+        : [],
+    feed_post_approval_exempt_users: Array.isArray(payload?.feed_post_approval_exempt_users)
+      ? payload.feed_post_approval_exempt_users
+      : Array.isArray(fallback.feed_post_approval_exempt_users)
+        ? fallback.feed_post_approval_exempt_users
+        : [],
     splash_animations: payload?.splash_animations || fallback.splash_animations || [],
     splash_system_name_animations: payload?.splash_system_name_animations || fallback.splash_system_name_animations || [],
     launch_animations: payload?.launch_animations || fallback.launch_animations || [],
@@ -67,7 +82,7 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
   };
 }
 
-const HR_SECTIONS = ADMIN_SECTIONS.filter((section) => section.id === 'attendance');
+const HR_SECTIONS = ADMIN_SECTIONS.filter((section) => section.id === 'attendance' || section.id === 'feed');
 
 export default function AdminSettings({ embedded = false }) {
   const { user } = useAuth();
@@ -112,14 +127,30 @@ export default function AdminSettings({ embedded = false }) {
   const save = async () => {
     setSaving(true);
     try {
-      const payload = isAdmin
-        ? await db.appSettings.update(settings)
-        : await db.appSettings.update({
-            ...attendanceWatermarkConfigToFormState(settings),
-            attendance_enabled: settings.attendance_enabled,
-          });
+      let payload;
+      if (isAdmin) {
+        payload = await db.appSettings.update(settings);
+      } else if (activeSection === 'feed') {
+        payload = await db.appSettings.update({
+          feed_posts_require_approval: Boolean(settings.feed_posts_require_approval),
+          feed_post_approval_exempt_user_ids: Array.isArray(settings.feed_post_approval_exempt_user_ids)
+            ? settings.feed_post_approval_exempt_user_ids.map((id) => Number(id))
+            : [],
+        });
+      } else {
+        payload = await db.appSettings.update({
+          ...attendanceWatermarkConfigToFormState(settings),
+          attendance_enabled: settings.attendance_enabled,
+        });
+      }
       setSettings((current) => mergeSettingsFromPayload(payload, current));
-      toast.success(isAdmin ? 'Admin settings saved' : 'Attendance settings saved');
+      toast.success(
+        isAdmin
+          ? 'Admin settings saved'
+          : activeSection === 'feed'
+            ? 'Feed settings saved'
+            : 'Attendance settings saved'
+      );
       window.dispatchEvent(new Event('app-settings-updated'));
     } catch (error) {
       toast.error(error?.data?.message || error.message || 'Failed to save settings');
@@ -150,8 +181,8 @@ export default function AdminSettings({ embedded = false }) {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isAdmin
-              ? 'Branding, splash screen, application launch, attendance watermark, and email delivery.'
-              : 'Attendance watermark, locations, and department policies.'}
+              ? 'Branding, splash screen, application launch, feed moderation, attendance watermark, and email delivery.'
+              : 'Feed moderation, attendance watermark, locations, and department policies.'}
           </p>
         </div>
       ) : null}
@@ -171,7 +202,7 @@ export default function AdminSettings({ embedded = false }) {
 
           <div
             className={`min-w-0 flex-1 space-y-4 md:pb-4 ${
-              activeSection === 'attendance'
+              activeSection === 'attendance' || (activeSection === 'feed' && !isAdmin)
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
                 : 'pb-[calc(10rem+env(safe-area-inset-bottom))]'
             }`}
@@ -214,6 +245,27 @@ export default function AdminSettings({ embedded = false }) {
                 </CardHeader>
                 <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                   <LaunchSettingsPanel settings={settings} onChange={setSettings} />
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {activeSection === 'feed' ? (
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Company feed moderation</CardTitle>
+                  <CardDescription>
+                    Require approval for posts, and choose people who can publish without waiting.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FeedModerationSettingsPanel settings={settings} onChange={setSettings} />
+                  {!isAdmin ? (
+                    <div className="flex justify-end border-t pt-4">
+                      <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
+                        <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save feed settings'}
+                      </Button>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             ) : null}
@@ -382,7 +434,7 @@ export default function AdminSettings({ embedded = false }) {
               </>
             ) : null}
 
-            {activeSection !== 'attendance' ? (
+            {activeSection !== 'attendance' && !(activeSection === 'feed' && !isAdmin) ? (
               <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 -mx-1 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 md:bottom-4 md:z-20">
                 <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
                   <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save admin settings'}

@@ -8,6 +8,7 @@ use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
+use App\Support\FeedModerationSettings;
 use App\Support\SplashAnimationSettings;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
@@ -52,7 +53,7 @@ class AppSettingController extends Controller
         }
 
         if (UserRoles::isHr($user) && ! UserRoles::isAdmin($user)) {
-            return $this->updateHrAttendanceSettings($request);
+            return $this->updateHrSettings($request);
         }
 
         if ($response = $this->authorizeAdmin($request)) {
@@ -72,12 +73,13 @@ class AppSettingController extends Controller
             'imap_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'imap_encryption' => ['nullable', 'in:ssl,tls,null'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
-        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules()));
+        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules()));
 
         $current = (array) DB::table('app_settings')->first();
         $splash = SplashAnimationSettings::normalizeConfig(array_merge($current, $validated));
         $launch = ApplicationLaunchSettings::normalizeConfig(array_merge($current, $validated));
         $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
+        $feed = self::resolveFeedModerationColumns($current, $validated);
 
         $settings = DB::table('app_settings')->first();
 
@@ -95,7 +97,7 @@ class AppSettingController extends Controller
                 'imap_port' => $validated['imap_port'] ?? null,
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed));
         } else {
             DB::table('app_settings')->insert(array_merge([
                 'system_name' => $validated['system_name'],
@@ -111,7 +113,7 @@ class AppSettingController extends Controller
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed));
         }
 
         AppSettings::forget();
@@ -119,34 +121,68 @@ class AppSettingController extends Controller
         return response()->json($this->adminPayload());
     }
 
-    private function updateHrAttendanceSettings(Request $request): JsonResponse
+    private function updateHrSettings(Request $request): JsonResponse
     {
-        $validated = $request->validate(AttendanceWatermarkSettings::validationRules());
+        $validated = $request->validate(array_merge(
+            AttendanceWatermarkSettings::validationRules(),
+            FeedModerationSettings::validationRules(),
+        ));
 
         $current = (array) $this->currentSettings();
-        $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
+        $updates = ['updated_at' => now()];
+
+        $hasAttendanceKeys = collect($validated)->keys()->contains(
+            fn (string $key) => str_starts_with($key, 'attendance_')
+        );
+
+        if ($hasAttendanceKeys) {
+            $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
+            $updates = array_merge($updates, AttendanceWatermarkSettings::toDatabaseColumns($attendance));
+        }
+
+        $hasFeedKeys = array_key_exists('feed_posts_require_approval', $validated)
+            || array_key_exists('feed_post_approval_exempt_user_ids', $validated);
+
+        if ($hasFeedKeys) {
+            $updates = array_merge($updates, self::resolveFeedModerationColumns($current, $validated));
+        }
 
         $settings = DB::table('app_settings')->first();
 
         if ($settings) {
-            DB::table('app_settings')->where('id', $settings->id)->update(array_merge(
-                AttendanceWatermarkSettings::toDatabaseColumns($attendance),
-                ['updated_at' => now()],
-            ));
+            DB::table('app_settings')->where('id', $settings->id)->update($updates);
         } else {
             DB::table('app_settings')->insert(array_merge([
                 'system_name' => config('app.name', 'EMZI Nexus Brain'),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], AttendanceWatermarkSettings::toDatabaseColumns($attendance)));
+            ], array_diff_key($updates, ['updated_at' => true])));
         }
 
         AppSettings::forget();
 
-        return response()->json($this->hrAttendancePayload());
+        return response()->json($this->hrSettingsPayload());
     }
 
-    private function hrAttendancePayload(): array
+    /**
+     * @param  array<string, mixed>  $current
+     * @param  array<string, mixed>  $validated
+     * @return array{feed_posts_require_approval: bool, feed_post_approval_exempt_user_ids: string}
+     */
+    private static function resolveFeedModerationColumns(array $current, array $validated): array
+    {
+        $requireApproval = array_key_exists('feed_posts_require_approval', $validated)
+            ? (bool) $validated['feed_posts_require_approval']
+            : FeedModerationSettings::requireApproval((object) $current);
+
+        $exemptUserIds = array_key_exists('feed_post_approval_exempt_user_ids', $validated)
+            ? FeedModerationSettings::normalizeExemptUserIds($validated['feed_post_approval_exempt_user_ids'])
+            : FeedModerationSettings::exemptUserIds((object) $current);
+
+        return FeedModerationSettings::toDatabaseColumns($requireApproval, $exemptUserIds);
+    }
+
+    private function hrSettingsPayload(): array
     {
         $settings = $this->currentSettings();
         $attendance = $this->attendancePayload($settings);
@@ -156,7 +192,17 @@ class AppSettingController extends Controller
             'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
             'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
             'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
-        ], AttendanceWatermarkSettings::toDatabaseColumns($attendance));
+        ], AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true));
+    }
+
+    private function updateHrAttendanceSettings(Request $request): JsonResponse
+    {
+        return $this->updateHrSettings($request);
+    }
+
+    private function hrAttendancePayload(): array
+    {
+        return $this->hrSettingsPayload();
     }
 
     private function currentSettings(): object
@@ -174,6 +220,7 @@ class AppSettingController extends Controller
             'imap_port' => 993,
             'imap_encryption' => 'ssl',
             'splash_animation_style' => SplashAnimationSettings::DEFAULT_STYLE,
+            'feed_posts_require_approval' => FeedModerationSettings::DEFAULT_REQUIRE_APPROVAL,
         ];
 
         if (! Schema::hasTable('app_settings')) {
@@ -230,6 +277,7 @@ class AppSettingController extends Controller
             'launch_durations' => ApplicationLaunchSettings::durationCatalog(),
             'web_push_enabled' => filled(config('services.web_push.public_key')) && filled(config('services.web_push.private_key')) && filled(config('services.web_push.subject')),
             'web_push_public_key' => config('services.web_push.public_key'),
+            'feed_posts_require_approval' => FeedModerationSettings::requireApproval($settings),
         ];
     }
 
@@ -265,6 +313,6 @@ class AppSettingController extends Controller
             'launch_overlay_modes' => ApplicationLaunchSettings::overlayModeCatalog(),
             'launch_progress_styles' => ApplicationLaunchSettings::progressStyleCatalog(),
             'launch_durations' => ApplicationLaunchSettings::durationCatalog(),
-        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance));
+        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true));
     }
 }

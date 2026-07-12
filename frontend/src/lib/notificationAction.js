@@ -67,20 +67,20 @@ export async function followNotificationAction(
   const actionUrl = resolveNotificationActionUrl(notification);
   if (!actionUrl) return;
 
+  // Always dismiss the notifications drawer before leaving the current view.
+  onClose?.();
+
   const app = findApplicationBySystemId(applications, notification.system_id);
 
   if (app?.is_enabled && !isNexusInternalPath(actionUrl)) {
-    onClose?.();
     await openApplicationTarget(db, app, { actionUrl, navigate });
     return;
   }
 
   if (isNexusInternalPath(actionUrl)) {
-    onClose?.();
     navigate(toInternalPath(actionUrl));
     return;
   }
 
-  onClose?.();
   openExternalUrl(actionUrl);
 }

@@ -25,6 +25,7 @@ import { buildSystemStatusDescription } from '@/lib/MetaTagManager';
 import {
   clearUnreadNotificationsCache,
   invalidateNotificationQueries,
+  removeUnreadNotificationFromCache,
 } from '@/hooks/useNotifications';
 
 export default function NotificationCenter() {
@@ -60,15 +61,36 @@ export default function NotificationCenter() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => db.entities.Notification.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications-center'] }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
+      if (variables?.data?.is_read) {
+        removeUnreadNotificationFromCache(queryClient, variables.id);
+        invalidateNotificationQueries(queryClient);
+      }
+    },
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => db.entities.Notification.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications-center'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
+      invalidateNotificationQueries(queryClient);
+    },
   });
 
-  const markRead = (notif) => updateMut.mutate({ id: notif.id, data: { is_read: true, read_at: new Date().toISOString() } });
+  const markRead = (notif) => {
+    if (notif.is_read === true || notif.is_read === 1 || notif.is_read === '1') {
+      return Promise.resolve();
+    }
+
+    const readAt = new Date().toISOString();
+    queryClient.setQueryData(['notifications-center'], (old = []) =>
+      old.map((n) => (n.id === notif.id ? { ...n, is_read: true, read_at: readAt } : n))
+    );
+    removeUnreadNotificationFromCache(queryClient, notif.id);
+
+    return updateMut.mutateAsync({ id: notif.id, data: { is_read: true, read_at: readAt } });
+  };
   const snooze = (notif) => updateMut.mutate({ id: notif.id, data: { snoozed_until: new Date(Date.now() + 3600000).toISOString() } });
   const dismiss = (notif) => deleteMut.mutate(notif.id);
 

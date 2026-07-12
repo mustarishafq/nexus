@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -39,6 +40,16 @@ class AppSettings
         $attendance = AttendanceWatermarkSettings::normalizeConfig((array) $settings);
 
         return (bool) $attendance['enabled'];
+    }
+
+    public static function feedPostsRequireApproval(): bool
+    {
+        return FeedModerationSettings::requireApproval(self::row());
+    }
+
+    public static function userRequiresFeedPostApproval(User $user): bool
+    {
+        return FeedModerationSettings::userRequiresApproval($user, self::row());
     }
 
     /**

@@ -458,8 +458,29 @@ export const db = {
 			return request(`/feed${queryString}`);
 		},
 
-		async createPost({ body = '', image_url = null } = {}) {
-			return request('/posts', { method: 'POST', body: { body, image_url } });
+		async createPost({ body = '', image_url = null, image_urls = null } = {}) {
+			const urls = Array.isArray(image_urls)
+				? image_urls.filter(Boolean)
+				: image_url
+					? [image_url]
+					: [];
+
+			return request('/posts', {
+				method: 'POST',
+				body: {
+					body,
+					image_url: urls[0] || null,
+					image_urls: urls,
+				},
+			});
+		},
+
+		async approvePost(postId) {
+			return request(`/posts/${postId}/approve`, { method: 'POST' });
+		},
+
+		async rejectPost(postId) {
+			return request(`/posts/${postId}/reject`, { method: 'POST' });
 		},
 
 		async deletePost(postId) {

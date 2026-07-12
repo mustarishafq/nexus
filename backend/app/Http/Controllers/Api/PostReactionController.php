@@ -26,6 +26,10 @@ class PostReactionController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if ($response = $this->ensurePostIsInteractable($post)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'reaction' => ['required', 'string', Rule::in(self::POST_REACTIONS)],
         ]);
@@ -64,6 +68,10 @@ class PostReactionController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if ($response = $this->ensurePostIsInteractable($post)) {
+            return $response;
+        }
+
         PostReaction::query()
             ->where('post_id', $post->id)
             ->where('user_id', $viewer->id)
@@ -85,5 +93,14 @@ class PostReactionController extends Controller
         }
 
         return $user;
+    }
+
+    private function ensurePostIsInteractable(Post $post): ?JsonResponse
+    {
+        if ($post->isApproved()) {
+            return null;
+        }
+
+        return response()->json(['message' => 'This post is awaiting approval.'], 422);
     }
 }

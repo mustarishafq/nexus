@@ -13,14 +13,22 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
-export default function NotificationItem({ notification, onMarkRead, onSnooze, onDelete, onActivate }) {
+export default function NotificationItem({ notification, onMarkRead, onSnooze, onDelete, onActivate, onClose }) {
   const config = getNotificationTypeVisual(notification.type);
   const TypeIcon = config.icon;
   const hasAction = Boolean(notification.action_url?.trim());
+  const isUnread = notification.is_read !== true && notification.is_read !== 1 && notification.is_read !== '1';
 
   const handleClick = async () => {
-    if (!notification.is_read) {
-      await onMarkRead?.(notification);
+    // Close the drawer immediately so navigation never leaves it stuck open.
+    onClose?.();
+
+    if (isUnread && onMarkRead) {
+      try {
+        await onMarkRead(notification);
+      } catch {
+        // Still follow the action even if mark-as-read fails.
+      }
     }
 
     if (hasAction && onActivate) {
@@ -32,7 +40,7 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
     <div
       className={cn(
         'group relative flex gap-3 p-3.5 rounded-xl border transition-all duration-200 cursor-pointer',
-        notification.is_read
+        !isUnread
           ? 'border-border bg-card/70 shadow-sm hover:border-border/90 hover:bg-muted/40 dark:bg-muted/30 dark:hover:bg-muted/50'
           : cn(
               config.border,
@@ -57,7 +65,7 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
             <p
               className={cn(
                 'text-sm text-foreground leading-snug font-medium',
-                !notification.is_read && 'font-semibold'
+                isUnread && 'font-semibold'
               )}
             >
               {notification.title}
@@ -81,7 +89,7 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              {!notification.is_read && (
+              {isUnread && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMarkRead?.(notification); }}>
                   <Check className="w-3.5 h-3.5 mr-2" /> Mark as read
                 </DropdownMenuItem>
@@ -111,7 +119,7 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
         </div>
       </div>
 
-      {!notification.is_read && (
+      {isUnread && (
         <div className={cn('absolute top-3.5 right-3.5 w-2 h-2 rounded-full', config.dot)} />
       )}
     </div>

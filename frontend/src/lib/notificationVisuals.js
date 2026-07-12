@@ -135,7 +135,10 @@ export function inferBookingNotificationMeta(rawType = '') {
 export function normalizeNotification(raw) {
   if (!raw) return raw;
 
-  const is_read = raw.is_read ?? Boolean(raw.read_at);
+  const is_read = raw.is_read === true
+    || raw.is_read === 1
+    || raw.is_read === '1'
+    || (raw.is_read == null && Boolean(raw.read_at));
   const action_url = raw.action_url || raw.link || '';
   const system_id = compactSystemId(raw.system_id);
 
