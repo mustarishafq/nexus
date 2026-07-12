@@ -4,6 +4,7 @@ import { Download, Share, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import {
   canShowManualInstallPrompt,
@@ -16,14 +17,20 @@ import {
 export default function PwaInstallPrompt() {
   const isMobile = useIsMobile();
   const pwaInstall = usePwaInstall();
+  const { isOffline: networkOffline } = useOnlineStatus();
   const [showPrompt, setShowPrompt] = useState(false);
-  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [manualInstallPlatform, setManualInstallPlatform] = useState(null);
 
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
+  const isOffline = networkOffline && !offlineDismissed;
 
+  useEffect(() => {
+    if (!networkOffline) {
+      setOfflineDismissed(false);
+    }
+  }, [networkOffline]);
+
+  useEffect(() => {
     const manualInstallable = canShowManualInstallPrompt();
     setManualInstallPlatform(getManualInstallPlatform());
 
@@ -35,17 +42,16 @@ export default function PwaInstallPrompt() {
       setShowPrompt(true);
     }
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
     return () => {
       if (timer) window.clearTimeout(timer);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, [pwaInstall.hasNativePrompt, pwaInstall.installed]);
 
   const dismissPrompt = () => {
+    if (isOffline) {
+      setOfflineDismissed(true);
+      return;
+    }
     if (pwaInstall.manualInstall) {
       dismissManualInstallPrompt();
     }
@@ -109,16 +115,14 @@ export default function PwaInstallPrompt() {
                         : 'Add Nexus to your device for a faster, app-like experience.'}
                 </p>
               </div>
-              {!isOffline && (
-                <button
-                  type="button"
-                  onClick={dismissPrompt}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="Dismiss install prompt"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={dismissPrompt}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={isOffline ? 'Dismiss offline notice' : 'Dismiss install prompt'}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {showManualInstall && (
@@ -137,7 +141,13 @@ export default function PwaInstallPrompt() {
               </ol>
             )}
 
-            {!isOffline && (
+            {isOffline ? (
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" onClick={dismissPrompt}>
+                  Dismiss
+                </Button>
+              </div>
+            ) : (
               <div className="flex gap-2 justify-end">
                 {showManualInstall || showChromiumFallback ? (
                   <Button size="sm" onClick={dismissPrompt}>
