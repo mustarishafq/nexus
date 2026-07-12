@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, KeyRound, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, KeyRound, Maximize2, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import CornerRibbon from '@/components/applications/CornerRibbon';
+import { glassPanelStyles } from '@/components/layout/glassStyles';
 import { cn } from '@/lib/utils';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
@@ -14,7 +15,10 @@ import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping'
 import { applicationCalendarSyncEnabled } from '@/lib/calendarEventMapping';
 
 const hoverRevealClass =
-  'opacity-0 transition-all duration-300 ease-out group-hover:opacity-100 group-focus-within:opacity-100';
+  'opacity-100 transition-all duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100';
+
+const hoverSlideClass =
+  'translate-y-0 transition-transform duration-300 [@media(hover:hover)_and_(pointer:fine)]:translate-y-1 [@media(hover:hover)_and_(pointer:fine)]:group-hover:translate-y-0';
 
 export default function ApplicationCard({
   system,
@@ -25,6 +29,8 @@ export default function ApplicationCard({
   onEdit,
   onDelete,
   onManageSsoCredentials,
+  onWhatsNew,
+  unreadReleaseNotes = 0,
   footerSubtitle,
   readOnly = false,
   footerAlwaysVisible = false,
@@ -144,6 +150,56 @@ export default function ApplicationCard({
         />
       )}
 
+      {(onWhatsNew || (system.auth_mode === 'jwt' && onManageSsoCredentials)) && (
+        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
+          <div className={cn('pointer-events-auto absolute top-2 left-2 flex items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg', hoverSlideClass)}>
+            {system.auth_mode === 'jwt' && onManageSsoCredentials && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
+                title="Manage SSO accounts"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onManageSsoCredentials(system);
+                }}
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onWhatsNew && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
+                title="What's New"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onWhatsNew(system);
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {unreadReleaseNotes > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-semibold leading-none text-white">
+                    {unreadReleaseNotes > 9 ? '9+' : unreadReleaseNotes}
+                  </span>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {unreadReleaseNotes > 0 && !onWhatsNew && (
+        <span
+          className="pointer-events-none absolute top-2 left-2 z-[5] flex h-5 min-w-5 items-center justify-center rounded-full border border-white/25 bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+          title={`${unreadReleaseNotes} new release note${unreadReleaseNotes === 1 ? '' : 's'}`}
+        >
+          {unreadReleaseNotes > 9 ? '9+' : unreadReleaseNotes}
+          <span className="sr-only">{unreadReleaseNotes} unread release notes</span>
+        </span>
+      )}
+
       {notificationsEnabled && (
         <span
           className="pointer-events-none absolute bottom-2 left-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
@@ -190,35 +246,16 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {system.auth_mode === 'jwt' && onManageSsoCredentials && (
-        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
-          <div className="pointer-events-auto absolute top-2 left-2 translate-y-1 transition-transform duration-300 group-hover:translate-y-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-lg border border-white/20 bg-black/55 text-white shadow-lg hover:bg-white/15 hover:text-white"
-              title="Manage SSO accounts"
-              onClick={(e) => {
-                e.stopPropagation();
-                onManageSsoCredentials(system);
-              }}
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       {canManageSystem && onEdit && onDelete && (
         <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
-          <div className="pointer-events-auto absolute top-2 right-2 flex translate-y-1 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:translate-y-0">
-            <Badge variant="outline" className="h-5 border-white/25 bg-white/10 text-[9px] text-white">
+          <div className={cn('pointer-events-auto absolute top-2 right-2 flex items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg', hoverSlideClass)}>
+            <Badge variant="outline" className="hidden h-5 border-white/25 bg-white/10 px-1 text-[9px] text-white sm:inline-flex">
               {system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}
             </Badge>
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-white hover:bg-white/15 hover:text-white"
+              className="h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
               title="Edit"
               onClick={(e) => {
                 e.stopPropagation();
@@ -230,7 +267,7 @@ export default function ApplicationCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-red-300 hover:bg-red-500/20 hover:text-red-200"
+              className="h-7 w-7 text-red-300 hover:bg-red-500/20 hover:text-red-200 sm:h-6 sm:w-6"
               title="Delete"
               onClick={(e) => {
                 e.stopPropagation();
@@ -249,7 +286,10 @@ export default function ApplicationCard({
             'pointer-events-none absolute inset-x-0 bottom-0 z-[2] border-t border-white/25 bg-black/65 px-2.5 py-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
             footerAlwaysVisible
               ? 'translate-y-0'
-              : cn(hoverRevealClass, 'translate-y-2 transition-transform duration-300 group-hover:translate-y-0')
+              : cn(
+                hoverRevealClass,
+                'translate-y-0 [@media(hover:hover)_and_(pointer:fine)]:translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:translate-y-0',
+              )
           )}
         >
           <h3 className="line-clamp-2 text-xs font-semibold leading-snug">{system.name}</h3>
@@ -288,6 +328,28 @@ export default function ApplicationCard({
         <div className="min-w-0 w-full px-0.5 pt-2 text-center">
           <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
           <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{footerDetail}</p>
+          {onWhatsNew && (
+            <button
+              type="button"
+              className={cn(
+                'mt-1.5 inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium',
+                glassPanelStyles,
+                '[@media(hover:hover)_and_(pointer:fine)]:hidden',
+              )}
+              onClick={(event) => {
+                event.stopPropagation();
+                onWhatsNew(system);
+              }}
+            >
+              <Sparkles className="h-3 w-3 text-primary" />
+              What&apos;s New
+              {unreadReleaseNotes > 0 && (
+                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-semibold text-white">
+                  {unreadReleaseNotes > 9 ? '9+' : unreadReleaseNotes}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
     );

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
 use App\Http\Controllers\Api\ApplicationHealthController;
 use App\Http\Controllers\Api\ApplicationMcpCatalogController;
+use App\Http\Controllers\Api\ApplicationReleaseNoteController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\AppSettingController;
@@ -178,6 +179,9 @@ Route::post('applications/{application}/calendar-webhook/preview', [ApplicationC
 Route::post('applications/{application}/mcp-catalog/test', [ApplicationMcpCatalogController::class, 'test']);
 Route::post('applications/{application}/health-check/test', [ApplicationHealthController::class, 'test']);
 Route::post('applications/health-check/run', [ApplicationHealthController::class, 'run']);
+Route::get('application-release-notes/unread-counts', [ApplicationReleaseNoteController::class, 'unreadCounts']);
+Route::post('application-release-notes/mark-read', [ApplicationReleaseNoteController::class, 'markRead']);
+Route::apiResource('application-release-notes', ApplicationReleaseNoteController::class);
 Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('metabase-dashboards', MetabaseDashboardController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);

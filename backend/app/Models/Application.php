@@ -74,6 +74,11 @@ class Application extends Model
         return $this->hasMany(ApplicationSsoCredential::class);
     }
 
+    public function releaseNotes(): HasMany
+    {
+        return $this->hasMany(ApplicationReleaseNote::class);
+    }
+
     /**
      * @return array<int, string>
      */

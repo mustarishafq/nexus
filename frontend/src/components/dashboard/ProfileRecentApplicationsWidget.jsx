@@ -4,8 +4,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ApplicationCard from '@/components/applications/ApplicationCard';
+import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
+import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
 import { getRecentApplications } from '@/lib/applications';
 import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
+import { useAuth } from '@/lib/AuthContext';
 
 function getFooterSubtitle(app, readOnly) {
   if (app.lastUsed) {
@@ -21,8 +24,13 @@ export default function ProfileRecentApplicationsWidget({
   readOnly = false,
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { launchingId, launchWithAnimation } = useApplicationLaunch();
   const [launching, setLaunching] = useState(null);
+  const [whatsNewSystem, setWhatsNewSystem] = useState(null);
+  const { data: releaseNoteUnreadCounts = {} } = useApplicationReleaseNoteUnreadCounts({
+    enabled: !readOnly,
+  });
   const recentApplications = useMemo(
     () => getRecentApplications(applications, activities, 6),
     [applications, activities]
@@ -72,6 +80,8 @@ export default function ProfileRecentApplicationsWidget({
                 canManageSystem={false}
                 launching={launching ?? launchingId}
                 onLaunch={readOnly ? undefined : handleLaunch}
+                onWhatsNew={readOnly ? undefined : setWhatsNewSystem}
+                unreadReleaseNotes={readOnly ? 0 : Number(releaseNoteUnreadCounts?.[String(app.id)] || 0)}
                 footerSubtitle={getFooterSubtitle(app, readOnly)}
                 readOnly={readOnly}
                 footerOutside
@@ -79,6 +89,20 @@ export default function ProfileRecentApplicationsWidget({
             </div>
           ))}
         </div>
+      )}
+
+      {!readOnly && (
+        <ApplicationWhatsNewSheet
+          application={whatsNewSystem}
+          open={Boolean(whatsNewSystem)}
+          onOpenChange={(open) => {
+            if (!open) setWhatsNewSystem(null);
+          }}
+          canManage={Boolean(
+            whatsNewSystem
+            && (user?.role === 'admin' || Number(whatsNewSystem.created_by_user_id) === Number(user?.id))
+          )}
+        />
       )}
     </div>
   );

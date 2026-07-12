@@ -17,6 +17,7 @@ const ENTITY_ENDPOINTS = {
 	SystemEvent: 'system-events',
 	CalendarEvent: 'calendar-events',
 	ActivityLog: 'activity-logs',
+	ApplicationReleaseNote: 'application-release-notes',
 };
 
 function normalizeBody(data) {
@@ -753,6 +754,20 @@ export const db = {
 
 	async runApplicationHealthChecks() {
 		return request('/applications/health-check/run', { method: 'POST' });
+	},
+
+	async getApplicationReleaseNoteUnreadCounts() {
+		return request('/application-release-notes/unread-counts');
+	},
+
+	async markApplicationReleaseNotesRead({ application_id, release_note_ids } = {}) {
+		const body = {};
+		if (application_id != null) body.application_id = application_id;
+		if (release_note_ids != null) body.release_note_ids = release_note_ids;
+		return request('/application-release-notes/mark-read', {
+			method: 'POST',
+			body,
+		});
 	},
 
 	/**

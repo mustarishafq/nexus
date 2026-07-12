@@ -50,6 +50,8 @@ import ApplicationIntegrationsSection from '@/components/applications/Applicatio
 import ApplicationMcpConfigEditor from '@/components/applications/ApplicationMcpConfigEditor';
 import ApplicationHealthConfigEditor from '@/components/applications/ApplicationHealthConfigEditor';
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
+import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
+import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
 import {
   DEFAULT_BRAND_COLOR,
   extractDominantColorFromFile,
@@ -494,6 +496,8 @@ export default function Applications() {
 
   const [launching, setLaunching] = useState(null);
   const [ssoCredentialsSystem, setSsoCredentialsSystem] = useState(null);
+  const [whatsNewSystem, setWhatsNewSystem] = useState(null);
+  const { data: releaseNoteUnreadCounts = {} } = useApplicationReleaseNoteUnreadCounts();
   const { launchingId, launchWithAnimation } = useApplicationLaunch();
 
   const handleLaunch = async (system, options = {}) => {
@@ -917,6 +921,8 @@ export default function Applications() {
                     setPendingDeleteSystem(selectedSystem);
                   }}
                   onManageSsoCredentials={setSsoCredentialsSystem}
+                  onWhatsNew={setWhatsNewSystem}
+                  unreadReleaseNotes={Number(releaseNoteUnreadCounts?.[String(system.id)] || 0)}
                 />
               </div>
             );
@@ -986,6 +992,18 @@ export default function Applications() {
         onOpenChange={(open) => {
           if (!open) setSsoCredentialsSystem(null);
         }}
+      />
+
+      <ApplicationWhatsNewSheet
+        application={whatsNewSystem}
+        open={Boolean(whatsNewSystem)}
+        onOpenChange={(open) => {
+          if (!open) setWhatsNewSystem(null);
+        }}
+        canManage={Boolean(
+          whatsNewSystem
+          && (currentUser?.role === 'admin' || Number(whatsNewSystem.created_by_user_id) === Number(currentUser?.id))
+        )}
       />
     </div>
   );

@@ -2,10 +2,14 @@ import db, { API_ORIGIN } from '@/api/apiClient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
+import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
 import { toast } from 'sonner';
 import { useGoBack } from '@/hooks/useGoBack';
+import { useAuth } from '@/lib/AuthContext';
 
 const toAbsoluteUrl = (url) => {
   if (!url) return '';
@@ -41,6 +45,9 @@ export default function ApplicationBrowser() {
   const { id } = useParams();
   const location = useLocation();
   const goBack = useGoBack('/applications');
+  const { user } = useAuth();
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const { data: releaseNoteUnreadCounts = {} } = useApplicationReleaseNoteUnreadCounts();
   const redirectTo = useMemo(() => {
     const fromQuery = new URLSearchParams(location.search).get('redirect_to');
     if (fromQuery) return fromQuery;
@@ -184,6 +191,23 @@ export default function ApplicationBrowser() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="relative gap-1.5 h-8"
+            title="What's New"
+            onClick={() => setWhatsNewOpen(true)}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">What&apos;s New</span>
+            {Number(releaseNoteUnreadCounts?.[String(system.id)] || 0) > 0 && (
+              <Badge className="absolute -right-1 -top-1 h-4 min-w-4 justify-center rounded-full bg-rose-500 px-1 text-[10px] text-white hover:bg-rose-500">
+                {Number(releaseNoteUnreadCounts[String(system.id)]) > 9
+                  ? '9+'
+                  : releaseNoteUnreadCounts[String(system.id)]}
+              </Badge>
+            )}
+          </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refresh" onClick={refreshFrame} disabled={!launchUrl}>
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -238,6 +262,15 @@ export default function ApplicationBrowser() {
           />
         ) : null}
       </div>
+
+      <ApplicationWhatsNewSheet
+        application={system}
+        open={whatsNewOpen}
+        onOpenChange={setWhatsNewOpen}
+        canManage={Boolean(
+          user?.role === 'admin' || Number(system.created_by_user_id) === Number(user?.id)
+        )}
+      />
     </div>
   );
 }
