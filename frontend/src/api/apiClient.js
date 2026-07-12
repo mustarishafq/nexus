@@ -18,6 +18,7 @@ const ENTITY_ENDPOINTS = {
 	CalendarEvent: 'calendar-events',
 	ActivityLog: 'activity-logs',
 	ApplicationReleaseNote: 'application-release-notes',
+	PlatformReleaseNote: 'platform-release-notes',
 };
 
 function normalizeBody(data) {
@@ -491,8 +492,14 @@ export const db = {
 			return request(`/posts/${postId}/comments`);
 		},
 
-		async createComment(postId, body) {
-			return request(`/posts/${postId}/comments`, { method: 'POST', body: { body } });
+		async createComment(postId, body, parentCommentId = null) {
+			return request(`/posts/${postId}/comments`, {
+				method: 'POST',
+				body: {
+					body,
+					...(parentCommentId ? { parent_comment_id: parentCommentId } : {}),
+				},
+			});
 		},
 
 		async deleteComment(commentId) {
@@ -505,6 +512,14 @@ export const db = {
 
 		async removeReaction(postId) {
 			return request(`/posts/${postId}/reactions`, { method: 'DELETE' });
+		},
+
+		async reactToComment(commentId, reaction) {
+			return request(`/post-comments/${commentId}/reactions`, { method: 'POST', body: { reaction } });
+		},
+
+		async removeCommentReaction(commentId) {
+			return request(`/post-comments/${commentId}/reactions`, { method: 'DELETE' });
 		},
 	},
 
@@ -786,6 +801,19 @@ export const db = {
 		if (application_id != null) body.application_id = application_id;
 		if (release_note_ids != null) body.release_note_ids = release_note_ids;
 		return request('/application-release-notes/mark-read', {
+			method: 'POST',
+			body,
+		});
+	},
+
+	async getPlatformReleaseNoteUnreadCount() {
+		return request('/platform-release-notes/unread-count');
+	},
+
+	async markPlatformReleaseNotesRead({ release_note_ids } = {}) {
+		const body = {};
+		if (release_note_ids != null) body.release_note_ids = release_note_ids;
+		return request('/platform-release-notes/mark-read', {
 			method: 'POST',
 			body,
 		});

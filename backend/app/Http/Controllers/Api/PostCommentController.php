@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\SerializesFeedAuthors;
+use App\Http\Controllers\Api\Concerns\SerializesPostComments;
+use App\Http\Controllers\Api\Concerns\SerializesPosts;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Models\PostComment;
@@ -11,12 +13,15 @@ use App\Services\FeedNotificationService;
 use App\Services\MentionService;
 use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
+use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PostCommentController extends Controller
 {
     use SerializesFeedAuthors;
+    use SerializesPostComments;
+    use SerializesPosts;
 
     public function index(Request $request, Post $post): JsonResponse
     {
@@ -30,17 +35,37 @@ class PostCommentController extends Controller
             return $response;
         }
 
-        $comments = $post->comments()
-            ->with('author.department')
+        $allComments = $post->comments()
+            ->with(['author.department', 'reactions'])
             ->orderBy('created_at')
-            ->limit(100)
-            ->get()
-            ->map(fn (PostComment $comment) => $this->serializeComment($comment, $viewer))
-            ->values();
+            ->limit(200)
+            ->get();
+
+        $comments = $allComments
+            ->filter(fn (PostComment $comment) => $comment->parent_comment_id === null)
+            ->values()
+            ->map(fn (PostComment $comment) => $this->serializeCommentTree($comment, $allComments, $viewer))
+            ->all();
 
         return response()->json([
             'comments' => $comments,
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, PostComment>  $allComments
+     * @return array<string, mixed>
+     */
+    private function serializeCommentTree(PostComment $comment, $allComments, User $viewer): array
+    {
+        $payload = $this->serializeComment($comment, $viewer);
+        $payload['replies'] = $allComments
+            ->filter(fn (PostComment $child) => (int) ($child->parent_comment_id ?? 0) === (int) $comment->id)
+            ->values()
+            ->map(fn (PostComment $child) => $this->serializeCommentTree($child, $allComments, $viewer))
+            ->all();
+
+        return $payload;
     }
 
     public function store(Request $request, Post $post): JsonResponse
@@ -57,12 +82,29 @@ class PostCommentController extends Controller
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:1000'],
+            'parent_comment_id' => ['nullable', 'integer', 'exists:post_comments,id'],
         ]);
 
         $body = trim($validated['body']);
+        $parentCommentId = isset($validated['parent_comment_id'])
+            ? (int) $validated['parent_comment_id']
+            : null;
+        $parentComment = null;
+
+        if ($parentCommentId !== null) {
+            $parentComment = PostComment::query()
+                ->where('id', $parentCommentId)
+                ->where('post_id', $post->id)
+                ->first();
+
+            if (! $parentComment) {
+                return response()->json(['message' => 'Parent comment not found on this post.'], 422);
+            }
+        }
 
         $comment = $post->comments()->create([
             'author_user_id' => $viewer->id,
+            'parent_comment_id' => $parentCommentId,
             'body' => $body,
         ]);
 
@@ -75,9 +117,17 @@ class PostCommentController extends Controller
             ['post_id' => $post->id]
         );
 
-        app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);
+        if ($parentComment) {
+            app(FeedNotificationService::class)->notifyCommentAuthorOnReply($post, $parentComment, $viewer, $body);
 
-        $comment->load('author');
+            if ((int) $post->author_user_id !== (int) $parentComment->author_user_id) {
+                app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);
+            }
+        } else {
+            app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);
+        }
+
+        $comment->load(['author.department', 'reactions']);
 
         return response()->json([
             'comment' => $this->serializeComment($comment, $viewer),
@@ -101,21 +151,6 @@ class PostCommentController extends Controller
         return response()->json(null, 204);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeComment(PostComment $comment, User $viewer): array
-    {
-        return [
-            'id' => $comment->id,
-            'post_id' => $comment->post_id,
-            'body' => $comment->body,
-            'author' => $this->serializeFeedAuthor($comment->author),
-            'created_date' => $comment->created_date,
-            'can_delete' => $viewer->id === $comment->author_user_id || $viewer->role === 'admin',
-        ];
-    }
-
     private function authenticatedUser(Request $request): ?User
     {
         $user = ApiTokenAuth::userFromRequest($request);
@@ -133,7 +168,7 @@ class PostCommentController extends Controller
             return null;
         }
 
-        if ($post->isPending() && ((int) $post->author_user_id === (int) $viewer->id || \App\Support\UserRoles::isHrOrAdmin($viewer))) {
+        if ($post->isPending() && ((int) $post->author_user_id === (int) $viewer->id || UserRoles::isHrOrAdmin($viewer))) {
             return response()->json(['message' => 'This post is awaiting approval.'], 422);
         }
 

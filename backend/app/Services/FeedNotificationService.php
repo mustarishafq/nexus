@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notification;
 use App\Models\Post;
+use App\Models\PostComment;
 use App\Models\User;
 use App\Support\FeedLinks;
 use App\Support\UserRoles;
@@ -50,6 +51,53 @@ class FeedNotificationService
                 'kind' => 'post_comment',
                 'post_id' => $post->id,
                 'author_user_id' => $commenter->id,
+            ],
+        ]);
+
+        app(PushNotificationService::class)->sendNotification($notification);
+    }
+
+    public function notifyCommentAuthorOnReply(Post $post, PostComment $parentComment, User $replier, string $body): void
+    {
+        $parentAuthorId = (int) $parentComment->author_user_id;
+
+        if ($parentAuthorId === (int) $replier->id) {
+            return;
+        }
+
+        $mentionedIds = app(MentionService::class)->extractUserIds($body);
+        if (in_array($parentAuthorId, $mentionedIds, true)) {
+            return;
+        }
+
+        $parentAuthor = User::query()
+            ->where('is_approved', true)
+            ->find($parentAuthorId);
+
+        if (! $parentAuthor) {
+            return;
+        }
+
+        $replierName = $replier->displayName();
+        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', $body) ?? $body);
+        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
+
+        $notification = Notification::create([
+            'user_id' => (string) $parentAuthor->id,
+            'type' => 'info',
+            'priority' => 'medium',
+            'title' => "{$replierName} replied to your comment",
+            'message' => $preview,
+            'category' => 'other',
+            'is_read' => false,
+            'is_broadcast' => false,
+            'action_url' => FeedLinks::post($post->id, expandComments: true),
+            'delivery_channels' => ['in_app'],
+            'data' => [
+                'kind' => 'post_comment_reply',
+                'post_id' => $post->id,
+                'parent_comment_id' => $parentComment->id,
+                'author_user_id' => $replier->id,
             ],
         ]);
 

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, BarChart3, Monitor, Bell, User, Activity, Wifi, Calendar,
   Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 
 export const MOBILE_BOTTOM_NAV_ITEMS = [
@@ -19,6 +20,13 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
 
 export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers }) {
   return [
+    {
+      type: 'whats-new',
+      icon: Sparkles,
+      label: "What's New",
+      badge: 'whatsNew',
+      match: () => false,
+    },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
     {
       path: '/organization',

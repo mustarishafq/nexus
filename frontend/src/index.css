@@ -404,7 +404,59 @@
   animation-duration: 6.5s;
 }
 
+@keyframes whats-new-attention {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  15% {
+    transform: scale(1.12) rotate(-8deg);
+  }
+  30% {
+    transform: scale(1.08) rotate(8deg);
+  }
+  45% {
+    transform: scale(1.14) rotate(-4deg);
+  }
+  60% {
+    transform: scale(1.06) rotate(3deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(0deg);
+  }
+}
+
+@keyframes whats-new-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgb(234 179 8 / 0.55));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgb(234 179 8 / 0.95));
+  }
+}
+
+.whats-new-trigger--unread {
+  color: #eab308;
+  background: transparent !important;
+}
+
+.whats-new-trigger--unread:hover {
+  background: transparent !important;
+}
+
+.whats-new-trigger--unread .whats-new-trigger__icon {
+  animation:
+    whats-new-attention 2.2s ease-in-out infinite,
+    whats-new-glow 2.2s ease-in-out infinite;
+  transform-origin: center;
+  color: #eab308;
+  fill: rgb(234 179 8 / 0.25);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .whats-new-trigger--unread .whats-new-trigger__icon {
+    animation: none;
+  }
+
   .apps-orb-nav__core,
   .apps-orb-nav__nerve-impulse,
   .apps-orb-nav__nerve-node,

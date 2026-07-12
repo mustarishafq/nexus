@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import CornerRibbon from '@/components/applications/CornerRibbon';
-import { glassPanelStyles } from '@/components/layout/glassStyles';
 import { cn } from '@/lib/utils';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
 import { DEFAULT_BRAND_COLOR } from '@/lib/imageColor';
@@ -151,7 +150,12 @@ export default function ApplicationCard({
       )}
 
       {(onWhatsNew || (system.auth_mode === 'jwt' && onManageSsoCredentials)) && (
-        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
+        <div
+          className={cn(
+            'absolute inset-0 z-[4] pointer-events-none',
+            unreadReleaseNotes > 0 ? 'opacity-100' : hoverRevealClass,
+          )}
+        >
           <div className={cn('pointer-events-auto absolute top-2 left-2 flex items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg', hoverSlideClass)}>
             {system.auth_mode === 'jwt' && onManageSsoCredentials && (
               <Button
@@ -171,16 +175,19 @@ export default function ApplicationCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
+                className={cn(
+                  'relative h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6',
+                  unreadReleaseNotes > 0 && 'whats-new-trigger--unread',
+                )}
                 title="What's New"
                 onClick={(e) => {
                   e.stopPropagation();
                   onWhatsNew(system);
                 }}
               >
-                <Sparkles className="h-3.5 w-3.5" />
+                <Sparkles className="whats-new-trigger__icon h-3.5 w-3.5" />
                 {unreadReleaseNotes > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-semibold leading-none text-white">
+                  <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-semibold leading-none text-primary-foreground">
                     {unreadReleaseNotes > 9 ? '9+' : unreadReleaseNotes}
                   </span>
                 )}
@@ -328,28 +335,6 @@ export default function ApplicationCard({
         <div className="min-w-0 w-full px-0.5 pt-2 text-center">
           <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
           <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{footerDetail}</p>
-          {onWhatsNew && (
-            <button
-              type="button"
-              className={cn(
-                'mt-1.5 inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium',
-                glassPanelStyles,
-                '[@media(hover:hover)_and_(pointer:fine)]:hidden',
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                onWhatsNew(system);
-              }}
-            >
-              <Sparkles className="h-3 w-3 text-primary" />
-              What&apos;s New
-              {unreadReleaseNotes > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-semibold text-white">
-                  {unreadReleaseNotes > 9 ? '9+' : unreadReleaseNotes}
-                </span>
-              )}
-            </button>
-          )}
         </div>
       </div>
     );

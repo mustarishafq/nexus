@@ -1,0 +1,38 @@
+{
+  "name": "PlatformReleaseNote",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "feature",
+        "fix",
+        "improvement"
+      ],
+      "default": "feature"
+    },
+    "is_published": {
+      "type": "boolean",
+      "default": true
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_read": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

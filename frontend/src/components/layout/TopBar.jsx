@@ -4,8 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { toAbsoluteUrl } from '@/lib/media';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
+import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
+import { isAdmin } from '@/lib/roles';
 
-import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, LogOut, Sparkles, User, ChevronDown } from 'lucide-react';
 import GlobalSearch, { GlobalSearchTrigger, useGlobalSearchShortcut } from './GlobalSearch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -13,6 +15,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
+import PlatformWhatsNewSheet from '@/components/platform/PlatformWhatsNewSheet';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
@@ -24,10 +27,14 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const [user, setUser] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const { data: unreadNotifications = [] } = useUnreadNotifications({
     enabled: !isMobile,
   });
   const unreadCount = unreadNotifications.length;
+  const { data: platformUnreadCount = 0 } = usePlatformReleaseNoteUnreadCount({
+    enabled: !isMobile,
+  });
 
   useGlobalSearchShortcut(setSearchOpen);
 
@@ -45,7 +52,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
       <header
         className={cn(
           glassTopBarStyles,
-          'h-16 border-b flex items-center justify-between px-6 transition-all duration-200',
+          'h-16 border-b flex items-center justify-between gap-3 px-6 transition-all duration-200',
           embedded ? 'w-full' : 'fixed top-0 right-0 z-30'
         )}
         style={embedded ? undefined : { left: sidebarWidth }}
@@ -58,7 +65,29 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
         </div>
 
         {!isMobile && (
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setWhatsNewOpen(true)}
+              className={cn(
+                'relative rounded-lg p-2 text-foreground/65 transition-colors hover:text-foreground dark:text-muted-foreground',
+                platformUnreadCount > 0 && !whatsNewOpen && 'whats-new-trigger--unread',
+              )}
+              title="What's New"
+              aria-label={
+                platformUnreadCount > 0
+                  ? `What's New, ${platformUnreadCount} unread`
+                  : "What's New"
+              }
+            >
+              <Sparkles className="whats-new-trigger__icon h-5 w-5" />
+              {platformUnreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center px-1">
+                  {platformUnreadCount > 9 ? '9+' : platformUnreadCount}
+                </span>
+              )}
+            </button>
+
             <ThemeToggle />
             <button
               onClick={() => setPanelOpen(!panelOpen)}
@@ -105,7 +134,6 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
         )}
       </header>
 
-      {/* Notification Panel Overlay */}
       {!isMobile ? (
         <NotificationPanel
           open={panelOpen}
@@ -113,6 +141,13 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
         />
       ) : null}
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+      {!isMobile ? (
+        <PlatformWhatsNewSheet
+          open={whatsNewOpen}
+          onOpenChange={setWhatsNewOpen}
+          canManage={isAdmin(user)}
+        />
+      ) : null}
     </>
   );
 }
