@@ -5,20 +5,32 @@
     "title": {
       "type": "string"
     },
-    "body": {
-      "type": "string"
-    },
     "version": {
       "type": "string"
     },
-    "category": {
-      "type": "string",
-      "enum": [
-        "feature",
-        "fix",
-        "improvement"
-      ],
-      "default": "feature"
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "fix",
+              "improvement"
+            ]
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "body"
+        ]
+      },
+      "default": []
     },
     "is_published": {
       "type": "boolean",

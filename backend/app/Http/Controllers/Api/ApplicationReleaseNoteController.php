@@ -44,7 +44,7 @@ class ApplicationReleaseNoteController extends Controller
 
         $canEdit = $this->canEditSystem($user, $application);
         $query = ApplicationReleaseNote::query()
-            ->with(['creator:id,name,full_name,email'])
+            ->with(['creator:id,name,full_name,email', 'items'])
             ->where('application_id', $application->id);
 
         if (! $canEdit || $request->boolean('published_only')) {
@@ -56,7 +56,7 @@ class ApplicationReleaseNoteController extends Controller
         $items = $this->applyIndexQuery(
             $request,
             $query,
-            ['category', 'is_published', 'version'],
+            ['is_published', 'version'],
             '-published_at'
         )->get();
 
@@ -113,9 +113,10 @@ class ApplicationReleaseNoteController extends Controller
         $validated = $request->validate([
             'application_id' => ['required', 'integer', 'exists:applications,id'],
             'title' => ['required', 'string', 'max:255'],
-            'body' => ['nullable', 'string'],
             'version' => ['nullable', 'string', 'max:64'],
-            'category' => ['sometimes', Rule::in(ApplicationReleaseNote::CATEGORIES)],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.category' => ['required', Rule::in(ApplicationReleaseNote::CATEGORIES)],
+            'items.*.body' => ['required', 'string'],
             'is_published' => ['sometimes', 'boolean'],
             'published_at' => ['nullable', 'date'],
         ]);
@@ -138,18 +139,25 @@ class ApplicationReleaseNoteController extends Controller
             $publishedAt = $validated['published_at'] ?? null;
         }
 
+        $items = ApplicationReleaseNote::normalizeItems($validated['items']);
+        if ($items === []) {
+            return response()->json([
+                'message' => 'Add at least one detail with text.',
+                'errors' => ['items' => ['Add at least one detail with text.']],
+            ], 422);
+        }
+
         $note = ApplicationReleaseNote::create([
             'application_id' => $application->id,
             'created_by_user_id' => $user->id,
             'title' => $validated['title'],
-            'body' => $validated['body'] ?? null,
             'version' => $validated['version'] ?? null,
-            'category' => $validated['category'] ?? ApplicationReleaseNote::CATEGORY_FEATURE,
             'is_published' => $isPublished,
             'published_at' => $publishedAt,
         ]);
+        $note->syncItems($items);
 
-        $note->load(['creator:id,name,full_name,email']);
+        $note->load(['creator:id,name,full_name,email', 'items']);
         $note->setAttribute('is_read', false);
 
         return response()->json($note, 201);
@@ -174,7 +182,7 @@ class ApplicationReleaseNoteController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $applicationReleaseNote->load(['creator:id,name,full_name,email', 'application:id,name,slug']);
+        $applicationReleaseNote->load(['creator:id,name,full_name,email', 'application:id,name,slug', 'items']);
         $this->attachReadState(collect([$applicationReleaseNote]), $user);
 
         return response()->json($applicationReleaseNote);
@@ -196,12 +204,25 @@ class ApplicationReleaseNoteController extends Controller
 
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
-            'body' => ['nullable', 'string'],
             'version' => ['nullable', 'string', 'max:64'],
-            'category' => ['sometimes', Rule::in(ApplicationReleaseNote::CATEGORIES)],
+            'items' => ['sometimes', 'array', 'min:1'],
+            'items.*.category' => ['required_with:items', Rule::in(ApplicationReleaseNote::CATEGORIES)],
+            'items.*.body' => ['required_with:items', 'string'],
             'is_published' => ['sometimes', 'boolean'],
             'published_at' => ['nullable', 'date'],
         ]);
+
+        $items = null;
+        if (array_key_exists('items', $validated)) {
+            $items = ApplicationReleaseNote::normalizeItems($validated['items']);
+            if ($items === []) {
+                return response()->json([
+                    'message' => 'Add at least one detail with text.',
+                    'errors' => ['items' => ['Add at least one detail with text.']],
+                ], 422);
+            }
+            unset($validated['items']);
+        }
 
         if (array_key_exists('is_published', $validated)) {
             $isPublished = (bool) $validated['is_published'];
@@ -217,7 +238,11 @@ class ApplicationReleaseNoteController extends Controller
         }
 
         $applicationReleaseNote->update($validated);
-        $applicationReleaseNote->load(['creator:id,name,full_name,email']);
+        if ($items !== null) {
+            $applicationReleaseNote->syncItems($items);
+        }
+
+        $applicationReleaseNote->load(['creator:id,name,full_name,email', 'items']);
         $this->attachReadState(collect([$applicationReleaseNote]), $user);
 
         return response()->json($applicationReleaseNote);

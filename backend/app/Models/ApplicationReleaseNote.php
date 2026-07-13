@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class ApplicationReleaseNote extends Model
 {
@@ -24,9 +26,7 @@ class ApplicationReleaseNote extends Model
         'application_id',
         'created_by_user_id',
         'title',
-        'body',
         'version',
-        'category',
         'is_published',
         'published_at',
     ];
@@ -45,9 +45,66 @@ class ApplicationReleaseNote extends Model
         ];
     }
 
+    /**
+     * @param  array<int, mixed>|null  $items
+     * @return array<int, array{category: string, body: string}>
+     */
+    public static function normalizeItems(?array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items ?? [] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $category = (string) ($item['category'] ?? self::CATEGORY_FEATURE);
+            if (! in_array($category, self::CATEGORIES, true)) {
+                $category = self::CATEGORY_FEATURE;
+            }
+
+            $body = trim((string) ($item['body'] ?? ''));
+            if ($body === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'category' => $category,
+                'body' => $body,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<int, array{category: string, body: string}>  $items
+     */
+    public function syncItems(array $items): void
+    {
+        DB::transaction(function () use ($items) {
+            $this->items()->delete();
+
+            foreach (array_values($items) as $index => $item) {
+                $this->items()->create([
+                    'category' => $item['category'],
+                    'body' => $item['body'],
+                    'sort_order' => $index,
+                ]);
+            }
+        });
+    }
+
     public function application(): BelongsTo
     {
         return $this->belongsTo(Application::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(ApplicationReleaseNoteItem::class, 'release_note_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function creator(): BelongsTo

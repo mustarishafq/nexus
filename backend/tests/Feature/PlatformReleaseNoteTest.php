@@ -22,8 +22,16 @@ class PlatformReleaseNoteTest extends TestCase
         $note = $this->withToken($adminToken)
             ->postJson('/api/platform-release-notes', [
                 'title' => 'Nexus calendar widgets',
-                'body' => 'Weekly calendar is now on the dashboard.',
-                'category' => 'feature',
+                'items' => [
+                    [
+                        'category' => 'feature',
+                        'body' => 'Weekly calendar is now on the dashboard.',
+                    ],
+                    [
+                        'category' => 'improvement',
+                        'body' => 'Faster widget loading.',
+                    ],
+                ],
                 'version' => '2.1.0',
                 'is_published' => true,
             ])
@@ -31,6 +39,8 @@ class PlatformReleaseNoteTest extends TestCase
             ->json();
 
         $this->assertSame('Nexus calendar widgets', $note['title']);
+        $this->assertCount(2, $note['items']);
+        $this->assertSame('feature', $note['items'][0]['category']);
         $this->assertFalse($note['is_read']);
 
         $this->withToken($userToken)
@@ -70,20 +80,24 @@ class PlatformReleaseNoteTest extends TestCase
             ])
             ->assertForbidden();
 
-        PlatformReleaseNote::create([
+        $draft = PlatformReleaseNote::create([
             'created_by_user_id' => $admin->id,
             'title' => 'Draft only',
-            'category' => 'fix',
             'is_published' => false,
             'published_at' => null,
         ]);
+        $draft->syncItems([
+            ['category' => 'fix', 'body' => 'Draft detail'],
+        ]);
 
-        PlatformReleaseNote::create([
+        $live = PlatformReleaseNote::create([
             'created_by_user_id' => $admin->id,
             'title' => 'Live note',
-            'category' => 'feature',
             'is_published' => true,
             'published_at' => now(),
+        ]);
+        $live->syncItems([
+            ['category' => 'feature', 'body' => 'Live detail'],
         ]);
 
         $userList = $this->withToken($userToken)

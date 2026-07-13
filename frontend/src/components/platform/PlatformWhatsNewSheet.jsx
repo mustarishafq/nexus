@@ -67,13 +67,30 @@ const CATEGORY_META = {
   },
 };
 
+const EMPTY_ITEM = { category: 'feature', body: '' };
+
 const EMPTY_FORM = {
   title: '',
-  body: '',
   version: '',
-  category: 'feature',
+  items: [{ ...EMPTY_ITEM }],
   is_published: true,
 };
+
+function noteItems(note) {
+  if (Array.isArray(note?.items) && note.items.length > 0) {
+    return note.items;
+  }
+  if (note?.body) {
+    const categories = Array.isArray(note.categories) && note.categories.length > 0
+      ? note.categories
+      : [note.category || 'feature'];
+    return categories.map((category, index) => ({
+      category,
+      body: index === 0 ? note.body : '',
+    }));
+  }
+  return [];
+}
 
 function categoryBadge(category) {
   const meta = CATEGORY_META[category] || CATEGORY_META.feature;
@@ -166,13 +183,16 @@ export default function PlatformWhatsNewSheet({
   });
 
   const startEdit = (note) => {
+    const items = noteItems(note).map((item) => ({
+      category: item.category || 'feature',
+      body: item.body || '',
+    }));
     setManaging(true);
     setEditingNote(note);
     setForm({
       title: note.title || '',
-      body: note.body || '',
       version: note.version || '',
-      category: note.category || 'feature',
+      items: items.length > 0 ? items : [{ ...EMPTY_ITEM }],
       is_published: note.is_published !== false,
     });
   };
@@ -182,17 +202,50 @@ export default function PlatformWhatsNewSheet({
     setForm(EMPTY_FORM);
   };
 
+  const updateItem = (index, patch) => {
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const addItem = () => {
+    setForm((prev) => ({
+      ...prev,
+      items: [...prev.items, { ...EMPTY_ITEM }],
+    }));
+  };
+
+  const removeItem = (index) => {
+    setForm((prev) => {
+      if (prev.items.length <= 1) return prev;
+      return {
+        ...prev,
+        items: prev.items.filter((_, i) => i !== index),
+      };
+    });
+  };
+
   const submitForm = (event) => {
     event.preventDefault();
     if (!form.title.trim()) {
       toast.error('Title is required.');
       return;
     }
+    const items = form.items
+      .map((item) => ({
+        category: item.category || 'feature',
+        body: (item.body || '').trim(),
+      }))
+      .filter((item) => item.body);
+    if (items.length === 0) {
+      toast.error('Add at least one detail.');
+      return;
+    }
     saveMut.mutate({
       title: form.title.trim(),
-      body: form.body.trim() || null,
       version: form.version.trim() || null,
-      category: form.category,
+      items,
       is_published: Boolean(form.is_published),
     });
   };
@@ -269,44 +322,74 @@ export default function PlatformWhatsNewSheet({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="platform-release-note-body">Details</Label>
-                  <Textarea
-                    id="platform-release-note-body"
-                    value={form.body}
-                    onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))}
-                    placeholder="What changed and why it matters…"
-                    rows={4}
+                  <Label htmlFor="platform-release-note-version">Version</Label>
+                  <Input
+                    id="platform-release-note-version"
+                    value={form.version}
+                    onChange={(e) => setForm((prev) => ({ ...prev, version: e.target.value }))}
+                    placeholder="2.1.0"
+                    maxLength={64}
                     className={glassDialogInputStyles}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="platform-release-note-version">Version</Label>
-                    <Input
-                      id="platform-release-note-version"
-                      value={form.version}
-                      onChange={(e) => setForm((prev) => ({ ...prev, version: e.target.value }))}
-                      placeholder="2.1.0"
-                      maxLength={64}
-                      className={glassDialogInputStyles}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Category</Label>
-                    <Select
-                      value={form.category}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Details</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 border-border/60 bg-background/40"
+                      onClick={addItem}
                     >
-                      <SelectTrigger className={glassDialogInputStyles}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="feature">Feature</SelectItem>
-                        <SelectItem value="fix">Fix</SelectItem>
-                        <SelectItem value="improvement">Improvement</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <Plus className="h-3.5 w-3.5" />
+                      Add detail
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {form.items.map((item, index) => (
+                      <div
+                        key={`platform-detail-${index}`}
+                        className={cn('space-y-2 rounded-lg border p-3', glassPanelStyles)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={item.category}
+                            onValueChange={(value) => updateItem(index, { category: value })}
+                          >
+                            <SelectTrigger className={cn('h-9 w-[150px]', glassDialogInputStyles)}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="feature">Feature</SelectItem>
+                              <SelectItem value="fix">Fix</SelectItem>
+                              <SelectItem value="improvement">Improvement</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {form.items.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="ml-auto h-8 w-8 text-destructive hover:text-destructive"
+                              title="Remove detail"
+                              onClick={() => removeItem(index)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                        <Textarea
+                          value={item.body}
+                          onChange={(e) => updateItem(index, { body: e.target.value })}
+                          placeholder="What changed and why it matters…"
+                          rows={3}
+                          className={glassDialogInputStyles}
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -347,6 +430,7 @@ export default function PlatformWhatsNewSheet({
               <ul className="space-y-3">
                 {displayNotes.map((note) => {
                   const when = noteTimestamp(note);
+                  const items = noteItems(note);
                   return (
                     <li
                       key={note.id}
@@ -357,9 +441,8 @@ export default function PlatformWhatsNewSheet({
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1.5">
+                        <div className="min-w-0 space-y-2">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            {categoryBadge(note.category)}
                             {note.version && (
                               <Badge variant="secondary" className="font-normal">
                                 v{note.version}
@@ -373,10 +456,19 @@ export default function PlatformWhatsNewSheet({
                             )}
                           </div>
                           <h3 className={cn('text-sm font-semibold leading-snug', glassDialogTitleText)}>{note.title}</h3>
-                          {note.body && (
-                            <p className={cn('whitespace-pre-wrap text-sm leading-relaxed', glassDialogMutedText)}>
-                              {note.body}
-                            </p>
+                          {items.length > 0 && (
+                            <ul className="space-y-2">
+                              {items.map((item, index) => (
+                                <li key={`${note.id}-item-${index}`} className="space-y-1">
+                                  {categoryBadge(item.category)}
+                                  {item.body && (
+                                    <p className={cn('whitespace-pre-wrap text-sm leading-relaxed', glassDialogMutedText)}>
+                                      {item.body}
+                                    </p>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
                           )}
                           {when && (
                             <p className={cn('text-[11px]', glassDialogFaintText)}>{when}</p>
