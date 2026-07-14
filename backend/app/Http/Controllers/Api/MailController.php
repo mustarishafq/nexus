@@ -24,13 +24,44 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $connected = $this->mail->hasCredentials($user);
+        $accounts = $this->mail->accountsFor($user)
+            ->map(fn ($account) => $account->toMailboxArray())
+            ->values()
+            ->all();
+
+        $connected = $accounts !== [];
+        $activeId = $request->integer('account_id') ?: null;
+        $active = null;
+
+        if ($connected) {
+            try {
+                $active = $this->mail->resolveAccount($user, $activeId ?: null)->toMailboxArray();
+            } catch (RuntimeException) {
+                $active = $accounts[0] ?? null;
+            }
+        }
 
         return response()->json([
             'configured' => $this->mail->isServerConfigured(),
             'reachable' => $this->mail->isServerReachableForUser($user),
             'connected' => $connected,
-            'email' => $user->email,
+            'email' => $active['email'] ?? $user->email,
+            'account' => $active,
+            'accounts' => $accounts,
+            'folders' => collect(MailMailboxService::logicalFolders())
+                ->map(fn (string $folder) => [
+                    'id' => $folder,
+                    'label' => match ($folder) {
+                        MailMailboxService::FOLDER_INBOX => 'Inbox',
+                        MailMailboxService::FOLDER_DRAFTS => 'Drafts',
+                        MailMailboxService::FOLDER_SENT => 'Sent',
+                        MailMailboxService::FOLDER_SPAM => 'Spam',
+                        MailMailboxService::FOLDER_ARCHIVE => 'Archive',
+                        default => ucfirst($folder),
+                    },
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -44,17 +75,29 @@ class MailController extends Controller
 
         $validated = $request->validate([
             'password' => ['required', 'string', 'max:2048'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'label' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
         try {
-            $this->mail->testAndStoreCredentials($user, $validated['password']);
+            $account = $this->mail->testAndStoreCredentials(
+                $user,
+                $validated['password'],
+                $validated['email'] ?? null,
+                $validated['label'] ?? null,
+            );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
         return response()->json([
             'connected' => true,
-            'email' => $user->email,
+            'email' => $account->email,
+            'account' => $account->toMailboxArray(),
+            'accounts' => $this->mail->accountsFor($user)
+                ->map(fn ($item) => $item->toMailboxArray())
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -66,9 +109,52 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $this->mail->disconnect($user);
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]);
 
-        return response()->json(['connected' => false]);
+        try {
+            $this->mail->disconnect($user, $validated['account_id'] ?? null);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        $accounts = $this->mail->accountsFor($user)
+            ->map(fn ($item) => $item->toMailboxArray())
+            ->values()
+            ->all();
+
+        return response()->json([
+            'connected' => $accounts !== [],
+            'accounts' => $accounts,
+        ]);
+    }
+
+    public function setPrimary(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'account_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        try {
+            $account = $this->mail->setPrimaryAccount($user, (int) $validated['account_id']);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'account' => $account->toMailboxArray(),
+            'accounts' => $this->mail->accountsFor($user)
+                ->map(fn ($item) => $item->toMailboxArray())
+                ->values()
+                ->all(),
+        ]);
     }
 
     public function index(Request $request): JsonResponse
@@ -83,6 +169,8 @@ class MailController extends Controller
             'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'q' => ['sometimes', 'nullable', 'string', 'max:200'],
             'unread' => ['sometimes', 'boolean'],
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
         ]);
 
         try {
@@ -91,6 +179,9 @@ class MailController extends Controller
                 (int) ($validated['limit'] ?? 50),
                 $validated['q'] ?? null,
                 (bool) ($validated['unread'] ?? false),
+                true,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
             );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
@@ -109,8 +200,18 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
         try {
-            $message = $this->mail->getMessage($user, $uid);
+            $message = $this->mail->getMessage(
+                $user,
+                $uid,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (Throwable) {
@@ -136,14 +237,17 @@ class MailController extends Controller
             'bcc' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'in_reply_to' => ['sometimes', 'nullable', 'string', 'max:500'],
             'references' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'attachments' => ['sometimes', 'array', 'max:5'],
             'attachments.*' => ['file', 'max:10240'],
         ]);
 
+        $accountId = isset($validated['account_id']) ? (int) $validated['account_id'] : null;
+        unset($validated['account_id']);
         $validated['attachments'] = $request->file('attachments', []);
 
         try {
-            $this->mail->sendMessage($user, $validated);
+            $this->mail->sendMessage($user, $validated, $accountId);
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (Throwable) {
@@ -161,8 +265,18 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
         try {
-            $this->mail->deleteMessage($user, $uid);
+            $this->mail->deleteMessage(
+                $user,
+                $uid,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (Throwable) {
@@ -180,8 +294,18 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
         try {
-            $this->mail->markUnread($user, $uid);
+            $this->mail->markUnread(
+                $user,
+                $uid,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (Throwable) {

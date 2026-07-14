@@ -559,32 +559,63 @@ export const db = {
 	},
 
 	mail: {
-		async status() {
-			return request('/mail/status');
+		async status(accountId) {
+			return request(`/mail/status${buildQuery({ account_id: accountId || undefined })}`);
 		},
 
-		async connect(password) {
-			return request('/mail/connect', { method: 'POST', body: { password } });
+		async connect({ password, email, label } = {}) {
+			return request('/mail/connect', {
+				method: 'POST',
+				body: {
+					password,
+					...(email ? { email } : {}),
+					...(label ? { label } : {}),
+				},
+			});
 		},
 
-		async disconnect() {
-			return request('/mail/disconnect', { method: 'DELETE' });
+		async disconnect(accountId) {
+			return request(`/mail/disconnect${buildQuery({ account_id: accountId || undefined })}`, {
+				method: 'DELETE',
+			});
 		},
 
-		async listMessages({ limit = 50, q, unread } = {}) {
-			return request(`/mail/messages${buildQuery({ limit, q, unread: unread ? 1 : undefined })}`);
+		async setPrimary(accountId) {
+			return request('/mail/accounts/primary', {
+				method: 'POST',
+				body: { account_id: accountId },
+			});
 		},
 
-		async getMessage(uid) {
-			return request(`/mail/messages/${uid}`);
+		async listMessages({ limit = 50, q, unread, accountId, folder } = {}) {
+			return request(`/mail/messages${buildQuery({
+				limit,
+				q,
+				unread: unread ? 1 : undefined,
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+			})}`);
 		},
 
-		async deleteMessage(uid) {
-			return request(`/mail/messages/${uid}`, { method: 'DELETE' });
+		async getMessage(uid, { accountId, folder } = {}) {
+			return request(`/mail/messages/${uid}${buildQuery({
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+			})}`);
 		},
 
-		async markUnread(uid) {
-			return request(`/mail/messages/${uid}/unread`, { method: 'PATCH' });
+		async deleteMessage(uid, { accountId, folder } = {}) {
+			return request(`/mail/messages/${uid}${buildQuery({
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+			})}`, { method: 'DELETE' });
+		},
+
+		async markUnread(uid, { accountId, folder } = {}) {
+			return request(`/mail/messages/${uid}/unread${buildQuery({
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+			})}`, { method: 'PATCH' });
 		},
 
 		async send(payload) {

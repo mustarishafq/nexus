@@ -161,19 +161,24 @@ export default function AdminCalendar() {
     queryFn: () => db.entities.CalendarEvent.list('start_at', 500),
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['calendar-users'],
-    queryFn: () => db.entities.User.list('full_name', 500),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
   });
 
   const userOptions = useMemo(() => {
+    const users = Array.isArray(rosterData?.users) ? rosterData.users : [];
+
     return users
       .filter((user) => user.email)
-      .map((user) => ({
-        email: user.email,
-        label: user.full_name ? `${user.full_name} (${user.email})` : user.email,
-      }));
-  }, [users]);
+      .map((user) => {
+        const displayName = user.name?.trim() || user.full_name?.trim();
+        return {
+          email: user.email,
+          label: displayName ? `${displayName} (${user.email})` : user.email,
+        };
+      });
+  }, [rosterData]);
 
   const userEmailLookup = useMemo(() => {
     const map = new Map();

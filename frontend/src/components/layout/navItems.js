@@ -28,12 +28,12 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
       match: () => false,
     },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
-    {
+    ...(canManageUsers ? [{
       path: '/organization',
       icon: GitBranch,
       label: 'Organization',
       match: (path) => path === '/organization' || path.startsWith('/organization/'),
-    },
+    }] : []),
     { path: '/messages', icon: MessageSquare, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
     { path: '/email', icon: Mail, label: 'Email', match: (path) => path === '/email' || path.startsWith('/email/'), badge: 'email' },
     ...(showAnalytics ? [{
@@ -42,7 +42,9 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
       label: 'Analytics',
       match: (path) => path === '/analytics' || path.startsWith('/analytics/'),
     }] : []),
-    { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
+    ...(isAdmin ? [
+      { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
+    ] : []),
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
@@ -66,12 +68,12 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
   return [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', match: (path) => path === '/' },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
-    {
+    ...(canManageUsers ? [{
       path: '/organization',
       icon: GitBranch,
       label: 'Organization',
       match: (path) => path === '/organization' || path.startsWith('/organization/'),
-    },
+    }] : []),
     { path: '/feed', icon: Newspaper, label: 'Feed', match: (path) => path === '/feed' },
     { path: '/messages', icon: MessageSquare, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
     { path: '/email', icon: Mail, label: 'Email', match: (path) => path === '/email' || path.startsWith('/email/'), badge: 'email' },
@@ -87,7 +89,9 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
       label: 'Application',
       match: (path) => path === '/applications' || path.startsWith('/applications/'),
     },
-    { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
+    ...(isAdmin ? [
+      { path: '/activity', icon: Activity, label: 'Activity', match: (path) => path === '/activity' },
+    ] : []),
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },

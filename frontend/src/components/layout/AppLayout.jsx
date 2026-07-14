@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ import {
   useAttendanceClockInRedirect,
 } from '@/hooks/useAttendanceReminder';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
+import { useEmailFullscreen, setEmailFullscreen } from '@/hooks/useEmailFullscreen';
 import { isRunningStandalone } from '@/lib/pwa';
 
 export default function AppLayout() {
@@ -29,10 +30,20 @@ export default function AppLayout() {
   const location = useLocation();
   const standalone = isRunningStandalone();
   const [topStripCount, setTopStripCount] = useState(0);
+  const { isFullscreen: emailFullscreen } = useEmailFullscreen();
 
   const handleTopStripLayout = useCallback(({ stripCount }) => {
     setTopStripCount(stripCount);
   }, []);
+
+  const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
+  const isEmailFullscreen = isEmailPage && emailFullscreen;
+
+  useEffect(() => {
+    if (!isEmailPage && emailFullscreen) {
+      setEmailFullscreen(false);
+    }
+  }, [isEmailPage, emailFullscreen]);
 
   if (shouldRedirect) {
     return (
@@ -44,11 +55,11 @@ export default function AppLayout() {
     );
   }
 
-  const isFullBleed = /^\/applications\/\d+\/view$/.test(location.pathname);
+  const isAppViewer = /^\/applications\/\d+\/view$/.test(location.pathname);
+  const isFullBleed = isAppViewer || isEmailFullscreen;
   const isAnalyticsPage = location.pathname === '/analytics';
-  const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
   const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
-  const isViewportFillPage = isAnalyticsPage || isEmailPage || isMessagesPage;
+  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage) && !isFullBleed;
   const showBottomNav = !isFullBleed;
 
   return (
@@ -76,7 +87,7 @@ export default function AppLayout() {
         <main
           className={cn(
             'transition-all duration-200',
-            isFullBleed ? 'min-h-screen overflow-hidden' : 'pt-16',
+            isFullBleed ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'pt-16',
             isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
             !isFullBleed && !isViewportFillPage && 'min-h-screen',
             !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
@@ -87,7 +98,11 @@ export default function AppLayout() {
                 : 'pb-[5.25rem]')
           )}
         >
-          {isFullBleed ? (
+          {isEmailFullscreen ? (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden p-2 sm:p-3">
+              <Outlet />
+            </div>
+          ) : isFullBleed ? (
             <Outlet />
           ) : isViewportFillPage ? (
             <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 pt-4 sm:pt-6 max-w-[1600px] mx-auto w-full">

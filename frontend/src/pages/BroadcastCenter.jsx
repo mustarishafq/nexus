@@ -120,7 +120,7 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
             >
               <UserAvatar user={user} className="h-8 w-8" fallbackClassName="bg-primary/15 text-xs" />
               <div className="min-w-0 flex-1">
-                <p className="font-medium truncate">{user.full_name || user.email}</p>
+                <p className="font-medium truncate">{user.name || user.full_name || user.email}</p>
                 <p className="text-xs opacity-70 truncate">{user.email}</p>
               </div>
               <button
@@ -142,16 +142,17 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
           <CommandEmpty>No user found.</CommandEmpty>
           {users.map((user) => {
             const checked = selectedIds.has(String(user.id));
+            const displayName = user.name || user.full_name || user.email;
             return (
               <CommandItem
                 key={user.id}
-                value={`${user.full_name || ''} ${user.email || ''}`}
+                value={`${displayName || ''} ${user.email || ''}`}
                 onSelect={() => onToggle(String(user.id))}
                 className="gap-3"
               >
                 <UserAvatar user={user} className="h-8 w-8" fallbackClassName="bg-muted text-xs text-foreground" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{user.full_name || user.email}</p>
+                  <p className="font-medium truncate">{displayName}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
                 <Check className={cn('w-4 h-4 shrink-0', checked ? 'opacity-100 text-primary' : 'opacity-0')} />
@@ -185,7 +186,7 @@ function getAudienceLabel(broadcast, users = [], departments = []) {
     .slice(0, 2)
     .map((id) => users.find((item) => String(item.id) === String(id)))
     .filter(Boolean)
-    .map((item) => item.full_name || item.email);
+    .map((item) => item.name || item.full_name || item.email);
 
   if (count <= 2) {
     return names.length ? names.join(', ') : `${count} users`;
@@ -212,10 +213,11 @@ export default function BroadcastCenter() {
     queryFn: () => db.entities.Broadcast.list('-created_date', 50),
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['broadcast-users'],
-    queryFn: () => db.entities.User.list('-created_date', 500),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
   });
+  const users = Array.isArray(rosterData?.users) ? rosterData.users : [];
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],

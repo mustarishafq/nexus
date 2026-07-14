@@ -108,6 +108,7 @@ Route::delete('/post-comments/{postComment}/reactions', [PostCommentReactionCont
 Route::get('/mail/status', [MailController::class, 'status']);
 Route::post('/mail/connect', [MailController::class, 'connect']);
 Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
+Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);
 Route::get('/mail/messages', [MailController::class, 'index']);
 Route::get('/mail/messages/{uid}', [MailController::class, 'show']);
 Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);

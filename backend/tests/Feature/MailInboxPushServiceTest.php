@@ -49,6 +49,8 @@ class MailInboxPushServiceTest extends TestCase
 
         UserMailCredential::query()->create([
             'user_id' => $user->id,
+            'email' => $user->email,
+            'is_primary' => true,
             'password' => Crypt::encryptString('secret'),
             'verified_at' => now(),
         ]);
@@ -125,6 +127,8 @@ class MailInboxPushServiceTest extends TestCase
 
         UserMailCredential::query()->create([
             'user_id' => $user->id,
+            'email' => $user->email,
+            'is_primary' => true,
             'password' => Crypt::encryptString('secret'),
             'verified_at' => now(),
         ]);
@@ -213,6 +217,8 @@ class MailInboxPushServiceTest extends TestCase
 
         UserMailCredential::query()->create([
             'user_id' => $user->id,
+            'email' => $user->email,
+            'is_primary' => true,
             'password' => Crypt::encryptString('secret'),
             'verified_at' => now(),
         ]);
@@ -268,6 +274,8 @@ class MailInboxPushServiceTest extends TestCase
         foreach ($users as $user) {
             UserMailCredential::query()->create([
                 'user_id' => $user->id,
+                'email' => $user->email,
+                'is_primary' => true,
                 'password' => Crypt::encryptString('secret'),
                 'verified_at' => now(),
             ]);

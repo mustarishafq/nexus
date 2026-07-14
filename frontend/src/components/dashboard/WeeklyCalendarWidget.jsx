@@ -31,14 +31,15 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['calendar-users'],
-    queryFn: () => db.entities.User.list('full_name', 500),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
     staleTime: 5 * 60 * 1000,
   });
 
   const organizerNameByEmail = useMemo(() => {
     const map = new Map();
+    const users = Array.isArray(rosterData?.users) ? rosterData.users : [];
 
     users.forEach((user) => {
       if (user.email) {
@@ -47,7 +48,7 @@ export default function WeeklyCalendarWidget({ embedded = false }) {
     });
 
     return map;
-  }, [users]);
+  }, [rosterData]);
 
   const upcomingEvents = useMemo(
     () =>

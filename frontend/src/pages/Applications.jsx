@@ -375,11 +375,12 @@ export default function Applications() {
     setOrderedSystems([...systems]);
   };
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['users-for-private-access'],
-    queryFn: () => db.entities.User.list('-created_date', 500),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
     staleTime: 60000,
   });
+  const users = Array.isArray(rosterData?.users) ? rosterData.users : [];
   const resetDialogState = () => {
     setDialogOpen(false);
     setEditSystem(null);
@@ -524,7 +525,7 @@ export default function Applications() {
 
   const selectableUsers = users
     .filter((user) => user?.email && user.email !== currentUser?.email)
-    .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
+    .sort((a, b) => (a.name || a.full_name || a.email).localeCompare(b.name || b.full_name || b.email));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -740,14 +741,15 @@ export default function Applications() {
                           <CommandEmpty>No user found.</CommandEmpty>
                           {selectableUsers.map((user) => {
                             const checked = privateAllowedEmails.includes(user.email);
+                            const displayName = user.name || user.full_name || user.email;
                             return (
                               <CommandItem
                                 key={user.id || user.email}
-                                value={`${user.full_name || ''} ${user.email}`}
+                                value={`${displayName} ${user.email}`}
                                 onSelect={() => togglePrivateAccessEmail(user.email)}
                               >
                                 <Check className={cn('mr-2 h-4 w-4', checked ? 'opacity-100' : 'opacity-0')} />
-                                <span className="truncate">{user.full_name || user.email}</span>
+                                <span className="truncate">{displayName}</span>
                                 <span className="text-xs text-muted-foreground truncate">({user.email})</span>
                               </CommandItem>
                             );

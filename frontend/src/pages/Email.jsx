@@ -4,11 +4,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, parse } from 'date-fns';
 import {
-  ArrowLeft, ChevronDown, Forward, Inbox, Loader2, LogOut, Mail, MailOpen, MoreHorizontal, Paperclip,
-  PenSquare, RefreshCw, Reply, ReplyAll, Search, Send, Trash2, X,
+  Archive, ArrowLeft, Check, ChevronDown, FileEdit, Forward, Inbox, Loader2, LogOut, Mail, MailOpen,
+  Maximize2, Minimize2, MoreHorizontal, Paperclip, PenSquare, Plus, RefreshCw, Reply, ReplyAll,
+  Search, Send, ShieldAlert, Trash2, X,
 } from 'lucide-react';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { useEmailFullscreen } from '@/hooks/useEmailFullscreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +20,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -29,9 +35,39 @@ import { UnreadBadge } from '@/components/ui/unread-badge';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
 
 const MAIL_STATUS_QUERY_KEY = ['mail-status'];
+const MAIL_ACCOUNT_STORAGE_KEY = 'nexus-mail-account-id';
 
-function mailInboxQueryKey(search, unreadOnly) {
-  return ['mail-inbox', search, unreadOnly ? 'unread' : 'all'];
+const FOLDERS = [
+  { id: 'inbox', label: 'Inbox', icon: Inbox },
+  { id: 'drafts', label: 'Drafts', icon: FileEdit },
+  { id: 'sent', label: 'Sent', icon: Send },
+  { id: 'spam', label: 'Spam', icon: ShieldAlert },
+  { id: 'archive', label: 'Archive', icon: Archive },
+];
+
+function mailInboxQueryKey(accountId, folder, search, unreadOnly) {
+  return ['mail-inbox', accountId || 'default', folder || 'inbox', search, unreadOnly ? 'unread' : 'all'];
+}
+
+function readStoredAccountId() {
+  try {
+    const value = window.localStorage.getItem(MAIL_ACCOUNT_STORAGE_KEY);
+    return value ? Number(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeAccountId(accountId) {
+  try {
+    if (accountId) {
+      window.localStorage.setItem(MAIL_ACCOUNT_STORAGE_KEY, String(accountId));
+    } else {
+      window.localStorage.removeItem(MAIL_ACCOUNT_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 function parseMailDate(value) {
@@ -155,7 +191,11 @@ function EmailMessageActions({
   );
 }
 
-function InboxListItem({ message, active, onClick }) {
+function InboxListItem({ message, active, onClick, folder }) {
+  const primary = folder === 'sent' || folder === 'drafts'
+    ? (message.to || message.from || 'No recipients')
+    : (message.from || 'Unknown sender');
+
   return (
     <button
       type="button"
@@ -168,7 +208,7 @@ function InboxListItem({ message, active, onClick }) {
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className={cn('truncate text-sm', !message.seen && 'font-semibold')}>{message.from || 'Unknown sender'}</p>
+          <p className={cn('truncate text-sm', !message.seen && 'font-semibold')}>{primary}</p>
           <span className="shrink-0 text-[10px] text-muted-foreground">{formatMailDate(message.date)}</span>
         </div>
         <p className={cn('mt-0.5 truncate text-sm', !message.seen ? 'font-medium text-foreground' : 'text-foreground/90')}>
@@ -217,13 +257,14 @@ function ConnectMailbox({ status, onConnect, connecting }) {
         </div>
         <h2 className="text-lg font-semibold">Connect mailbox</h2>
         <p className="text-sm text-muted-foreground">
-          Sign in with your cPanel mailbox password for <span className="font-medium text-foreground">{status.email}</span>.
+          Sign in with your cPanel mailbox password for{' '}
+          <span className="font-medium text-foreground">{status.email}</span>.
         </p>
       </div>
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          onConnect(password);
+          onConnect({ password });
         }}
         className="space-y-4"
       >
@@ -427,14 +468,18 @@ export default function Email() {
   const goBack = useGoBack('/email');
   const queryClient = useQueryClient();
   const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
+  const { isFullscreen, toggleFullscreen } = useEmailFullscreen();
 
   const isCompose = location.pathname.endsWith('/compose');
   const composeDraft = location.state?.composeDraft || null;
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [folder, setFolder] = useState('inbox');
+  const [accountId, setAccountId] = useState(() => readStoredAccountId());
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -451,13 +496,41 @@ export default function Email() {
   });
 
   const { data: status, isLoading: statusLoading } = useQuery({
-    queryKey: MAIL_STATUS_QUERY_KEY,
-    queryFn: () => db.mail.status(),
+    queryKey: [...MAIL_STATUS_QUERY_KEY, accountId || 'default'],
+    queryFn: () => db.mail.status(accountId || undefined),
   });
 
+  const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
+  const activeAccount = status?.account
+    || accounts.find((account) => account.id === accountId)
+    || accounts[0]
+    || null;
+  const activeAccountId = activeAccount?.id || null;
+  const activeEmail = activeAccount?.email || status?.email || '';
+
+  useEffect(() => {
+    if (!status?.connected || !accounts.length) return;
+
+    const matched = accountId && accounts.some((account) => account.id === accountId);
+    if (!matched) {
+      const nextId = status.account?.id || accounts[0]?.id || null;
+      setAccountId(nextId);
+      storeAccountId(nextId);
+    }
+  }, [status, accounts, accountId]);
+
+  const selectAccount = (nextId) => {
+    setAccountId(nextId);
+    storeAccountId(nextId);
+    setFolder('inbox');
+    setSearch('');
+    setUnreadOnly(false);
+    navigate('/email');
+  };
+
   const inboxQueryKey = useMemo(
-    () => mailInboxQueryKey(debouncedSearch, unreadOnly),
-    [debouncedSearch, unreadOnly],
+    () => mailInboxQueryKey(activeAccountId, folder, debouncedSearch, unreadOnly),
+    [activeAccountId, folder, debouncedSearch, unreadOnly],
   );
 
   const { data: inboxData, isLoading: inboxLoading, refetch: refetchInbox, isFetching } = useQuery({
@@ -466,15 +539,17 @@ export default function Email() {
       limit: 50,
       q: debouncedSearch || undefined,
       unread: unreadOnly,
+      accountId: activeAccountId || undefined,
+      folder,
     }),
-    enabled: Boolean(status?.connected),
-    refetchInterval: debouncedSearch ? false : pollInterval,
+    enabled: Boolean(status?.connected) && Boolean(activeAccountId),
+    refetchInterval: debouncedSearch || folder !== 'inbox' ? false : pollInterval,
   });
 
   const { data: messageData, isLoading: messageLoading } = useQuery({
-    queryKey: ['mail-message', uid],
-    queryFn: () => db.mail.getMessage(uid),
-    enabled: Boolean(uid) && !isCompose && Boolean(status?.connected),
+    queryKey: ['mail-message', activeAccountId, folder, uid],
+    queryFn: () => db.mail.getMessage(uid, { accountId: activeAccountId, folder }),
+    enabled: Boolean(uid) && !isCompose && Boolean(status?.connected) && Boolean(activeAccountId),
   });
 
   useEffect(() => {
@@ -488,26 +563,53 @@ export default function Email() {
   };
 
   const connectMailbox = useMutation({
-    mutationFn: (password) => db.mail.connect(password),
-    onSuccess: () => {
+    mutationFn: (payload) => db.mail.connect(payload),
+    onSuccess: (data) => {
+      const nextId = data?.account?.id || null;
+      if (nextId) {
+        setAccountId(nextId);
+        storeAccountId(nextId);
+      }
+      setAddAccountOpen(false);
       invalidateMail();
-      toast.success('Mailbox connected.');
+      toast.success(data?.account ? 'Mailbox connected.' : 'Mailbox connected.');
     },
     onError: (error) => toast.error(error?.message || 'Could not connect mailbox.'),
   });
 
   const disconnectMailbox = useMutation({
-    mutationFn: () => db.mail.disconnect(),
-    onSuccess: () => {
+    mutationFn: (id) => db.mail.disconnect(id),
+    onSuccess: (data) => {
+      const remaining = Array.isArray(data?.accounts) ? data.accounts : [];
+      if (remaining.length === 0) {
+        setAccountId(null);
+        storeAccountId(null);
+      } else {
+        const nextId = remaining.find((account) => account.is_primary)?.id || remaining[0].id;
+        setAccountId(nextId);
+        storeAccountId(nextId);
+      }
       invalidateMail();
       navigate('/email');
-      toast.success('Mailbox disconnected.');
+      toast.success(remaining.length ? 'Account removed.' : 'Mailbox disconnected.');
     },
     onError: (error) => toast.error(error?.message || 'Could not disconnect mailbox.'),
   });
 
+  const setPrimaryAccount = useMutation({
+    mutationFn: (id) => db.mail.setPrimary(id),
+    onSuccess: () => {
+      invalidateMail();
+      toast.success('Primary account updated.');
+    },
+    onError: (error) => toast.error(error?.message || 'Could not update primary account.'),
+  });
+
   const sendEmail = useMutation({
-    mutationFn: (payload) => db.mail.send(payload),
+    mutationFn: (payload) => db.mail.send({
+      ...payload,
+      account_id: activeAccountId || undefined,
+    }),
     onSuccess: () => {
       toast.success('Email sent.');
       invalidateMail();
@@ -517,11 +619,14 @@ export default function Email() {
   });
 
   const deleteEmail = useMutation({
-    mutationFn: (messageUid) => db.mail.deleteMessage(messageUid),
+    mutationFn: (messageUid) => db.mail.deleteMessage(messageUid, {
+      accountId: activeAccountId,
+      folder,
+    }),
     onSuccess: () => {
       setDeleteTarget(null);
       invalidateMail();
-      queryClient.removeQueries({ queryKey: ['mail-message', uid] });
+      queryClient.removeQueries({ queryKey: ['mail-message', activeAccountId, folder, uid] });
       navigate('/email');
       toast.success('Email deleted.');
     },
@@ -529,7 +634,10 @@ export default function Email() {
   });
 
   const markUnread = useMutation({
-    mutationFn: (messageUid) => db.mail.markUnread(messageUid),
+    mutationFn: (messageUid) => db.mail.markUnread(messageUid, {
+      accountId: activeAccountId,
+      folder,
+    }),
     onSuccess: () => {
       invalidateMail();
       toast.success('Marked as unread.');
@@ -539,9 +647,17 @@ export default function Email() {
 
   const messages = Array.isArray(inboxData?.messages) ? inboxData.messages : [];
   const showPanel = isCompose || Boolean(uid);
+  const activeFolder = FOLDERS.find((item) => item.id === folder) || FOLDERS[0];
+  const ActiveFolderIcon = activeFolder.icon;
 
   const openCompose = (draft = null) => {
     navigate('/email/compose', { state: draft ? { composeDraft: draft } : undefined });
+  };
+
+  const switchFolder = (nextFolder) => {
+    setFolder(nextFolder);
+    setUnreadOnly(false);
+    navigate('/email');
   };
 
   if (statusLoading) {
@@ -558,7 +674,7 @@ export default function Email() {
         <ConnectMailbox
           status={status}
           connecting={connectMailbox.isPending}
-          onConnect={(password) => connectMailbox.mutate(password)}
+          onConnect={(payload) => connectMailbox.mutate(payload)}
         />
       </div>
     );
@@ -566,22 +682,84 @@ export default function Email() {
 
   return (
     <div className={cn(
-      'mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col',
+      'mx-auto flex h-full min-h-0 w-full flex-col',
+      isFullscreen ? 'max-w-none' : 'max-w-6xl',
       showPanel ? 'gap-0 lg:gap-4' : 'gap-2 sm:gap-4',
-      showPanel && '-mx-4 -mt-4 w-[calc(100%+2rem)] sm:-mx-6 sm:-mt-6 sm:w-[calc(100%+3rem)] lg:mx-auto lg:mt-0 lg:w-full',
+      showPanel && !isFullscreen && '-mx-4 -mt-4 w-[calc(100%+2rem)] sm:-mx-6 sm:-mt-6 sm:w-[calc(100%+3rem)] lg:mx-auto lg:mt-0 lg:w-full',
     )}>
       <div className={cn(
         'flex shrink-0 flex-wrap items-center justify-between gap-2 sm:gap-3',
-        showPanel && 'hidden lg:flex',
+        showPanel && !isFullscreen && 'hidden lg:flex',
       )}>
         <div className="flex min-w-0 items-center gap-2">
-          <Inbox className="h-5 w-5 shrink-0 text-primary" />
+          <ActiveFolderIcon className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0">
             <h1 className="text-base font-semibold leading-tight sm:text-lg">Email</h1>
-            <p className="truncate text-[11px] text-muted-foreground sm:text-xs">{status.email}</p>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex max-w-full items-center gap-1 truncate text-[11px] text-muted-foreground transition-colors hover:text-foreground sm:text-xs"
+                >
+                  <span className="truncate">{activeEmail}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Accounts</DropdownMenuLabel>
+                {accounts.map((account) => (
+                  <DropdownMenuItem
+                    key={account.id}
+                    onClick={() => selectAccount(account.id)}
+                    className="flex items-start gap-2"
+                  >
+                    <Check className={cn('mt-0.5 h-4 w-4 shrink-0', account.id === activeAccountId ? 'opacity-100' : 'opacity-0')} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">{account.email}</p>
+                      {account.is_primary ? (
+                        <p className="text-[10px] text-muted-foreground">Primary</p>
+                      ) : null}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setAddAccountOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add account
+                </DropdownMenuItem>
+                {activeAccountId && !activeAccount?.is_primary ? (
+                  <DropdownMenuItem
+                    onClick={() => setPrimaryAccount.mutate(activeAccountId)}
+                    disabled={setPrimaryAccount.isPending}
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    Make primary
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                  onClick={() => disconnectMailbox.mutate(activeAccountId)}
+                  disabled={disconnectMailbox.isPending}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {accounts.length > 1 ? 'Remove account' : 'Disconnect'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? 'Exit full screen' : 'View full screen'}
+            title={isFullscreen ? 'Exit full screen' : 'Full screen'}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -611,29 +789,56 @@ export default function Email() {
             <PenSquare className="h-4 w-4" />
             Compose
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => disconnectMailbox.mutate()}
-            disabled={disconnectMailbox.isPending}
-            aria-label="Disconnect mailbox"
-          >
-            {disconnectMailbox.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-          </Button>
         </div>
       </div>
 
       <div className={cn(
-        'grid min-h-0 flex-1 grid-cols-1 overflow-hidden bg-card lg:grid-cols-[320px_minmax(0,1fr)]',
+        'grid min-h-0 flex-1 grid-cols-1 overflow-hidden bg-card',
+        isFullscreen
+          ? 'lg:grid-cols-[220px_340px_minmax(0,1fr)]'
+          : 'lg:grid-cols-[200px_300px_minmax(0,1fr)]',
         showPanel
           ? 'rounded-none border-0 lg:rounded-2xl lg:border lg:border-border'
           : 'rounded-2xl border border-border',
+        isFullscreen && 'rounded-none border-0 sm:rounded-xl sm:border sm:border-border',
       )}>
+        <div className={cn(
+          'flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r',
+          showPanel && 'hidden lg:flex',
+        )}>
+          <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4 sm:py-3">
+            <p className="text-sm font-semibold">Folders</p>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto p-2 lg:flex-col lg:overflow-y-auto">
+            {FOLDERS.map((item) => {
+              const Icon = item.icon;
+              const active = item.id === folder;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => switchFolder(item.id)}
+                  className={cn(
+                    'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                    active
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{item.label}</span>
+                  {item.id === 'inbox' && inboxData?.unread_count && folder === 'inbox' ? (
+                    <span className="ml-auto text-[10px] text-primary lg:inline">{inboxData.unread_count}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
         <div className={cn('flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r', showPanel && 'hidden lg:flex')}>
           <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4 sm:py-3">
-            <p className="text-sm font-semibold">Inbox</p>
+            <p className="text-sm font-semibold">{activeFolder.label}</p>
             <p className="text-xs text-muted-foreground">
               {inboxData?.unread_count ? `${inboxData.unread_count} unread` : 'All caught up'}
             </p>
@@ -680,20 +885,20 @@ export default function Email() {
             ) : messages.length === 0 ? (
               <EmptyState
                 variant="compact"
-                icon={Inbox}
+                icon={ActiveFolderIcon}
                 title={
                   unreadOnly
                     ? 'No unread mail'
                     : debouncedSearch
                       ? 'No matches'
-                      : 'Inbox is empty'
+                      : `${activeFolder.label} is empty`
                 }
                 description={
                   unreadOnly
-                    ? 'You have read all messages in your inbox.'
+                    ? 'You have read all messages in this folder.'
                     : debouncedSearch
                       ? 'Try a different search term.'
-                      : 'New messages will appear here.'
+                      : 'Messages in this folder will appear here.'
                 }
               />
             ) : (
@@ -701,6 +906,7 @@ export default function Email() {
                 <InboxListItem
                   key={message.uid}
                   message={message}
+                  folder={folder}
                   active={String(message.uid) === String(uid)}
                   onClick={() => navigate(`/email/${message.uid}`)}
                 />
@@ -717,6 +923,7 @@ export default function Email() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold">New message</p>
+                <p className="hidden truncate text-xs text-muted-foreground sm:block">{activeEmail}</p>
               </div>
               <ComposeForm
                 initialDraft={composeDraft}
@@ -730,7 +937,7 @@ export default function Email() {
               variant="inline"
               icon={Mail}
               title="Select a message"
-              description="Choose an email from your inbox or compose a new one."
+              description="Choose an email from the list or compose a new one."
               className="flex-1"
               action={(
                 <Button className="gap-2" onClick={() => openCompose()}>
@@ -780,7 +987,7 @@ export default function Email() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 md:hidden"
-                      onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: status.email }))}
+                      onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
                       aria-label="Reply"
                     >
                       <Reply className="h-4 w-4" />
@@ -789,8 +996,8 @@ export default function Email() {
                       <EmailMessageActions
                         compact
                         markUnreadPending={markUnread.isPending}
-                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: status.email }))}
-                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: status.email }))}
+                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                         onForward={() => openCompose(buildForwardDraft(messageData))}
                         onMarkUnread={() => markUnread.mutate(uid)}
                         onDelete={() => setDeleteTarget(messageData)}
@@ -799,8 +1006,8 @@ export default function Email() {
                     <div className="hidden md:block">
                       <EmailMessageActions
                         markUnreadPending={markUnread.isPending}
-                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: status.email }))}
-                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: status.email }))}
+                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                         onForward={() => openCompose(buildForwardDraft(messageData))}
                         onMarkUnread={() => markUnread.mutate(uid)}
                         onDelete={() => setDeleteTarget(messageData)}
@@ -846,7 +1053,7 @@ export default function Email() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this email?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the message from your inbox on the mail server.
+              This removes the message from this folder on the mail server.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -860,6 +1067,44 @@ export default function Email() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={addAccountOpen} onOpenChange={setAddAccountOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add email account</DialogTitle>
+            <DialogDescription>
+              Enter another mailbox address and its webmail password.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              connectMailbox.mutate({
+                email: String(form.get('email') || '').trim(),
+                password: String(form.get('password') || ''),
+              });
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="add-mail-email">Email address</Label>
+              <Input id="add-mail-email" name="email" type="email" placeholder="you@company.com" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-mail-password">Mailbox password</Label>
+              <Input id="add-mail-password" name="password" type="password" placeholder="Webmail password" required />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddAccountOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={connectMailbox.isPending} className="gap-2">
+                {connectMailbox.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Add account
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

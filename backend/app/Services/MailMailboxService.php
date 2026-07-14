@@ -13,13 +13,37 @@ use RuntimeException;
 
 class MailMailboxService
 {
+    public const FOLDER_INBOX = 'inbox';
+
+    public const FOLDER_DRAFTS = 'drafts';
+
+    public const FOLDER_SENT = 'sent';
+
+    public const FOLDER_SPAM = 'spam';
+
+    public const FOLDER_ARCHIVE = 'archive';
+
+    /**
+     * @return array<int, string>
+     */
+    public static function logicalFolders(): array
+    {
+        return [
+            self::FOLDER_INBOX,
+            self::FOLDER_DRAFTS,
+            self::FOLDER_SENT,
+            self::FOLDER_SPAM,
+            self::FOLDER_ARCHIVE,
+        ];
+    }
+
     /**
      * @return array{host: string, port: int, encryption: string|null, smtp_port: int, smtp_encryption: string|null}
      */
-    public function serverConfig(?User $user = null): array
+    public function serverConfig(?User $user = null, ?string $mailboxEmail = null): array
     {
         $settings = AppSettings::row();
-        $host = $this->resolveMailHost($settings, $user);
+        $host = $this->resolveMailHost($settings, $user, $mailboxEmail);
 
         if ($host === '') {
             throw new RuntimeException('Mail server is not configured. Ask an admin to set SMTP/IMAP settings.');
@@ -34,7 +58,7 @@ class MailMailboxService
         ];
     }
 
-    protected function resolveMailHost(?object $settings, ?User $user = null): string
+    protected function resolveMailHost(?object $settings, ?User $user = null, ?string $mailboxEmail = null): string
     {
         $candidates = [];
 
@@ -45,8 +69,9 @@ class MailMailboxService
             }
         }
 
-        if ($user?->email) {
-            $domain = $this->domainFromEmail($user->email);
+        $emailForDomain = $mailboxEmail ?: $user?->email;
+        if ($emailForDomain) {
+            $domain = $this->domainFromEmail($emailForDomain);
             if ($domain) {
                 $candidates[] = 'mail.'.$domain;
 
@@ -134,40 +159,86 @@ class MailMailboxService
     }
 
     /**
-     * @return resource|Connection
+     * @return \Illuminate\Support\Collection<int, UserMailCredential>
      */
-    public function connect(User $user)
+    public function accountsFor(User $user)
     {
-        $credential = UserMailCredential::query()
+        return UserMailCredential::query()
             ->where('user_id', $user->id)
-            ->first();
+            ->orderByDesc('is_primary')
+            ->orderBy('email')
+            ->get();
+    }
+
+    public function resolveAccount(User $user, ?int $accountId = null): UserMailCredential
+    {
+        $query = UserMailCredential::query()->where('user_id', $user->id);
+
+        if ($accountId) {
+            $credential = (clone $query)->where('id', $accountId)->first();
+
+            if (! $credential) {
+                throw new RuntimeException('Mail account not found.');
+            }
+
+            return $credential;
+        }
+
+        $credential = (clone $query)->where('is_primary', true)->first()
+            ?? (clone $query)->orderBy('id')->first();
 
         if (! $credential) {
             throw new RuntimeException('Mail account not connected.');
         }
+
+        return $credential;
+    }
+
+    /**
+     * @return resource|Connection
+     */
+    public function connect(User $user, ?int $accountId = null, string $folder = self::FOLDER_INBOX)
+    {
+        $credential = $this->resolveAccount($user, $accountId);
 
         if (! function_exists('imap_open')) {
             throw new RuntimeException('PHP IMAP extension is not installed on the server.');
         }
 
         $password = Crypt::decryptString($credential->password);
-        $config = $this->serverConfig($user);
-        $mailbox = $this->mailboxString($config);
+        $config = $this->serverConfig($user, $credential->email);
+        $logicalFolder = $this->normalizeLogicalFolder($folder);
 
         $previous = imap_errors();
         if (is_array($previous)) {
             imap_errors();
         }
 
-        $connection = $this->openMailbox($mailbox, $user, $password);
+        $connection = $this->openMailbox($this->mailboxString($config, 'INBOX'), $credential->email, $password);
+
+        $map = $this->discoverFolderMapFromConnection($connection, $config);
+        $this->folderMapCache[$credential->id] = $map;
+
+        $imapFolder = $map[$logicalFolder] ?? $this->defaultImapFolder($logicalFolder);
+
+        if ($imapFolder !== 'INBOX') {
+            $target = $this->mailboxString($config, $imapFolder);
+            if (! @imap_reopen($connection, $target)) {
+                $error = imap_last_error() ?: "Could not open folder \"{$logicalFolder}\".";
+                imap_close($connection);
+                throw new RuntimeException($error);
+            }
+        }
 
         return $connection;
     }
 
-    public function testAndStoreCredentials(User $user, string $password): void
+    public function testAndStoreCredentials(User $user, string $password, ?string $email = null, ?string $label = null): UserMailCredential
     {
-        if (! filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('Your Nexus account needs a valid email address.');
+        $mailboxEmail = strtolower(trim($email ?: (string) $user->email));
+
+        if (! filter_var($mailboxEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('A valid email address is required.');
         }
 
         if ($password === '') {
@@ -178,7 +249,7 @@ class MailMailboxService
             throw new RuntimeException('PHP IMAP extension is not installed on the server.');
         }
 
-        $config = $this->serverConfig($user);
+        $config = $this->serverConfig($user, $mailboxEmail);
         $mailbox = $this->mailboxString($config);
 
         $previous = imap_errors();
@@ -186,54 +257,130 @@ class MailMailboxService
             imap_errors();
         }
 
-        $connection = $this->openMailbox($mailbox, $user, $password);
-
+        $connection = $this->openMailbox($mailbox, $mailboxEmail, $password);
         imap_close($connection);
 
-        UserMailCredential::query()->updateOrCreate(
-            ['user_id' => $user->id],
+        $existingCount = UserMailCredential::query()->where('user_id', $user->id)->count();
+        $existing = UserMailCredential::query()
+            ->where('user_id', $user->id)
+            ->where('email', $mailboxEmail)
+            ->first();
+
+        $makePrimary = $existingCount === 0 || ($existing && $existing->is_primary);
+
+        $credential = UserMailCredential::query()->updateOrCreate(
             [
+                'user_id' => $user->id,
+                'email' => $mailboxEmail,
+            ],
+            [
+                'label' => $label !== null && $label !== '' ? $label : ($existing?->label),
+                'is_primary' => $makePrimary || ($existing?->is_primary ?? false) || $existingCount === 0,
                 'password' => Crypt::encryptString($password),
                 'verified_at' => now(),
             ],
         );
 
-        app(MailInboxPushService::class)->resetWatchState($user);
+        if ($credential->is_primary) {
+            $this->ensureSinglePrimary($user, $credential->id);
+        }
+
+        if ($credential->is_primary) {
+            app(MailInboxPushService::class)->resetWatchState($user);
+        }
+
+        return $credential->fresh();
     }
 
-    public function disconnect(User $user): void
+    public function disconnect(User $user, ?int $accountId = null): void
+    {
+        if ($accountId === null) {
+            UserMailCredential::query()
+                ->where('user_id', $user->id)
+                ->delete();
+
+            app(MailInboxPushService::class)->resetWatchState($user);
+
+            return;
+        }
+
+        $credential = $this->resolveAccount($user, $accountId);
+        $wasPrimary = $credential->is_primary;
+        $credential->delete();
+
+        if ($wasPrimary) {
+            $next = UserMailCredential::query()
+                ->where('user_id', $user->id)
+                ->orderBy('id')
+                ->first();
+
+            if ($next) {
+                $next->is_primary = true;
+                $next->save();
+            }
+
+            app(MailInboxPushService::class)->resetWatchState($user);
+        }
+    }
+
+    public function setPrimaryAccount(User $user, int $accountId): UserMailCredential
+    {
+        $credential = $this->resolveAccount($user, $accountId);
+        $this->ensureSinglePrimary($user, $credential->id);
+        app(MailInboxPushService::class)->resetWatchState($user);
+
+        return $credential->fresh();
+    }
+
+    protected function ensureSinglePrimary(User $user, int $primaryId): void
     {
         UserMailCredential::query()
             ->where('user_id', $user->id)
-            ->delete();
+            ->where('id', '!=', $primaryId)
+            ->update(['is_primary' => false]);
 
-        app(MailInboxPushService::class)->resetWatchState($user);
+        UserMailCredential::query()
+            ->where('user_id', $user->id)
+            ->where('id', $primaryId)
+            ->update(['is_primary' => true]);
     }
 
     /**
-     * @return array{messages: array<int, array<string, mixed>>, unread_count: int}
+     * @return array{messages: array<int, array<string, mixed>>, unread_count: int, folder: string, account_id: int}
      */
-    public function listInbox(User $user, int $limit = 40, ?string $query = null, bool $unreadOnly = false, bool $includeAttachments = true): array
-    {
-        $connection = $this->connect($user);
+    public function listInbox(
+        User $user,
+        int $limit = 40,
+        ?string $query = null,
+        bool $unreadOnly = false,
+        bool $includeAttachments = true,
+        ?int $accountId = null,
+        string $folder = self::FOLDER_INBOX,
+    ): array {
+        $credential = $this->resolveAccount($user, $accountId);
+        $folder = $this->normalizeLogicalFolder($folder);
+        $connection = $this->connect($user, $credential->id, $folder);
 
         try {
             $uids = $this->searchMessageUids($connection, $query, $unreadOnly);
+            $imapFolder = $this->folderMapCache[$credential->id][$folder]
+                ?? $this->defaultImapFolder($folder);
+            $mailbox = $this->mailboxString($this->serverConfig($user, $credential->email), $imapFolder);
 
             if ($uids === []) {
-                $mailbox = $this->mailboxString($this->serverConfig($user));
                 $status = imap_status($connection, $mailbox, SA_UNSEEN);
 
                 return [
                     'messages' => [],
                     'unread_count' => (int) ($status->unseen ?? 0),
+                    'folder' => $folder,
+                    'account_id' => $credential->id,
                 ];
             }
 
             rsort($uids);
             $uids = array_slice($uids, 0, min($limit, 100));
 
-            $mailbox = $this->mailboxString($this->serverConfig($user));
             $status = imap_status($connection, $mailbox, SA_UNSEEN);
             $unreadCount = (int) ($status->unseen ?? 0);
 
@@ -262,6 +409,7 @@ class MailMailboxService
                     'uid' => $uid,
                     'subject' => $this->decodeHeader($overview->subject ?? '(No subject)'),
                     'from' => $this->decodeHeader($overview->from ?? ''),
+                    'to' => $this->decodeHeader($overview->to ?? ''),
                     'date' => $overview->date ?? null,
                     'seen' => $seen,
                     'has_attachments' => $includeAttachments
@@ -273,6 +421,8 @@ class MailMailboxService
             return [
                 'messages' => $messages,
                 'unread_count' => $unreadCount,
+                'folder' => $folder,
+                'account_id' => $credential->id,
             ];
         } finally {
             imap_close($connection);
@@ -282,9 +432,11 @@ class MailMailboxService
     /**
      * @return array<string, mixed>
      */
-    public function getMessage(User $user, int $uid): array
+    public function getMessage(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): array
     {
-        $connection = $this->connect($user);
+        $credential = $this->resolveAccount($user, $accountId);
+        $folder = $this->normalizeLogicalFolder($folder);
+        $connection = $this->connect($user, $credential->id, $folder);
 
         try {
             $overviewList = imap_fetch_overview($connection, (string) $uid, FT_UID);
@@ -301,6 +453,8 @@ class MailMailboxService
 
             return [
                 'uid' => $uid,
+                'folder' => $folder,
+                'account_id' => $credential->id,
                 'subject' => $this->decodeHeader($overview->subject ?? '(No subject)'),
                 'from' => $this->decodeHeader($overview->from ?? ''),
                 'to' => $this->decodeHeader($overview->to ?? ''),
@@ -330,36 +484,31 @@ class MailMailboxService
      *     attachments?: array<int, UploadedFile>
      * }  $payload
      */
-    public function sendMessage(User $user, array $payload): void
+    public function sendMessage(User $user, array $payload, ?int $accountId = null): void
     {
-        if (! $this->hasCredentials($user)) {
-            throw new RuntimeException('Mail account not connected.');
-        }
-
-        $credential = UserMailCredential::query()
-            ->where('user_id', $user->id)
-            ->firstOrFail();
-
+        $credential = $this->resolveAccount($user, $accountId);
         $password = Crypt::decryptString($credential->password);
-        $config = $this->serverConfig($user);
+        $config = $this->serverConfig($user, $credential->email);
+        $fromName = $credential->label
+            ?: ($user->full_name ?? $user->name ?? $credential->email);
 
         config([
             'mail.default' => 'smtp',
             'mail.mailers.smtp.host' => $config['host'],
             'mail.mailers.smtp.port' => $config['smtp_port'],
-            'mail.mailers.smtp.username' => $user->email,
+            'mail.mailers.smtp.username' => $credential->email,
             'mail.mailers.smtp.password' => $password,
             'mail.mailers.smtp.scheme' => AppSettings::smtpSchemeFromEncryption($config['smtp_encryption']),
-            'mail.from.address' => $user->email,
-            'mail.from.name' => $user->full_name ?? $user->name ?? $user->email,
+            'mail.from.address' => $credential->email,
+            'mail.from.name' => $fromName,
         ]);
 
         Mail::mailer('smtp')->raw(
             $payload['body'],
-            function ($message) use ($user, $payload) {
+            function ($message) use ($credential, $fromName, $payload) {
                 $message->to($this->parseAddresses($payload['to']))
                     ->subject($payload['subject'])
-                    ->from($user->email, $user->full_name ?? $user->name ?? $user->email);
+                    ->from($credential->email, $fromName);
 
                 if (! empty($payload['cc'])) {
                     $message->cc($this->parseAddresses($payload['cc']));
@@ -394,9 +543,10 @@ class MailMailboxService
         );
     }
 
-    public function deleteMessage(User $user, int $uid): void
+    public function deleteMessage(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void
     {
-        $connection = $this->connect($user);
+        $credential = $this->resolveAccount($user, $accountId);
+        $connection = $this->connect($user, $credential->id, $folder);
 
         try {
             if (! imap_delete($connection, (string) $uid, FT_UID)) {
@@ -409,9 +559,10 @@ class MailMailboxService
         }
     }
 
-    public function markUnread(User $user, int $uid): void
+    public function markUnread(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void
     {
-        $connection = $this->connect($user);
+        $credential = $this->resolveAccount($user, $accountId);
+        $connection = $this->connect($user, $credential->id, $folder);
 
         try {
             imap_clearflag_full($connection, (string) $uid, '\\Seen', ST_UID);
@@ -538,11 +689,11 @@ class MailMailboxService
     /**
      * @return resource|Connection
      */
-    protected function openMailbox(string $mailbox, User $user, string $password)
+    protected function openMailbox(string $mailbox, string $email, string $password)
     {
         $lastError = null;
 
-        foreach ($this->imapUsernames($user) as $username) {
+        foreach ($this->imapUsernames($email) as $username) {
             imap_errors();
 
             $connection = @imap_open($mailbox, $username, $password, 0, 1, [
@@ -562,15 +713,123 @@ class MailMailboxService
     /**
      * @return array<int, string>
      */
-    protected function imapUsernames(User $user): array
+    protected function imapUsernames(string $email): array
     {
-        $email = strtolower(trim((string) $user->email));
+        $email = strtolower(trim($email));
         $localPart = strstr($email, '@', true) ?: '';
 
         return array_values(array_unique(array_filter([
             $email,
             $localPart !== '' ? $localPart : null,
         ])));
+    }
+
+    protected function normalizeLogicalFolder(string $folder): string
+    {
+        $folder = strtolower(trim($folder));
+
+        if (! in_array($folder, self::logicalFolders(), true)) {
+            return self::FOLDER_INBOX;
+        }
+
+        return $folder;
+    }
+
+    protected function defaultImapFolder(string $logicalFolder): string
+    {
+        return match ($this->normalizeLogicalFolder($logicalFolder)) {
+            self::FOLDER_DRAFTS => 'Drafts',
+            self::FOLDER_SENT => 'Sent',
+            self::FOLDER_SPAM => 'Junk',
+            self::FOLDER_ARCHIVE => 'Archive',
+            default => 'INBOX',
+        };
+    }
+
+    /**
+     * Soft cache for discovered IMAP folder names per credential id.
+     *
+     * @var array<int, array<string, string>>
+     */
+    protected array $folderMapCache = [];
+
+    /**
+     * @param  array{host: string, port: int, encryption: string|null}  $config
+     * @return array<string, string>
+     */
+    protected function discoverFolderMapFromConnection($connection, array $config): array
+    {
+        $refMailbox = $this->mailboxString($config, '');
+        $mailboxes = @imap_list($connection, $refMailbox, '*') ?: [];
+
+        $names = [];
+        foreach ($mailboxes as $mailboxPath) {
+            $folder = $this->folderNameFromMailboxPath($mailboxPath, $refMailbox);
+            if ($folder !== '') {
+                $names[] = $folder;
+            }
+        }
+
+        return [
+            self::FOLDER_INBOX => 'INBOX',
+            self::FOLDER_DRAFTS => $this->matchFolder($names, ['drafts', 'draft']) ?? 'Drafts',
+            self::FOLDER_SENT => $this->matchFolder($names, ['sent items', 'sent mail', 'sent messages', 'sent']) ?? 'Sent',
+            self::FOLDER_SPAM => $this->matchFolder($names, ['junk e-mail', 'junk email', 'junk', 'spam', 'bulk mail']) ?? 'Junk',
+            self::FOLDER_ARCHIVE => $this->matchFolder($names, ['archive', 'archived']) ?? 'Archive',
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $names
+     * @param  array<int, string>  $keywords
+     */
+    protected function matchFolder(array $names, array $keywords): ?string
+    {
+        $normalized = [];
+        foreach ($names as $name) {
+            $normalized[strtolower($name)] = $name;
+            $leaf = strtolower($this->folderLeaf($name));
+            $normalized[$leaf] = $normalized[$leaf] ?? $name;
+        }
+
+        foreach ($keywords as $keyword) {
+            $keyword = strtolower($keyword);
+            if (isset($normalized[$keyword])) {
+                return $normalized[$keyword];
+            }
+        }
+
+        foreach ($names as $name) {
+            $haystack = strtolower($name);
+            foreach ($keywords as $keyword) {
+                if (str_contains($haystack, strtolower($keyword))) {
+                    return $name;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected function folderLeaf(string $folder): string
+    {
+        $folder = str_replace(['/', '\\'], '.', $folder);
+        $parts = explode('.', $folder);
+
+        return (string) end($parts);
+    }
+
+    protected function folderNameFromMailboxPath(string $mailboxPath, string $refMailbox): string
+    {
+        if (str_starts_with($mailboxPath, $refMailbox)) {
+            return substr($mailboxPath, strlen($refMailbox));
+        }
+
+        if (preg_match('/\}(.+)$/', $mailboxPath, $matches)) {
+            return $matches[1];
+        }
+
+        return $mailboxPath;
     }
 
     protected function clearImapErrors(): void

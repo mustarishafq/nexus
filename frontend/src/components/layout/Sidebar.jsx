@@ -31,14 +31,14 @@ export default function Sidebar({
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/people', icon: Users, label: 'People' },
-    { path: '/organization', icon: GitBranch, label: 'Organization' },
+    ...(showUserManagement ? [{ path: '/organization', icon: GitBranch, label: 'Organization' }] : []),
     { path: '/feed', icon: Newspaper, label: 'Feed' },
     { path: '/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/email', icon: Mail, label: 'Email' },
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
-    { path: '/activity', icon: Activity, label: 'Activity Feed' },
+    ...(isAdmin ? [{ path: '/activity', icon: Activity, label: 'Activity Feed' }] : []),
     { path: '/network-health', icon: Wifi, label: 'Network Health' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     ...(showUserManagement ? [

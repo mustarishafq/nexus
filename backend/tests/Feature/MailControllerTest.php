@@ -31,6 +31,12 @@ class MailControllerTest extends TestCase
                 'reachable' => false,
                 'connected' => false,
                 'email' => $user->email,
+                'accounts' => [],
+            ])
+            ->assertJsonStructure([
+                'folders' => [
+                    ['id', 'label'],
+                ],
             ]);
     }
 

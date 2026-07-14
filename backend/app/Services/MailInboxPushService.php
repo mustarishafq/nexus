@@ -223,6 +223,7 @@ class MailInboxPushService
         return UserMailCredential::query()
             ->with('user')
             ->whereIn('user_id', $userIdsWithPush)
+            ->where('is_primary', true)
             ->orderBy('user_id')
             ->get();
     }
