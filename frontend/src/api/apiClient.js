@@ -523,6 +523,56 @@ export const db = {
 		},
 	},
 
+	profileMedia: {
+		async get(userId, mediaType) {
+			return request(`/users/${userId}/profile-media/${mediaType}`);
+		},
+
+		async react(userId, mediaType, reaction) {
+			return request(`/users/${userId}/profile-media/${mediaType}/reactions`, {
+				method: 'POST',
+				body: { reaction },
+			});
+		},
+
+		async removeReaction(userId, mediaType) {
+			return request(`/users/${userId}/profile-media/${mediaType}/reactions`, {
+				method: 'DELETE',
+			});
+		},
+
+		async listComments(userId, mediaType) {
+			return request(`/users/${userId}/profile-media/${mediaType}/comments`);
+		},
+
+		async createComment(userId, mediaType, body, parentCommentId = null) {
+			return request(`/users/${userId}/profile-media/${mediaType}/comments`, {
+				method: 'POST',
+				body: {
+					body,
+					...(parentCommentId ? { parent_comment_id: parentCommentId } : {}),
+				},
+			});
+		},
+
+		async deleteComment(commentId) {
+			return request(`/profile-media-comments/${commentId}`, { method: 'DELETE' });
+		},
+
+		async reactToComment(commentId, reaction) {
+			return request(`/profile-media-comments/${commentId}/reactions`, {
+				method: 'POST',
+				body: { reaction },
+			});
+		},
+
+		async removeCommentReaction(commentId) {
+			return request(`/profile-media-comments/${commentId}/reactions`, {
+				method: 'DELETE',
+			});
+		},
+	},
+
 	messages: {
 		async listConversations() {
 			return request('/conversations');

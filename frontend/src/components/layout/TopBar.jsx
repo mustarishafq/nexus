@@ -2,14 +2,13 @@ import db from '@/api/apiClient';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { toAbsoluteUrl } from '@/lib/media';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { isAdmin } from '@/lib/roles';
 
 import { Bell, LogOut, Sparkles, User, ChevronDown } from 'lucide-react';
 import GlobalSearch, { GlobalSearchTrigger, useGlobalSearchShortcut } from './GlobalSearch';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import UserAvatar from '@/components/users/UserAvatar';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger
@@ -103,16 +102,12 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
 
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage
-                    src={toAbsoluteUrl(user?.profile_picture)}
-                    alt={getDisplayName(user)}
-                    className="rounded-lg"
-                  />
-                  <AvatarFallback className="rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-                    {getDisplayName(user, 'U')[0]?.toUpperCase() || 'U'}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar
+                  user={user}
+                  className="h-8 w-8 rounded-lg"
+                  fallbackClassName="rounded-lg bg-primary/10 text-sm font-semibold text-primary"
+                  showOnlineStatus={false}
+                />
                 <div className="hidden text-left md:block">
                   <p className={cn('text-sm font-medium leading-none', glassDialogTitleText)}>
                     {getDisplayName(user)}

@@ -3,7 +3,7 @@ import db from '@/api/apiClient';
 import React, { useCallback, useRef, useState } from 'react';
 import Cropper from 'react-easy-crop';
 import { Camera, Loader2, Trash2 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,13 +15,37 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { getCroppedImageBlob, PROFILE_PHOTO_MAX_SIZE, toAbsoluteUrl } from '@/lib/media';
+import {
+  getCenteredCoverCrop,
+  getCoverCropBackgroundStyle,
+  getResizedImageBlob,
+  normalizeMediaCropArea,
+  PROFILE_PHOTO_MAX_SIZE,
+  toAbsoluteUrl,
+} from '@/lib/media';
 import RoleAvatarRing from '@/components/users/RoleAvatarRing';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+const PROFILE_CROP_MIN_ZOOM = 0.2;
+const PROFILE_CROP_MAX_ZOOM = 3;
+
+function ProfileAvatarMedia({ url, crop, alt, className }) {
+  if (!url) return null;
+
+  return (
+    <span
+      role="img"
+      aria-label={alt}
+      className={cn('absolute inset-0 rounded-full', className)}
+      style={getCoverCropBackgroundStyle(url, crop)}
+    />
+  );
+}
+
 export default function ProfilePictureUploader({
   profilePicture,
+  profilePictureCrop = null,
   displayName,
   onUpdated,
   variant = 'profile',
@@ -30,13 +54,13 @@ export default function ProfilePictureUploader({
   readOnly = false,
   role,
   immersiveRing = false,
+  onView,
 }) {
   const fileInputRef = useRef(null);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [croppedAreaPercent, setCroppedAreaPercent] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -44,16 +68,14 @@ export default function ProfilePictureUploader({
   const initial = displayName?.[0]?.toUpperCase() || 'U';
   const avatarUrl = toAbsoluteUrl(profilePicture);
 
-  const onCropAreaChange = useCallback((croppedArea, pixels) => {
+  const onCropAreaChange = useCallback((croppedArea) => {
     setCroppedAreaPercent(croppedArea);
-    setCroppedAreaPixels(pixels);
   }, []);
 
   const resetCropState = () => {
     setImageSrc(null);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
-    setCroppedAreaPixels(null);
     setCroppedAreaPercent(null);
   };
 
@@ -74,8 +96,16 @@ export default function ProfilePictureUploader({
 
     const reader = new FileReader();
     reader.addEventListener('load', () => {
-      setImageSrc(reader.result);
-      setCropDialogOpen(true);
+      const dataUrl = reader.result;
+      const image = new Image();
+      image.addEventListener('load', () => {
+        setCroppedAreaPercent(getCenteredCoverCrop(image.naturalWidth, image.naturalHeight, 1));
+        setCrop({ x: 0, y: 0 });
+        setZoom(1);
+        setImageSrc(dataUrl);
+        setCropDialogOpen(true);
+      });
+      image.src = dataUrl;
     });
     reader.readAsDataURL(file);
   };
@@ -90,17 +120,26 @@ export default function ProfilePictureUploader({
 
     setUploading(true);
     try {
-      const blob = await getCroppedImageBlob(
-        imageSrc,
-        { percentages: croppedAreaPercent, pixels: croppedAreaPixels },
-        { maxWidth: PROFILE_PHOTO_MAX_SIZE, maxHeight: PROFILE_PHOTO_MAX_SIZE }
-      );
+      const cropArea = normalizeMediaCropArea(croppedAreaPercent);
+      if (!cropArea) {
+        toast.error('Invalid crop area. Adjust the framing and try again.');
+        return;
+      }
+
+      // Keep the full image for lightbox; crop only controls the circular avatar fit.
+      const blob = await getResizedImageBlob(imageSrc, {
+        maxWidth: PROFILE_PHOTO_MAX_SIZE,
+        maxHeight: PROFILE_PHOTO_MAX_SIZE,
+      });
       const file = new File([blob], 'profile-picture.jpg', { type: 'image/jpeg' });
       const { file_url } = await db.integrations.Core.UploadFile({
         file,
         folder: 'profile-pictures',
       });
-      await db.auth.updateMe({ profile_picture: file_url });
+      await db.auth.updateMe({
+        profile_picture: file_url,
+        profile_picture_crop: cropArea,
+      });
       await onUpdated?.();
       toast.success('Profile picture updated.');
       setCropDialogOpen(false);
@@ -115,7 +154,7 @@ export default function ProfilePictureUploader({
   const handleRemove = async () => {
     setRemoving(true);
     try {
-      await db.auth.updateMe({ profile_picture: null });
+      await db.auth.updateMe({ profile_picture: null, profile_picture_crop: null });
       await onUpdated?.();
       toast.success('Profile picture removed.');
     } catch (err) {
@@ -131,7 +170,7 @@ export default function ProfilePictureUploader({
         <DialogHeader>
           <DialogTitle>Crop profile picture</DialogTitle>
           <DialogDescription>
-            Drag to reposition and use the slider to zoom. Your photo will be saved as a square.
+            Drag to reposition and zoom. Crop controls the avatar fit; the full image is kept for preview.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,9 +180,14 @@ export default function ProfilePictureUploader({
               image={imageSrc}
               crop={crop}
               zoom={zoom}
+              minZoom={PROFILE_CROP_MIN_ZOOM}
+              maxZoom={PROFILE_CROP_MAX_ZOOM}
+              restrictPosition={false}
               aspect={1}
               cropShape="round"
               showGrid={false}
+              objectFit="contain"
+              initialCroppedAreaPercentages={croppedAreaPercent || undefined}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropAreaChange={onCropAreaChange}
@@ -155,8 +199,8 @@ export default function ProfilePictureUploader({
           <Label htmlFor="profile-picture-zoom">Zoom</Label>
           <Slider
             id="profile-picture-zoom"
-            min={1}
-            max={3}
+            min={PROFILE_CROP_MIN_ZOOM}
+            max={PROFILE_CROP_MAX_ZOOM}
             step={0.05}
             value={[zoom]}
             onValueChange={([value]) => setZoom(value)}
@@ -180,56 +224,73 @@ export default function ProfilePictureUploader({
     const avatar = (
       <Avatar
         className={cn(
-          'h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 shadow-lg',
+          'relative h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40 shadow-lg overflow-hidden',
           role ? 'border-0' : 'border-[3px] border-background',
+          onView && 'cursor-zoom-in',
           avatarClassName
         )}
       >
-        <AvatarImage src={avatarUrl} alt={displayName || 'Profile picture'} />
-        <AvatarFallback className="text-2xl sm:text-3xl lg:text-4xl font-semibold bg-primary/10 text-primary">
-          {initial}
-        </AvatarFallback>
+        <ProfileAvatarMedia
+          url={avatarUrl}
+          crop={profilePictureCrop}
+          alt={displayName || 'Profile picture'}
+        />
+        {!avatarUrl ? (
+          <AvatarFallback className="text-2xl sm:text-3xl lg:text-4xl font-semibold bg-primary/10 text-primary">
+            {initial}
+          </AvatarFallback>
+        ) : null}
       </Avatar>
+    );
+
+    const avatarNode = onView ? (
+      <button
+        type="button"
+        onClick={onView}
+        className="rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        aria-label="View profile picture"
+      >
+        {role ? (
+          <RoleAvatarRing role={role} immersive={immersiveRing}>
+            {avatar}
+          </RoleAvatarRing>
+        ) : (
+          avatar
+        )}
+      </button>
+    ) : role ? (
+      <RoleAvatarRing role={role} immersive={immersiveRing}>
+        {avatar}
+      </RoleAvatarRing>
+    ) : (
+      avatar
     );
 
     return (
       <>
         <div className={cn('relative w-fit shrink-0 group', className)}>
-          {role ? (
-            <RoleAvatarRing role={role} immersive={immersiveRing}>
-              {avatar}
-            </RoleAvatarRing>
-          ) : (
-            avatar
-          )}
+          {avatarNode}
 
           {!readOnly ? (
             <>
               <button
                 type="button"
-                className="absolute inset-0 hidden sm:flex items-center justify-center rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || removing}
-                aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
-              >
-                {uploading ? (
-                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
-                ) : (
-                  <Camera className="w-6 h-6 text-foreground" />
+                className={cn(
+                  'absolute bottom-0 left-0 flex items-center justify-center rounded-full border border-border/70 bg-background shadow-md text-muted-foreground',
+                  'h-8 w-8 sm:h-9 sm:w-9',
+                  'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity'
                 )}
-              </button>
-
-              <button
-                type="button"
-                className="absolute bottom-0 left-0 sm:hidden flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background shadow-md text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
                 disabled={uploading || removing}
                 aria-label={profilePicture ? 'Change profile photo' : 'Add profile photo'}
               >
                 {uploading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                 ) : (
-                  <Camera className="w-3.5 h-3.5" />
+                  <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 )}
               </button>
 
@@ -239,7 +300,10 @@ export default function ProfilePictureUploader({
                   size="icon"
                   variant="secondary"
                   className="absolute bottom-0 right-0 h-8 w-8 sm:h-9 sm:w-9 rounded-full shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                  onClick={handleRemove}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleRemove();
+                  }}
                   disabled={uploading || removing}
                   aria-label="Remove profile photo"
                 >
@@ -269,18 +333,24 @@ export default function ProfilePictureUploader({
   return (
     <>
       <div className={cn('flex items-center gap-4', className)}>
-        <Avatar className="h-20 w-20 border border-border shadow-sm">
-          <AvatarImage src={avatarUrl} alt={displayName || 'Profile picture'} />
-          <AvatarFallback className="text-xl font-semibold bg-primary/10 text-primary">
-            {initial}
-          </AvatarFallback>
+        <Avatar className="relative h-20 w-20 overflow-hidden border border-border shadow-sm">
+          <ProfileAvatarMedia
+            url={avatarUrl}
+            crop={profilePictureCrop}
+            alt={displayName || 'Profile picture'}
+          />
+          {!avatarUrl ? (
+            <AvatarFallback className="text-xl font-semibold bg-primary/10 text-primary">
+              {initial}
+            </AvatarFallback>
+          ) : null}
         </Avatar>
 
         <div className="space-y-2">
           <div>
             <p className="text-sm font-medium">Profile Picture</p>
             <p className="text-xs text-muted-foreground">
-              Upload a photo and crop it to a square. JPG or PNG, up to 10 MB.
+              Upload a photo and adjust the circular fit. JPG or PNG, up to 10 MB.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

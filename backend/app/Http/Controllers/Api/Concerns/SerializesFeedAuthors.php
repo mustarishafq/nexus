@@ -19,6 +19,7 @@ trait SerializesFeedAuthors
             'id' => $user->id,
             'name' => $user->displayName(),
             'profile_picture' => $user->profile_picture,
+            'profile_picture_crop' => $user->profile_picture_crop,
             'department' => $user->department?->name,
         ];
     }

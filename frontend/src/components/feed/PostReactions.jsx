@@ -12,6 +12,8 @@ export default function PostReactions({
   commentId = null,
   postId = null,
   compact = false,
+  reactFn = null,
+  invalidateKeys = null,
 }) {
   const queryClient = useQueryClient();
   const isComment = Boolean(commentId);
@@ -21,9 +23,23 @@ export default function PostReactions({
   const activeEntries = Object.entries(reactionCounts).filter(([, count]) => count > 0);
 
   const reactMutation = useMutation({
-    mutationFn: (reaction) =>
-      isComment ? db.feed.reactToComment(commentId, reaction) : db.feed.reactToPost(item.id, reaction),
+    mutationFn: (reaction) => {
+      if (reactFn) {
+        return reactFn(reaction);
+      }
+
+      return isComment
+        ? db.feed.reactToComment(commentId, reaction)
+        : db.feed.reactToPost(item.id, reaction);
+    },
     onSuccess: () => {
+      if (Array.isArray(invalidateKeys) && invalidateKeys.length > 0) {
+        invalidateKeys.forEach((queryKey) => {
+          queryClient.invalidateQueries({ queryKey });
+        });
+        return;
+      }
+
       if (isComment) {
         queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       } else {

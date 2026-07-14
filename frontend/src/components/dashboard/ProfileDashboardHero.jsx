@@ -3,21 +3,46 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
+import ProfileMediaViewer from '@/components/profile/ProfileMediaViewer';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
-import { COVER_PHOTO_DISPLAY_ASPECT, toAbsoluteUrl } from '@/lib/media';
+import {
+  COVER_PHOTO_DISPLAY_ASPECT,
+  getCoverCropBackgroundStyle,
+  toAbsoluteUrl,
+} from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 const DEFAULT_COVER = '/icons/cover-photo-new.png';
 
-function CoverPhotoImage({ coverPicture, userReady }) {
+function CoverPhotoImage({ coverPicture, coverCrops, userReady, onOpen }) {
   const [loaded, setLoaded] = useState(false);
   const coverUrl = userReady ? toAbsoluteUrl(coverPicture) || DEFAULT_COVER : null;
+  const desktopStyle = coverUrl
+    ? getCoverCropBackgroundStyle(coverUrl, coverCrops?.desktop)
+    : undefined;
+  const mobileStyle = coverUrl
+    ? getCoverCropBackgroundStyle(coverUrl, coverCrops?.mobile || coverCrops?.desktop)
+    : undefined;
 
   useEffect(() => {
     setLoaded(false);
-  }, [coverUrl]);
+    if (!coverUrl) {
+      setLoaded(true);
+      return undefined;
+    }
+
+    const image = new Image();
+    image.onload = () => setLoaded(true);
+    image.onerror = () => setLoaded(true);
+    image.src = coverUrl;
+
+    return () => {
+      image.onload = null;
+      image.onerror = null;
+    };
+  }, [coverUrl, coverCrops?.desktop, coverCrops?.mobile]);
 
   return (
     <>
@@ -29,16 +54,31 @@ function CoverPhotoImage({ coverPicture, userReady }) {
         aria-hidden
       />
       {coverUrl ? (
-        <img
-          src={coverUrl}
-          alt=""
-          onLoad={() => setLoaded(true)}
-          onError={() => setLoaded(true)}
-          className={cn(
-            'absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-300',
-            loaded ? 'opacity-100' : 'opacity-0'
-          )}
-        />
+        <button
+          type="button"
+          onClick={onOpen}
+          className="absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden text-left"
+          aria-label="View cover photo"
+        >
+          {/* Mobile framing */}
+          <span
+            className={cn(
+              'absolute inset-0 sm:hidden transition-opacity duration-300',
+              loaded ? 'opacity-100' : 'opacity-0'
+            )}
+            style={mobileStyle}
+            aria-hidden
+          />
+          {/* Desktop / tablet framing — full image framed by crop, not a cropped file */}
+          <span
+            className={cn(
+              'absolute inset-0 hidden sm:block transition-opacity duration-300',
+              loaded ? 'opacity-100' : 'opacity-0'
+            )}
+            style={desktopStyle}
+            aria-hidden
+          />
+        </button>
       ) : null}
     </>
   );
@@ -49,6 +89,12 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
   const userReady = user != null;
   const presenceOnline = useIsUserOnline(user?.id);
   const isOnline = user?.is_online ?? presenceOnline;
+  const [viewer, setViewer] = useState(null);
+
+  const openViewer = (mediaType) => {
+    if (!user?.id) return;
+    setViewer(mediaType);
+  };
 
   return (
     <motion.div
@@ -57,8 +103,13 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
       className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm"
     >
       <div className={cn('relative w-full group', COVER_PHOTO_DISPLAY_ASPECT)}>
-        <CoverPhotoImage coverPicture={user?.cover_picture} userReady={userReady} />
-        <div className="absolute inset-0 bg-gradient-to-t from-background/55 via-transparent to-transparent sm:from-background/75 sm:via-background/10" />
+        <CoverPhotoImage
+          coverPicture={user?.cover_picture}
+          coverCrops={user?.cover_picture_crops}
+          userReady={userReady}
+          onOpen={() => openViewer('cover')}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/55 via-transparent to-transparent sm:from-background/75 sm:via-background/10" />
         <CoverPhotoUploader
           variant="overlay"
           coverPicture={user?.cover_picture}
@@ -72,11 +123,13 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
           <ProfilePictureUploader
             variant="overlay"
             profilePicture={user?.profile_picture}
+            profilePictureCrop={user?.profile_picture_crop}
             displayName={getDisplayName(user, '')}
             onUpdated={onUserUpdated}
             readOnly={readOnly}
             role={user?.role}
             immersiveRing
+            onView={user?.profile_picture ? () => openViewer('avatar') : undefined}
             className="-mt-[5.5rem] sm:-mt-20 lg:-mt-[5.5rem] mx-auto sm:mx-0 self-center sm:self-start"
             avatarClassName="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
           />
@@ -102,6 +155,20 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
           </div>
         </div>
       </div>
+
+      <ProfileMediaViewer
+        open={Boolean(viewer)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setViewer(null);
+        }}
+        user={user}
+        mediaType={viewer || 'avatar'}
+        fallbackImageUrl={
+          viewer === 'cover'
+            ? user?.cover_picture || DEFAULT_COVER
+            : user?.profile_picture
+        }
+      />
     </motion.div>
   );
 }

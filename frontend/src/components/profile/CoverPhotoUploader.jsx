@@ -1,6 +1,6 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import Cropper from 'react-easy-crop';
 import { Camera, ImageIcon, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,32 +14,42 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   COVER_PHOTO_ASPECT,
   COVER_PHOTO_MOBILE_ASPECT,
   COVER_PHOTO_MAX_WIDTH,
-  COVER_PHOTO_MOBILE_VISIBLE_WIDTH_RATIO,
-  getCoverDisplayPreviewDataUrl,
-  getCroppedImageBlob,
+  getCenteredCoverCrop,
+  getCoverCropBackgroundStyle,
+  getResizedImageBlob,
+  normalizeMediaCropArea,
   toAbsoluteUrl,
 } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const DEFAULT_COVER = '/icons/banner.png';
+const COVER_CROP_MIN_ZOOM = 0.2;
+const COVER_CROP_MAX_ZOOM = 4;
 
-function CoverCropPreview({ label, aspectClass, previewUrl }) {
+function CoverCropPreview({ label, aspectClass, imageSrc, crop, className }) {
+  const hasCrop = Boolean(crop?.width && crop?.height);
+
   return (
-    <div className="space-y-1.5 min-w-0">
+    <div className={cn('space-y-1.5 min-w-0', className)}>
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-      <div className={cn('relative w-full overflow-hidden rounded-md border border-border bg-muted', aspectClass)}>
-        {previewUrl ? (
-          <img src={previewUrl} alt="" className="h-full w-full object-cover object-center" />
-        ) : (
+      <div
+        className={cn(
+          'relative w-full overflow-hidden rounded-md border border-border bg-muted',
+          aspectClass
+        )}
+        style={hasCrop ? getCoverCropBackgroundStyle(imageSrc, crop) : undefined}
+      >
+        {!hasCrop ? (
           <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">
             Adjust crop
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -53,114 +63,28 @@ export default function CoverPhotoUploader({
   readOnly = false,
 }) {
   const fileInputRef = useRef(null);
-  const cropContainerRef = useRef(null);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
+  const [activeTab, setActiveTab] = useState('desktop');
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [croppedAreaPercent, setCroppedAreaPercent] = useState(null);
-  const [cropAreaRect, setCropAreaRect] = useState(null);
-  const [desktopPreviewUrl, setDesktopPreviewUrl] = useState(null);
-  const [mobilePreviewUrl, setMobilePreviewUrl] = useState(null);
+  const [desktopArea, setDesktopArea] = useState(null);
+  const [mobileArea, setMobileArea] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   const coverUrl = toAbsoluteUrl(coverPicture) || DEFAULT_COVER;
-
-  const updateCropAreaRect = useCallback(() => {
-    const container = cropContainerRef.current;
-    const cropArea = container?.querySelector('.reactEasyCrop_CropArea');
-    if (!container || !cropArea) {
-      setCropAreaRect(null);
-      return;
-    }
-
-    const containerRect = container.getBoundingClientRect();
-    const areaRect = cropArea.getBoundingClientRect();
-    setCropAreaRect({
-      top: areaRect.top - containerRect.top,
-      left: areaRect.left - containerRect.left,
-      width: areaRect.width,
-      height: areaRect.height,
-    });
-  }, []);
-
-  const onCropAreaChange = useCallback(
-    (croppedArea, pixels) => {
-      setCroppedAreaPercent(croppedArea);
-      setCroppedAreaPixels(pixels);
-      requestAnimationFrame(updateCropAreaRect);
-    },
-    [updateCropAreaRect]
-  );
-
-  useEffect(() => {
-    if (!cropDialogOpen || !imageSrc || !croppedAreaPixels) {
-      setDesktopPreviewUrl(null);
-      setMobilePreviewUrl(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const updatePreviews = async () => {
-      try {
-        const [desktop, mobile] = await Promise.all([
-          getCoverDisplayPreviewDataUrl(imageSrc, croppedAreaPixels, COVER_PHOTO_ASPECT),
-          getCoverDisplayPreviewDataUrl(imageSrc, croppedAreaPixels, COVER_PHOTO_MOBILE_ASPECT),
-        ]);
-
-        if (!cancelled) {
-          setDesktopPreviewUrl(desktop);
-          setMobilePreviewUrl(mobile);
-        }
-      } catch {
-        if (!cancelled) {
-          setDesktopPreviewUrl(null);
-          setMobilePreviewUrl(null);
-        }
-      }
-    };
-
-    updatePreviews();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cropDialogOpen, imageSrc, croppedAreaPixels]);
-
-  useEffect(() => {
-    if (!cropDialogOpen) return undefined;
-
-    const container = cropContainerRef.current;
-    if (!container) return undefined;
-
-    const cropArea = container.querySelector('.reactEasyCrop_CropArea');
-    const observer = new ResizeObserver(() => updateCropAreaRect());
-
-    if (cropArea) {
-      observer.observe(cropArea);
-    }
-    observer.observe(container);
-
-    const frame = requestAnimationFrame(updateCropAreaRect);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [cropDialogOpen, imageSrc, crop, zoom, updateCropAreaRect]);
+  const activeAspect = activeTab === 'mobile' ? COVER_PHOTO_MOBILE_ASPECT : COVER_PHOTO_ASPECT;
+  const activeInitialArea = activeTab === 'mobile' ? mobileArea : desktopArea;
+  const activeArea = activeTab === 'mobile' ? mobileArea : desktopArea;
 
   const resetCropState = () => {
     setImageSrc(null);
+    setActiveTab('desktop');
     setCrop({ x: 0, y: 0 });
     setZoom(1);
-    setCroppedAreaPixels(null);
-    setCroppedAreaPercent(null);
-    setCropAreaRect(null);
-    setDesktopPreviewUrl(null);
-    setMobilePreviewUrl(null);
+    setDesktopArea(null);
+    setMobileArea(null);
   };
 
   const handleFileSelect = (event) => {
@@ -180,8 +104,20 @@ export default function CoverPhotoUploader({
 
     const reader = new FileReader();
     reader.addEventListener('load', () => {
-      setImageSrc(reader.result);
-      setCropDialogOpen(true);
+      const dataUrl = reader.result;
+      const image = new Image();
+      image.addEventListener('load', () => {
+        setDesktopArea(getCenteredCoverCrop(image.naturalWidth, image.naturalHeight, COVER_PHOTO_ASPECT));
+        setMobileArea(
+          getCenteredCoverCrop(image.naturalWidth, image.naturalHeight, COVER_PHOTO_MOBILE_ASPECT)
+        );
+        setCrop({ x: 0, y: 0 });
+        setZoom(1);
+        setImageSrc(dataUrl);
+        setActiveTab('desktop');
+        setCropDialogOpen(true);
+      });
+      image.src = dataUrl;
     });
     reader.readAsDataURL(file);
   };
@@ -191,22 +127,49 @@ export default function CoverPhotoUploader({
     resetCropState();
   };
 
+  const handleAreaChange = useCallback(
+    (croppedArea) => {
+      if (activeTab === 'mobile') {
+        setMobileArea(croppedArea);
+      } else {
+        setDesktopArea(croppedArea);
+      }
+    },
+    [activeTab]
+  );
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+  };
+
   const handleCropSave = async () => {
-    if (!imageSrc || !croppedAreaPercent) return;
+    if (!imageSrc || !desktopArea || !mobileArea) return;
 
     setUploading(true);
     try {
-      const blob = await getCroppedImageBlob(
-        imageSrc,
-        { percentages: croppedAreaPercent, pixels: croppedAreaPixels },
-        { maxWidth: COVER_PHOTO_MAX_WIDTH }
-      );
+      const desktopCrop = normalizeMediaCropArea(desktopArea);
+      const mobileCrop = normalizeMediaCropArea(mobileArea);
+      if (!desktopCrop || !mobileCrop) {
+        toast.error('Invalid crop area. Adjust the framing and try again.');
+        return;
+      }
+
+      // Keep the full image for lightbox/full-size preview; crops only control banner fit.
+      const blob = await getResizedImageBlob(imageSrc, { maxWidth: COVER_PHOTO_MAX_WIDTH });
       const file = new File([blob], 'cover-photo-new.jpg', { type: 'image/jpeg' });
       const { file_url } = await db.integrations.Core.UploadFile({
         file,
         folder: 'cover-pictures-new',
       });
-      await db.auth.updateMe({ cover_picture: file_url });
+      await db.auth.updateMe({
+        cover_picture: file_url,
+        cover_picture_crops: {
+          desktop: desktopCrop,
+          mobile: mobileCrop,
+        },
+      });
       await onUpdated?.();
       toast.success('Cover photo updated.');
       setCropDialogOpen(false);
@@ -221,7 +184,7 @@ export default function CoverPhotoUploader({
   const handleRemove = async () => {
     setRemoving(true);
     try {
-      await db.auth.updateMe({ cover_picture: null });
+      await db.auth.updateMe({ cover_picture: null, cover_picture_crops: null });
       await onUpdated?.();
       toast.success('Cover photo removed.');
     } catch (err) {
@@ -233,89 +196,95 @@ export default function CoverPhotoUploader({
 
   const cropDialog = (
     <Dialog open={cropDialogOpen} onOpenChange={(open) => !open && handleCropCancel()}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Crop cover photo</DialogTitle>
-          <DialogDescription>
-            Drag to reposition and zoom. The solid frame is desktop; the dashed frame shows what mobile will display.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <div className="shrink-0 space-y-1.5 border-b border-border px-4 py-4 pr-12 sm:px-6">
+          <DialogHeader className="space-y-1.5 text-left">
+            <DialogTitle>Crop cover photo</DialogTitle>
+            <DialogDescription>
+              Adjust desktop and mobile framing separately. The full image is kept for preview; crop only
+              controls how it fits on the banner.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div
-          ref={cropContainerRef}
-          className="relative h-56 sm:h-72 w-full overflow-hidden rounded-lg bg-muted"
-        >
-          {imageSrc ? (
-            <Cropper
-              image={imageSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={COVER_PHOTO_ASPECT}
-              cropShape="rect"
-              showGrid
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropAreaChange={onCropAreaChange}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-6">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="desktop">Desktop</TabsTrigger>
+              <TabsTrigger value="mobile">Mobile</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div
+            className={cn(
+              'relative w-full overflow-hidden rounded-lg bg-muted',
+              activeTab === 'mobile' ? 'h-44 sm:h-56' : 'h-40 sm:h-52'
+            )}
+          >
+            {imageSrc ? (
+              <Cropper
+                key={activeTab}
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                minZoom={COVER_CROP_MIN_ZOOM}
+                maxZoom={COVER_CROP_MAX_ZOOM}
+                restrictPosition={false}
+                aspect={activeAspect}
+                cropShape="rect"
+                showGrid
+                objectFit="contain"
+                initialCroppedAreaPercentages={activeInitialArea || undefined}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropAreaChange={handleAreaChange}
+              />
+            ) : null}
+          </div>
+
+          {activeTab === 'mobile' ? (
+            <CoverCropPreview
+              label="Mobile fit preview"
+              aspectClass="aspect-[3/2]"
+              imageSrc={imageSrc}
+              crop={activeArea}
+              className="mx-auto w-full max-w-[180px] sm:max-w-[220px]"
             />
-          ) : null}
+          ) : (
+            <CoverCropPreview
+              label="Desktop fit preview"
+              aspectClass="aspect-[4/1]"
+              imageSrc={imageSrc}
+              crop={activeArea}
+              className="w-full"
+            />
+          )}
 
-          {cropAreaRect ? (
-            <>
-              <div
-                className="pointer-events-none absolute z-20 rounded-sm border-2 border-dashed border-primary/90"
-                style={{
-                  top: cropAreaRect.top,
-                  left:
-                    cropAreaRect.left +
-                    (cropAreaRect.width * (1 - COVER_PHOTO_MOBILE_VISIBLE_WIDTH_RATIO)) / 2,
-                  width: cropAreaRect.width * COVER_PHOTO_MOBILE_VISIBLE_WIDTH_RATIO,
-                  height: cropAreaRect.height,
-                }}
-              >
-                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm">
-                  Mobile
-                </span>
-              </div>
-              <span
-                className="pointer-events-none absolute z-20 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow-sm"
-                style={{ top: cropAreaRect.top + 6, left: cropAreaRect.left + 8 }}
-              >
-                Desktop
-              </span>
-            </>
-          ) : null}
+          <div className="space-y-2 pb-1">
+            <Label htmlFor="cover-photo-zoom">Zoom</Label>
+            <Slider
+              id="cover-photo-zoom"
+              min={COVER_CROP_MIN_ZOOM}
+              max={COVER_CROP_MAX_ZOOM}
+              step={0.05}
+              value={[zoom]}
+              onValueChange={([value]) => setZoom(value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Zoom out to fit more of the image in the frame.
+            </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <CoverCropPreview
-            label="Desktop preview"
-            aspectClass="aspect-[4/1]"
-            previewUrl={desktopPreviewUrl}
-          />
-          <CoverCropPreview
-            label="Mobile preview"
-            aspectClass="aspect-[3/2]"
-            previewUrl={mobilePreviewUrl}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="cover-photo-zoom">Zoom</Label>
-          <Slider
-            id="cover-photo-zoom"
-            min={1}
-            max={4}
-            step={0.05}
-            value={[zoom]}
-            onValueChange={([value]) => setZoom(value)}
-          />
-        </div>
-
-        <DialogFooter>
+        <DialogFooter className="shrink-0 gap-2 border-t border-border px-4 py-3 sm:px-6">
           <Button type="button" variant="outline" onClick={handleCropCancel} disabled={uploading}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleCropSave} disabled={uploading || !croppedAreaPercent}>
+          <Button
+            type="button"
+            onClick={handleCropSave}
+            disabled={uploading || !desktopArea || !mobileArea}
+          >
             {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Save Cover
           </Button>

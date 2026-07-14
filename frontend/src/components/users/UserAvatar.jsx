@@ -1,6 +1,6 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
-import { toAbsoluteUrl } from '@/lib/media';
+import { getCoverCropBackgroundStyle, toAbsoluteUrl } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 
@@ -14,23 +14,29 @@ export default function UserAvatar({
   const initial = displayName?.[0]?.toUpperCase() || '?';
   const presenceOnline = useIsUserOnline(user?.id);
   const isOnline = user?.is_online ?? presenceOnline;
+  const avatarUrl = toAbsoluteUrl(user?.profile_picture);
+  const crop = user?.profile_picture_crop;
 
   return (
     <div className="relative inline-flex shrink-0">
-      <Avatar className={cn('h-10 w-10 shrink-0', className)}>
-        <AvatarImage
-          src={toAbsoluteUrl(user?.profile_picture)}
-          alt={displayName}
-          className="rounded-full object-cover"
-        />
-        <AvatarFallback
-          className={cn(
-            'bg-primary/10 text-sm font-semibold text-primary',
-            fallbackClassName
-          )}
-        >
-          {initial}
-        </AvatarFallback>
+      <Avatar className={cn('relative h-10 w-10 shrink-0 overflow-hidden', className)}>
+        {avatarUrl ? (
+          <span
+            role="img"
+            aria-label={displayName}
+            className="absolute inset-0 rounded-[inherit]"
+            style={getCoverCropBackgroundStyle(avatarUrl, crop)}
+          />
+        ) : (
+          <AvatarFallback
+            className={cn(
+              'bg-primary/10 text-sm font-semibold text-primary',
+              fallbackClassName
+            )}
+          >
+            {initial}
+          </AvatarFallback>
+        )}
       </Avatar>
       {showOnlineStatus && isOnline ? (
         <span

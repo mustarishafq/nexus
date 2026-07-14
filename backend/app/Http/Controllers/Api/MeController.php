@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
 use App\Support\ApiTokenAuth;
+use App\Support\MediaCropNormalizer;
+use App\Support\ProfileMediaInteractions;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserProfileSerializer;
 use App\Services\UserPresenceService;
@@ -66,7 +68,23 @@ class MeController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'profile_picture' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'profile_picture_crop' => ['sometimes', 'nullable', 'array'],
+            'profile_picture_crop.x' => ['required_with:profile_picture_crop', 'numeric', 'min:-100', 'max:200'],
+            'profile_picture_crop.y' => ['required_with:profile_picture_crop', 'numeric', 'min:-100', 'max:200'],
+            'profile_picture_crop.width' => ['required_with:profile_picture_crop', 'numeric', 'min:0.01', 'max:200'],
+            'profile_picture_crop.height' => ['required_with:profile_picture_crop', 'numeric', 'min:0.01', 'max:200'],
             'cover_picture' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'cover_picture_crops' => ['sometimes', 'nullable', 'array'],
+            'cover_picture_crops.desktop' => ['sometimes', 'nullable', 'array'],
+            'cover_picture_crops.desktop.x' => ['required_with:cover_picture_crops.desktop', 'numeric', 'min:-100', 'max:200'],
+            'cover_picture_crops.desktop.y' => ['required_with:cover_picture_crops.desktop', 'numeric', 'min:-100', 'max:200'],
+            'cover_picture_crops.desktop.width' => ['required_with:cover_picture_crops.desktop', 'numeric', 'min:0.01', 'max:200'],
+            'cover_picture_crops.desktop.height' => ['required_with:cover_picture_crops.desktop', 'numeric', 'min:0.01', 'max:200'],
+            'cover_picture_crops.mobile' => ['sometimes', 'nullable', 'array'],
+            'cover_picture_crops.mobile.x' => ['required_with:cover_picture_crops.mobile', 'numeric', 'min:-100', 'max:200'],
+            'cover_picture_crops.mobile.y' => ['required_with:cover_picture_crops.mobile', 'numeric', 'min:-100', 'max:200'],
+            'cover_picture_crops.mobile.width' => ['required_with:cover_picture_crops.mobile', 'numeric', 'min:0.01', 'max:200'],
+            'cover_picture_crops.mobile.height' => ['required_with:cover_picture_crops.mobile', 'numeric', 'min:0.01', 'max:200'],
             'bio' => ['sometimes', 'nullable', 'string', 'max:500'],
             'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'department' => ['sometimes', 'nullable', 'string', 'max:100'],
@@ -125,6 +143,36 @@ class MeController extends Controller
             ->toArray();
         $profileData = $this->normalizeHrProfilePayload($profileData);
         $profileData = $this->resolveDepartmentFields($profileData);
+
+        if (array_key_exists('cover_picture', $profileData) && $profileData['cover_picture'] === null) {
+            $profileData['cover_picture_crops'] = null;
+        }
+
+        if (array_key_exists('profile_picture', $profileData) && $profileData['profile_picture'] === null) {
+            $profileData['profile_picture_crop'] = null;
+        }
+
+        if (array_key_exists('profile_picture_crop', $profileData)) {
+            $profileData['profile_picture_crop'] = MediaCropNormalizer::normalize(
+                is_array($profileData['profile_picture_crop'] ?? null) ? $profileData['profile_picture_crop'] : null
+            );
+        }
+
+        if (array_key_exists('cover_picture_crops', $profileData)) {
+            $profileData['cover_picture_crops'] = MediaCropNormalizer::normalizeCoverCrops(
+                is_array($profileData['cover_picture_crops'] ?? null) ? $profileData['cover_picture_crops'] : null
+            );
+        }
+
+        if (array_key_exists('profile_picture', $profileData)
+            && $profileData['profile_picture'] !== $user->profile_picture) {
+            ProfileMediaInteractions::clearFor($user, 'avatar');
+        }
+
+        if (array_key_exists('cover_picture', $profileData)
+            && $profileData['cover_picture'] !== $user->cover_picture) {
+            ProfileMediaInteractions::clearFor($user, 'cover');
+        }
 
         $user->fill($profileData)->save();
 
