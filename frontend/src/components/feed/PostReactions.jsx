@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SmilePlus } from 'lucide-react';
 import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
 
@@ -16,6 +17,7 @@ export default function PostReactions({
   invalidateKeys = null,
 }) {
   const queryClient = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const isComment = Boolean(commentId);
   const reactions = item.available_reactions || DEFAULT_REACTIONS;
   const reactionCounts = item.reaction_counts || {};
@@ -46,9 +48,12 @@ export default function PostReactions({
         queryClient.invalidateQueries({ queryKey: ['company-feed'] });
       }
     },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to update reaction.');
+    },
   });
 
-  const reactionButton = (reaction, { showCount = false } = {}) => {
+  const reactionButton = (reaction, { showCount = false, fromPicker = false } = {}) => {
     const count = reactionCounts[reaction] || 0;
     const isActive = myReaction === reaction;
 
@@ -57,7 +62,14 @@ export default function PostReactions({
         key={reaction}
         type="button"
         disabled={reactMutation.isPending}
-        onClick={() => reactMutation.mutate(reaction)}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (fromPicker) {
+            setPickerOpen(false);
+          }
+          reactMutation.mutate(reaction);
+        }}
         className={cn(
           'inline-flex items-center gap-1 rounded-full border transition-colors',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
@@ -78,9 +90,12 @@ export default function PostReactions({
   };
 
   return (
-    <div className={cn('flex flex-wrap items-center', compact ? 'gap-1' : 'gap-1 md:gap-1.5')}>
+    <div
+      className={cn('flex flex-wrap items-center', compact ? 'gap-1' : 'gap-1 md:gap-1.5')}
+      onClick={(event) => event.stopPropagation()}
+    >
       {activeEntries.map(([reaction]) => reactionButton(reaction, { showCount: true }))}
-      <Popover>
+      <Popover open={pickerOpen} onOpenChange={setPickerOpen} modal={false}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -90,6 +105,7 @@ export default function PostReactions({
               myReaction && !activeEntries.some(([emoji]) => emoji === myReaction) && 'border-primary/30 bg-primary/5 text-primary'
             )}
             title={myReaction ? 'Change reaction' : 'Add reaction'}
+            onClick={(event) => event.stopPropagation()}
           >
             {myReaction && !activeEntries.some(([emoji]) => emoji === myReaction) ? (
               myReaction
@@ -98,8 +114,10 @@ export default function PostReactions({
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-2">
-          <div className="flex flex-wrap gap-1.5">{reactions.map((reaction) => reactionButton(reaction))}</div>
+        <PopoverContent align="start" className="z-[200] w-auto p-2" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap gap-1.5">
+            {reactions.map((reaction) => reactionButton(reaction, { fromPicker: true }))}
+          </div>
         </PopoverContent>
       </Popover>
     </div>
