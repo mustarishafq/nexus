@@ -37,6 +37,7 @@
 27. [Icon sizing reference](#27-icon-sizing-reference)
 28. [Pre-ship checklist](#28-pre-ship-checklist)
 29. [Reference files](#29-reference-files)
+30. [SSO satellite recreation kit](#30-sso-satellite-recreation-kit)
 
 ---
 
@@ -160,7 +161,17 @@ Tailwind: `bg-sidebar`, `text-sidebar-foreground`, etc.
 
 ### 3.5 Chart tokens
 
-`--chart-1` through `--chart-5` — mapped to `chart.1` … `chart.5` in Tailwind. Use for Recharts / chart components.
+Mapped to `chart.1` … `chart.5` in Tailwind. Same values in light and dark:
+
+| Token | HSL | Typical use |
+|-------|-----|-------------|
+| `--chart-1` | `206 92% 36%` | Primary / brand series |
+| `--chart-2` | `160 84% 39%` | Success / green series |
+| `--chart-3` | `38 92% 50%` | Warning / amber series |
+| `--chart-4` | `0 84% 60%` | Destructive / red series |
+| `--chart-5` | `280 68% 60%` | Purple accent series |
+
+Full chart tooltip / axis conventions: `docs/GRAPH_DESIGN.md`.
 
 ### 3.6 Brand panel (auth pages only)
 
@@ -216,7 +227,7 @@ Loaded via Google Fonts in `index.css`. Body: `font-sans` (applied globally).
 | Helper / caption | `text-xs text-muted-foreground` |
 | Stats label | `text-xs font-medium text-muted-foreground uppercase tracking-wider` |
 | Stats value | `text-3xl font-bold tracking-tight` |
-| Bottom nav label | `text-[10px] font-medium leading-none` |
+| Bottom nav label | `text-[11px] font-medium leading-tight` (`glassDockNavLabel`) |
 | Date / meta line | `text-[11px] sm:text-xs text-muted-foreground` |
 | Admin section label | `text-xs font-semibold uppercase tracking-wide text-muted-foreground` |
 | Group header (notifications) | `text-xs font-semibold uppercase tracking-wider` |
@@ -299,16 +310,19 @@ Use these layers consistently. Do not invent new z-index values without updating
 | Widget header | `p-5 pb-3` |
 | Top bar height | `h-16` (4rem) |
 | Top padding (main) | `pt-16` |
-| Top padding + broadcast | `pt-[calc(4rem+1.75rem)] sm:pt-21` |
-| Bottom nav clearance | `pb-[calc(4.75rem+env(safe-area-inset-bottom))]` |
+| Top padding + 1 alert strip | `pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]` |
+| Top padding + 2 alert strips | `pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]` |
+| Bottom nav clearance (browser) | `pb-[5.25rem]` (`84px`) |
+| Bottom nav clearance (PWA / standalone) | `pb-[calc(5.25rem+env(safe-area-inset-bottom))]` |
+| Safe-area rule | Add `env(safe-area-inset-*)` **only** when `isRunningStandalone()` — not in browser tabs |
 
 ### 6.3 Layout variants
 
 | Variant | Route / condition | Behavior |
 |---------|-------------------|----------|
-| **Standard** | Most pages | TopBar + padding + bottom nav |
-| **Full bleed** | `/applications/:id/view` | No TopBar, no padding, no bottom nav, no broadcast |
-| **Analytics** | `/analytics` | `h-[100dvh] max-h-[100dvh] overflow-hidden`; flex column container |
+| **Standard** | Most pages | TopBar + `p-4 sm:p-6` + bottom nav |
+| **Full bleed** | `/applications/:id/view` or email fullscreen | No TopBar, no padding, no bottom nav |
+| **Viewport fill** | `/analytics`, `/email`, `/messages` (when not full-bleed) | `h-[100dvh] overflow-hidden`; padded flex column; TeamRosterPanel hidden |
 | **Auth** | `/login`, `/register`, etc. | No app shell; standalone full-screen |
 
 ### 6.4 Grid patterns
@@ -341,13 +355,24 @@ Mobile primary CTA: `h-10 w-full sm:w-auto sm:h-9`.
 
 ## 7. Navigation
 
-### 7.0 Glass panel tokens
+> **Portable bottom-nav + Apps orb CSS:** see `docs/MOBILE_BOTTOM_NAV_DESIGN.md` for the full glass-dock spec (Figma checklist, copy-paste orb CSS, visual-viewport pin).
 
-**File:** `glassStyles.js`
+### 7.0 Glass surface tokens
 
-Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3), and bottom dock (§7.4 via `glassDockStyles`).
+**File:** `frontend/src/components/layout/glassStyles.js`
 
-#### Base styles (`glassPanelStyles`)
+Four surface recipes + dialog text helpers. Pick the opacity tier that matches the chrome:
+
+| Token | Opacity intent | Use when |
+|-------|----------------|----------|
+| `glassPanelStyles` | Low (`bg-card/30` light, `/35` dark) | Sheets / panels over content when dense text is not required |
+| `glassTopBarStyles` | High light (`bg-card/95`, supports `/92`), low dark (`/35`) | Fixed TopBar — label legibility in light mode |
+| `glassDockStyles` | Mid (`bg-card/50` both themes) + `rounded-2xl border` | Floating bottom dock |
+| `glassDialogPanelStyles` | Highest (`bg-card/95` → supports `/90`; dark `/85`) | Dialogs, pickers, readable body copy |
+
+**Do not** use `glassPanelStyles` (`bg-card/30`) on content-heavy modals — muted text becomes illegible in light mode. Use `glassDialogPanelStyles` instead.
+
+#### Base panel (`glassPanelStyles`)
 
 | Setting | Light | Dark |
 |---------|-------|------|
@@ -357,15 +382,27 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 | Shadow | `shadow-[0_8px_24px_rgba(0,0,0,0.08)]` | `shadow-[0_8px_32px_rgba(0,0,0,0.4)]` |
 | Ring | `ring-1 ring-black/5` | `ring-white/10` |
 
-**Import:** `import { glassPanelStyles, glassDialogPanelStyles, glassDialogMutedText } from '@/components/layout/glassStyles';`
+#### Top bar (`glassTopBarStyles`)
 
-**Usage:** Apply via `cn(glassPanelStyles, …)` and add edge-specific borders as needed (`border-b`, `border-r`, `border`).
+| Setting | Light | Dark |
+|---------|-------|------|
+| Blur | `backdrop-blur-2xl` | same |
+| Background | `bg-card/95` (`supports-[backdrop-filter]:bg-card/92`) | `bg-card/35` |
+| Border | `border-border` | `border-border/70` |
+| Shadow | `shadow-sm` | `shadow-[0_8px_32px_rgba(0,0,0,0.4)]` |
+| Ring | `ring-1 ring-black/5` | `ring-white/10` |
+| Text | `text-foreground` | same |
 
-| Token | Use when |
-|-------|----------|
-| `glassPanelStyles` | Chrome only — TopBar, bottom dock (thin bars over page content) |
-| `glassDialogPanelStyles` | Dialogs, sheets, pickers with readable body text (higher opacity in light mode) |
-| `glassDialogMutedText` | Descriptions, captions, secondary lines on `glassDialogPanelStyles` surfaces |
+#### Bottom dock (`glassDockStyles`)
+
+| Setting | Light | Dark |
+|---------|-------|------|
+| Blur | `backdrop-blur-2xl` | same |
+| Background | `bg-card/50` (`supports-[backdrop-filter]:bg-card/50`) | `bg-card/50` |
+| Border | `border` + `border-border` | `border-border/70` |
+| Shadow | `shadow-[0_8px_24px_rgba(0,0,0,0.08)]` | `shadow-[0_8px_32px_rgba(0,0,0,0.5)]` |
+| Ring | `ring-1 ring-black/5` | `ring-white/10` |
+| Radius | `rounded-2xl` | same |
 
 #### Dialog glass (`glassDialogPanelStyles`)
 
@@ -373,15 +410,40 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 |---------|-------|------|
 | Blur | `backdrop-blur-2xl` | same |
 | Background | `bg-card/95` (`supports-[backdrop-filter]:bg-card/90`) | `bg-card/85` |
-| Text | `text-foreground` on panel; use `glassDialogMutedText` for descriptions | same |
+| Text | `text-foreground`; muted copy via helpers below | same |
 
-**Do not** use `glassPanelStyles` (`bg-card/30`) on content-heavy modals — muted text becomes illegible in light mode.
+#### Dialog / chrome helpers
 
-| Component | Additional classes |
-|-----------|-------------------|
-| TopBar (§7.1) | `border-b` |
-| Mobile more menu sheet (§7.3) | `border-t` + `glassDialogPanelStyles` |
-| Bottom dock (§7.4) | `glassDockStyles` = base + `rounded-2xl border` |
+| Export | Classes / purpose |
+|--------|-------------------|
+| `glassDialogMutedText` | `text-foreground/70 dark:text-muted-foreground` — descriptions |
+| `glassDialogFaintText` | `text-foreground/60 dark:text-muted-foreground` — timestamps, hints |
+| `glassDialogIconButton` | Icon-only controls on glass (`text-foreground/65` → hover muted) |
+| `glassDialogInputStyles` | Inputs on glass: `border-border/80 bg-background …` |
+| `glassDialogLinkStyles` | Secondary links → hover primary |
+| `glassDialogTitleText` | `text-foreground` — row titles |
+| `glassDockNavItemInactive` | Dock inactive: `text-foreground/75 hover:text-foreground` (dark `/90`) |
+| `glassDockNavLabel` | `text-[11px] font-medium leading-tight` |
+
+**Import:**
+
+```js
+import {
+  glassPanelStyles,
+  glassTopBarStyles,
+  glassDockStyles,
+  glassDockNavItemInactive,
+  glassDockNavLabel,
+  glassDialogPanelStyles,
+  glassDialogMutedText,
+} from '@/components/layout/glassStyles';
+```
+
+| Component | Classes |
+|-----------|---------|
+| TopBar (§7.1) | `glassTopBarStyles` + `border-b` |
+| Mobile More sheet (§7.3) | `glassPanelStyles` + `rounded-t-2xl border-t` |
+| Bottom dock (§7.4) | `glassDockStyles` (already includes radius + border) |
 | SSO picker / compact glass dialogs (§11.9) | `glassDialogPanelStyles` + `rounded-2xl border` |
 
 ### 7.1 Top bar
@@ -391,20 +453,22 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 | Property | Value |
 |----------|-------|
 | Height | `h-16` |
-| Background | `glassPanelStyles` + `border-b` (see §7.0) |
-| Padding | `px-6` |
+| Background | `glassTopBarStyles` + `border-b` (see §7.0) |
+| Padding | `px-6`; inner `gap-3` / right actions `gap-2 sm:gap-3` |
 | Position | Embedded in AppLayout stack (`embedded` prop): `w-full`. Legacy fixed: `fixed top-0 right-0 z-30` |
 | Transition | `transition-all duration-200` |
 
-**Left:** MobileMoreMenu (mobile) + GlobalSearchTrigger (flex-1)
+**Left:** `GlobalSearchTrigger` (`flex-1`)
 
-**Right desktop:** ThemeToggle (icon) → Notification bell → Avatar dropdown
+**Right desktop:** What's New (Sparkles) → ThemeToggle → Notification bell → Avatar dropdown
 
-**Right mobile:** ThemeToggle (icon) only
+**Right mobile:** none in TopBar (theme lives in More sheet; notifications are a dock tab)
 
-**Notification bell button:** `p-2 rounded-lg hover:bg-muted transition-colors`
+**What's New button (desktop):** `rounded-lg p-2`; unread class `whats-new-trigger--unread` (amber `#eab308` + attention/glow keyframes in `index.css`). Badge: `min-w-[18px] h-[18px] rounded-full bg-primary … text-[10px]` — cap `9+`
 
-**Bell badge (desktop):** `absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold` — capped `99+`
+**Notification bell button:** `rounded-lg p-2` + `glassDialogIconButton`
+
+**Bell badge (desktop):** `absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold animate-pulse` — capped `99+`
 
 **Avatar dropdown trigger:** `flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors`
 
@@ -412,11 +476,11 @@ Shared frosted-glass surface used by TopBar (§7.1), mobile sidebar sheet (§7.3
 
 **Avatar fallback:** `rounded-lg bg-primary/10 text-sm font-semibold text-primary`
 
-**User name (md+):** `text-sm font-medium leading-none`; role: `text-xs text-muted-foreground`
+**User name (md+):** `text-sm font-medium leading-none` + `glassDialogTitleText`; chevron `glassDialogMutedText`
 
 **Dropdown:** `align="end" w-48`; sign out item: `text-destructive`
 
-**NotificationPanel:** Desktop only (`!isMobile`). Toggled from bell click (`panelOpen`). Full spec: §15.3. Polls unread every 15s via `useUnreadNotificationCount`.
+**NotificationPanel:** Desktop only (`!isMobile`). Toggled from bell click (`panelOpen`). Full spec: §15.3.
 
 ### 7.2 Global search
 
@@ -445,37 +509,49 @@ hover:bg-muted/70 focus-visible:ring-1 focus-visible:ring-ring
 
 **Result row:** `UserAvatar h-8 w-8`; name `truncate font-medium`; dept `text-xs text-muted-foreground`; role badge `variant="secondary" capitalize shrink-0 text-[10px]`
 
-### 7.3 Mobile more menu
+### 7.3 Mobile More menu
 
 **File:** `MobileMoreMenu.jsx`
 
-**Trigger:** `p-2 rounded-lg hover:bg-muted`; `Menu w-5 h-5 text-muted-foreground`
+Triggered by the dock **More** tab (`Grip` icon) — not a separate TopBar hamburger.
 
-**Sheet:** `side="bottom"`, `rounded-t-2xl border-t` + `glassDialogPanelStyles` (see §7.0)
+**Dock trigger:** Same layout as standard nav items (`flex-1`, icon + `glassDockNavLabel`); active top pill when current path matches any More-sheet route (`matchMobileMorePath`).
+
+**Aggregated badge on More:** Sum of all nested item badges (messages, email, what'sNew, …).
+
+**Sheet:** `side="bottom"`, `max-h-[85dvh]`, `rounded-t-2xl border-t p-0 pb-[env(safe-area-inset-bottom)]` + `glassPanelStyles`
 
 **Overlay:** `bg-black/25 backdrop-blur-sm` (lighter than default `bg-black/80`)
 
-**Header:** `border-b border-border/50 px-4 py-4`; logo `h-9 w-9 rounded-xl`; title `text-base font-bold tracking-tight`
+**Header:** `border-b border-border/50 px-4 py-4`; logo `h-9 w-9 rounded-xl`; title `text-base font-bold tracking-tight` (system name)
 
-**Nav links:**
+**Nav grid (not a vertical list):**
 
-| State | Classes |
-|-------|---------|
+| Property | Value |
+|----------|-------|
+| Layout | `grid grid-cols-4 gap-1 sm:grid-cols-5` |
+| Item | `flex flex-col items-center gap-2 rounded-xl px-2 py-3` |
 | Active | `bg-primary/15 text-primary` |
 | Inactive | `text-foreground hover:bg-foreground/5` |
-| Layout | `flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors` |
 | Icon | `h-5 w-5 shrink-0` |
-| Label | `text-sm font-medium` |
+| Label | `text-[11px] font-medium leading-tight` |
+| Badge | Same pill as dock (`destructive`, `text-[9px]`) |
 
-**Admin section label:** `px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground`
+**What's New tile:** `type: 'whats-new'` — opens `PlatformWhatsNewSheet` (closes More first, 180ms delay). Unread Sparkles icon tint `#eab308`.
 
-**Footer:** `mt-auto border-t border-border/50 p-4` with icon box + `ThemeToggle variant="switch"`
+**Admin section label:** `px-1 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide` + `glassDialogMutedText`
 
-**Items:** People, Company Feed, Messages, Activity Feed, Calendar, Network Health, Settings; admin: Broadcast, System Events, User Management.
+**Footer:** `border-t border-border/50 p-4` — Moon icon box + Dark Mode copy + `ThemeToggle variant="switch"`
+
+**Regular items (`buildMobileMoreItems`):** What's New, People, Organization (`canManageUsers`), Messages, Email, Analytics (conditional), Activity (admin), Network, Attendance, Calendar, Profile, Settings
+
+**Admin items:** Users (`canManageUsers`), Broadcast, Events (admin)
 
 ### 7.4 Bottom navigation (glass dock)
 
-**Files:** `BottomNav.jsx`, `glassStyles.js`, `navItems.js`, `AppLayout.jsx`
+**Files:** `BottomNav.jsx`, `AppsOrbNavItem.jsx`, `glassStyles.js`, `navItems.js`, `AppLayout.jsx`
+
+**Full portable spec (orb CSS, visual-viewport, Figma):** `docs/MOBILE_BOTTOM_NAV_DESIGN.md`
 
 #### Visual structure
 
@@ -487,23 +563,20 @@ hover:bg-muted/70 focus-visible:ring-1 focus-visible:ring-ring
 │   │  icon + label per item      │   │
 │   └─────────────────────────────┘   │
 └─────────────────────────────────────┘
-         safe-area padding
+   safe-area padding (PWA only)
 ```
-
-#### Glass dock styles (`glassDockStyles`)
-
-Built from `glassPanelStyles` (§7.0) + `rounded-2xl border`.
 
 #### Layout & sizing
 
 | Property | Value |
 |----------|-------|
-| Position | `fixed bottom-0 left-0 right-0 z-40` |
-| Outer padding | `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` |
+| Position | `fixed left-0 right-0 z-40`; `style={{ bottom: viewportBottomOffset }}` (see MOBILE_BOTTOM_NAV §2.1) |
+| Outer bottom padding | **PWA:** `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` · **Browser:** `pb-3` |
 | Horizontal inset | `px-3 sm:px-4`, centered |
-| Dock height | `h-16` |
-| Mobile width | `w-full max-w-lg` |
-| Desktop width | `w-fit max-w-full overflow-x-auto` (hidden scrollbar) |
+| Dock surface | `glassDockStyles` |
+| Internal padding | `px-1` |
+| Mobile height / width | `h-[4.25rem]` (68px), `w-full max-w-lg`, `overflow-visible` (orb) |
+| Desktop height / width | `h-16`, `w-fit max-w-full overflow-x-auto` (hidden scrollbar) |
 
 #### Nav item states
 
@@ -511,9 +584,9 @@ Built from `glassPanelStyles` (§7.0) + `rounded-2xl border`.
 |-------|------|
 | Layout | `relative flex flex-col items-center justify-center gap-0.5 transition-colors` |
 | Active | `text-primary`; top bar: `absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary` |
-| Inactive | `text-muted-foreground hover:text-foreground` |
+| Inactive | `glassDockNavItemInactive` — **not** bare `text-muted-foreground` |
 | Icon | `h-5 w-5` |
-| Label | `text-[10px] font-medium leading-none` |
+| Label | `glassDockNavLabel` (`text-[11px] font-medium leading-tight`) |
 | Mobile width | `flex-1 px-1` |
 | Desktop width | `min-w-[4.5rem] shrink-0 px-2` |
 
@@ -524,24 +597,40 @@ absolute -right-2 -top-1.5 min-w-[16px] h-4 rounded-full
 bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground
 ```
 
-Poll every 15s. Cap at `99+`.
+Cap at `99+`. Badges used for `notifications`, `messages`, `email`, `whatsNew` (aggregated on More).
 
-#### Mobile nav items (6 max)
+#### Mobile dock tabs (`MOBILE_BOTTOM_NAV_ITEMS`) — exactly 5
 
-Home `/`, Feed `/feed`, Analytics `/analytics`, Apps `/applications`, Notifications `/notifications` (badge), Profile `/profile`
+| # | Label | Route / behavior |
+|---|-------|------------------|
+| 1 | Home | `/` |
+| 2 | Feed | `/feed` |
+| 3 | Apps | `/applications` — **raised orb** (`AppsOrbNavItem`) |
+| 4 | Notifications | `/notifications` + badge |
+| 5 | More | Opens More sheet — not a route |
 
-#### Desktop nav items
+#### Desktop dock tabs (`buildDesktopNavItems`)
 
-Dashboard, People, Feed, Messages (badge), Analytics (conditional), Application, Notifications (badge), Activity, Network, Calendar, Broadcast/Events/Users (admin), Settings
+Dashboard, People, Organization (`canManageUsers`), Feed, Messages (badge), Email (badge), Analytics (conditional), Application, Activity (admin), Network, Attendance, Calendar, Users / Broadcast / Events (role-gated), Settings
 
-**Breakpoint:** `< 768px` = mobile (`useIsMobile()`)
+**No orb / no More sheet on desktop.** Notifications live in TopBar bell panel only (not a desktop dock tab).
+
+**Breakpoint:** `< 768px` = mobile (`useIsMobile()` / `MOBILE_BREAKPOINT = 768`)
 
 #### Visibility
 
-| Condition | Bottom nav |
-|-----------|------------|
-| Standard pages | Shown |
-| `/applications/:id/view` | Hidden |
+| Condition | Bottom nav | TopBar |
+|-----------|------------|--------|
+| Standard pages | Shown | Shown |
+| `/applications/:id/view` | Hidden | Hidden |
+| Email fullscreen | Hidden | Hidden |
+
+#### Main content clearance
+
+| Mode | Class on `<main>` |
+|------|-------------------|
+| Browser | `pb-[5.25rem]` |
+| Standalone / PWA | `pb-[calc(5.25rem+env(safe-area-inset-bottom))]` |
 
 ---
 
@@ -1672,6 +1761,37 @@ Class: `scrollbar-on-hover`
 - Thumb transparent until hover
 - Use on scrollable panels that shouldn't show scrollbar constantly
 
+### Copy-paste scrollbar CSS (SSO satellites)
+
+```css
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.scrollbar-on-hover {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-on-hover:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+.scrollbar-on-hover::-webkit-scrollbar { width: 6px; }
+.scrollbar-on-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+```
+
 ---
 
 ## 24. PWA, meta & splash screen
@@ -1714,11 +1834,13 @@ These are **intentional** — do not "fix" to tokens unless explicitly migrating
 | App brand fallback | `#6366f1` | `DEFAULT_BRAND_COLOR` |
 | PWA theme-color | `#2563eb` | `index.html` |
 | PWA splash | `#022e96` | Splash screen bg |
+| What's New unread | `#eab308` / `rgb(234 179 8 / …)` | `.whats-new-trigger--unread` + keyframes in `index.css` |
 | GlobalBroadcastStrip | Tailwind red/amber/slate/emerald gradients | Not semantic tokens |
 | App tile badge icons | `text-amber-300`, `text-emerald-400` | On dark overlay |
 | iframe background | `bg-white` | Embedded apps |
 | PageNotFound / UserNotRegisteredError | Full `slate-*` palette | Legacy — migrate when touched |
 | Celebrations widget | `amber-500/600` accents | Seasonal UI |
+| Auth brand panel | Fixed `hsl(206,92%,…)` blues | §3.6 — intentional (not CSS vars) |
 
 **All new pages and systems:** use semantic tokens only.
 
@@ -1876,8 +1998,11 @@ Filters in collapsible card (mobile collapsed by default):
 
 ### Navigation
 - [ ] New routes added to `navItems.js` if needed
-- [ ] Mobile dock stays ≤ 6 items; overflow in MobileMoreMenu
+- [ ] Mobile dock stays at **5** items; overflow in MobileMoreMenu grid
 - [ ] Active state `match()` handles nested paths
+- [ ] Dock uses `glassDockStyles` + `glassDockNavLabel` / `glassDockNavItemInactive`
+- [ ] Main clearance `pb-[5.25rem]` (+ safe-area only in standalone)
+- [ ] Glass-dock / orb details match `MOBILE_BOTTOM_NAV_DESIGN.md` when porting
 
 ### Overlays
 - [ ] Mobile compact dialogs: `w-[calc(100vw-1.5rem)]`, not full-width (§11.9)
@@ -1913,7 +2038,7 @@ Filters in collapsible card (mobile collapsed by default):
 
 | Area | File |
 |------|------|
-| CSS tokens & ticker | `frontend/src/index.css` |
+| CSS tokens, orb, What's New, scrollbar | `frontend/src/index.css` |
 | Tailwind config | `frontend/tailwind.config.js` |
 | shadcn config | `frontend/components.json` |
 | HTML / PWA meta | `frontend/index.html` |
@@ -1921,10 +2046,14 @@ Filters in collapsible card (mobile collapsed by default):
 | App shell | `frontend/src/components/layout/AppLayout.jsx` |
 | Top bar | `frontend/src/components/layout/TopBar.jsx` |
 | Bottom nav | `frontend/src/components/layout/BottomNav.jsx` |
+| Apps orb | `frontend/src/components/layout/AppsOrbNavItem.jsx` |
 | Nav items | `frontend/src/components/layout/navItems.js` |
-| Mobile menu | `frontend/src/components/layout/MobileMoreMenu.jsx` |
+| Mobile More menu | `frontend/src/components/layout/MobileMoreMenu.jsx` |
 | Global search | `frontend/src/components/layout/GlobalSearch.jsx` |
 | Glass styles | `frontend/src/components/layout/glassStyles.js` |
+| Visual viewport pin | `frontend/src/hooks/useVisualViewportBottomOffset.js` |
+| Mobile breakpoint | `frontend/src/hooks/use-mobile.jsx` |
+| PWA standalone detect | `frontend/src/lib/pwa.js` |
 | Theme | `frontend/src/components/theme/ThemeProvider.jsx`, `ThemeToggle.jsx` |
 | Toaster | `frontend/src/components/ui/sonner.jsx` |
 | Auth pages | `frontend/src/pages/Login.jsx`, `Register.jsx`, `ForgotPassword.jsx` |
@@ -1939,15 +2068,244 @@ Filters in collapsible card (mobile collapsed by default):
 | App browser | `frontend/src/pages/ApplicationBrowser.jsx` |
 | SSO credential picker | `frontend/src/components/applications/SsoCredentialPickerDialog.jsx` |
 | Broadcast strip | `frontend/src/components/broadcasts/GlobalBroadcastStrip.jsx` |
-| Notification panel | `src/components/notifications/NotificationPanel.jsx` |
-| Notification item | `src/components/notifications/NotificationItem.jsx` |
-| Notification badges | `src/components/notifications/NotificationVisualBadges.jsx` |
-| Notification visuals | `src/lib/notificationVisuals.js` |
-| Notifications page | `src/pages/Notifications.jsx` |
+| Notification panel | `frontend/src/components/notifications/NotificationPanel.jsx` |
+| Notification item | `frontend/src/components/notifications/NotificationItem.jsx` |
+| Notification badges | `frontend/src/components/notifications/NotificationVisualBadges.jsx` |
+| Notification visuals | `frontend/src/lib/notificationVisuals.js` |
+| Notifications page | `frontend/src/pages/Notifications.jsx` |
 | Media constants | `frontend/src/lib/media.js` |
 | Brand color | `frontend/src/lib/imageColor.js` |
-| Mobile hook | `frontend/src/hooks/use-mobile.jsx` |
+| Bottom nav design spec | `docs/MOBILE_BOTTOM_NAV_DESIGN.md` |
+| Chart design | `docs/GRAPH_DESIGN.md` |
 
 ---
 
-*Last updated from Nexus frontend codebase. When patterns change in code, update this document to match.*
+## 30. SSO satellite recreation kit
+
+Use this checklist when standing up **another EMZI SSO-integrated system** so look-and-feel matches Nexus (this document) without inventing a parallel theme.
+
+JWT / protocol: `docs/SSO_INTEGRATION_GUIDE.md`. Visual system: **this file** + `docs/MOBILE_BOTTOM_NAV_DESIGN.md`.
+
+### 30.1 Minimum file set to copy / re-implement
+
+| Priority | Source | Purpose |
+|----------|--------|---------|
+| Required | `frontend/src/index.css` (`:root` + `.dark` + fonts import) | All HSL tokens, fonts |
+| Required | `frontend/tailwind.config.js` color/radius/font `extend` | Tailwind semantic classes |
+| Required | `frontend/components.json` | shadcn New York + neutral + cssVariables |
+| Required | `frontend/src/components/layout/glassStyles.js` | Glass chrome recipes |
+| Required | `frontend/src/lib/utils.js` (`cn`) | Class merging |
+| Required | shadcn: `button`, `input`, `label`, `card`, `badge`, `dialog`, `sheet`, `switch` | Core primitives |
+| Required | `ThemeProvider` + `ThemeToggle` + `index.html` FOUC script | Class-based theme, `nexus-theme` key (or rename storage key per product) |
+| Required | Auth pattern from `Login.jsx` (§9) | Split brand panel + mobile card |
+| Optional shell | BottomNav stack + `MOBILE_BOTTOM_NAV_DESIGN.md` | Full Nexus chrome |
+| Optional | Apps orb keyframes from `index.css` (§13 of mobile nav doc) | Center FAB |
+
+**Ignore for app UI:** `backend/resources/css/app.css` (Laravel/Instrument Sans — not the product shell).
+
+### 30.2 Brand constants (must match)
+
+| Token | Value |
+|-------|-------|
+| Primary | `206 92% 36%` (≈ `#0775B0` / `#0878B6`) |
+| Auth brand panel | `hsl(206, 92%, 15%)` + gradient `25% → 20% → 10%` |
+| Auth mobile card | `bg-card rounded-3xl p-8 shadow-2xl` |
+| Fonts | **Inter** 300–900 + **JetBrains Mono** 400–600 |
+| Icons | **Lucide React** only |
+| Radius base | `--radius: 0.75rem`; cards/dock often `rounded-2xl` |
+| Theme storage | `attribute="class"`, `defaultTheme="light"`, `enableSystem={false}` |
+| Shell breakpoint | Mobile chrome if `< 768px` |
+
+### 30.3 Copy-paste CSS tokens (light + dark)
+
+Paste into the satellite app’s global CSS (HSL **channels only** — Tailwind wraps with `hsl(var(--…))`):
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 206 92% 36%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 220 14% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 206 92% 36%;
+  --chart-1: 206 92% 36%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 0 84% 60%;
+  --chart-5: 280 68% 60%;
+  --radius: 0.75rem;
+
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+  --info: 210 71% 35%;
+  --info-foreground: 0 0% 100%;
+  --critical: 330 80% 55%;
+  --critical-foreground: 0 0% 100%;
+
+  --sidebar-background: 222 47% 11%;
+  --sidebar-foreground: 220 14% 80%;
+  --sidebar-primary: 206 92% 36%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 222 40% 16%;
+  --sidebar-accent-foreground: 220 14% 90%;
+  --sidebar-border: 222 40% 18%;
+  --sidebar-ring: 206 92% 36%;
+}
+
+.dark {
+  --background: 222 47% 6%;
+  --foreground: 220 14% 96%;
+  --card: 222 47% 9%;
+  --card-foreground: 220 14% 96%;
+  --popover: 222 47% 9%;
+  --popover-foreground: 220 14% 96%;
+  --primary: 206 92% 36%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 40% 14%;
+  --secondary-foreground: 220 14% 96%;
+  --muted: 222 40% 14%;
+  --muted-foreground: 220 9% 56%;
+  --accent: 222 40% 14%;
+  --accent-foreground: 220 14% 96%;
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 40% 16%;
+  --input: 222 40% 16%;
+  --ring: 206 92% 36%;
+  --chart-1: 206 92% 36%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 0 84% 60%;
+  --chart-5: 280 68% 60%;
+
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+  --info: 210 71% 35%;
+  --info-foreground: 0 0% 100%;
+  --critical: 330 80% 55%;
+  --critical-foreground: 0 0% 100%;
+
+  --sidebar-background: 222 47% 6%;
+  --sidebar-foreground: 220 14% 80%;
+  --sidebar-primary: 206 92% 36%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 222 40% 12%;
+  --sidebar-accent-foreground: 220 14% 90%;
+  --sidebar-border: 222 40% 12%;
+  --sidebar-ring: 206 92% 36%;
+}
+```
+
+Also copy the **custom scrollbar** rules and (if using the dock orb) the full **Apps orb** + **What's New** blocks from `index.css` / `MOBILE_BOTTOM_NAV_DESIGN.md` §13.
+
+### 30.4 Glass recipes (must match `glassStyles.js`)
+
+Copy this file (or re-implement identical class strings):
+
+```js
+import { cn } from '@/lib/utils';
+
+export const glassPanelStyles = cn(
+  'backdrop-blur-2xl',
+  'bg-card/30 border-border/50 shadow-[0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5',
+  'dark:bg-card/35 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10'
+);
+
+export const glassDialogPanelStyles = cn(
+  'backdrop-blur-2xl text-foreground',
+  'bg-card/95 border-border shadow-lg ring-1 ring-black/5',
+  'supports-[backdrop-filter]:bg-card/90',
+  'dark:bg-card/85 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] dark:ring-white/10'
+);
+
+export const glassDialogMutedText = 'text-foreground/70 dark:text-muted-foreground';
+export const glassDialogFaintText = 'text-foreground/60 dark:text-muted-foreground';
+export const glassDialogIconButton = cn(
+  'text-foreground/65 transition-colors hover:bg-muted hover:text-foreground',
+  'dark:text-muted-foreground'
+);
+export const glassDialogInputStyles =
+  'border-border/80 bg-background text-foreground placeholder:text-foreground/45';
+export const glassDialogLinkStyles = cn(
+  'text-foreground/75 transition-colors hover:text-primary',
+  'dark:text-muted-foreground'
+);
+export const glassDialogTitleText = 'text-foreground';
+
+export const glassTopBarStyles = cn(
+  'backdrop-blur-2xl text-foreground',
+  'bg-card/95 border-border shadow-sm ring-1 ring-black/5',
+  'supports-[backdrop-filter]:bg-card/92',
+  'dark:bg-card/35 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10'
+);
+
+export const glassDockStyles = cn(
+  'backdrop-blur-2xl text-foreground',
+  'bg-card/50 border-border shadow-[0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5',
+  'supports-[backdrop-filter]:bg-card/50',
+  'dark:bg-card/50 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] dark:ring-white/10',
+  'rounded-2xl border'
+);
+
+export const glassDockNavItemInactive = cn(
+  'text-foreground/75 hover:text-foreground',
+  'dark:text-foreground/90 dark:hover:text-foreground'
+);
+
+export const glassDockNavLabel = 'text-[11px] font-medium leading-tight';
+```
+
+Critical specifics:
+
+- Dock: `bg-card/50` (not `/30`)
+- TopBar: light `bg-card/95` / dark `/35`
+- Dialogs: `glassDialogPanelStyles` + `glassDialogMutedText`
+- Dock labels: `11px` / `leading-tight`; inactive `foreground/75` (not `muted-foreground`)
+
+### 30.5 Auth UI (§9) — SSO entry points
+
+Satellite login / consent screens should reuse:
+
+1. Split `lg:` brand panel + form (§9.1–9.2)
+2. Mobile full-bleed blue gradient + white `rounded-3xl` card
+3. Inputs `h-12` mobile / `h-11` desktop; primary CTA shadow `shadow-primary/20`
+4. ThemeToggle absolute `top-4 right-4 z-20` with white-on-blue mobile color
+5. Logos `/icons/logo.png` + `/icons/banner.png` (or product equivalents at same sizes)
+6. Compact SSO pickers inside the shell: §11.9 (`z-[130]`, glass dialog, horizontal footers)
+
+### 30.6 Parity checklist (before ship)
+
+- [ ] Light + dark screenshots match Nexus primary blue and surface hues
+- [ ] No Inter/Roboto substitute; JetBrains Mono on `kbd` / mono hints
+- [ ] Cards `rounded-2xl`; auth mobile card `rounded-3xl`
+- [ ] Focus rings use `ring-ring` (= primary)
+- [ ] Semantic status: `success` / `warning` / `info` / `critical` / `destructive`
+- [ ] If shell included: dock clearance `5.25rem`, safe-area **standalone only**, visual-viewport bottom pin
+- [ ] Glass overlays `bg-black/25 backdrop-blur-sm` for compact pickers / More sheet
+- [ ] Lucide icons only; sizes per §27
+
+---
+
+*Last updated from Nexus frontend codebase (glassStyles, AppLayout clearance `5.25rem`, dock labels `11px`, TopBar What's New). When patterns change in code, update this document and `MOBILE_BOTTOM_NAV_DESIGN.md` to match.*

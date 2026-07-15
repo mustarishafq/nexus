@@ -9,7 +9,7 @@ Portable spec for recreating the Nexus **glass dock** bottom navigation across *
 | `frontend/src/components/layout/BottomNav.jsx` | Responsive dock shell + nav item rendering |
 | `frontend/src/components/layout/AppsOrbNavItem.jsx` | Mobile-only center Apps orb (JSX structure) |
 | `frontend/src/components/layout/MobileMoreMenu.jsx` | Mobile More bottom sheet |
-| `frontend/src/components/layout/glassStyles.js` | Glass surface tokens (`glassDockStyles`, `glassPanelStyles`) |
+| `frontend/src/components/layout/glassStyles.js` | Glass surface tokens (`glassDockStyles`, `glassTopBarStyles`, `glassPanelStyles`, nav label helpers) |
 | `frontend/src/components/layout/navItems.js` | Mobile + desktop route maps |
 | `frontend/src/components/layout/AppLayout.jsx` | Page padding + dock visibility |
 | `frontend/src/components/layout/TopBar.jsx` | Top chrome (desktop actions) |
@@ -75,7 +75,7 @@ Both mobile and desktop use the same outer shell.
 | Outer bottom padding | **Standalone / PWA:** `12px + env(safe-area-inset-bottom)` → `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` |
 |  | **Browser tab (Safari/Chrome):** `12px` only → `pb-3` (no safe-area — browser chrome already clears the home indicator) |
 | Horizontal wrapper | `flex justify-center px-3 sm:px-4` (12px mobile, 16px at `sm+`) |
-| Dock surface | `glassDockStyles` = `glassPanelStyles` + `rounded-2xl border` |
+| Dock surface | `glassDockStyles` — dedicated mid-opacity recipe (**not** plain `glassPanelStyles` + radius) |
 | Internal horizontal padding | `4px` (`px-1`) |
 | Dock corner radius | `16px` (`rounded-2xl`) |
 
@@ -106,7 +106,11 @@ Also require `viewport-fit=cover` in the document `<meta name="viewport">` so `e
 
 Any other fixed UI that sits above the dock (e.g. PWA install prompt) must use the **same** visual-viewport bottom offset and the same standalone-aware safe-area rule.
 
-### Glass surface (`glassPanelStyles` / `glassDockStyles`)
+### Glass surfaces (`glassStyles.js`)
+
+Three related recipes — **do not** treat the dock as identical to the base panel:
+
+#### Base panel (`glassPanelStyles`) — More sheet, low-opacity chrome
 
 | Effect | Light | Dark |
 |--------|-------|------|
@@ -115,6 +119,34 @@ Any other fixed UI that sits above the dock (e.g. PWA install prompt) must use t
 | Border | `border-border/50` | `dark:border-border/70` |
 | Shadow | `0 8px 24px rgba(0,0,0,0.08)` | `0 8px 32px rgba(0,0,0,0.4)` |
 | Ring | `ring-1 ring-black/5` | `dark:ring-white/10` |
+
+#### Bottom dock (`glassDockStyles`) — required for the floating bar
+
+| Effect | Light | Dark |
+|--------|-------|------|
+| Backdrop blur | `backdrop-blur-2xl` | same |
+| Background | `bg-card/50` (`supports-[backdrop-filter]:bg-card/50`) | `dark:bg-card/50` |
+| Border | `rounded-2xl border` + `border-border` | `dark:border-border/70` |
+| Shadow | `0 8px 24px rgba(0,0,0,0.08)` | `0 8px 32px rgba(0,0,0,0.5)` |
+| Ring | `ring-1 ring-black/5` | `dark:ring-white/10` |
+| Text | `text-foreground` | same |
+
+#### Top bar (`glassTopBarStyles`) — companion chrome
+
+| Effect | Light | Dark |
+|--------|-------|------|
+| Background | `bg-card/95` (`supports…:bg-card/92`) | `dark:bg-card/35` |
+| Shadow | `shadow-sm` | `0 8px 32px rgba(0,0,0,0.4)` |
+| Border | `border-b` + `border-border` | `dark:border-border/70` |
+
+#### Dock typography helpers
+
+| Export | Value |
+|--------|-------|
+| `glassDockNavLabel` | `text-[11px] font-medium leading-tight` |
+| `glassDockNavItemInactive` | `text-foreground/75 hover:text-foreground` · dark: `text-foreground/90` |
+
+Full glass helper list (dialogs, muted text, icon buttons): `docs/DESIGN_TEMPLATE.md` §7.0.
 
 ### Page content clearance (`AppLayout.jsx`)
 
@@ -197,9 +229,9 @@ overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scr
 | Tab count | 5 (+ More sheet) | 12–15 (conditional) |
 | Tab width | `flex-1` equal | `min-w-[4.5rem]` fixed min |
 | Apps tab | Hero orb | Plain icon link |
-| Notifications (mobile) | Bottom nav tab | Bottom nav tab |
-| Notifications (desktop header) | — | TopBar bell + slide-in panel |
+| Notifications | Bottom nav tab + badge | TopBar bell only (not a dock tab) |
 | Theme toggle | More sheet footer | TopBar |
+| What's New | More sheet tile | TopBar Sparkles button |
 
 ---
 
@@ -210,30 +242,31 @@ overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scr
 | Token | HSL | Approx hex | Usage |
 |-------|-----|------------|-------|
 | **Background** | `222 47% 6%` | `#0A0E17` | Page behind dock |
-| **Card (glass fill)** | `222 47% 9%` at **35% opacity** | `rgba(13, 18, 30, 0.35)` | Dock background |
-| **Border** | `222 40% 16%` at **70% opacity** | — | Dock outline |
+| **Card (dock fill)** | `222 47% 9%` at **50%** (`bg-card/50`) | ≈ `#0D121E` @ 50% | `glassDockStyles` |
+| **Border** | `222 40% 16%` at **70%** | — | Dock outline |
 | **Primary** | `206 92% 36%` | `#0878B6` | Active tab, orb |
 | **Primary foreground** | `0 0% 100%` | `#FFFFFF` | Icons on orb |
-| **Muted foreground** | `220 9% 56%` | `#8A919E` | Inactive labels/icons |
-| **Foreground** | `220 14% 96%` | `#F1F3F5` | Hover state |
+| **Inactive dock** | `foreground` at **90%** | — | `glassDockNavItemInactive` (not muted) |
+| **Foreground** | `220 14% 96%` | `#F1F3F5` | Hover / titles |
 | **Destructive** | `0 62% 30%` | `#7A1E1E` | Notification badge |
 
 ### Light mode
 
-| Token | HSL |
-|-------|-----|
-| Background | `220 20% 97%` |
-| Card (glass fill) | `0 0% 100%` at **30% opacity** |
-| Muted foreground | `220 9% 46%` |
-| Primary | `206 92% 36%` |
-
+| Token | HSL | Usage |
+|-------|-----|-------|
+| Background | `220 20% 97%` | Page behind dock |
+| Card (dock fill) | `0 0% 100%` at **50% opacity** (`bg-card/50`) | Dock surface |
+| Card (More sheet) | `0 0% 100%` at **30% opacity** (`bg-card/30`) | `glassPanelStyles` |
+| Inactive dock item | `foreground` at **75%** | `glassDockNavItemInactive` |
+| Primary | `206 92% 36%` | Active tab, orb |
 ### Typography
 
 | Property | Value |
 |----------|-------|
 | Font family | **Inter**, `system-ui`, `sans-serif` |
-| Nav labels | `10px`, font-medium (orb label: font-semibold) |
-| Line height | `1` (leading-none) |
+| Nav labels | `11px` (`text-[11px]`), font-medium, `leading-tight` (`glassDockNavLabel`) |
+| Active Apps orb label | same size + `font-semibold` + `text-primary` |
+| Line height | `leading-tight` (not `leading-none`) |
 
 ---
 
@@ -245,7 +278,7 @@ overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scr
 |---------|------|
 | Container | `relative flex flex-col items-center justify-center gap-0.5 transition-colors` |
 | Icon size | `20×20px` (`h-5 w-5`), Lucide-style stroke |
-| Label | `10px` (`text-[10px]`), font-medium, leading-none |
+| Label | `11px` (`text-[11px]` / `glassDockNavLabel`), font-medium, leading-tight |
 | Mobile padding | `px-1`, `flex-1` |
 | Desktop padding | `px-2`, `min-w-[4.5rem] shrink-0` |
 | Transition | Color on tap/hover |
@@ -262,8 +295,8 @@ overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scr
 
 ### Inactive state
 
-- Icon + label: **muted foreground**
-- Hover: **foreground**
+- Icon + label: **`glassDockNavItemInactive`** — `text-foreground/75` (dark `/90`), hover → `text-foreground`
+- Do **not** use bare `text-muted-foreground` on dock items (too washed-out on glass)
 
 ### Icons (Lucide)
 
@@ -272,21 +305,23 @@ overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scr
 | Home / Dashboard | `LayoutDashboard` | Mobile label "Home", desktop "Dashboard" |
 | Feed | `Newspaper` | |
 | Apps / Application | `Monitor` | Mobile = orb; desktop = standard tab |
-| Notifications | `Bell` | Badge when unread |
-| Messages | `Mail` | Desktop dock only; badge when unread |
+| Notifications | `Bell` | Mobile dock tab + badge; desktop = TopBar only |
+| Messages | `MessageSquare` | Desktop dock + More sheet; badge `messages` |
+| Email | `Mail` | Desktop dock + More sheet; badge `email` |
 | More | `Grip` | Mobile only — 3×3 dot grid |
 | People | `Users` | Desktop + More sheet |
-| Organization | `GitBranch` | Desktop + More sheet |
+| Organization | `GitBranch` | Desktop + More when `canManageUsers` |
 | Analytics | `BarChart3` | Conditional (admin or dashboards exist) |
-| Activity | `Activity` | |
+| Activity | `Activity` | Admin |
 | Network | `Wifi` | Label "Network" |
 | Attendance | `Clock` | |
 | Calendar | `Calendar` | |
 | Profile | `User` | More sheet only |
 | Settings | `Settings` | Desktop + More sheet |
+| What's New | `Sparkles` | More sheet only (`type: 'whats-new'`) |
 | Broadcast | `Megaphone` | Admin |
 | Events | `Shield` | Admin — label "Events" |
-| Users (admin) | `Users` | Admin — label "Users" |
+| Users (admin) | `Users` | Admin / `canManageUsers` — label "Users" |
 
 ---
 
@@ -310,7 +345,7 @@ Link (flex-1 flex-col items-center justify-end gap-2 pb-1)
 │   └── span.apps-orb-nav__core
 │       ├── span.apps-orb-nav__icon.apps-orb-nav__icon--monitor → Monitor 24×24
 │       └── span.apps-orb-nav__icon.apps-orb-nav__icon--brain → Brain 24×24
-└── span label (text-[10px] font-semibold mt-0.5)
+└── span label (glassDockNavLabel + active ? text-primary font-semibold : glassDockNavItemInactive)
 ```
 
 ### Layer stack (bottom to top)
@@ -448,24 +483,26 @@ Used on tabs with unread counts (Notifications, Messages).
 
 ### Desktop dock tabs (`buildDesktopNavItems`)
 
-| Label | Route | Badge |
-|-------|-------|-------|
+| Label | Route | Badge / gate |
+|-------|-------|--------------|
 | Dashboard | `/` | |
 | People | `/people`, `/people/:id` | |
-| Organization | `/organization`, `/organization/*` | |
+| Organization | `/organization`, `/organization/*` | `canManageUsers` |
 | Feed | `/feed` | |
-| Messages | `/messages`, `/messages/*` | messages |
+| Messages | `/messages`, `/messages/*` | `messages` |
+| Email | `/email`, `/email/*` | `email` |
 | Analytics | `/analytics`, `/analytics/*` | conditional |
 | Application | `/applications`, `/applications/*` | |
-| Notifications | `/notifications` | notifications |
-| Activity | `/activity` | |
+| Activity | `/activity` | admin only |
 | Network | `/network-health` | |
 | Attendance | `/attendance` | |
 | Calendar | `/calendar` | |
+| Users | `/admin/users` | `canManageUsers` |
 | Broadcast | `/admin/broadcast` | admin only |
 | Events | `/admin/events` | admin only |
-| Users | `/admin/users` | admin only |
 | Settings | `/settings` | |
+
+**No Notifications tab on the desktop dock** — unread lives in TopBar bell + slide-in panel.
 
 **Analytics tab** shown when `user.role === 'admin'` OR Metabase dashboards exist.
 
@@ -477,30 +514,33 @@ Triggered by **More** tab. Not part of dock chrome.
 |----------|-------|
 | Sheet position | Bottom, `rounded-t-2xl`, max-height `85dvh` |
 | Overlay | `rgba(0, 0, 0, 0.25)` + `backdrop-blur-sm` |
-| Panel | `glassPanelStyles` (same family as dock, readable on sheet) |
-| Grid | `grid-cols-4 sm:grid-cols-5`, gap `4px` |
-| Item layout | Icon + `11px` label, `rounded-xl py-3` |
+| Panel | `glassPanelStyles` + `border-t` + `pb-[env(safe-area-inset-bottom)]` |
+| Grid | `grid-cols-4 sm:grid-cols-5`, gap `4px` (`gap-1`) |
+| Item layout | Icon + `11px` label, `rounded-xl py-3`, `gap-2` |
 | Active item | `bg-primary/15 text-primary` |
 | Footer | Dark mode toggle (`ThemeToggle variant="switch"`) |
-| Admin section | Separate labeled group when admin |
+| Admin section | Separate labeled group when admin items present |
 
 **Routes (regular):**
 
-| Label | Route | Badge |
-|-------|-------|-------|
+| Label | Route | Badge / notes |
+|-------|-------|---------------|
+| What's New | — (`type: 'whats-new'`) | `whatsNew`; opens `PlatformWhatsNewSheet` |
 | People | `/people` | |
-| Organization | `/organization` | |
-| Messages | `/messages` | messages |
+| Organization | `/organization` | `canManageUsers` |
+| Messages | `/messages` | `messages` — icon `MessageSquare` |
+| Email | `/email` | `email` — icon `Mail` |
 | Analytics | `/analytics` | conditional |
-| Activity | `/activity` | |
+| Activity | `/activity` | admin |
 | Network | `/network-health` | |
 | Attendance | `/attendance` | |
 | Calendar | `/calendar` | |
 | Profile | `/profile` | |
 | Settings | `/settings` | |
 
-**Routes (admin):** Broadcast, Events, Users (same paths as desktop admin tabs).
+**Routes (admin / gated):** Users (`canManageUsers`), Broadcast, Events (admin).
 
+**More dock badge:** sum of all nested item badge counts.
 ---
 
 ## 10. Wireframes
@@ -516,16 +556,16 @@ Triggered by **More** tab. Not part of dock chrome.
     ────────────────┴─────┴────────────────
     │ ▬ │      │      │       │      │   │  ← active top bar (Home)
     │ ⊞ │      │ 📰   │  Apps │  🔔  │ ⋮⋮ │  ← icons
-    │Home│     │ Feed │       │ Notif│More│  ← 10px labels
+    │Home│     │ Feed │       │ Notif│More│  ← 11px labels
     └──────────────────────────────────────┘
-              glass dock (rounded-2xl)
+              glass dock (rounded-2xl, bg-card/50)
 ```
 
 ### Desktop / tablet
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  [Search……………………]              🌙  🔔  Avatar ▾                 │  TopBar
+│  [Search……………………]     ✨  🌙  🔔  Avatar ▾                │  TopBar (What's New + theme + bell)
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │                     Main page content                           │
@@ -555,9 +595,10 @@ Triggered by **More** tab. Not part of dock chrome.
 
 - [ ] Dock: `h-64px`, full-width scroll container, no max-width cap
 - [ ] 12–15 tabs, `min-width 72px` each, no orb
-- [ ] TopBar with search, theme, bell, avatar
+- [ ] TopBar with search, What's New, theme, bell, avatar
 - [ ] Hidden scrollbar state
-- [ ] Main content bottom padding `84px` (+ safe area in standalone only)
+- [ ] Main content bottom padding `84px` (`5.25rem`) (+ safe area in standalone only)
+- [ ] No Notifications dock tab (bell in header only)
 
 ### Shared
 
@@ -586,7 +627,7 @@ Triggered by **More** tab. Not part of dock chrome.
   --dock-side-inset: 0.75rem;      /* 12px */
   --main-pb-dock: 5.25rem;         /* 84px — content clearance */
   --nav-icon-size: 1.25rem;        /* 20px */
-  --nav-label-size: 0.625rem;      /* 10px */
+  --nav-label-size: 0.6875rem;     /* 11px — glassDockNavLabel */
   --nav-active-bar-w: 2rem;        /* 32px */
   --nav-active-bar-h: 0.125rem;    /* 2px */
   --nav-item-min-w-desktop: 4.5rem; /* 72px */
@@ -845,12 +886,12 @@ const viewportBottomOffset = useVisualViewportBottomOffset();
 
 const navItems = isMobile
   ? MOBILE_BOTTOM_NAV_ITEMS   // 5 items incl. orb + more
-  : buildDesktopNavItems({ showAnalytics, isAdmin });
+  : buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers });
 
 // Outer nav shell — same for both; pin to visual viewport (§2.1)
 <nav
   className={cn(
-    'fixed inset-x-0 z-40',
+    'fixed left-0 right-0 z-40',
     standalone
       ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
       : 'pb-3'
@@ -859,7 +900,8 @@ const navItems = isMobile
 >
   <div className="flex justify-center px-3 sm:px-4">
     <div className={cn(
-      'flex items-stretch px-1 rounded-2xl border glassPanelStyles',
+      'flex items-stretch px-1',
+      glassDockStyles, // mid-opacity glass + rounded-2xl border — NOT glassPanelStyles alone
       isMobile
         ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
         : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] ...'
@@ -881,16 +923,18 @@ const navItems = isMobile
 
 **Do not** use bare `fixed bottom-0` without the visual-viewport offset when shipping to iOS Safari.
 
+**Nav item classes:** active → `text-primary` + top pill; inactive → `glassDockNavItemInactive`; label → `glassDockNavLabel`.
+
 ---
 
 ## 15. Design Principles
 
 1. **Floating, not flush** — dock sits inset from screen edges
-2. **Glass morphism** — blur + low-opacity fill, not a solid bar
+2. **Glass morphism** — blur + mid-opacity fill (`bg-card/50` on dock), not a solid bar
 3. **One hero action (mobile only)** — center orb draws attention to Apps
-4. **Minimal labels** — 10px text; icons carry most meaning
+4. **Minimal labels** — `11px` tight text; icons carry most meaning
 5. **Subtle active cue** — thin top bar, not a full background fill
-6. **Dark-first** — navy UI with blue accent; light mode via same tokens
+6. **Dark-first chrome tokens** — navy glass with blue accent; light mode via same tokens (higher TopBar opacity)
 7. **Progressive density** — mobile consolidates into More sheet; desktop exposes all routes
 8. **Visual-viewport pinned** — dock tracks the visible bottom on iOS Safari; safe-area only in standalone (§2.1)
 
@@ -902,9 +946,29 @@ const navItems = isMobile
 |-----------|------------|--------|
 | Standard pages | Shown | Shown |
 | `/applications/:id/view` (embedded app) | **Hidden** | **Hidden** |
-| Mobile (`< 768px`) | 5-tab dock + orb | Search only |
-| Desktop / tablet (`≥ 768px`) | Scroll dock, all tabs | Search + theme + bell + profile |
+| Email fullscreen | **Hidden** | **Hidden** |
+| Mobile (`< 768px`) | 5-tab dock + orb + More | Search only (theme in More) |
+| Desktop / tablet (`≥ 768px`) | Scroll dock, all tabs (no Notif tab) | Search + What's New + theme + bell + profile |
 
-**Badge polling:** Messages and notifications refresh every 15 seconds.
+**Badge polling:** Messages, email, and notifications refresh on the app’s background poll interval (typically ~15s when tab visible).
 
 **Embedded app regex:** `/^\/applications\/\d+\/view$/`
+
+---
+
+## 17. SSO / cross-system porting
+
+When recreating this dock in another EMZI SSO system:
+
+1. Copy **§2 glass surfaces**, **§12 custom properties**, and **§13 orb CSS** verbatim
+2. Align color tokens with `docs/DESIGN_TEMPLATE.md` §3 and §30 (SSO recreation kit)
+3. Port `glassStyles.js` exports — especially `glassDockStyles`, `glassDockNavLabel`, `glassDockNavItemInactive`
+4. Implement `useVisualViewportBottomOffset` + `isRunningStandalone` safe-area policy (§2.1)
+5. Main clearance must be **`5.25rem`**, not `4.75rem`
+6. Keep the **5-tab** mobile map; put secondary routes in the More grid
+
+Canonical product design SoT: `docs/DESIGN_TEMPLATE.md`.
+
+---
+
+*Last updated from Nexus frontend: `glassDockStyles` (`bg-card/50`), labels `11px`, clearance `5.25rem`, Email / What's New routes, visual-viewport safe-area policy. Keep in sync with `DESIGN_TEMPLATE.md` §7 / §30.*
