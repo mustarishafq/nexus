@@ -150,6 +150,7 @@ Route::get('/users/directory', [UserController::class, 'directory']);
 Route::get('/users/roster', [UserController::class, 'roster']);
 Route::get('/users/org-chart', [UserController::class, 'orgChart']);
 Route::get('/users', [UserController::class, 'index']);
+Route::get('/users/export', [UserController::class, 'exportCsv']);
 Route::get('/users/search', [UserController::class, 'search']);
 Route::post('/users', [UserController::class, 'store']);
 Route::post('/users/import-csv', [UserController::class, 'importCsv']);

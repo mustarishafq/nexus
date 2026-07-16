@@ -915,6 +915,42 @@ export const db = {
 		return this.uploadUsersCsv(file, '/users/assign-access-groups-csv');
 	},
 
+	async exportUsersCsv(filters = {}) {
+		const token = getAuthToken();
+		const query = buildQuery(filters);
+		const response = await fetch(`${API_BASE_URL}/users/export${query}`, {
+			method: 'GET',
+			headers: {
+				Accept: 'text/csv',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+			credentials: 'include',
+		});
+
+		if (!response.ok) {
+			let payload = null;
+			try {
+				payload = await response.json();
+			} catch {
+				payload = null;
+			}
+			const error = new Error(payload?.message || `HTTP ${response.status}`);
+			error.status = response.status;
+			error.data = payload;
+			throw error;
+		}
+
+		const blob = await response.blob();
+		const url = window.URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		window.URL.revokeObjectURL(url);
+	},
+
 	async searchUsers(query, limit = 10) {
 		const queryString = buildQuery({ q: query, limit });
 		const payload = await request(`/users/search${queryString}`);

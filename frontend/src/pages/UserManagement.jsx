@@ -336,6 +336,7 @@ export default function UserManagement() {
   });
   const [nudgingUser, setNudgingUser] = useState(null);
   const [bulkNudging, setBulkNudging] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [notificationSending, setNotificationSending] = useState(false);
   const [notificationUserIds, setNotificationUserIds] = useState(new Set());
@@ -1316,6 +1317,22 @@ export default function UserManagement() {
     }
   };
 
+  const handleExportUsers = async () => {
+    setExporting(true);
+    try {
+      await db.exportUsersCsv({
+        ...(search.trim() ? { q: search.trim() } : {}),
+        ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+      });
+      toast.success('Users export downloaded');
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to export users CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const openNotificationDialog = (user = null) => {
     setNotificationUserIds(new Set(user ? [user.id] : []));
     setNotificationForm({
@@ -1466,6 +1483,16 @@ export default function UserManagement() {
           >
             <BellRing className="w-4 h-4 shrink-0" />
             <span className="truncate">{bulkNudging ? 'Sending…' : 'Nudge incomplete'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 w-full sm:w-auto min-h-[40px]"
+            disabled={exporting}
+            onClick={handleExportUsers}
+          >
+            {exporting ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Download className="w-4 h-4 shrink-0" />}
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
           <Button
             variant="outline"

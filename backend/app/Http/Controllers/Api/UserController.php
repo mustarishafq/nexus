@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UserController extends Controller
 {
@@ -51,6 +52,104 @@ class UserController extends Controller
         return response()->json(
             $users->map(fn (User $user) => $this->adminUserPayload($user))->values()
         );
+    }
+
+    public function exportCsv(Request $request): StreamedResponse|JsonResponse
+    {
+        if ($response = $this->authorizeHrOrAdmin($request)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
+            'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
+            'q' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $query = User::query()
+            ->with(['accessGroups', 'department', 'manager:id,email,full_name,name'])
+            ->orderBy('full_name')
+            ->orderBy('email');
+
+        if (! empty($validated['role'])) {
+            $query->where('role', $validated['role']);
+        }
+
+        if (($validated['status'] ?? null) === 'approved') {
+            $query->where('is_approved', true);
+        } elseif (($validated['status'] ?? null) === 'pending') {
+            $query->where('is_approved', false);
+        }
+
+        if (! empty($validated['q'])) {
+            $search = trim($validated['q']);
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%");
+            });
+        }
+
+        $filename = 'users-'.now()->format('Y-m-d-His').'.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'ID',
+                'Full Name',
+                'Email',
+                'Role',
+                'Approved',
+                'Job Title',
+                'Employee ID',
+                'Employment Type',
+                'Department',
+                'Manager Email',
+                'Work Phone',
+                'Personal Phone',
+                'Location',
+                'Gender',
+                'Date of Birth',
+                'Joined At',
+                'MCP Access',
+                'Access Groups',
+                'Profile Completeness %',
+                'Created At',
+            ]);
+
+            foreach ($query->lazy(500) as $user) {
+                $completeness = ProfileCompleteness::forUser($user);
+
+                fputcsv($handle, [
+                    $user->id,
+                    $user->full_name ?: $user->name,
+                    $user->email,
+                    $user->role,
+                    $user->is_approved ? 'yes' : 'no',
+                    $user->job_title,
+                    $user->employee_id,
+                    $user->employment_type,
+                    $user->department?->name,
+                    $user->manager?->email,
+                    $user->work_phone,
+                    $user->personal_phone,
+                    $user->location,
+                    $user->gender,
+                    $user->date_of_birth?->format('Y-m-d'),
+                    $user->joined_at?->format('Y-m-d'),
+                    $user->mcp_access,
+                    $user->accessGroups->pluck('name')->sort()->implode('; '),
+                    $completeness['percent'] ?? 0,
+                    $user->created_at?->toISOString(),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 
     public function profileNudge(Request $request, User $user): JsonResponse

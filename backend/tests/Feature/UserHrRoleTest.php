@@ -119,4 +119,63 @@ class UserHrRoleTest extends TestCase
             ->assertJsonPath('attendance.show_user_name', false)
             ->assertJsonPath('attendance.position', 'bottom-right');
     }
+
+    public function test_admin_can_export_users_csv(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'full_name' => 'Admin Exporter',
+            'email' => 'admin.export@example.com',
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Export Target',
+            'email' => 'export.target@example.com',
+        ]);
+        $token = $this->issueToken($admin);
+
+        $response = $this->withToken($token)->get('/api/users/export');
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Full Name', $csv);
+        $this->assertStringContainsString('export.target@example.com', $csv);
+    }
+
+    public function test_hr_can_export_users_csv(): void
+    {
+        $hr = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'hr',
+            'full_name' => 'HR Exporter',
+            'email' => 'hr.export@example.com',
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'HR Export Target',
+            'email' => 'hr.export.target@example.com',
+        ]);
+        $token = $this->issueToken($hr);
+
+        $response = $this->withToken($token)->get('/api/users/export');
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('hr.export.target@example.com', $csv);
+    }
+
+    public function test_regular_user_cannot_export_users_csv(): void
+    {
+        $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $token = $this->issueToken($user);
+
+        $this->withToken($token)
+            ->get('/api/users/export')
+            ->assertForbidden();
+    }
 }
