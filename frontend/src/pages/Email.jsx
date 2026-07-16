@@ -2,7 +2,7 @@ import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow, parse } from 'date-fns';
+import { formatDistanceToNow, isValid } from 'date-fns';
 import {
   Archive, ArrowLeft, Check, ChevronDown, FileEdit, Forward, Inbox, Loader2, LogOut, Mail, MailOpen,
   Maximize2, Minimize2, MoreHorizontal, Paperclip, PenSquare, Plus, RefreshCw, Reply, ReplyAll,
@@ -72,12 +72,11 @@ function storeAccountId(accountId) {
 
 function parseMailDate(value) {
   if (!value) return null;
-  try {
-    return parse(value, 'EEE, d MMM yyyy HH:mm:ss Z', new Date());
-  } catch {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
+  // IMAP dates are RFC 2822; native Date handles those reliably.
+  // Avoid date-fns parse() with a fixed pattern — mismatched inputs return
+  // Invalid Date without throwing, which crashes formatDistanceToNow.
+  const parsed = new Date(value);
+  return isValid(parsed) ? parsed : null;
 }
 
 function formatMailDate(value) {
