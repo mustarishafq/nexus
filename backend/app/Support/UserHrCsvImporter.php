@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Http\Controllers\Api\Concerns\ResolvesCompanyInput;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Models\AccessGroup;
 use App\Models\User;
@@ -10,6 +11,7 @@ use App\Support\SyncUserProfileRecords;
 
 class UserHrCsvImporter
 {
+    use ResolvesCompanyInput;
     use ResolvesDepartmentInput;
 
     /**
@@ -262,6 +264,11 @@ class UserHrCsvImporter
         $department = $this->valueFromRecord($record, 'department');
         if ($department !== null) {
             $attributes['department_id'] = $this->resolveDepartmentId(null, $department);
+        }
+
+        $company = $this->valueFromRecord($record, 'company');
+        if ($company !== null) {
+            $attributes['company_id'] = $this->resolveCompanyId(null, $company);
         }
 
         $skills = null;

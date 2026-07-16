@@ -978,6 +978,18 @@ export const db = {
 		});
 	},
 
+	async listCompanies() {
+		const payload = await request('/companies');
+		return Array.isArray(payload) ? payload : [];
+	},
+
+	async createCompany(name) {
+		return request('/companies', {
+			method: 'POST',
+			body: { name },
+		});
+	},
+
 	async getUserProfile(userId) {
 		return request(`/users/${userId}/profile`);
 	},

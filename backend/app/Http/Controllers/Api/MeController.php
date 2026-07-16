@@ -48,7 +48,7 @@ class MeController extends Controller
      */
     private function profileRelations(): array
     {
-        return ['department', 'manager.department', 'educations', 'workExperiences', 'userSkills'];
+        return ['department', 'company', 'manager.department', 'educations', 'workExperiences', 'userSkills'];
     }
 
     private function loadProfile($user)

@@ -61,4 +61,35 @@ class MailControllerTest extends TestCase
                 'connected' => false,
             ]);
     }
+
+    public function test_user_can_have_multiple_mail_credentials(): void
+    {
+        $user = User::factory()->create(['is_approved' => true]);
+
+        DB::table('user_mail_credentials')->insert([
+            [
+                'user_id' => $user->id,
+                'email' => 'primary@example.com',
+                'label' => 'Primary',
+                'is_primary' => true,
+                'password' => 'encrypted-one',
+                'verified_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $user->id,
+                'email' => 'secondary@example.com',
+                'label' => 'Secondary',
+                'is_primary' => false,
+                'password' => 'encrypted-two',
+                'verified_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->assertDatabaseCount('user_mail_credentials', 2);
+        $this->assertSame(2, DB::table('user_mail_credentials')->where('user_id', $user->id)->count());
+    }
 }

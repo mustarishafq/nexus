@@ -419,6 +419,19 @@ export default function Profile() {
                           </div>
 
                           <div className="space-y-2">
+                            <Label className="flex items-center gap-1.5">
+                              <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+                              Company
+                            </Label>
+                            <p className="text-sm rounded-md border bg-muted/40 px-3 py-2 text-foreground">
+                              {user?.company || 'Not assigned'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Only HR or an admin can change your company.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
                             <Label htmlFor="department" className="flex items-center gap-1.5">
                               <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
                               Department

@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentAttendanceController;
+use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\FileUploadController;
@@ -146,6 +147,8 @@ Route::put('/admin/department-attendance/{department}', [DepartmentAttendanceCon
 
 Route::get('/departments', [DepartmentController::class, 'index']);
 Route::post('/departments', [DepartmentController::class, 'store']);
+Route::get('/companies', [CompanyController::class, 'index']);
+Route::post('/companies', [CompanyController::class, 'store']);
 Route::get('/users/directory', [UserController::class, 'directory']);
 Route::get('/users/roster', [UserController::class, 'roster']);
 Route::get('/users/org-chart', [UserController::class, 'orgChart']);

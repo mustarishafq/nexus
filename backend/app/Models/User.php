@@ -30,6 +30,7 @@ class User extends Authenticatable
         'cover_picture_crops',
         'bio',
         'department_id',
+        'company_id',
         'job_title',
         'work_phone',
         'personal_phone',
@@ -140,13 +141,19 @@ class User extends Authenticatable
                 ->orWhere('ask_me_about', 'like', $like)
                 ->orWhere('job_title', 'like', $like)
                 ->orWhereHas('userSkills', fn (Builder $skillQuery) => $skillQuery->where('name', 'like', $like))
-                ->orWhereHas('department', fn (Builder $departmentQuery) => $departmentQuery->where('name', 'like', $like));
+                ->orWhereHas('department', fn (Builder $departmentQuery) => $departmentQuery->where('name', 'like', $like))
+                ->orWhereHas('company', fn (Builder $companyQuery) => $companyQuery->where('name', 'like', $like));
         });
     }
 
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function manager(): BelongsTo
@@ -305,6 +312,13 @@ class User extends Authenticatable
 
         $array['department'] = $department?->name;
         $array['department_id'] = $this->department_id;
+
+        $company = $this->relationLoaded('company')
+            ? $this->getRelation('company')
+            : $this->company()->first();
+
+        $array['company'] = $company?->name;
+        $array['company_id'] = $this->company_id;
 
         if ($this->date_of_birth) {
             $array['date_of_birth'] = $this->date_of_birth->toDateString();

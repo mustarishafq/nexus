@@ -85,6 +85,23 @@ return new class extends Migration
 
     protected function dropUniqueIfExists(string $table, string $indexName): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            $database = Schema::getConnection()->getDatabaseName();
+            $exists = DB::table('information_schema.statistics')
+                ->where('table_schema', $database)
+                ->where('table_name', $table)
+                ->where('index_name', $indexName)
+                ->exists();
+
+            if ($exists) {
+                DB::statement("ALTER TABLE `{$table}` DROP INDEX `{$indexName}`");
+            }
+
+            return;
+        }
+
         try {
             Schema::table($table, function (Blueprint $blueprint) use ($indexName) {
                 $blueprint->dropUnique($indexName);

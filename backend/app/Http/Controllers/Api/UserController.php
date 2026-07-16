@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
+use App\Http\Controllers\Api\Concerns\ResolvesCompanyInput;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
@@ -29,6 +30,7 @@ class UserController extends Controller
 {
     use AppliesIndexQuery;
     use AuthorizesRoles;
+    use ResolvesCompanyInput;
     use ResolvesDepartmentInput;
     use ValidatesHrProfileFields;
 
@@ -41,7 +43,7 @@ class UserController extends Controller
         $users = $this->applyIndexQuery(
             $request,
             User::query()
-                ->with(['accessGroups', 'department', 'manager'])
+                ->with(['accessGroups', 'department', 'company', 'manager'])
                 ->withExists('pushSubscriptions'),
             ['role', 'email'],
             '-created_date',
@@ -67,7 +69,7 @@ class UserController extends Controller
         ]);
 
         $query = User::query()
-            ->with(['accessGroups', 'department', 'manager:id,email,full_name,name'])
+            ->with(['accessGroups', 'department', 'company', 'manager:id,email,full_name,name'])
             ->orderBy('full_name')
             ->orderBy('email');
 
@@ -105,6 +107,7 @@ class UserController extends Controller
                 'Job Title',
                 'Employee ID',
                 'Employment Type',
+                'Company',
                 'Department',
                 'Manager Email',
                 'Work Phone',
@@ -132,6 +135,7 @@ class UserController extends Controller
                     $user->job_title,
                     $user->employee_id,
                     $user->employment_type,
+                    $user->company?->name,
                     $user->department?->name,
                     $user->manager?->email,
                     $user->work_phone,
@@ -382,7 +386,7 @@ class UserController extends Controller
         $limit = (int) ($validated['limit'] ?? 50);
 
         $query = User::query()
-            ->with(['accessGroups', 'department', 'manager.department', 'educations', 'workExperiences', 'userSkills'])
+            ->with(['accessGroups', 'department', 'company', 'manager.department', 'educations', 'workExperiences', 'userSkills'])
             ->where('is_approved', true);
 
         if ($term !== '') {
@@ -460,7 +464,7 @@ class UserController extends Controller
             return response()->json(['message' => 'User not found.'], 404);
         }
 
-        $user->load(['accessGroups', 'department', 'manager.department', 'educations', 'workExperiences', 'userSkills']);
+        $user->load(['accessGroups', 'department', 'company', 'manager.department', 'educations', 'workExperiences', 'userSkills']);
 
         return response()->json([
             'user' => $this->publicUserProfile($user),
@@ -491,6 +495,8 @@ class UserController extends Controller
             'is_approved' => ['sometimes', 'boolean'],
             'date_of_birth' => ['sometimes', 'nullable', 'date'],
             'joined_at' => ['sometimes', 'nullable', 'date'],
+            'company_id' => ['sometimes', 'nullable', 'integer', 'exists:companies,id'],
+            'company' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
         $groupIds = $validated['access_group_ids'] ?? null;
@@ -503,6 +509,8 @@ class UserController extends Controller
             unset($validated['mcp_access']);
         }
 
+        $validated = $this->resolveCompanyFields($validated);
+
         $user = User::create([
             'name'                   => '',
             'full_name'              => $validated['full_name'],
@@ -512,13 +520,14 @@ class UserController extends Controller
             'mcp_access'             => $validated['mcp_access'] ?? McpUserAccess::NONE,
             'is_approved'            => $validated['is_approved'] ?? true,
             'force_password_change'  => true,
+            'company_id'             => $validated['company_id'] ?? null,
         ]);
 
         if ($groupIds !== null) {
             $user->accessGroups()->sync($groupIds);
         }
 
-        return response()->json($user->load('accessGroups'), 201);
+        return response()->json($user->load(['accessGroups', 'company']), 201);
     }
 
     /**
@@ -846,6 +855,8 @@ class UserController extends Controller
             'bio' => ['sometimes', 'nullable', 'string', 'max:500'],
             'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'department' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'company_id' => ['sometimes', 'nullable', 'integer', 'exists:companies,id'],
+            'company' => ['sometimes', 'nullable', 'string', 'max:100'],
             'location' => ['sometimes', 'nullable', 'string', 'max:100'],
             'skills' => ['sometimes', 'nullable', 'array', 'max:10'],
             'skills.*' => ['string', 'max:50'],
@@ -908,6 +919,7 @@ class UserController extends Controller
         }
 
         $validated = $this->resolveDepartmentFields($validated);
+        $validated = $this->resolveCompanyFields($validated);
         $validated = $this->normalizeHrProfilePayload($validated);
         $user->update($validated);
 
@@ -927,7 +939,7 @@ class UserController extends Controller
             $user->accessGroups()->sync($groupIds);
         }
 
-        return response()->json($user->fresh()->load(['accessGroups', 'department', 'manager', 'educations', 'workExperiences', 'userSkills']));
+        return response()->json($user->fresh()->load(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences', 'userSkills']));
     }
 
     public function destroy(Request $request, User $user): JsonResponse

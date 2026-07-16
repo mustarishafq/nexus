@@ -41,6 +41,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
+import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
 import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
@@ -293,6 +294,8 @@ export default function UserManagement() {
   const [newUserRole, setNewUserRole] = useState('user');
   const [newUserMcpAccess, setNewUserMcpAccess] = useState('none');
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
+  const [newUserCompanyId, setNewUserCompanyId] = useState(null);
+  const [newUserCompanyName, setNewUserCompanyName] = useState('');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1018,6 +1021,7 @@ export default function UserManagement() {
         role: newUserRole,
         mcp_access: newUserMcpAccess,
         access_group_ids: [...newUserGroupIds].map(Number),
+        company_id: newUserCompanyId,
         is_approved: true,
       });
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -1026,6 +1030,8 @@ export default function UserManagement() {
       setNewUserRole('user');
       setNewUserMcpAccess('none');
       setNewUserGroupIds(new Set());
+      setNewUserCompanyId(null);
+      setNewUserCompanyName('');
       toast.success('User created successfully');
     } catch (err) {
       toast.error(err?.data?.message || err.message || 'Failed to create user');
@@ -1051,6 +1057,8 @@ export default function UserManagement() {
       employment_type: user.employment_type || '',
       department_id: user.department_id ?? null,
       department_name: user.department || '',
+      company_id: user.company_id ?? null,
+      company_name: user.company || '',
       manager_id: user.manager_id ?? null,
       manager_name: user.manager?.name || user.manager?.full_name || '',
       ...buildHrProfileForm(user),
@@ -1075,6 +1083,7 @@ export default function UserManagement() {
         employee_id: editForm.employee_id?.trim() || null,
         employment_type: editForm.employment_type || null,
         department_id: editForm.department_id,
+        company_id: editForm.company_id,
         manager_id: editForm.manager_id,
         ...buildHrProfilePayload(editForm),
       };
@@ -1222,7 +1231,7 @@ export default function UserManagement() {
   const downloadHrOnboardingSampleCsv = () => {
     const headers = [
       'email', 'full_name', 'name', 'password', 'role', 'is_approved',
-      'job_title', 'department', 'manager_email', 'employee_id', 'employment_type', 'joined_at', 'date_of_birth',
+      'job_title', 'company', 'department', 'manager_email', 'employee_id', 'employment_type', 'joined_at', 'date_of_birth',
       'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'gender',
       'current_address', 'home_phone', 'ic_number', 'epf_number', 'socso_number', 'income_tax_number',
       'work_phone', 'personal_phone', 'personal_phone_visible',
@@ -1235,7 +1244,7 @@ export default function UserManagement() {
       headers.join(','),
       [
         'jane.doe@example.com', 'Jane Doe', 'Jane', 'Password@123', 'user', 'true',
-        'Online Sales Executive', 'Customer Success Management', 'manager@example.com', 'EMP-001', 'full_time', '2023-07-24', '1990-01-15',
+        'Online Sales Executive', 'Acme Sdn Bhd', 'Customer Success Management', 'manager@example.com', 'EMP-001', 'full_time', '2023-07-24', '1990-01-15',
         'Selangor', 'Malaysian', 'islam', 'malay', 'single', 'female',
         'C-1-11 Kenanga Apartment, Taman Putra Perdana, 47130 Puchong Selangor', '03-12345678', '900101-01-1234', '12345678', 'SOC123', 'IG123456',
         '+60192704323', '+601999990607', 'false',
@@ -2291,6 +2300,20 @@ export default function UserManagement() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Company</Label>
+                  <CompanyCombobox
+                    value={editForm.company_id}
+                    label={editForm.company_name}
+                    onChange={(companyId, companyName = '') =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        company_id: companyId,
+                        company_name: companyName,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Department</Label>
                   <DepartmentCombobox
                     value={editForm.department_id}
@@ -2384,6 +2407,17 @@ export default function UserManagement() {
             <div className="space-y-2">
               <Label>Password</Label>
               <Input name="password" type="password" placeholder="Min 8 characters" minLength={8} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Company</Label>
+              <CompanyCombobox
+                value={newUserCompanyId}
+                label={newUserCompanyName}
+                onChange={(companyId, companyName = '') => {
+                  setNewUserCompanyId(companyId);
+                  setNewUserCompanyName(companyName);
+                }}
+              />
             </div>
             {isAdmin ? (
               <div className="space-y-2">

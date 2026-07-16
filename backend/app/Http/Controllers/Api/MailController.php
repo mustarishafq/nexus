@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\MailMailboxService;
 use App\Support\ApiTokenAuth;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -88,6 +89,12 @@ class MailController extends Controller
             );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (QueryException $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Could not save this mailbox. If you already connected an account, try updating it or reconnecting after refreshing the page.',
+            ], 422);
         }
 
         return response()->json([
