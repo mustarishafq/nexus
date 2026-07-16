@@ -157,6 +157,41 @@ class UserHrRoleTest extends TestCase
         $this->assertStringContainsString('2026-07-15', $csv);
     }
 
+    public function test_admin_can_export_users_csv_filtered_by_never_logged_in(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'full_name' => 'Admin Never Filter',
+            'email' => 'admin.never.filter@example.com',
+            'last_login_at' => '2026-07-10 12:00:00',
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Never Logged In',
+            'email' => 'never.logged.in@example.com',
+            'last_login_at' => null,
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Has Logged In',
+            'email' => 'has.logged.in@example.com',
+            'last_login_at' => '2026-07-15 08:30:00',
+        ]);
+        $token = $this->issueToken($admin);
+
+        $response = $this->withToken($token)->get('/api/users/export?login=never');
+
+        $response->assertOk();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('never.logged.in@example.com', $csv);
+        $this->assertStringContainsString('Never login', $csv);
+        $this->assertStringNotContainsString('has.logged.in@example.com', $csv);
+        $this->assertStringNotContainsString('admin.never.filter@example.com', $csv);
+    }
+
     public function test_hr_can_export_users_csv(): void
     {
         $hr = User::factory()->create([

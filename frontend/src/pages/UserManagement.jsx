@@ -43,7 +43,7 @@ import UserAvatar from '@/components/users/UserAvatar';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
-import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness } from '@/lib/profile';
+import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness, formatRelativeDate } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
@@ -300,6 +300,7 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [profileFilter, setProfileFilter] = useState('all');
+  const [loginFilter, setLoginFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [assignDialogUser, setAssignDialogUser] = useState(null);
   const [assignGroupIds, setAssignGroupIds] = useState(new Set());
@@ -405,7 +406,34 @@ export default function UserManagement() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, roleFilter, statusFilter, profileFilter]);
+  }, [search, roleFilter, statusFilter, profileFilter, loginFilter]);
+
+  const formatLastLogin = (value) => {
+    if (!value) return 'Never';
+    return formatRelativeDate(value);
+  };
+
+  const matchesLoginFilter = (user) => {
+    if (loginFilter === 'all') return true;
+
+    const lastLogin = user.last_login_at;
+    if (loginFilter === 'never') return !lastLogin;
+    if (loginFilter === 'has_logged_in') return Boolean(lastLogin);
+    if (!lastLogin) return false;
+
+    const loginTime = new Date(lastLogin).getTime();
+    if (Number.isNaN(loginTime)) return false;
+
+    const now = Date.now();
+    if (loginFilter === 'last_7_days') {
+      return loginTime >= now - 7 * 24 * 60 * 60 * 1000;
+    }
+    if (loginFilter === 'last_30_days') {
+      return loginTime >= now - 30 * 24 * 60 * 60 * 1000;
+    }
+
+    return true;
+  };
 
   const getGroupById = (groupId) => accessGroups.find((group) => String(group.id) === String(groupId));
 
@@ -455,8 +483,9 @@ export default function UserManagement() {
     const matchesProfile = profileFilter === 'all'
       || (profileFilter === 'incomplete' && profilePercent < 100)
       || (profileFilter === 'complete' && profilePercent === 100);
+    const matchesLogin = matchesLoginFilter(user);
 
-    return matchesSearch && matchesRole && matchesStatus && matchesProfile;
+    return matchesSearch && matchesRole && matchesStatus && matchesProfile && matchesLogin;
   });
 
   const pageSize = 20;
@@ -1333,6 +1362,7 @@ export default function UserManagement() {
         ...(search.trim() ? { q: search.trim() } : {}),
         ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
         ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(loginFilter !== 'all' ? { login: loginFilter } : {}),
       });
       toast.success('Users export downloaded');
     } catch (err) {
@@ -1405,6 +1435,7 @@ export default function UserManagement() {
     setRoleFilter('all');
     setStatusFilter('all');
     setProfileFilter('all');
+    setLoginFilter('all');
   };
 
   const selectableUsers = users
@@ -1613,7 +1644,20 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
 
-              {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all') ? (
+              <Select value={loginFilter} onValueChange={setLoginFilter}>
+                <SelectTrigger className="w-full col-span-2 sm:col-span-1 sm:w-[170px]">
+                  <SelectValue placeholder="Login" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All logins</SelectItem>
+                  <SelectItem value="never">Never logged in</SelectItem>
+                  <SelectItem value="has_logged_in">Has logged in</SelectItem>
+                  <SelectItem value="last_7_days">Last 7 days</SelectItem>
+                  <SelectItem value="last_30_days">Last 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all' || loginFilter !== 'all') ? (
                 <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1 w-full sm:w-auto" onClick={clearFilters}>
                   Clear filters
                 </Button>
@@ -1675,6 +1719,10 @@ export default function UserManagement() {
                       <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete</p>
                       <p><span className="font-medium text-foreground/80">Groups:</span> {getUserAccessLabel(user)}</p>
                       <p><span className="font-medium text-foreground/80">Analytics:</span> {getUserAnalyticsLabel(user)}</p>
+                      <p title={user.last_login_at || undefined}>
+                        <span className="font-medium text-foreground/80">Last login:</span>{' '}
+                        {formatLastLogin(user.last_login_at)}
+                      </p>
                     </div>
                     <ProfileStrengthCell user={user} compact />
                   </div>
@@ -1690,6 +1738,7 @@ export default function UserManagement() {
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden lg:table-cell">Profile strength</TableHead>
                     <TableHead className="hidden xl:table-cell">Access</TableHead>
+                    <TableHead className="hidden md:table-cell whitespace-nowrap">Last login</TableHead>
                     <TableHead className="text-right pr-6 w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1737,6 +1786,11 @@ export default function UserManagement() {
                         {getUserAnalyticsLabel(user) !== 'None' ? (
                           <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{getUserAnalyticsLabel(user)}</p>
                         ) : null}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground whitespace-nowrap">
+                        <span title={user.last_login_at || undefined}>
+                          {formatLastLogin(user.last_login_at)}
+                        </span>
                       </TableCell>
                       <TableCell className="pr-6">
                         <div className="flex justify-end">

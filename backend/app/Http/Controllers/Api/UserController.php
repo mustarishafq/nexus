@@ -65,6 +65,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
+            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
             'q' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -81,6 +82,16 @@ class UserController extends Controller
             $query->where('is_approved', true);
         } elseif (($validated['status'] ?? null) === 'pending') {
             $query->where('is_approved', false);
+        }
+
+        if (($validated['login'] ?? null) === 'never') {
+            $query->whereNull('last_login_at');
+        } elseif (($validated['login'] ?? null) === 'has_logged_in') {
+            $query->whereNotNull('last_login_at');
+        } elseif (($validated['login'] ?? null) === 'last_7_days') {
+            $query->where('last_login_at', '>=', now()->subDays(7));
+        } elseif (($validated['login'] ?? null) === 'last_30_days') {
+            $query->where('last_login_at', '>=', now()->subDays(30));
         }
 
         if (! empty($validated['q'])) {
