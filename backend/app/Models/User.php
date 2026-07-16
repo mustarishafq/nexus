@@ -70,6 +70,7 @@ class User extends Authenticatable
         'date_of_birth',
         'joined_at',
         'last_profile_nudge_at',
+        'last_login_at',
     ];
 
     protected $appends = [
@@ -110,6 +111,7 @@ class User extends Authenticatable
             'date_of_birth' => 'date',
             'joined_at' => 'date',
             'last_profile_nudge_at' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 

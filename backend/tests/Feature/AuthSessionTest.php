@@ -21,6 +21,8 @@ class AuthSessionTest extends TestCase
             'password' => 'password',
         ])->assertOk();
 
+        $this->assertNotNull($user->fresh()->last_login_at);
+
         $this->withToken($existingToken)
             ->getJson('/api/me')
             ->assertOk();

@@ -62,6 +62,8 @@ class AuthController extends Controller
 
         $token = ApiTokenAuth::issueToken($user);
 
+        $user->forceFill(['last_login_at' => now()])->save();
+
         ActivityLog::create([
             'user_id'     => (string) $user->id,
             'user_name'   => $user->full_name ?? $user->name ?? $user->email,
@@ -73,7 +75,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful.',
             'token' => $token,
-            'user' => $user,
+            'user' => $user->fresh(),
         ]);
     }
 

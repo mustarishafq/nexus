@@ -116,6 +116,7 @@ class UserController extends Controller
                 'MCP Access',
                 'Access Groups',
                 'Profile Completeness %',
+                'Last Login',
                 'Created At',
             ]);
 
@@ -142,6 +143,7 @@ class UserController extends Controller
                     $user->mcp_access,
                     $user->accessGroups->pluck('name')->sort()->implode('; '),
                     $completeness['percent'] ?? 0,
+                    $user->last_login_at?->toISOString() ?: 'Never login',
                     $user->created_at?->toISOString(),
                 ]);
             }

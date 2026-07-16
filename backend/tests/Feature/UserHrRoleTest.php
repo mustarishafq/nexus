@@ -133,6 +133,14 @@ class UserHrRoleTest extends TestCase
             'role' => 'user',
             'full_name' => 'Export Target',
             'email' => 'export.target@example.com',
+            'last_login_at' => null,
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Logged In User',
+            'email' => 'logged.in@example.com',
+            'last_login_at' => '2026-07-15 08:30:00',
         ]);
         $token = $this->issueToken($admin);
 
@@ -142,7 +150,11 @@ class UserHrRoleTest extends TestCase
         $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
         $csv = $response->streamedContent();
         $this->assertStringContainsString('Full Name', $csv);
+        $this->assertStringContainsString('Last Login', $csv);
         $this->assertStringContainsString('export.target@example.com', $csv);
+        $this->assertStringContainsString('Never login', $csv);
+        $this->assertStringContainsString('logged.in@example.com', $csv);
+        $this->assertStringContainsString('2026-07-15', $csv);
     }
 
     public function test_hr_can_export_users_csv(): void
