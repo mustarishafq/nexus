@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\AppTimezoneDateTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -32,8 +33,8 @@ class Broadcast extends Model
     protected function casts(): array
     {
         return [
-            'broadcast_starts_at' => 'datetime',
-            'broadcast_ends_at' => 'datetime',
+            'broadcast_starts_at' => AppTimezoneDateTime::class,
+            'broadcast_ends_at' => AppTimezoneDateTime::class,
         ];
     }
 

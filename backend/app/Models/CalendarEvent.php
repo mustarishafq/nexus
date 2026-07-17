@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\AppTimezoneDateTime;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -35,8 +36,8 @@ class CalendarEvent extends Model
     protected function casts(): array
     {
         return [
-            'start_at' => 'datetime',
-            'end_at' => 'datetime',
+            'start_at' => AppTimezoneDateTime::class,
+            'end_at' => AppTimezoneDateTime::class,
             'is_all_day' => 'boolean',
         ];
     }
