@@ -203,8 +203,8 @@ class AttendanceController extends Controller
 
         $setting = AttendancePolicyValidator::resolveForUser($user);
         $timezone = $setting?->timezone ?? config('app.timezone');
-        $todayStart = now()->timezone($timezone)->startOfDay()->utc();
-        $todayEnd = now()->timezone($timezone)->endOfDay()->utc();
+        $todayStart = now()->timezone($timezone)->startOfDay()->timezone(config('app.timezone'));
+        $todayEnd = now()->timezone($timezone)->endOfDay()->timezone(config('app.timezone'));
 
         $todayRecords = AttendanceRecord::query()
             ->where('user_id', $user->id)
@@ -577,8 +577,6 @@ class AttendanceController extends Controller
                 'email' => $record->user->email,
             ];
         }
-
-        $payload['captured_at'] = $record->captured_at?->toISOString();
 
         return $payload;
     }

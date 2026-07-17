@@ -43,7 +43,7 @@ class UserController extends Controller
         $users = $this->applyIndexQuery(
             $request,
             User::query()
-                ->with(['accessGroups', 'department', 'company', 'manager'])
+                ->with(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences'])
                 ->withExists('pushSubscriptions'),
             ['role', 'email'],
             '-created_date',
@@ -70,7 +70,7 @@ class UserController extends Controller
         ]);
 
         $query = User::query()
-            ->with(['accessGroups', 'department', 'company', 'manager:id,email,full_name,name'])
+            ->with(['accessGroups', 'department', 'company', 'manager:id,email,full_name,name', 'educations', 'workExperiences'])
             ->orderBy('full_name')
             ->orderBy('email');
 

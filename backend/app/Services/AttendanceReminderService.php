@@ -7,6 +7,7 @@ use App\Models\DepartmentAttendanceSetting;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\AttendanceReminderEvaluator;
+use App\Support\AttendancePolicyValidator;
 use App\Support\AppSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -45,12 +46,14 @@ class AttendanceReminderService
         }
 
         $userIds = $users->pluck('id');
-        $todayStart = now()->startOfDay();
-        $todayEnd = now()->endOfDay();
+
+        // Wide enough to cover every department "today" across UTC offsets.
+        $recentStart = now()->subHours(36);
+        $recentEnd = now()->addHours(12);
 
         $todayRecordsByUser = AttendanceRecord::query()
             ->whereIn('user_id', $userIds)
-            ->whereBetween('captured_at', [$todayStart, $todayEnd])
+            ->whereBetween('captured_at', [$recentStart, $recentEnd])
             ->orderBy('captured_at')
             ->get()
             ->groupBy('user_id');
@@ -163,8 +166,10 @@ class AttendanceReminderService
         }
 
         if ($todayRecords === null) {
-            $todayStart = now()->startOfDay();
-            $todayEnd = now()->endOfDay();
+            $setting = $setting ?? AttendancePolicyValidator::resolveForUser($user);
+            $timezone = $setting?->timezone ?? config('app.timezone');
+            $todayStart = now()->timezone($timezone)->startOfDay()->timezone(config('app.timezone'));
+            $todayEnd = now()->timezone($timezone)->endOfDay()->timezone(config('app.timezone'));
 
             $todayRecords = AttendanceRecord::query()
                 ->where('user_id', $user->id)

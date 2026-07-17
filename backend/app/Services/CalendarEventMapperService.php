@@ -20,7 +20,7 @@ class CalendarEventMapperService
         $defaults = $config['defaults'];
         $timezone = filled($defaults['timezone'] ?? null)
             ? (string) $defaults['timezone']
-            : (string) config('app.timezone', 'UTC');
+            : (string) config('app.timezone');
 
         $title = $this->resolveField(
             $event,

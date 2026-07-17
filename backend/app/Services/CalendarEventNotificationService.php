@@ -115,7 +115,7 @@ class CalendarEventNotificationService
 
     protected function formatSchedule(CalendarEvent $event): string
     {
-        $timezone = (string) config('app.timezone', 'UTC');
+        $timezone = (string) config('app.timezone');
         $start = $event->start_at?->timezone($timezone);
         $end = $event->end_at?->timezone($timezone);
 

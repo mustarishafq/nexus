@@ -25,6 +25,9 @@ class ProfileCompleteness
      */
     public static function forUser(User $user): array
     {
+        // educationHistoryList / workHistoryList return [] unless relations are loaded
+        $user->loadMissing(['educations', 'workExperiences']);
+
         $checks = collect(self::CHECKS)
             ->map(fn (array $item) => [
                 'key' => $item['key'],

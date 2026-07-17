@@ -57,27 +57,29 @@ class NetworkHealthTimeFilter
     private function buildWindows(Carbon $rangeStart, Carbon $rangeEnd): array
     {
         $windows = [];
+        $appTimezone = (string) config('app.timezone');
         $current = $rangeStart->copy()->timezone($this->timezone)->startOfDay();
         $lastDay = $rangeEnd->copy()->timezone($this->timezone)->startOfDay();
 
         [$startHour, $startMinute] = array_map('intval', explode(':', $this->start));
         [$endHour, $endMinute] = array_map('intval', explode(':', $this->end));
 
-        $rangeStartUtc = $rangeStart->copy()->utc();
-        $rangeEndUtc = $rangeEnd->copy()->utc();
+        // Datetimes are stored as APP_TIMEZONE wall clock; compare in that zone.
+        $rangeStartStored = $rangeStart->copy()->timezone($appTimezone);
+        $rangeEndStored = $rangeEnd->copy()->timezone($appTimezone);
 
         while ($current->lte($lastDay)) {
-            $windowStart = $current->copy()->setTime($startHour, $startMinute, 0)->utc();
-            $windowEnd = $current->copy()->setTime($endHour, $endMinute, 0)->addMinute()->utc();
+            $windowStart = $current->copy()->setTime($startHour, $startMinute, 0)->timezone($appTimezone);
+            $windowEnd = $current->copy()->setTime($endHour, $endMinute, 0)->addMinute()->timezone($appTimezone);
 
-            if ($windowEnd->gt($rangeStartUtc) && $windowStart->lt($rangeEndUtc)) {
-                $clipStart = $windowStart->greaterThan($rangeStartUtc) ? $windowStart : $rangeStartUtc;
-                $clipEnd = $windowEnd->lessThan($rangeEndUtc) ? $windowEnd : $rangeEndUtc;
+            if ($windowEnd->gt($rangeStartStored) && $windowStart->lt($rangeEndStored)) {
+                $clipStart = $windowStart->greaterThan($rangeStartStored) ? $windowStart : $rangeStartStored;
+                $clipEnd = $windowEnd->lessThan($rangeEndStored) ? $windowEnd : $rangeEndStored;
 
                 if ($clipStart->lt($clipEnd)) {
                     $windows[] = [
-                        $clipStart->toDateTimeString(),
-                        $clipEnd->toDateTimeString(),
+                        $clipStart->format('Y-m-d H:i:s'),
+                        $clipEnd->format('Y-m-d H:i:s'),
                     ];
                 }
             }

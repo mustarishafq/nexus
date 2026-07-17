@@ -10,7 +10,7 @@ class DepartmentAttendanceSettings
     public const DEFAULTS = [
         'enabled' => true,
         'attendance_location_id' => null,
-        'timezone' => 'UTC',
+        'timezone' => null,
         'grace_period_minutes' => 15,
         'allow_outside_shift_hours' => false,
         'overtime_enabled' => true,
@@ -40,7 +40,7 @@ class DepartmentAttendanceSettings
 
         $config['enabled'] = self::toBool($input['enabled'] ?? true);
         $config['attendance_location_id'] = self::toNullableInt($input['attendance_location_id'] ?? null);
-        $config['timezone'] = self::normalizeTimezone($input['timezone'] ?? config('app.timezone'));
+        $config['timezone'] = self::normalizeTimezone($input['timezone'] ?? null);
         $config['grace_period_minutes'] = max(0, min(180, (int) ($input['grace_period_minutes'] ?? 15)));
         $config['allow_outside_shift_hours'] = self::toBool($input['allow_outside_shift_hours'] ?? false);
         $config['overtime_enabled'] = self::toBool($input['overtime_enabled'] ?? true);
@@ -231,11 +231,13 @@ class DepartmentAttendanceSettings
         return null;
     }
 
-    private static function normalizeTimezone(string $timezone): string
+    private static function normalizeTimezone(?string $timezone): string
     {
-        return in_array($timezone, timezone_identifiers_list(), true)
-            ? $timezone
-            : config('app.timezone');
+        if (filled($timezone) && in_array($timezone, timezone_identifiers_list(), true)) {
+            return $timezone;
+        }
+
+        return (string) config('app.timezone');
     }
 
     private static function toBool(mixed $value): bool

@@ -119,4 +119,55 @@ class ProfileNudgeControllerTest extends TestCase
         $this->assertArrayHasKey('profile_completeness', $response->json('0'));
         $this->assertArrayHasKey('percent', $response->json('0.profile_completeness'));
     }
+
+    public function test_user_index_counts_education_history_toward_completeness(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $department = \App\Models\Department::query()->create(['name' => 'Engineering']);
+        $target = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'name' => 'Display',
+            'full_name' => 'Full Name',
+            'profile_picture' => 'https://example.com/p.jpg',
+            'cover_picture' => 'https://example.com/c.jpg',
+            'bio' => 'Hello',
+            'department_id' => $department->id,
+            'work_phone' => '123',
+            'date_of_birth' => '1990-01-01',
+            'joined_at' => '2020-01-01',
+            'gender' => 'male',
+            'nationality' => 'Malaysian',
+            'ic_number' => '900101-01-1234',
+            'current_address' => '123 Street',
+            'emergency_contact_name' => 'Kin',
+            'emergency_contact_phone' => '456',
+            'next_of_kin_relationship' => 'Spouse',
+        ]);
+        $target->educations()->create([
+            'institution' => 'Test University',
+            'qualification' => 'Degree',
+            'field_of_study' => 'CS',
+            'year_from' => '2010',
+            'year_to' => '2014',
+            'sort_order' => 0,
+        ]);
+        $token = $this->issueToken($admin);
+
+        // Simulate list payload without eager-loaded history relations
+        $fresh = User::query()->findOrFail($target->id);
+        $this->assertFalse($fresh->relationLoaded('educations'));
+        $this->assertSame(100, \App\Support\ProfileCompleteness::forUser($fresh)['percent']);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/users')
+            ->assertOk();
+
+        $row = collect($response->json())->firstWhere('id', $target->id);
+        $this->assertNotNull($row);
+        $this->assertSame(100, $row['profile_completeness']['percent']);
+
+        $background = collect($row['profile_completeness']['checks'])->firstWhere('key', 'background');
+        $this->assertTrue($background['done']);
+    }
 }

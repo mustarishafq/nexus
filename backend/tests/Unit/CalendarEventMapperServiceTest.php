@@ -119,7 +119,7 @@ class CalendarEventMapperServiceTest extends TestCase
 
     public function test_parses_timezone_less_scheduled_start_in_configured_timezone(): void
     {
-        config(['app.timezone' => 'Asia/Kuala_Lumpur']);
+        $timezone = (string) config('app.timezone');
 
         $application = Application::factory()->create([
             'calendar_config' => CalendarEventMapping::defaults(),
@@ -138,12 +138,15 @@ class CalendarEventMapperServiceTest extends TestCase
 
         $this->assertSame('created', $payload['action']);
         $this->assertTrue($payload['start_at']->equalTo(
-            \Illuminate\Support\Carbon::parse('2026-07-09 10:30:00', 'Asia/Kuala_Lumpur')
+            \Illuminate\Support\Carbon::parse('2026-07-09 10:30:00', $timezone)
         ));
         $this->assertTrue($payload['end_at']->equalTo(
-            \Illuminate\Support\Carbon::parse('2026-07-09 13:00:00', 'Asia/Kuala_Lumpur')
+            \Illuminate\Support\Carbon::parse('2026-07-09 13:00:00', $timezone)
         ));
-        $this->assertSame('2026-07-09T02:30:00.000000Z', $payload['start_at']->toISOString());
+        $this->assertSame(
+            \Illuminate\Support\Carbon::parse('2026-07-09 10:30:00', $timezone)->toISOString(),
+            $payload['start_at']->toISOString()
+        );
     }
 
     public function test_preserves_explicit_timezone_in_datetime_values(): void

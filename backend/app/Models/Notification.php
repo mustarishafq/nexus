@@ -2,11 +2,9 @@
 
 namespace App\Models;
 
-use App\Casts\AppTimezoneDateTime;
 use App\Observers\NotificationObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 
 #[ObservedBy([NotificationObserver::class])]
 class Notification extends Model
@@ -43,11 +41,11 @@ class Notification extends Model
         return [
             'data' => 'array',
             'is_read' => 'boolean',
-            'read_at' => AppTimezoneDateTime::class,
+            'read_at' => 'datetime',
             'is_broadcast' => 'boolean',
-            'broadcast_starts_at' => AppTimezoneDateTime::class,
-            'broadcast_ends_at' => AppTimezoneDateTime::class,
-            'snoozed_until' => AppTimezoneDateTime::class,
+            'broadcast_starts_at' => 'datetime',
+            'broadcast_ends_at' => 'datetime',
+            'snoozed_until' => 'datetime',
             'delivery_channels' => 'array',
         ];
     }

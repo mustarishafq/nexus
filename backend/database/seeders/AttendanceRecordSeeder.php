@@ -103,7 +103,7 @@ class AttendanceRecordSeeder extends Seeder
             ->where('metadata->seed', self::SEED_TAG)
             ->delete();
 
-        $timezone = config('app.timezone', 'UTC');
+        $timezone = config('app.timezone');
         $created = 0;
 
         foreach ($this->scenarios() as $index => $scenario) {

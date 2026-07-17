@@ -201,7 +201,7 @@ class GoogleCalendarService
             $event->setStart(new EventDateTime(['date' => $start]));
             $event->setEnd(new EventDateTime(['date' => $end]));
         } else {
-            $timezone = (string) config('services.google_oauth.timezone', config('app.timezone', 'UTC'));
+            $timezone = (string) (config('services.google_oauth.timezone') ?: config('app.timezone'));
 
             $event->setStart(new EventDateTime([
                 'dateTime' => $calendarEvent->start_at->copy()->toIso8601String(),
