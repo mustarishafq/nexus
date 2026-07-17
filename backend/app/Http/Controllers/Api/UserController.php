@@ -235,6 +235,16 @@ class UserController extends Controller
     /**
      * @return array<string, mixed>
      */
+    private function privateUserProfile(User $user): array
+    {
+        return app(UserPresenceService::class)->enrichPayload(
+            UserProfileSerializer::privateProfile($user)
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function publicUserSummary(User $user): array
     {
         return app(UserPresenceService::class)->enrichPayload([
@@ -477,8 +487,12 @@ class UserController extends Controller
 
         $user->load(['accessGroups', 'department', 'company', 'manager.department', 'educations', 'workExperiences', 'userSkills']);
 
+        $payload = UserRoles::isHrOrAdmin($viewer)
+            ? $this->privateUserProfile($user)
+            : $this->publicUserProfile($user);
+
         return response()->json([
-            'user' => $this->publicUserProfile($user),
+            'user' => $payload,
         ]);
     }
 
@@ -1129,7 +1143,7 @@ class UserController extends Controller
     {
         return array_merge($user->toArray(), [
             'profile_completeness' => ProfileCompleteness::forUser($user),
-            'has_push_subscription' => (bool) $user->pushSubscriptions_exists,
+            'has_push_subscription' => (bool) $user->push_subscriptions_exists,
         ]);
     }
 

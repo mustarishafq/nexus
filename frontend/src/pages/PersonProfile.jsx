@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Pencil } from 'lucide-react';
 import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
+import ProfileHrDetailsView from '@/components/profile/ProfileHrDetailsView';
 import { useGoBack } from '@/hooks/useGoBack';
 import { getDisplayName } from '@/lib/profile';
+import { canManageUsers } from '@/lib/roles';
 
 export default function PersonProfile() {
   const { userId } = useParams();
@@ -19,6 +21,7 @@ export default function PersonProfile() {
   const goBack = useGoBack('/people');
   const { user: authUser } = useAuth();
   const isOwnProfile = authUser?.id && String(authUser.id) === String(userId);
+  const canViewHrProfiling = canManageUsers(authUser);
 
   if (isOwnProfile) {
     return <Navigate to="/profile" replace />;
@@ -65,26 +68,36 @@ export default function PersonProfile() {
           <ArrowLeft className="mr-2 h-3.5 w-3.5" />
           Back
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="h-8"
-          onClick={async () => {
-            try {
-              const payload = await db.messages.startConversation(user.id);
-              if (payload?.conversation?.id) {
-                navigate(`/messages/${payload.conversation.id}`);
-                return;
+        <div className="flex flex-wrap items-center gap-2">
+          {canViewHrProfiling ? (
+            <Button type="button" size="sm" variant="outline" className="h-8" asChild>
+              <Link to={`/admin/users?q=${encodeURIComponent(user.email || user.full_name || '')}`}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Edit in Users
+              </Link>
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            onClick={async () => {
+              try {
+                const payload = await db.messages.startConversation(user.id);
+                if (payload?.conversation?.id) {
+                  navigate(`/messages/${payload.conversation.id}`);
+                  return;
+                }
+              } catch {
+                // Fall through to compose view.
               }
-            } catch {
-              // Fall through to compose view.
-            }
-            navigate(`/messages/new/${user.id}`);
-          }}
-        >
-          <MessageCircle className="mr-2 h-3.5 w-3.5" />
-          Message
-        </Button>
+              navigate(`/messages/new/${user.id}`);
+            }}
+          >
+            <MessageCircle className="mr-2 h-3.5 w-3.5" />
+            Message
+          </Button>
+        </div>
       </div>
 
       <ProfileDashboardHero user={user} readOnly />
@@ -94,8 +107,9 @@ export default function PersonProfile() {
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 gap-6 xl:grid-cols-12"
       >
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-5 space-y-4">
           <ProfileAboutCard user={user} showCompleteLink={false} />
+          {canViewHrProfiling ? <ProfileHrDetailsView user={user} /> : null}
         </div>
 
         <div className="xl:col-span-7 space-y-4">

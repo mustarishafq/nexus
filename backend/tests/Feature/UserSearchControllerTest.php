@@ -109,6 +109,42 @@ class UserSearchControllerTest extends TestCase
             ->assertJsonStructure(['user']);
     }
 
+    public function test_admin_profile_returns_private_fields(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $target = User::factory()->create([
+            'name' => 'Admin View Target',
+            'full_name' => 'Admin View Legal Name',
+            'ic_number' => '900101-01-1234',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($viewer);
+
+        $this->withToken($token)
+            ->getJson("/api/users/{$target->id}/profile")
+            ->assertOk()
+            ->assertJsonPath('user.full_name', 'Admin View Legal Name')
+            ->assertJsonPath('user.ic_number', '900101-01-1234');
+    }
+
+    public function test_hr_profile_returns_private_fields(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true, 'role' => 'hr']);
+        $target = User::factory()->create([
+            'name' => 'HR View Target',
+            'full_name' => 'HR View Legal Name',
+            'epf_number' => 'EPF-12345',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($viewer);
+
+        $this->withToken($token)
+            ->getJson("/api/users/{$target->id}/profile")
+            ->assertOk()
+            ->assertJsonPath('user.full_name', 'HR View Legal Name')
+            ->assertJsonPath('user.epf_number', 'EPF-12345');
+    }
+
     public function test_profile_rejects_unapproved_user(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);

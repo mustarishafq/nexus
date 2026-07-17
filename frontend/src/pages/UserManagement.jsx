@@ -1,10 +1,10 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -280,6 +280,8 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 }
 
 export default function UserManagement() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const isAdmin = userIsAdmin(currentUser);
   const isHrUser = isHr(currentUser);
@@ -296,7 +298,7 @@ export default function UserManagement() {
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
   const [newUserCompanyId, setNewUserCompanyId] = useState(null);
   const [newUserCompanyName, setNewUserCompanyName] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [profileFilter, setProfileFilter] = useState('all');
@@ -332,7 +334,6 @@ export default function UserManagement() {
   });
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
-  const [searchParams] = useSearchParams();
   const adminSections = new Set(isAdmin ? ['users', 'groups', 'analytics', 'sso-links', 'api-tokens'] : ['users']);
   const [activeSection, setActiveSection] = useState(() => {
     const section = searchParams.get('section');
@@ -948,6 +949,12 @@ export default function UserManagement() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-52">
+        {user.is_approved ? (
+          <DropdownMenuItem onClick={() => navigate(`/people/${user.id}`)}>
+            <Eye className="w-4 h-4 mr-2" />
+            View profile
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           onClick={() => openEditUser(user)}
           disabled={isHrUser && !isAdmin && (user.role === 'admin' || user.role === 'hr')}

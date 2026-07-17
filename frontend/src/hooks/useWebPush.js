@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import db from '@/api/apiClient';
 import { isWebPushSupported, urlBase64ToUint8Array } from '@/lib/webPush';
 
@@ -11,8 +11,16 @@ const INITIAL_STATE = {
   checked: false,
 };
 
+async function persistBrowserSubscription(subscription) {
+  await db.pushSubscriptions.upsert({
+    ...subscription.toJSON(),
+    userAgent: navigator.userAgent,
+  });
+}
+
 export function useWebPush(publicKey) {
   const [pushState, setPushState] = useState(INITIAL_STATE);
+  const resyncAttemptedRef = useRef(false);
 
   const refreshPushState = useCallback(async () => {
     const supported = isWebPushSupported();
@@ -56,8 +64,35 @@ export function useWebPush(publicKey) {
   }, []);
 
   useEffect(() => {
+    resyncAttemptedRef.current = false;
     refreshPushState();
   }, [refreshPushState, publicKey]);
+
+  // Browser can look "enabled" while the server row is missing (failed upsert, new login, etc.).
+  useEffect(() => {
+    if (!pushState.checked || !pushState.subscribed || pushState.synced || resyncAttemptedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    resyncAttemptedRef.current = true;
+
+    (async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (!subscription || cancelled) return;
+        await persistBrowserSubscription(subscription);
+        if (!cancelled) await refreshPushState();
+      } catch {
+        // Leave synced=false so Settings can show the pending state.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pushState.checked, pushState.subscribed, pushState.synced, refreshPushState]);
 
   const subscribe = useCallback(async () => {
     if (!isWebPushSupported()) {
@@ -85,11 +120,8 @@ export function useWebPush(publicKey) {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      await db.pushSubscriptions.upsert({
-        ...subscription.toJSON(),
-        userAgent: navigator.userAgent,
-      });
-
+      await persistBrowserSubscription(subscription);
+      resyncAttemptedRef.current = false;
       await refreshPushState();
       return { success: true };
     } catch (error) {
@@ -114,6 +146,7 @@ export function useWebPush(publicKey) {
         await subscription.unsubscribe();
       }
 
+      resyncAttemptedRef.current = false;
       await refreshPushState();
       return { success: true };
     } catch (error) {

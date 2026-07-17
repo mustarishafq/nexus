@@ -344,14 +344,20 @@ export default function Settings() {
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-sm font-medium">
-                              {pushState.subscribed ? <BellRing className="w-4 h-4 text-emerald-600" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
-                              {pushState.subscribed ? 'Web push enabled' : 'Web push disabled'}
+                              {pushState.subscribed && pushState.synced
+                                ? <BellRing className="w-4 h-4 text-emerald-600" />
+                                : <BellOff className="w-4 h-4 text-muted-foreground" />}
+                              {pushState.subscribed && pushState.synced
+                                ? 'Web push enabled'
+                                : pushState.subscribed
+                                  ? 'Web push not synced'
+                                  : 'Web push disabled'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {pushState.subscribed
                                 ? pushState.synced
                                   ? 'This device is subscribed and synced with the server.'
-                                  : 'This device is subscribed, but the server sync is pending.'
+                                  : 'Browser permission is on, but this device is not saved on the server yet. Click Enable to retry.'
                                 : 'Subscribe this device to receive browser notifications.'}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -360,12 +366,16 @@ export default function Settings() {
                           </div>
                           <Button
                             type="button"
-                            variant={pushState.subscribed ? 'outline' : 'default'}
-                            onClick={pushState.subscribed ? unsubscribeFromPush : subscribeToPush}
+                            variant={pushState.subscribed && pushState.synced ? 'outline' : 'default'}
+                            onClick={pushState.subscribed && pushState.synced ? unsubscribeFromPush : subscribeToPush}
                             disabled={pushState.loading}
                           >
                             {pushState.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            {pushState.subscribed ? 'Disable' : 'Enable'}
+                            {pushState.subscribed && pushState.synced
+                              ? 'Disable'
+                              : pushState.subscribed
+                                ? 'Retry sync'
+                                : 'Enable'}
                           </Button>
                         </div>
                       )}

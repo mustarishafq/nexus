@@ -421,10 +421,42 @@ export const db = {
 			});
 
 			if (!response.ok) {
-				return null;
+				let payload = null;
+				try {
+					payload = await response.json();
+				} catch {
+					payload = null;
+				}
+				const error = new Error(payload?.message || `HTTP ${response.status}`);
+				error.status = response.status;
+				error.data = payload;
+				throw error;
 			}
 
 			return response.blob();
+		},
+	},
+
+	eventCheckIn: {
+		async show(token) {
+			return request(`/event-check-in/${encodeURIComponent(token)}`);
+		},
+
+		async checkIn(token, data) {
+			return request(`/event-check-in/${encodeURIComponent(token)}`, {
+				method: 'POST',
+				body: data,
+			});
+		},
+
+		async checkInMe(token) {
+			return request(`/event-check-in/${encodeURIComponent(token)}/me`, {
+				method: 'POST',
+			});
+		},
+
+		async listAttendances(eventId) {
+			return request(`/calendar-events/${eventId}/attendances`);
 		},
 	},
 

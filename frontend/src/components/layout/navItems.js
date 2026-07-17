@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, BarChart3, Monitor, Bell, User, Activity, Wifi, Calendar,
   Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
-  Sparkles,
+  Sparkles, QrCode,
 } from 'lucide-react';
 
 export const MOBILE_BOTTOM_NAV_ITEMS = [
@@ -48,6 +48,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
+    { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     { path: '/profile', icon: User, label: 'Profile', match: (path) => path === '/profile' },
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
     ...(canManageUsers ? [
@@ -95,6 +96,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
     { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
+    { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     ...(canManageUsers ? [
       { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
     ] : []),

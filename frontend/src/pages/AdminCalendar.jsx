@@ -15,6 +15,8 @@ import {
   Pencil,
   Trash2,
   Users,
+  QrCode,
+  CheckCircle2,
 } from 'lucide-react';
 import { format, isSameDay, isToday, parseISO, startOfDay } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
@@ -50,6 +52,8 @@ import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import EventQrDialog from '@/components/calendar/EventQrDialog';
+import EventAttendanceList from '@/components/calendar/EventAttendanceList';
 
 function toDateTimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -80,6 +84,10 @@ function isInvitedEvent(event, user) {
   const attendees = Array.isArray(event.attendee_emails) ? event.attendee_emails : [];
 
   return attendees.some((email) => normalizeEmail(email) === normalizeEmail(user.email));
+}
+
+function isAttendedEvent(event) {
+  return Boolean(event?.attended_by_me);
 }
 
 function defaultStartForDate(date) {
@@ -147,11 +155,13 @@ export default function AdminCalendar() {
   const [customInvitees, setCustomInvitees] = useState([]);
   const [customInviteeInput, setCustomInviteeInput] = useState('');
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState(null);
+  const [qrEvent, setQrEvent] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [startAt, setStartAt] = useState(toDateTimeLocalValue(new Date()));
   const [endAt, setEndAt] = useState(toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
+  const [checkInOpensAt, setCheckInOpensAt] = useState('');
   const [isAllDay, setIsAllDay] = useState(false);
 
   const queryClient = useQueryClient();
@@ -230,11 +240,14 @@ export default function AdminCalendar() {
 
   const createMut = useMutation({
     mutationFn: (payload) => db.entities.CalendarEvent.create(payload),
-    onSuccess: () => {
+    onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
       queryClient.invalidateQueries({ queryKey: ['calendar-events-week'] });
       resetForm();
       toast.success('Event created');
+      if (created?.check_in_url) {
+        setQrEvent(created);
+      }
     },
     onError: handleMutationError,
   });
@@ -284,6 +297,20 @@ export default function AdminCalendar() {
       return;
     }
 
+    let opensAt = null;
+    if (checkInOpensAt) {
+      const opens = new Date(checkInOpensAt);
+      if (Number.isNaN(opens.getTime())) {
+        toast.error('Please provide a valid attendance open date/time');
+        return;
+      }
+      if (opens > end) {
+        toast.error('Attendance cannot open after the event ends');
+        return;
+      }
+      opensAt = opens.toISOString();
+    }
+
     const allInvitees = Array.from(new Set(
       [...selectedUserEmails, ...customInvitees]
         .map((email) => String(email).trim().toLowerCase())
@@ -296,6 +323,7 @@ export default function AdminCalendar() {
       location: location.trim() || null,
       start_at: start.toISOString(),
       end_at: end.toISOString(),
+      check_in_opens_at: opensAt,
       is_all_day: isAllDay,
       attendee_emails: allInvitees.length ? allInvitees : null,
     };
@@ -316,6 +344,7 @@ export default function AdminCalendar() {
     setLocation('');
     setStartAt(toDateTimeLocalValue(new Date()));
     setEndAt(toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
+    setCheckInOpensAt('');
     setSelectedUserEmails([]);
     setCustomInvitees([]);
     setCustomInviteeInput('');
@@ -333,6 +362,7 @@ export default function AdminCalendar() {
     setLocation('');
     setStartAt(toDateTimeLocalValue(start));
     setEndAt(toDateTimeLocalValue(end));
+    setCheckInOpensAt('');
     setSelectedUserEmails([]);
     setCustomInvitees([]);
     setCustomInviteeInput('');
@@ -373,6 +403,11 @@ export default function AdminCalendar() {
     setLocation(event.location || '');
     setStartAt(toDateTimeLocalValue(new Date(event.start_at)));
     setEndAt(toDateTimeLocalValue(new Date(event.end_at)));
+    setCheckInOpensAt(
+      event.check_in_opens_at
+        ? toDateTimeLocalValue(new Date(event.check_in_opens_at))
+        : ''
+    );
     setSelectedUserEmails(Array.from(new Set(selected)));
     setCustomInvitees(Array.from(new Set(custom)));
     setCustomInviteeInput('');
@@ -467,6 +502,7 @@ export default function AdminCalendar() {
   const renderEventCard = (event, index) => {
     const manageable = canManageEvent(event, user);
     const invited = isInvitedEvent(event, user);
+    const attended = isAttendedEvent(event);
     const isFocused = focusedEventId === event.id;
     const attendeeCount = Array.isArray(event.attendee_emails) ? event.attendee_emails.length : 0;
 
@@ -483,7 +519,7 @@ export default function AdminCalendar() {
           onClick={() => setFocusedEventId(isFocused ? null : event.id)}
           className={cn(
             'group w-full rounded-xl border p-3 text-left transition-all hover:border-primary/30 hover:bg-muted/30',
-            invited && 'bg-muted/20',
+            (invited || attended) && 'bg-muted/20',
             isFocused && 'border-primary/50 bg-primary/[0.04] ring-1 ring-primary/20'
           )}
         >
@@ -492,12 +528,12 @@ export default function AdminCalendar() {
 
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors">
                       {event.title}
                     </p>
-                    {invited ? <Badge variant="outline" className="h-5 text-[10px]">Invited</Badge> : null}
+                    {invited && !attended ? <Badge variant="outline" className="h-5 text-[10px]">Invited</Badge> : null}
                     {event.is_all_day ? <Badge variant="secondary" className="h-5 text-[10px]">All day</Badge> : null}
                   </div>
 
@@ -550,6 +586,16 @@ export default function AdminCalendar() {
                           ) : null}
                           {manageable ? (
                             <>
+                              {event.check_in_url ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1"
+                                  onClick={() => setQrEvent(event)}
+                                >
+                                  <QrCode className="w-3 h-3" /> Show QR
+                                </Button>
+                              ) : null}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -570,10 +616,20 @@ export default function AdminCalendar() {
                             </>
                           ) : null}
                         </div>
+
+                        {manageable ? (
+                          <EventAttendanceList eventId={event.id} enabled={isFocused} />
+                        ) : null}
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
                 </div>
+                {attended ? (
+                  <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Attend
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -796,6 +852,53 @@ export default function AdminCalendar() {
                 <Input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
               </div>
             </div>
+
+            <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm font-medium">QR attendance</p>
+                  <p className="text-xs text-muted-foreground">
+                    {checkInOpensAt
+                      ? 'Check-in opens at the scheduled time.'
+                      : 'Check-in is open immediately after the event is created.'}
+                  </p>
+                </div>
+                <Switch
+                  checked={Boolean(checkInOpensAt)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setCheckInOpensAt(startAt || toDateTimeLocalValue(new Date()));
+                    } else {
+                      setCheckInOpensAt('');
+                    }
+                  }}
+                  aria-label="Schedule attendance open time"
+                />
+              </div>
+
+              {checkInOpensAt ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="check-in-opens-at">Opens at</Label>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:underline disabled:opacity-50 disabled:no-underline"
+                      onClick={() => setCheckInOpensAt(startAt)}
+                      disabled={!startAt}
+                    >
+                      Same as event start
+                    </button>
+                  </div>
+                  <Input
+                    id="check-in-opens-at"
+                    type="datetime-local"
+                    value={checkInOpensAt}
+                    onChange={(e) => setCheckInOpensAt(e.target.value)}
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="space-y-2">
               <Label>Invitees</Label>
               <Popover open={inviteePickerOpen} onOpenChange={setInviteePickerOpen}>
@@ -912,6 +1015,16 @@ export default function AdminCalendar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EventQrDialog
+        open={Boolean(qrEvent)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQrEvent(null);
+          }
+        }}
+        event={qrEvent}
+      />
     </div>
   );
 }

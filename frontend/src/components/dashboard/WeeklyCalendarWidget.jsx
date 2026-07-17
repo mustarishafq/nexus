@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight, User } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, ArrowRight, User, CheckCircle2 } from 'lucide-react';
 import { getDisplayName } from '@/lib/profile';
 import { format, isPast, isToday, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -234,6 +234,12 @@ function EventItem({ event, index, organizerNameByEmail }) {
                   <Badge className="h-4 px-1.5 text-[9px] font-semibold bg-primary/90 hover:bg-primary">
                     Today
                   </Badge>
+                ) : null}
+                {event.attended_by_me ? (
+                  <span className="inline-flex h-4 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Attend
+                  </span>
                 ) : null}
               </div>
               {subtitle ? (

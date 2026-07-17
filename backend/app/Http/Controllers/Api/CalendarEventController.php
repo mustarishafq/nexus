@@ -55,7 +55,22 @@ class CalendarEventController extends Controller
             $query->where('start_at', '<=', Carbon::parse($to)->endOfDay());
         }
 
-        return response()->json($query->with('attendees')->get());
+        $email = strtolower(trim((string) $user->email));
+
+        $events = $query->with([
+            'attendees',
+            'checkIns' => function ($checkInQuery) use ($user, $email) {
+                $checkInQuery->where(function ($inner) use ($user, $email) {
+                    $inner->where('user_id', $user->id);
+
+                    if ($email !== '') {
+                        $inner->orWhere('email', $email);
+                    }
+                });
+            },
+        ])->get();
+
+        return response()->json($this->presentEvents($events, $user));
     }
 
     public function store(Request $request): JsonResponse
@@ -71,10 +86,22 @@ class CalendarEventController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'start_at' => ['required', 'date'],
             'end_at' => ['required', 'date', 'after_or_equal:start_at'],
+            'check_in_opens_at' => ['nullable', 'date'],
             'is_all_day' => ['sometimes', 'boolean'],
             'attendee_emails' => ['nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
         ]);
+
+        if (! empty($validated['check_in_opens_at']) && ! empty($validated['end_at'])) {
+            if (Carbon::parse($validated['check_in_opens_at'])->gt(Carbon::parse($validated['end_at']))) {
+                return response()->json([
+                    'message' => 'Attendance cannot open after the event ends.',
+                    'errors' => [
+                        'check_in_opens_at' => ['Attendance cannot open after the event ends.'],
+                    ],
+                ], 422);
+            }
+        }
 
         $validated['created_by'] = $user->email;
         $attendeeEmails = $this->normalizeAttendeeEmails($validated['attendee_emails'] ?? null);
@@ -103,7 +130,7 @@ class CalendarEventController extends Controller
             $user
         );
 
-        return response()->json($item, 201);
+        return response()->json($this->presentEvent($item, $user), 201);
     }
 
     public function show(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -117,7 +144,7 @@ class CalendarEventController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json($calendarEvent->load('attendees'));
+        return response()->json($this->presentEvent($calendarEvent->load('attendees'), $user));
     }
 
     public function update(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -137,6 +164,7 @@ class CalendarEventController extends Controller
             'location' => ['sometimes', 'nullable', 'string', 'max:255'],
             'start_at' => ['sometimes', 'date'],
             'end_at' => ['sometimes', 'date'],
+            'check_in_opens_at' => ['sometimes', 'nullable', 'date'],
             'is_all_day' => ['sometimes', 'boolean'],
             'attendee_emails' => ['sometimes', 'nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
@@ -152,12 +180,24 @@ class CalendarEventController extends Controller
 
         $startAt = array_key_exists('start_at', $validated) ? $validated['start_at'] : $calendarEvent->start_at;
         $endAt = array_key_exists('end_at', $validated) ? $validated['end_at'] : $calendarEvent->end_at;
+        $checkInOpensAt = array_key_exists('check_in_opens_at', $validated)
+            ? $validated['check_in_opens_at']
+            : $calendarEvent->check_in_opens_at;
 
         if ($startAt && $endAt && Carbon::parse($endAt)->lt(Carbon::parse($startAt))) {
             return response()->json([
                 'message' => 'The end_at must be a date after or equal to start_at.',
                 'errors' => [
                     'end_at' => ['The end_at must be a date after or equal to start_at.'],
+                ],
+            ], 422);
+        }
+
+        if ($checkInOpensAt && $endAt && Carbon::parse($checkInOpensAt)->gt(Carbon::parse($endAt))) {
+            return response()->json([
+                'message' => 'Attendance cannot open after the event ends.',
+                'errors' => [
+                    'check_in_opens_at' => ['Attendance cannot open after the event ends.'],
                 ],
             ], 422);
         }
@@ -185,7 +225,7 @@ class CalendarEventController extends Controller
             );
         }
 
-        return response()->json($calendarEvent);
+        return response()->json($this->presentEvent($calendarEvent, $user));
     }
 
     public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -213,6 +253,51 @@ class CalendarEventController extends Controller
         return response()->json(null, 204);
     }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int, CalendarEvent>|array<int, CalendarEvent>  $events
+     * @return array<int, array<string, mixed>>
+     */
+    protected function presentEvents($events, User $user): array
+    {
+        return collect($events)
+            ->map(fn (CalendarEvent $event) => $this->presentEvent($event, $user))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function presentEvent(CalendarEvent $event, User $user): array
+    {
+        $data = $event->toArray();
+        $email = strtolower(trim((string) $user->email));
+
+        $attended = $event->relationLoaded('checkIns')
+            ? $event->checkIns->contains(function ($checkIn) use ($user, $email) {
+                return (int) $checkIn->user_id === (int) $user->id
+                    || ($email !== '' && strtolower((string) $checkIn->email) === $email);
+            })
+            : $event->checkIns()
+                ->where(function ($query) use ($user, $email) {
+                    $query->where('user_id', $user->id);
+
+                    if ($email !== '') {
+                        $query->orWhere('email', $email);
+                    }
+                })
+                ->exists();
+
+        $data['attended_by_me'] = $attended;
+
+        if ($this->userCanManageEvent($user, $event)) {
+            $data['check_in_token'] = $event->check_in_token;
+            $data['check_in_url'] = $event->checkInUrl();
+        }
+
+        return $data;
+    }
+
     protected function requireUser(Request $request): User|JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);
@@ -231,11 +316,21 @@ class CalendarEventController extends Controller
         }
 
         $email = strtolower(trim((string) $user->email));
+        $userId = $user->id;
 
-        return CalendarEvent::query()->with('attendees')->where(function ($query) use ($email) {
+        return CalendarEvent::query()->with('attendees')->where(function ($query) use ($email, $userId) {
             $query
                 ->whereRaw('LOWER(created_by) = ?', [$email])
-                ->orWhereHas('attendees', fn ($attendeeQuery) => $attendeeQuery->where('email', $email));
+                ->orWhereHas('attendees', fn ($attendeeQuery) => $attendeeQuery->where('email', $email))
+                ->orWhereHas('checkIns', function ($checkInQuery) use ($email, $userId) {
+                    $checkInQuery->where(function ($inner) use ($email, $userId) {
+                        $inner->where('user_id', $userId);
+
+                        if ($email !== '') {
+                            $inner->orWhere('email', $email);
+                        }
+                    });
+                });
         });
     }
 
@@ -257,7 +352,19 @@ class CalendarEventController extends Controller
             ->filter()
             ->all();
 
-        return in_array($email, $attendees, true);
+        if (in_array($email, $attendees, true)) {
+            return true;
+        }
+
+        return $calendarEvent->checkIns()
+            ->where(function ($query) use ($user, $email) {
+                $query->where('user_id', $user->id);
+
+                if ($email !== '') {
+                    $query->orWhere('email', $email);
+                }
+            })
+            ->exists();
     }
 
     protected function userCanManageEvent(User $user, CalendarEvent $calendarEvent): bool
