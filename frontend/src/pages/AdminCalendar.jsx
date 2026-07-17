@@ -18,7 +18,16 @@ import {
   QrCode,
   CheckCircle2,
 } from 'lucide-react';
-import { format, isSameDay, isToday, parseISO, startOfDay } from 'date-fns';
+import {
+  format,
+  isSameDay,
+  isToday,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+} from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -147,6 +156,7 @@ function CalendarDayContent({ date, eventCount }) {
 export default function AdminCalendar() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
   const [formOpen, setFormOpen] = useState(false);
   const [focusedEventId, setFocusedEventId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -166,14 +176,23 @@ export default function AdminCalendar() {
 
   const queryClient = useQueryClient();
 
+  const rangeFrom = format(startOfMonth(visibleMonth), 'yyyy-MM-dd');
+  const rangeTo = format(endOfMonth(addMonths(visibleMonth, 1)), 'yyyy-MM-dd');
+
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ['calendar-events'],
-    queryFn: () => db.entities.CalendarEvent.list('start_at', 500),
+    queryKey: ['calendar-events', rangeFrom, rangeTo],
+    queryFn: () =>
+      db.entities.CalendarEvent.filter(
+        { from: rangeFrom, to: rangeTo },
+        'start_at',
+        300
+      ),
   });
 
   const { data: rosterData } = useQuery({
     queryKey: ['user-roster'],
     queryFn: () => db.getUserRoster(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const userOptions = useMemo(() => {
@@ -674,10 +693,13 @@ export default function AdminCalendar() {
               <div className="rounded-xl border bg-muted/10 p-2 sm:p-4">
                 <Calendar
                   mode="single"
+                  month={visibleMonth}
+                  onMonthChange={setVisibleMonth}
                   selected={selectedDate}
                   onSelect={(date) => {
                     if (date) {
                       setSelectedDate(date);
+                      setVisibleMonth(startOfMonth(date));
                       setFocusedEventId(null);
                     }
                   }}

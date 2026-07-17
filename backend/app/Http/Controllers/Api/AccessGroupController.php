@@ -23,9 +23,18 @@ class AccessGroupController extends Controller
 
         $items = $this->applyIndexQuery(
             $request,
-            AccessGroup::query()->with('allowedApplications')->withCount('users'),
+            AccessGroup::query()->with(['allowedApplications', 'users:id'])->withCount('users'),
             ['name']
-        )->get();
+        )->get()
+            ->map(function (AccessGroup $group) {
+                $payload = $group->toArray();
+                $payload['user_ids'] = $group->relationLoaded('users')
+                    ? $group->users->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
+                    : [];
+
+                return $payload;
+            })
+            ->values();
 
         return response()->json($items);
     }

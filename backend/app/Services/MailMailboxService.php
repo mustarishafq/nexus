@@ -6,10 +6,14 @@ use App\Models\User;
 use App\Models\UserMailCredential;
 use App\Support\AppSettings;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
 use IMAP\Connection;
 use RuntimeException;
+use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
+use Throwable;
 
 class MailMailboxService
 {
@@ -346,6 +350,72 @@ class MailMailboxService
     }
 
     /**
+     * Lightweight unread badge lookup — opens IMAP and reads SA_UNSEEN only.
+     *
+     * @return array{unread_count: int, folder: string, account_id: int, cached: bool}
+     */
+    public function unreadCount(
+        User $user,
+        ?int $accountId = null,
+        string $folder = self::FOLDER_INBOX,
+        bool $fresh = false,
+    ): array {
+        $credential = $this->resolveAccount($user, $accountId);
+        $folder = $this->normalizeLogicalFolder($folder);
+        $cacheKey = "mail:unread:{$user->id}:{$credential->id}:{$folder}";
+
+        if (! $fresh) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && array_key_exists('unread_count', $cached)) {
+                return [
+                    'unread_count' => (int) $cached['unread_count'],
+                    'folder' => $folder,
+                    'account_id' => $credential->id,
+                    'cached' => true,
+                ];
+            }
+        }
+
+        $connection = $this->connect($user, $credential->id, $folder);
+
+        try {
+            $imapFolder = $this->folderMapCache[$credential->id][$folder]
+                ?? $this->defaultImapFolder($folder);
+            $mailbox = $this->mailboxString($this->serverConfig($user, $credential->email), $imapFolder);
+            $status = imap_status($connection, $mailbox, SA_UNSEEN);
+            $unreadCount = (int) ($status->unseen ?? 0);
+        } finally {
+            imap_close($connection);
+        }
+
+        Cache::put($cacheKey, ['unread_count' => $unreadCount], now()->addSeconds(45));
+
+        return [
+            'unread_count' => $unreadCount,
+            'folder' => $folder,
+            'account_id' => $credential->id,
+            'cached' => false,
+        ];
+    }
+
+    public function forgetUnreadCountCache(User $user, ?int $accountId = null, ?string $folder = null): void
+    {
+        try {
+            $credential = $this->resolveAccount($user, $accountId);
+        } catch (RuntimeException) {
+            return;
+        }
+
+        $folders = $folder !== null
+            ? [$this->normalizeLogicalFolder($folder)]
+            : self::logicalFolders();
+
+        foreach ($folders as $logicalFolder) {
+            Cache::forget("mail:unread:{$user->id}:{$credential->id}:{$logicalFolder}");
+        }
+    }
+
+    /**
      * @return array{messages: array<int, array<string, mixed>>, unread_count: int, folder: string, account_id: int}
      */
     public function listInbox(
@@ -541,6 +611,109 @@ class MailMailboxService
                 }
             }
         );
+
+        // Most IMAP hosts do not auto-file SMTP traffic into Sent — copy it ourselves.
+        $this->appendSentCopy($user, $credential, $password, $config, $payload, $fromName);
+    }
+
+    /**
+     * @param  array{host: string, port: int, encryption: string|null}  $config
+     * @param  array<string, mixed>  $payload
+     */
+    protected function appendSentCopy(
+        User $user,
+        UserMailCredential $credential,
+        string $password,
+        array $config,
+        array $payload,
+        string $fromName,
+    ): void {
+        if (! function_exists('imap_append')) {
+            return;
+        }
+
+        try {
+            $raw = $this->buildSentMimeMessage($credential->email, $fromName, $payload);
+            $connection = $this->openMailbox(
+                $this->mailboxString($config, 'INBOX'),
+                $credential->email,
+                $password,
+            );
+
+            try {
+                $map = $this->discoverFolderMapFromConnection($connection, $config);
+                $this->folderMapCache[$credential->id] = $map;
+                $imapFolder = $map[self::FOLDER_SENT] ?? $this->defaultImapFolder(self::FOLDER_SENT);
+                $mailbox = $this->mailboxString($config, $imapFolder);
+
+                if (! @imap_append($connection, $mailbox, $raw, '\\Seen')) {
+                    @imap_createmailbox($connection, $mailbox);
+                    if (! @imap_append($connection, $mailbox, $raw, '\\Seen')) {
+                        throw new RuntimeException(imap_last_error() ?: 'Could not save message to Sent.');
+                    }
+                }
+            } finally {
+                imap_close($connection);
+            }
+
+            $this->forgetUnreadCountCache($user, $credential->id, self::FOLDER_SENT);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    protected function buildSentMimeMessage(string $fromEmail, string $fromName, array $payload): string
+    {
+        $email = (new Email())
+            ->from(new Address($fromEmail, $fromName))
+            ->subject((string) $payload['subject'])
+            ->date(new \DateTimeImmutable('now'))
+            ->text((string) $payload['body']);
+
+        $to = $this->parseAddresses((string) ($payload['to'] ?? ''));
+        if ($to !== []) {
+            $email->to(...array_map(static fn (string $address) => new Address($address), $to));
+        }
+
+        $cc = $this->parseAddresses((string) ($payload['cc'] ?? ''));
+        if ($cc !== []) {
+            $email->cc(...array_map(static fn (string $address) => new Address($address), $cc));
+        }
+
+        $bcc = $this->parseAddresses((string) ($payload['bcc'] ?? ''));
+        if ($bcc !== []) {
+            $email->bcc(...array_map(static fn (string $address) => new Address($address), $bcc));
+        }
+
+        if (! empty($payload['in_reply_to'])) {
+            $email->getHeaders()->addTextHeader('In-Reply-To', (string) $payload['in_reply_to']);
+        }
+
+        if (! empty($payload['references'])) {
+            $email->getHeaders()->addTextHeader('References', (string) $payload['references']);
+        }
+
+        foreach ($payload['attachments'] ?? [] as $attachment) {
+            if (! $attachment instanceof UploadedFile) {
+                continue;
+            }
+
+            $path = $attachment->getRealPath();
+            if ($path === false || $path === '') {
+                continue;
+            }
+
+            $email->attachFromPath(
+                $path,
+                $attachment->getClientOriginalName() ?: 'attachment',
+                $attachment->getClientMimeType() ?: 'application/octet-stream',
+            );
+        }
+
+        return $email->toString();
     }
 
     public function deleteMessage(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void

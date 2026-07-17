@@ -107,13 +107,13 @@ export default function PersonProfile() {
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 gap-6 xl:grid-cols-12"
       >
-        <div className="xl:col-span-5 space-y-4">
+        <div className="xl:col-span-4 space-y-4">
           <ProfileAboutCard user={user} showCompleteLink={false} />
-          {canViewHrProfiling ? <ProfileHrDetailsView user={user} /> : null}
         </div>
 
-        <div className="xl:col-span-7 space-y-4">
+        <div className="xl:col-span-8 space-y-4">
           <ProfileStaffDetails user={user} />
+          {canViewHrProfiling ? <ProfileHrDetailsView user={user} /> : null}
         </div>
       </motion.div>
     </div>

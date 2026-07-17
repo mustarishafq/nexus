@@ -645,6 +645,14 @@ export const db = {
 			return request(`/mail/status${buildQuery({ account_id: accountId || undefined })}`);
 		},
 
+		async unreadCount({ accountId, folder, fresh } = {}) {
+			return request(`/mail/unread-count${buildQuery({
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+				fresh: fresh ? 1 : undefined,
+			})}`);
+		},
+
 		async connect({ password, email, label } = {}) {
 			return request('/mail/connect', {
 				method: 'POST',
@@ -987,6 +995,35 @@ export const db = {
 		const queryString = buildQuery({ q: query, limit });
 		const payload = await request(`/users/search${queryString}`);
 		return Array.isArray(payload) ? payload : [];
+	},
+
+	async listAdminUsers(filters = {}) {
+		const queryString = buildQuery(filters);
+		const payload = await request(`/users${queryString}`);
+
+		if (Array.isArray(payload)) {
+			return {
+				data: payload,
+				meta: {
+					total: payload.length,
+					page: 1,
+					per_page: payload.length || 20,
+					last_page: 1,
+					stats: null,
+				},
+			};
+		}
+
+		return {
+			data: Array.isArray(payload?.data) ? payload.data : [],
+			meta: payload?.meta || {
+				total: 0,
+				page: 1,
+				per_page: 20,
+				last_page: 1,
+				stats: null,
+			},
+		};
 	},
 
 	async getPeopleDirectory(filters = {}) {

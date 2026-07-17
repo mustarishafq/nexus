@@ -54,10 +54,10 @@ export default function BottomNav() {
     refetchInterval: messagePollInterval,
   });
 
-  const { data: mailInbox } = useQuery({
-    queryKey: ['mail-inbox'],
-    queryFn: () => db.mail.listMessages({ limit: 1 }),
-    staleTime: 15_000,
+  const { data: mailUnread } = useQuery({
+    queryKey: ['mail-unread-count'],
+    queryFn: () => db.mail.unreadCount(),
+    staleTime: 30_000,
     refetchInterval: messagePollInterval,
     enabled: Boolean(mailStatus?.connected),
     retry: false,
@@ -84,9 +84,9 @@ export default function BottomNav() {
   useEffect(() => {
     setBadgeCounts((prev) => ({
       ...prev,
-      email: Number(mailInbox?.unread_count) || 0,
+      email: Number(mailUnread?.unread_count) || 0,
     }));
-  }, [mailInbox?.unread_count]);
+  }, [mailUnread?.unread_count]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({

@@ -109,6 +109,7 @@ Route::delete('/post-comments/{postComment}', [PostCommentController::class, 'de
 Route::post('/post-comments/{postComment}/reactions', [PostCommentReactionController::class, 'store']);
 Route::delete('/post-comments/{postComment}/reactions', [PostCommentReactionController::class, 'destroy']);
 Route::get('/mail/status', [MailController::class, 'status']);
+Route::get('/mail/unread-count', [MailController::class, 'unreadCount']);
 Route::post('/mail/connect', [MailController::class, 'connect']);
 Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
 Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);

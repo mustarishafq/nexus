@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CalendarEvent;
+use App\Models\CalendarEventAttendee;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -23,7 +24,66 @@ class CalendarEventNotificationService
 
         $event->loadMissing('attendees');
 
-        $recipientEmails = $this->inviteeEmails($event);
+        $this->deliverNotifications($event, $action, $actor, $this->inviteeEmails($event));
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function notifyInviteesFromSnapshot(array $snapshot, string $action, ?User $actor = null): void
+    {
+        if (! in_array($action, [self::ACTION_CREATED, self::ACTION_RESCHEDULED, self::ACTION_CANCELLED], true)) {
+            return;
+        }
+
+        $event = new CalendarEvent([
+            'title' => $snapshot['title'] ?? 'Meeting',
+            'description' => $snapshot['description'] ?? null,
+            'location' => $snapshot['location'] ?? null,
+            'start_at' => $snapshot['start_at'] ?? null,
+            'end_at' => $snapshot['end_at'] ?? null,
+            'is_all_day' => (bool) ($snapshot['is_all_day'] ?? false),
+            'created_by' => $snapshot['created_by'] ?? null,
+            'source_system_id' => $snapshot['source_system_id'] ?? null,
+        ]);
+        $event->id = (int) ($snapshot['id'] ?? 0);
+
+        $attendeeEmails = collect($snapshot['attendee_emails'] ?? [])
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $attendees = $attendeeEmails->map(function (string $email) use ($event) {
+            $attendee = new CalendarEventAttendee([
+                'calendar_event_id' => $event->id,
+                'email' => $email,
+            ]);
+
+            return $attendee;
+        });
+
+        $event->setRelation('attendees', $attendees);
+
+        $this->deliverNotifications($event, $action, $actor, $attendeeEmails);
+    }
+
+    /**
+     * @param  Collection<int, string>  $recipientEmails
+     */
+    protected function deliverNotifications(
+        CalendarEvent $event,
+        string $action,
+        ?User $actor,
+        Collection $recipientEmails,
+    ): void {
+        $organizerEmail = strtolower(trim((string) $event->created_by));
+        $recipientEmails = $recipientEmails
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter()
+            ->reject(fn (string $email) => $organizerEmail !== '' && $email === $organizerEmail)
+            ->unique()
+            ->values();
 
         if ($recipientEmails->isEmpty()) {
             return;

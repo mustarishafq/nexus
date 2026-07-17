@@ -23,6 +23,7 @@ use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -40,11 +41,65 @@ class UserController extends Controller
             return $response;
         }
 
+        $validated = $request->validate([
+            'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
+            'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
+            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
+            'profile' => ['nullable', 'string', Rule::in(['incomplete', 'complete'])],
+            'q' => ['nullable', 'string', 'max:255'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'sort' => ['nullable', 'string', 'max:50'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'email' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $query = User::query()
+            ->with(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences'])
+            ->withExists('pushSubscriptions');
+
+        $this->applyAdminUserFilters($query, $validated);
+
+        $wantsPagination = $request->has('page') || $request->has('per_page');
+
+        if ($wantsPagination) {
+            $perPage = max(1, min((int) ($validated['per_page'] ?? 20), 100));
+            $page = max(1, (int) ($validated['page'] ?? 1));
+
+            $sort = (string) ($validated['sort'] ?? '-created_date');
+            $this->applyIndexSort($query, $sort);
+
+            $statsQuery = User::query();
+
+            $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+            return response()->json([
+                'data' => $paginator->getCollection()
+                    ->map(fn (User $user) => $this->adminUserPayload($user))
+                    ->values(),
+                'meta' => [
+                    'total' => $paginator->total(),
+                    'page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'stats' => [
+                        'total' => (clone $statsQuery)->count(),
+                        'admins' => (clone $statsQuery)->where('role', UserRoles::ADMIN)->count(),
+                        'hr' => (clone $statsQuery)->where('role', UserRoles::HR)->count(),
+                        'approved' => (clone $statsQuery)->where('is_approved', true)->count(),
+                        'pending' => (clone $statsQuery)->where('is_approved', false)->count(),
+                        'incomplete_profiles' => (clone $statsQuery)
+                            ->where('is_approved', true)
+                            ->tap(fn ($builder) => $this->applyProfileCompletenessFilter($builder, 'incomplete'))
+                            ->count(),
+                    ],
+                ],
+            ]);
+        }
+
         $users = $this->applyIndexQuery(
             $request,
-            User::query()
-                ->with(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences'])
-                ->withExists('pushSubscriptions'),
+            $query,
             ['role', 'email'],
             '-created_date',
             50,
@@ -54,6 +109,123 @@ class UserController extends Controller
         return response()->json(
             $users->map(fn (User $user) => $this->adminUserPayload($user))->values()
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyAdminUserFilters($query, array $filters): void
+    {
+        if (! empty($filters['role'])) {
+            $query->where('role', $filters['role']);
+        }
+
+        if (! empty($filters['email'])) {
+            $query->where('email', $filters['email']);
+        }
+
+        if (($filters['status'] ?? null) === 'approved') {
+            $query->where('is_approved', true);
+        } elseif (($filters['status'] ?? null) === 'pending') {
+            $query->where('is_approved', false);
+        }
+
+        if (($filters['login'] ?? null) === 'never') {
+            $query->whereNull('last_login_at');
+        } elseif (($filters['login'] ?? null) === 'has_logged_in') {
+            $query->whereNotNull('last_login_at');
+        } elseif (($filters['login'] ?? null) === 'last_7_days') {
+            $query->where('last_login_at', '>=', now()->subDays(7));
+        } elseif (($filters['login'] ?? null) === 'last_30_days') {
+            $query->where('last_login_at', '>=', now()->subDays(30));
+        }
+
+        if (! empty($filters['q'])) {
+            $search = trim((string) $filters['q']);
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%");
+            });
+        }
+
+        if (! empty($filters['profile'])) {
+            $this->applyProfileCompletenessFilter($query, (string) $filters['profile']);
+        }
+    }
+
+    private function applyProfileCompletenessFilter($query, string $profile): void
+    {
+        $complete = function ($builder): void {
+            $builder
+                ->whereNotNull('profile_picture')
+                ->where('profile_picture', '!=', '')
+                ->whereNotNull('cover_picture')
+                ->where('cover_picture', '!=', '')
+                ->whereRaw("TRIM(COALESCE(name, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(full_name, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(bio, '')) != ''")
+                ->whereNotNull('department_id')
+                ->whereRaw("TRIM(COALESCE(work_phone, '')) != ''")
+                ->whereNotNull('date_of_birth')
+                ->whereNotNull('joined_at')
+                ->where(function ($inner) {
+                    $inner->whereHas('educations')->orWhereHas('workExperiences');
+                })
+                ->whereRaw("TRIM(COALESCE(gender, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(nationality, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(ic_number, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(current_address, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(emergency_contact_name, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(emergency_contact_phone, '')) != ''")
+                ->whereRaw("TRIM(COALESCE(next_of_kin_relationship, '')) != ''");
+        };
+
+        if ($profile === 'complete') {
+            $complete($query);
+
+            return;
+        }
+
+        if ($profile === 'incomplete') {
+            $query->where(function ($builder) use ($complete) {
+                $builder->whereNot(function ($inner) use ($complete) {
+                    $complete($inner);
+                });
+            });
+        }
+    }
+
+    private function applyIndexSort($query, string $sort): void
+    {
+        if ($sort === '') {
+            $query->orderByDesc('created_at');
+
+            return;
+        }
+
+        $direction = 'asc';
+        $column = $sort;
+
+        if (str_starts_with($sort, '-')) {
+            $direction = 'desc';
+            $column = ltrim($sort, '-');
+        }
+
+        $column = match ($column) {
+            'created_date' => 'created_at',
+            'updated_date' => 'updated_at',
+            default => $column,
+        };
+
+        $table = $query->getModel()->getTable();
+        if (Schema::hasColumn($table, $column)) {
+            $query->orderBy($column, $direction);
+        } else {
+            $query->orderByDesc('created_at');
+        }
     }
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse

@@ -474,11 +474,21 @@ export default function Email() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [folder, setFolder] = useState('inbox');
+  const [folder, setFolder] = useState(() => {
+    const fromState = location.state?.folder;
+    return FOLDERS.some((item) => item.id === fromState) ? fromState : 'inbox';
+  });
   const [accountId, setAccountId] = useState(() => readStoredAccountId());
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
+
+  useEffect(() => {
+    const fromState = location.state?.folder;
+    if (FOLDERS.some((item) => item.id === fromState)) {
+      setFolder(fromState);
+    }
+  }, [location.state?.folder]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -554,11 +564,13 @@ export default function Email() {
   useEffect(() => {
     if (!messageData?.uid) return;
     queryClient.invalidateQueries({ queryKey: ['mail-inbox'] });
+    queryClient.invalidateQueries({ queryKey: ['mail-unread-count'] });
   }, [messageData?.uid, queryClient]);
 
   const invalidateMail = () => {
     queryClient.invalidateQueries({ queryKey: MAIL_STATUS_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: ['mail-inbox'] });
+    queryClient.invalidateQueries({ queryKey: ['mail-unread-count'] });
   };
 
   const connectMailbox = useMutation({
@@ -612,7 +624,7 @@ export default function Email() {
     onSuccess: () => {
       toast.success('Email sent.');
       invalidateMail();
-      navigate('/email');
+      navigate('/email', { state: { folder: 'sent' } });
     },
     onError: (error) => toast.error(error?.message || 'Could not send email.'),
   });

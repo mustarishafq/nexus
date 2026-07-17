@@ -31,6 +31,38 @@ class UserHrRoleTest extends TestCase
             ->assertJsonCount(2);
     }
 
+    public function test_hr_can_list_users_paginated_with_filters(): void
+    {
+        $hr = User::factory()->create(['is_approved' => true, 'role' => 'hr', 'full_name' => 'HR Person']);
+        User::factory()->create(['is_approved' => true, 'role' => 'user', 'full_name' => 'Alice Example', 'email' => 'alice@example.com']);
+        User::factory()->create(['is_approved' => false, 'role' => 'user', 'full_name' => 'Bob Pending', 'email' => 'bob@example.com']);
+        $token = $this->issueToken($hr);
+
+        $this->withToken($token)
+            ->getJson('/api/users?page=1&per_page=20&q=Alice&status=approved')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.page', 1)
+            ->assertJsonPath('data.0.email', 'alice@example.com')
+            ->assertJsonStructure([
+                'data',
+                'meta' => [
+                    'total',
+                    'page',
+                    'per_page',
+                    'last_page',
+                    'stats' => [
+                        'total',
+                        'admins',
+                        'hr',
+                        'approved',
+                        'pending',
+                        'incomplete_profiles',
+                    ],
+                ],
+            ]);
+    }
+
     public function test_hr_can_import_hr_onboarding_csv(): void
     {
         $hr = User::factory()->create(['is_approved' => true, 'role' => 'hr']);

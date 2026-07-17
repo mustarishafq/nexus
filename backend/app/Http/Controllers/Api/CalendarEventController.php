@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
+use App\Jobs\DeleteCalendarEventFromGoogleJob;
+use App\Jobs\NotifyCalendarInviteesJob;
+use App\Jobs\SyncCalendarEventToGoogleJob;
 use App\Models\CalendarEvent;
 use App\Models\User;
 use App\Services\CalendarEventNotificationService;
-use App\Services\GoogleCalendarService;
 use App\Support\ApiTokenAuth;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
@@ -17,18 +19,6 @@ use Illuminate\Support\Carbon;
 class CalendarEventController extends Controller
 {
     use AppliesIndexQuery;
-
-    protected GoogleCalendarService $googleCalendarService;
-
-    protected CalendarEventNotificationService $calendarEventNotificationService;
-
-    public function __construct(
-        GoogleCalendarService $googleCalendarService,
-        CalendarEventNotificationService $calendarEventNotificationService,
-    ) {
-        $this->googleCalendarService = $googleCalendarService;
-        $this->calendarEventNotificationService = $calendarEventNotificationService;
-    }
 
     public function index(Request $request): JsonResponse
     {
@@ -121,14 +111,14 @@ class CalendarEventController extends Controller
 
         SyncAssignmentRecords::syncCalendarEventAttendees($item, $attendeeEmails);
 
-        $this->syncToGoogle($item);
+        SyncCalendarEventToGoogleJob::dispatch($item->id)->onQueue('calendar');
 
         $item = $item->fresh()->load('attendees');
-        $this->calendarEventNotificationService->notifyInvitees(
-            $item,
+        NotifyCalendarInviteesJob::dispatch(
             CalendarEventNotificationService::ACTION_CREATED,
-            $user
-        );
+            $item->id,
+            $user->id,
+        )->onQueue('calendar');
 
         return response()->json($this->presentEvent($item, $user), 201);
     }
@@ -213,16 +203,16 @@ class CalendarEventController extends Controller
             SyncAssignmentRecords::syncCalendarEventAttendees($calendarEvent, $attendeeEmails);
         }
 
-        $this->syncToGoogle($calendarEvent);
+        SyncCalendarEventToGoogleJob::dispatch($calendarEvent->id)->onQueue('calendar');
 
         $calendarEvent = $calendarEvent->fresh()->load('attendees');
 
         if ($wasRescheduled) {
-            $this->calendarEventNotificationService->notifyInvitees(
-                $calendarEvent,
+            NotifyCalendarInviteesJob::dispatch(
                 CalendarEventNotificationService::ACTION_RESCHEDULED,
-                $user
-            );
+                $calendarEvent->id,
+                $user->id,
+            )->onQueue('calendar');
         }
 
         return response()->json($this->presentEvent($calendarEvent, $user));
@@ -240,13 +230,29 @@ class CalendarEventController extends Controller
         }
 
         $calendarEvent->load('attendees');
-        $this->calendarEventNotificationService->notifyInvitees(
-            $calendarEvent,
-            CalendarEventNotificationService::ACTION_CANCELLED,
-            $user
-        );
 
-        $this->googleCalendarService->deleteEvent($calendarEvent);
+        NotifyCalendarInviteesJob::dispatch(
+            CalendarEventNotificationService::ACTION_CANCELLED,
+            null,
+            $user->id,
+            [
+                'id' => $calendarEvent->id,
+                'title' => $calendarEvent->title,
+                'description' => $calendarEvent->description,
+                'location' => $calendarEvent->location,
+                'start_at' => $calendarEvent->start_at?->toISOString(),
+                'end_at' => $calendarEvent->end_at?->toISOString(),
+                'is_all_day' => (bool) $calendarEvent->is_all_day,
+                'created_by' => $calendarEvent->created_by,
+                'source_system_id' => $calendarEvent->source_system_id,
+                'attendee_emails' => $calendarEvent->attendeeEmailList(),
+            ],
+        )->onQueue('calendar');
+
+        DeleteCalendarEventFromGoogleJob::dispatch(
+            $calendarEvent->google_event_id,
+            $calendarEvent->created_by,
+        )->onQueue('calendar');
 
         $calendarEvent->delete();
 
@@ -416,27 +422,6 @@ class CalendarEventController extends Controller
             ->all();
 
         return count($normalized) > 0 ? $normalized : null;
-    }
-
-    protected function syncToGoogle(CalendarEvent $calendarEvent): void
-    {
-        $result = $this->googleCalendarService->syncEvent($calendarEvent);
-
-        if (! $result['success']) {
-            $calendarEvent->update([
-                'google_sync_status' => 'failed',
-                'google_sync_error' => $result['error'],
-            ]);
-
-            return;
-        }
-
-        $calendarEvent->update([
-            'google_event_id' => $result['event_id'],
-            'google_calendar_url' => $result['url'],
-            'google_sync_status' => 'synced',
-            'google_sync_error' => $result['error'],
-        ]);
     }
 
     protected function withGoogleCalendarUrl(array $payload, ?CalendarEvent $calendarEvent = null): array

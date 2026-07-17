@@ -91,6 +91,17 @@ function getUserProfileStrength(user) {
   };
 }
 
+function useDebouncedValue(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
 function ProfileStrengthCell({ user, compact = false }) {
   const { percent } = getUserProfileStrength(user);
 
@@ -304,6 +315,8 @@ export default function UserManagement() {
   const [profileFilter, setProfileFilter] = useState('all');
   const [loginFilter, setLoginFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const pageSize = 20;
   const [assignDialogUser, setAssignDialogUser] = useState(null);
   const [assignGroupIds, setAssignGroupIds] = useState(new Set());
   const [assignSaving, setAssignSaving] = useState(false);
@@ -358,9 +371,37 @@ export default function UserManagement() {
   const assignGroupsCsvRef = useRef(null);
   const queryClient = useQueryClient();
 
-  const { data: usersRaw = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => db.entities.User.list('-created_date', 500),
+  const { data: usersPage, isLoading: loadingUsers, isFetching: fetchingUsers } = useQuery({
+    queryKey: ['users', {
+      q: debouncedSearch,
+      role: roleFilter,
+      status: statusFilter,
+      profile: profileFilter,
+      login: loginFilter,
+      page,
+      per_page: pageSize,
+    }],
+    queryFn: () => db.listAdminUsers({
+      sort: '-created_date',
+      page,
+      per_page: pageSize,
+      ...(debouncedSearch ? { q: debouncedSearch } : {}),
+      ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
+      ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+      ...(profileFilter !== 'all' ? { profile: profileFilter } : {}),
+      ...(loginFilter !== 'all' ? { login: loginFilter } : {}),
+    }),
+    placeholderData: (previous) => previous,
+  });
+
+  const { data: pickerUsersRaw = [] } = useQuery({
+    queryKey: ['users-picker-roster'],
+    queryFn: async () => {
+      const roster = await db.getUserRoster();
+      return Array.isArray(roster?.users) ? roster.users : [];
+    },
+    enabled: groupDialogOpen || dashboardDialogOpen || notificationDialogOpen || activeSection === 'api-tokens' || Boolean(assignAnalyticsUser),
+    staleTime: 60_000,
   });
 
   const { data: systemsRaw = [] } = useQuery({
@@ -401,39 +442,28 @@ export default function UserManagement() {
     setMetabaseDashboards(metabaseDashboardsRaw.filter((dashboard) => !hidden.has(String(dashboard.id))));
   }, [metabaseDashboardsRaw]);
 
-  const users = Array.isArray(usersRaw) ? usersRaw : [];
+  const users = Array.isArray(usersPage?.data) ? usersPage.data : [];
+  const pickerUsers = Array.isArray(pickerUsersRaw) ? pickerUsersRaw : [];
   const systems = Array.isArray(systemsRaw) ? systemsRaw : [];
   const publicSystems = systems.filter((system) => system.visibility === 'public');
+  const totalMatching = Number(usersPage?.meta?.total) || 0;
+  const totalPages = Math.max(1, Number(usersPage?.meta?.last_page) || 1);
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = users;
 
   useEffect(() => {
     setPage(1);
-  }, [search, roleFilter, statusFilter, profileFilter, loginFilter]);
+  }, [debouncedSearch, roleFilter, statusFilter, profileFilter, loginFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const formatLastLogin = (value) => {
     if (!value) return 'Never';
     return formatRelativeDate(value);
-  };
-
-  const matchesLoginFilter = (user) => {
-    if (loginFilter === 'all') return true;
-
-    const lastLogin = user.last_login_at;
-    if (loginFilter === 'never') return !lastLogin;
-    if (loginFilter === 'has_logged_in') return Boolean(lastLogin);
-    if (!lastLogin) return false;
-
-    const loginTime = new Date(lastLogin).getTime();
-    if (Number.isNaN(loginTime)) return false;
-
-    const now = Date.now();
-    if (loginFilter === 'last_7_days') {
-      return loginTime >= now - 7 * 24 * 60 * 60 * 1000;
-    }
-    if (loginFilter === 'last_30_days') {
-      return loginTime >= now - 30 * 24 * 60 * 60 * 1000;
-    }
-
-    return true;
   };
 
   const getGroupById = (groupId) => accessGroups.find((group) => String(group.id) === String(groupId));
@@ -459,7 +489,14 @@ export default function UserManagement() {
     return names.length > 0 ? names.join(', ') : `${groupIds.length} group(s)`;
   };
 
-  const getUsersInGroup = (groupId) => users.filter((user) => getUserGroupIds(user).includes(String(groupId)));
+  const getUsersInGroup = (groupId) => {
+    const group = getGroupById(groupId);
+    const memberIds = Array.isArray(group?.user_ids)
+      ? group.user_ids.map((id) => String(id))
+      : [];
+    const source = pickerUsers.length > 0 ? pickerUsers : users;
+    return source.filter((user) => memberIds.includes(String(user.id)));
+  };
 
   const toggleIdInSet = (setter, id) => {
     setter((prev) => {
@@ -470,48 +507,20 @@ export default function UserManagement() {
     });
   };
 
-  const filteredUsers = users.filter((user) => {
-    const searchValue = search.trim().toLowerCase();
-    const matchesSearch = !searchValue
-      || user.full_name?.toLowerCase().includes(searchValue)
-      || user.name?.toLowerCase().includes(searchValue)
-      || user.email?.toLowerCase().includes(searchValue);
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'approved' && user.is_approved)
-      || (statusFilter === 'pending' && !user.is_approved);
-    const profilePercent = getUserProfileStrength(user).percent;
-    const matchesProfile = profileFilter === 'all'
-      || (profileFilter === 'incomplete' && profilePercent < 100)
-      || (profileFilter === 'complete' && profilePercent === 100);
-    const matchesLogin = matchesLoginFilter(user);
-
-    return matchesSearch && matchesRole && matchesStatus && matchesProfile && matchesLogin;
-  });
-
-  const pageSize = 20;
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
   const stats = {
-    total: users.length,
-    admins: users.filter(user => user.role === 'admin').length,
-    hrStaff: users.filter(user => user.role === 'hr').length,
-    approved: users.filter(user => user.is_approved).length,
-    pending: users.filter(user => !user.is_approved).length,
-    incompleteProfiles: users.filter((user) => user.is_approved && getUserProfileStrength(user).percent < 100).length,
+    total: Number(usersPage?.meta?.stats?.total) || totalMatching,
+    admins: Number(usersPage?.meta?.stats?.admins) || 0,
+    hrStaff: Number(usersPage?.meta?.stats?.hr) || 0,
+    approved: Number(usersPage?.meta?.stats?.approved) || 0,
+    pending: Number(usersPage?.meta?.stats?.pending) || 0,
+    incompleteProfiles: Number(usersPage?.meta?.stats?.incomplete_profiles) || 0,
   };
 
   const openGroupDialog = (group = null) => {
     if (group) {
-      const memberIds = getUsersInGroup(group.id).map((user) => user.id);
+      const memberIds = Array.isArray(group.user_ids) && group.user_ids.length > 0
+        ? group.user_ids
+        : getUsersInGroup(group.id).map((user) => user.id);
       setEditGroup(group);
       setGroupForm({
         name: group.name || '',
@@ -815,6 +824,13 @@ export default function UserManagement() {
     deleteDashboardMut.mutate({ id: dashboard.id, name: dashboard.name });
   };
 
+  const findUserById = (id) => {
+    const needle = String(id);
+    return pickerUsers.find((item) => String(item.id) === needle)
+      || users.find((item) => String(item.id) === needle)
+      || null;
+  };
+
   const getDashboardGroupNames = (dashboard) => {
     const ids = (dashboard.access_group_ids || []).map(String);
     return ids.map((id) => getGroupById(id)?.name).filter(Boolean);
@@ -823,14 +839,14 @@ export default function UserManagement() {
   const getDashboardUserNames = (dashboard) => {
     const ids = (dashboard.user_ids || []).map(String);
     return ids
-      .map((id) => users.find((item) => String(item.id) === id))
+      .map((id) => findUserById(id))
       .filter(Boolean)
       .map((item) => item.full_name || item.email);
   };
 
   const getDashboardAssignmentLabel = (dashboard) => {
     if (dashboard.owner_user_id) {
-      const owner = users.find((item) => String(item.id) === String(dashboard.owner_user_id));
+      const owner = findUserById(dashboard.owner_user_id);
       return owner ? `Personal (${owner.full_name || owner.email})` : 'Personal';
     }
     return dashboard.assignment_type === 'individual' ? 'Individual' : 'Access Group';
@@ -1445,11 +1461,11 @@ export default function UserManagement() {
     setLoginFilter('all');
   };
 
-  const selectableUsers = users
+  const selectableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
     .filter((user) => user.role !== 'admin')
     .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
 
-  const notifiableUsers = users
+  const notifiableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
     .filter((user) => user.is_approved)
     .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
 
@@ -1592,7 +1608,7 @@ export default function UserManagement() {
 
         <TabsContent value="api-tokens" className="mt-0">
           <UserApiTokensPanel
-            users={users}
+            users={pickerUsers.length > 0 ? pickerUsers : users}
             createForUserId={apiTokenCreateUserId}
             createSignal={apiTokenCreateSignal}
           />
@@ -1603,7 +1619,10 @@ export default function UserManagement() {
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-3">
             <div className="lg:hidden">
-              <CardDescription>{filteredUsers.length} matching users out of {users.length}</CardDescription>
+              <CardDescription>
+                {totalMatching} matching user{totalMatching === 1 ? '' : 's'}
+                {fetchingUsers && !loadingUsers ? ' · updating…' : ''}
+              </CardDescription>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative flex-1 min-w-0">
@@ -1685,7 +1704,7 @@ export default function UserManagement() {
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : totalMatching === 0 ? (
             <div className="px-6 py-16 text-center text-sm text-muted-foreground">
               No users match the current search and filters.
             </div>
@@ -1812,10 +1831,10 @@ export default function UserManagement() {
             </>
           )}
 
-          {filteredUsers.length > 0 && (
+          {totalMatching > 0 && (
             <div className="flex flex-col gap-3 border-t border-border px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
-                Showing {Math.min((currentPage - 1) * pageSize + 1, filteredUsers.length)}-{Math.min(currentPage * pageSize, filteredUsers.length)} of {filteredUsers.length}
+                Showing {Math.min((currentPage - 1) * pageSize + 1, totalMatching)}-{Math.min(currentPage * pageSize, totalMatching)} of {totalMatching}
               </p>
               <div className="flex items-center justify-center gap-2">
                 <Button variant="outline" size="sm" className="min-h-[40px] flex-1 sm:flex-none" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
@@ -2698,7 +2717,7 @@ export default function UserManagement() {
                 <div className="space-y-3">
                   <Label>Users *</Label>
                   <SearchableUserMultiSelect
-                    users={users}
+                    users={selectableUsers}
                     selectedIds={dashboardForm.userIds}
                     onToggle={toggleDashboardUser}
                     placeholder="Search user by name or email..."

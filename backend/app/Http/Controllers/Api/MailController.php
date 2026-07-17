@@ -164,6 +164,49 @@ class MailController extends Controller
         ]);
     }
 
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'fresh' => ['sometimes', 'boolean'],
+        ]);
+
+        if ($this->mail->accountsFor($user)->isEmpty()) {
+            return response()->json([
+                'unread_count' => 0,
+                'folder' => $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+                'account_id' => null,
+                'connected' => false,
+                'cached' => false,
+            ]);
+        }
+
+        try {
+            $payload = $this->mail->unreadCount(
+                $user,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+                (bool) ($validated['fresh'] ?? false),
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to load unread count.'], 500);
+        }
+
+        return response()->json([
+            ...$payload,
+            'connected' => true,
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);
@@ -187,6 +230,11 @@ class MailController extends Controller
                 $validated['q'] ?? null,
                 (bool) ($validated['unread'] ?? false),
                 true,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
+            $this->mail->forgetUnreadCountCache(
+                $user,
                 isset($validated['account_id']) ? (int) $validated['account_id'] : null,
                 $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
             );

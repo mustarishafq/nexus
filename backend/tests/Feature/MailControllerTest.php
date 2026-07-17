@@ -62,6 +62,26 @@ class MailControllerTest extends TestCase
             ]);
     }
 
+    public function test_mail_unread_count_requires_authentication(): void
+    {
+        $this->getJson('/api/mail/unread-count')
+            ->assertUnauthorized();
+    }
+
+    public function test_mail_unread_count_returns_zero_when_not_connected(): void
+    {
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $this->withToken($token)
+            ->getJson('/api/mail/unread-count')
+            ->assertOk()
+            ->assertJson([
+                'unread_count' => 0,
+                'connected' => false,
+            ]);
+    }
+
     public function test_user_can_have_multiple_mail_credentials(): void
     {
         $user = User::factory()->create(['is_approved' => true]);
