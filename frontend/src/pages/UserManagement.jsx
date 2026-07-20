@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -293,11 +293,13 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 export default function UserManagement() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, startImpersonation, isImpersonating } = useAuth();
   const isAdmin = userIsAdmin(currentUser);
   const isHrUser = isHr(currentUser);
   const [approvingUser, setApprovingUser] = useState(null);
   const [pendingUserApproval, setPendingUserApproval] = useState(null);
+  const [pendingPreviewUser, setPendingPreviewUser] = useState(null);
+  const [previewStarting, setPreviewStarting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -985,6 +987,15 @@ export default function UserManagement() {
           >
             <BellRing className="w-4 h-4 mr-2" />
             {nudgingUser === user.id ? 'Sending reminder...' : 'Send profile reminder'}
+          </DropdownMenuItem>
+        ) : null}
+        {isAdmin && user.is_approved && String(user.id) !== String(currentUser?.id) ? (
+          <DropdownMenuItem
+            onClick={() => setPendingPreviewUser(user)}
+            disabled={isImpersonating || previewStarting}
+          >
+            <UserRoundSearch className="w-4 h-4 mr-2" />
+            Preview as user
           </DropdownMenuItem>
         ) : null}
         {isAdmin && user.is_approved ? (
@@ -2838,6 +2849,50 @@ export default function UserManagement() {
                 : pendingUserApproval?.isApproved
                   ? 'Approve'
                   : 'Revoke access'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingPreviewUser)}
+        onOpenChange={(open) => {
+          if (!open && !previewStarting) setPendingPreviewUser(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Preview as this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingPreviewUser ? (
+                <>
+                  You will be signed in as{' '}
+                  <span className="font-medium text-foreground">
+                    {pendingPreviewUser.full_name || pendingPreviewUser.email}
+                  </span>
+                  . Your admin session is saved so you can exit preview anytime.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={previewStarting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={previewStarting}
+              onClick={async (event) => {
+                event.preventDefault();
+                if (!pendingPreviewUser || previewStarting) return;
+                setPreviewStarting(true);
+                try {
+                  await startImpersonation(pendingPreviewUser.id);
+                } catch (err) {
+                  setPreviewStarting(false);
+                  setPendingPreviewUser(null);
+                  toast.error(err?.data?.message || err.message || 'Failed to start preview');
+                }
+              }}
+            >
+              {previewStarting ? 'Starting…' : 'Preview as user'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

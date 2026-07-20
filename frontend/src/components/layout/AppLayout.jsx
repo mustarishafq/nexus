@@ -91,7 +91,8 @@ export default function AppLayout() {
             isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
             !isFullBleed && !isViewportFillPage && 'min-h-screen',
             !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
-            !isFullBleed && topStripCount >= 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
+            !isFullBleed && topStripCount === 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
+            !isFullBleed && topStripCount >= 3 && 'pt-[calc(4rem+5.25rem)] sm:pt-[calc(4rem+6rem)]',
             showBottomNav
               && (standalone
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'

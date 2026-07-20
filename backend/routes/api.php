@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GoogleOAuthController;
+use App\Http\Controllers\Api\ImpersonateController;
 use App\Http\Controllers\Api\MailController;
 use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
@@ -130,6 +131,8 @@ Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);
 
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
+Route::post('/admin/impersonate/stop', [ImpersonateController::class, 'stop']);
+Route::post('/admin/impersonate/{user}', [ImpersonateController::class, 'start']);
 Route::get('/admin/api-tokens', [ApiTokenController::class, 'index']);
 Route::post('/admin/api-tokens', [ApiTokenController::class, 'store']);
 Route::get('/admin/api-tokens/users/{user}/mcp-access', [ApiTokenController::class, 'showUserMcpAccess']);

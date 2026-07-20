@@ -3,6 +3,14 @@ import React, { createContext, useState, useContext, useEffect, useMemo, useCall
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
 import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
+import {
+  clearImpersonationSession,
+  getAuthToken,
+  isImpersonating as readIsImpersonating,
+  startImpersonationSession,
+  stopImpersonationSession,
+} from '@/lib/authStorage';
+import { queryClientInstance } from '@/lib/query-client';
 
 const AuthContext = createContext(null);
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
@@ -54,6 +62,7 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(() => readIsImpersonating());
 
   const refreshPublicSettings = useCallback(async () => {
     try {
@@ -83,6 +92,7 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
       setIsAuthenticated(true);
       setForcePasswordChange(currentUser.force_password_change || false);
+      setIsImpersonating(readIsImpersonating());
       setIsLoadingAuth(false);
       setAuthChecked(true);
       setAuthError(null);
@@ -92,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       setForcePasswordChange(false);
+      setIsImpersonating(readIsImpersonating());
       setAuthChecked(true);
       if (error?.status === 403 && error?.data?.code === 'account_not_approved') {
         setAuthError({
@@ -162,9 +173,57 @@ export const AuthProvider = ({ children }) => {
     };
   }, [appPublicSettings]);
 
+  const startImpersonation = useCallback(async (userId) => {
+    if (readIsImpersonating()) {
+      throw new Error('Already previewing as another user. Exit preview first.');
+    }
+
+    const adminToken = getAuthToken();
+    if (!adminToken) {
+      throw new Error('Not authenticated.');
+    }
+
+    const payload = await db.auth.impersonate(userId);
+    if (!payload?.token) {
+      throw new Error('Preview session could not be started.');
+    }
+
+    startImpersonationSession(adminToken, payload.token);
+    setIsImpersonating(true);
+    queryClientInstance.clear();
+    window.location.assign('/');
+    return payload;
+  }, []);
+
+  const stopImpersonation = useCallback(async () => {
+    if (!readIsImpersonating()) {
+      return;
+    }
+
+    try {
+      await db.auth.stopImpersonate();
+    } catch {
+      // Always restore admin token even if revoke fails.
+    }
+
+    const restored = stopImpersonationSession();
+    setIsImpersonating(false);
+    queryClientInstance.clear();
+
+    if (!restored) {
+      clearImpersonationSession();
+      window.location.assign('/login');
+      return;
+    }
+
+    window.location.assign('/admin/users');
+  }, []);
+
   const logout = useCallback((shouldRedirect = true) => {
     clearBirthdayShownKeys();
     clearBroadcastAckKeys();
+    clearImpersonationSession();
+    setIsImpersonating(false);
     setUser(null);
     setIsAuthenticated(false);
     setForcePasswordChange(false);
@@ -189,6 +248,9 @@ export const AuthProvider = ({ children }) => {
     appPublicSettings,
     authChecked,
     forcePasswordChange,
+    isImpersonating,
+    startImpersonation,
+    stopImpersonation,
     logout,
     navigateToLogin,
     checkUserAuth,
@@ -202,6 +264,9 @@ export const AuthProvider = ({ children }) => {
     appPublicSettings,
     authChecked,
     forcePasswordChange,
+    isImpersonating,
+    startImpersonation,
+    stopImpersonation,
     logout,
     navigateToLogin,
     checkUserAuth,

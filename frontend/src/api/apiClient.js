@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { clearBirthdayShownKeys } from '@/lib/birthday';
 import { clearBroadcastAckKeys } from '@/lib/broadcast';
-import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/authStorage';
+import { clearAuthToken, clearImpersonationSession, getAuthToken, setAuthToken } from '@/lib/authStorage';
 
 export const API_ORIGIN = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}/api`;
@@ -193,11 +193,20 @@ export const db = {
 			}
 
 			clearAuthToken();
+			clearImpersonationSession();
 			clearBirthdayShownKeys();
 			clearBroadcastAckKeys();
 			if (redirectTo) {
 				window.location.href = redirectTo;
 			}
+		},
+
+		async impersonate(userId) {
+			return request(`/admin/impersonate/${encodeURIComponent(userId)}`, { method: 'POST' });
+		},
+
+		async stopImpersonate() {
+			return request('/admin/impersonate/stop', { method: 'POST' });
 		},
 
 		redirectToLogin(redirectTo = '/login') {
