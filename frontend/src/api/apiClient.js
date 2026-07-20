@@ -323,6 +323,10 @@ export const db = {
 		async update(departmentId, data) {
 			return request(`/admin/department-attendance/${departmentId}`, { method: 'PUT', body: data });
 		},
+
+		async bulkUpdate(data) {
+			return request('/admin/department-attendance', { method: 'PUT', body: data });
+		},
 	},
 
 	attendanceLocations: {

@@ -1,12 +1,13 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, Loader2, MapPin, Plus, Save, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Clock3, Loader2, MapPin, Plus, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -105,9 +106,127 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
   );
 }
 
+function DepartmentMultiSelect({ departments, selectedIds, onChange }) {
+  const [open, setOpen] = useState(false);
+
+  const selectedDepartments = useMemo(
+    () => departments.filter((entry) => selectedIds.includes(String(entry.department.id))),
+    [departments, selectedIds],
+  );
+
+  const allSelected = departments.length > 0 && selectedIds.length === departments.length;
+
+  const displayLabel = (() => {
+    if (!selectedDepartments.length) return 'Select departments...';
+    if (selectedDepartments.length === 1) return selectedDepartments[0].department.name;
+    if (selectedDepartments.length <= 3) {
+      return selectedDepartments.map((entry) => entry.department.name).join(', ');
+    }
+    return `${selectedDepartments.length} departments selected`;
+  })();
+
+  const toggleDepartment = (id) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((value) => value !== id));
+      return;
+    }
+    onChange([...selectedIds, id]);
+  };
+
+  const selectAll = () => {
+    onChange(departments.map((entry) => String(entry.department.id)));
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className={cn('truncate text-left', !selectedDepartments.length && 'text-muted-foreground')}>
+            {displayLabel}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            {selectedIds.length} selected
+          </p>
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={selectAll}>
+              Select all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={clearAll}
+              disabled={!selectedIds.length}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+        <div className="max-h-64 overflow-auto p-1">
+          {departments.length === 0 ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">No departments available.</p>
+          ) : (
+            departments.map((entry) => {
+              const id = String(entry.department.id);
+              const checked = selectedIds.includes(id);
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleDepartment(id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+                    checked ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60 text-muted-foreground',
+                  )}
+                >
+                  <Checkbox
+                    checked={checked}
+                    className="pointer-events-none h-3.5 w-3.5"
+                    tabIndex={-1}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium">{entry.department.name}</span>
+                  {checked ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+        {allSelected ? (
+          <p className="border-t px-3 py-2 text-xs text-muted-foreground">All departments selected.</p>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function formatDepartmentNames(names) {
+  if (!names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
 export default function DepartmentAttendancePolicyPanel() {
   const queryClient = useQueryClient();
-  const [departmentId, setDepartmentId] = useState('');
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState([]);
   const [form, setForm] = useState(normalizeDepartmentAttendanceSettings());
 
   const { data, isLoading } = useQuery({
@@ -122,34 +241,45 @@ export default function DepartmentAttendancePolicyPanel() {
 
   const departments = data?.departments || [];
   const locations = locationsData?.locations || [];
+  const settingsSourceId = selectedDepartmentIds[0] || '';
 
   useEffect(() => {
-    if (!departmentId && departments.length) {
-      setDepartmentId(String(departments[0].department.id));
-    }
-  }, [departmentId, departments]);
+    if (selectedDepartmentIds.length || !departments.length) return;
+    setSelectedDepartmentIds([String(departments[0].department.id)]);
+  }, [selectedDepartmentIds.length, departments]);
 
   useEffect(() => {
-    const entry = departments.find((item) => String(item.department.id) === departmentId);
+    if (!settingsSourceId) return;
+    const entry = departments.find((item) => String(item.department.id) === settingsSourceId);
     if (entry) {
       setForm(normalizeDepartmentAttendanceSettings(entry.settings));
     }
-  }, [departmentId, departments]);
+  }, [settingsSourceId, departments]);
 
   const saveMutation = useMutation({
-    mutationFn: () => db.departmentAttendance.update(departmentId, departmentAttendanceSettingsToPayload(form)),
+    mutationFn: () => db.departmentAttendance.bulkUpdate({
+      department_ids: selectedDepartmentIds.map(Number),
+      ...departmentAttendanceSettingsToPayload(form),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['department-attendance-settings'] });
-      toast.success('Department attendance policy saved');
+      const count = selectedDepartmentIds.length;
+      toast.success(
+        count === 1
+          ? 'Department attendance policy saved'
+          : `Attendance policy saved to ${count} departments`,
+      );
     },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to save attendance policy');
     },
   });
 
-  const selectedDepartment = useMemo(
-    () => departments.find((item) => String(item.department.id) === departmentId)?.department,
-    [departments, departmentId],
+  const selectedDepartments = useMemo(
+    () => departments
+      .filter((item) => selectedDepartmentIds.includes(String(item.department.id)))
+      .map((item) => item.department),
+    [departments, selectedDepartmentIds],
   );
 
   const selectedLocation = useMemo(
@@ -186,44 +316,44 @@ export default function DepartmentAttendancePolicyPanel() {
     );
   }
 
+  const selectedNames = selectedDepartments.map((department) => department.name);
+  const description = selectedDepartments.length
+    ? selectedDepartments.length === 1
+      ? `Rules apply to users assigned to ${selectedNames[0]}.`
+      : `Saving applies these rules to ${formatDepartmentNames(selectedNames)}.`
+    : 'Select one or more departments to edit.';
+
   return (
     <div className="space-y-4">
       <AdminSettingsToolbar
-        label={<Label>Department</Label>}
+        label={<Label>Departments</Label>}
         control={(
-          <Select value={departmentId} onValueChange={setDepartmentId}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.map((entry) => (
-                <SelectItem key={entry.department.id} value={String(entry.department.id)}>
-                  {entry.department.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DepartmentMultiSelect
+            departments={departments}
+            selectedIds={selectedDepartmentIds}
+            onChange={setSelectedDepartmentIds}
+          />
         )}
         actions={(
           <Button
             type="button"
             onClick={() => saveMutation.mutate()}
-            disabled={!departmentId || saveMutation.isPending}
+            disabled={!selectedDepartmentIds.length || saveMutation.isPending}
             className={adminSettingsToolbarButtonClassName('gap-2')}
           >
             {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save department policy
+            {selectedDepartmentIds.length > 1
+              ? `Save to ${selectedDepartmentIds.length} departments`
+              : 'Save department policy'}
           </Button>
         )}
-        description={selectedDepartment
-          ? `Rules apply to users assigned to ${selectedDepartment.name}.`
-          : null}
+        description={description}
       />
 
       <AdminSettingsToggleRow
         className="p-3"
-        label={<Label>Enable rules for this department</Label>}
-        description="When disabled, users in this department are not restricted."
+        label={<Label>Enable rules for selected departments</Label>}
+        description="When disabled, users in the selected departments are not restricted."
       >
         <Switch
           checked={form.enabled}
@@ -289,7 +419,7 @@ export default function DepartmentAttendancePolicyPanel() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No location assigned. Users in this department will not be geofence-restricted.
+                No location assigned. Users in selected departments will not be geofence-restricted.
               </p>
             )}
           </CardContent>
@@ -303,7 +433,7 @@ export default function DepartmentAttendancePolicyPanel() {
                 Working hours & shifts
               </CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Define shifts per department, including night shifts.
+                Define shifts for the selected departments, including night shifts.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
@@ -315,7 +445,7 @@ export default function DepartmentAttendancePolicyPanel() {
                     onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Used to evaluate shift hours, grace period, and overtime for this department.
+                    Used to evaluate shift hours, grace period, and overtime for selected departments.
                   </p>
                 </div>
                 <div className="space-y-1.5">

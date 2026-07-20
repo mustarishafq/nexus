@@ -158,7 +158,7 @@ class NetworkHealthController extends Controller
             'operating_system' => ['nullable', 'string', 'max:64'],
             'time_from' => ['nullable', 'date_format:H:i'],
             'time_to' => ['nullable', 'date_format:H:i'],
-            'timezone' => ['nullable', 'timezone:all'],
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
         ]);
 
         if (! $isAdmin) {
@@ -331,7 +331,7 @@ class NetworkHealthController extends Controller
             'operating_system' => ['nullable', 'string', 'max:64'],
             'time_from' => ['nullable', 'date_format:H:i'],
             'time_to' => ['nullable', 'date_format:H:i'],
-            'timezone' => ['nullable', 'timezone:all'],
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
         ]);
 
         if (! $isAdmin) {

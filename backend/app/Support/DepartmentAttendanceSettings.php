@@ -59,7 +59,8 @@ class DepartmentAttendanceSettings
         return [
             'enabled' => ['nullable', 'boolean'],
             'attendance_location_id' => ['nullable', 'integer', 'exists:attendance_locations,id'],
-            'timezone' => ['nullable', 'timezone:all'],
+            // all_with_bc accepts IANA aliases browsers still expose (e.g. Asia/Calcutta, Europe/Kiev)
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
             'grace_period_minutes' => ['nullable', 'integer', 'min:0', 'max:180'],
             'allow_outside_shift_hours' => ['nullable', 'boolean'],
             'overtime_enabled' => ['nullable', 'boolean'],
@@ -233,7 +234,10 @@ class DepartmentAttendanceSettings
 
     private static function normalizeTimezone(?string $timezone): string
     {
-        if (filled($timezone) && in_array($timezone, timezone_identifiers_list(), true)) {
+        if (
+            filled($timezone)
+            && in_array($timezone, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+        ) {
             return $timezone;
         }
 

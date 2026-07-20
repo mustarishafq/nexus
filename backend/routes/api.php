@@ -144,6 +144,7 @@ Route::post('/admin/attendance-locations', [AttendanceLocationController::class,
 Route::put('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'update']);
 Route::delete('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'destroy']);
 Route::get('/admin/department-attendance', [DepartmentAttendanceController::class, 'index']);
+Route::put('/admin/department-attendance', [DepartmentAttendanceController::class, 'bulkUpdate']);
 Route::get('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'show']);
 Route::put('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'update']);
 
