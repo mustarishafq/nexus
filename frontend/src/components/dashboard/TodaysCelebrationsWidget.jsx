@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Cake, Award, PartyPopper, SmilePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,6 +15,36 @@ const DEFAULT_REACTIONS = ['🎉', '🎂', '👏', '🎈', '❤️', '🥳', '�
 
 function celebrationsQueryKey(localDate) {
   return ['dashboard-celebrations', localDate];
+}
+
+function celebrationDayLabel(celebrationDate) {
+  if (!celebrationDate) return 'Soon';
+
+  const date = typeof celebrationDate === 'string' ? parseISO(celebrationDate) : celebrationDate;
+  if (isToday(date)) return 'Today';
+  if (isTomorrow(date)) return 'Tomorrow';
+  return format(date, 'EEE');
+}
+
+function parseCelebrationDate(celebrationDate) {
+  if (!celebrationDate) return null;
+  return typeof celebrationDate === 'string' ? parseISO(celebrationDate) : celebrationDate;
+}
+
+function groupByCelebrationDate(items) {
+  const groups = [];
+  const indexByDate = new Map();
+
+  for (const person of items) {
+    const key = person.celebration_date || 'unknown';
+    if (!indexByDate.has(key)) {
+      indexByDate.set(key, groups.length);
+      groups.push({ dateKey: key, date: parseCelebrationDate(person.celebration_date), people: [] });
+    }
+    groups[indexByDate.get(key)].people.push(person);
+  }
+
+  return groups;
 }
 
 function updateCelebrationPerson(queryClient, queryKey, recipientUserId, celebrationType, updater) {
@@ -75,15 +105,46 @@ function applyReactionChange(person, reaction, reactionId = person.my_reaction?.
   };
 }
 
-function ReactionCountPills({ reactionCounts }) {
-  const entries = Object.entries(reactionCounts);
+function CelebrationDateBadge({ date, accent }) {
+  const today = date ? isToday(date) : false;
+
+  const todayTone =
+    accent === 'anniversary'
+      ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
+      : 'bg-pink-500 text-white shadow-sm shadow-pink-500/20';
 
   return (
-    <div className="mt-1.5 h-6 flex items-center gap-1 overflow-hidden">
+    <div
+      className={cn(
+        'flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl',
+        today ? todayTone : 'border border-border/70 bg-muted/30'
+      )}
+    >
+      <span
+        className={cn(
+          'text-[9px] font-semibold uppercase leading-none tracking-wide',
+          today ? 'text-white/80' : 'text-muted-foreground'
+        )}
+      >
+        {date ? format(date, 'MMM') : '—'}
+      </span>
+      <span className="mt-0.5 text-sm font-bold leading-none tabular-nums">
+        {date ? format(date, 'd') : '·'}
+      </span>
+    </div>
+  );
+}
+
+function ReactionCountPills({ reactionCounts }) {
+  const entries = Object.entries(reactionCounts);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1 overflow-hidden">
       {entries.map(([emoji, count]) => (
         <span
           key={emoji}
-          className="inline-flex shrink-0 items-center justify-center h-6 min-w-6 px-1 rounded-full bg-muted border border-border/70 text-sm leading-none shadow-sm"
+          className="inline-flex shrink-0 items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-muted/80 border border-border/60 text-sm leading-none"
           title={`${count} reaction${count === 1 ? '' : 's'}`}
         >
           <span className="text-xs">{emoji}</span>
@@ -100,7 +161,7 @@ function CelebrationFeedCard({
   person,
   celebrationType,
   celebrationDate,
-  badge,
+  subtitle,
   accent,
   reactions,
   onReact,
@@ -110,15 +171,17 @@ function CelebrationFeedCard({
   const canReact = person.can_react ?? person.can_wish !== false;
   const myReaction = person.my_reaction?.reaction ?? person.my_wish?.reaction ?? null;
   const reactionCounts = person.reaction_counts || {};
+  const date = parseCelebrationDate(celebrationDate);
+  const today = date ? isToday(date) : false;
 
   const accentStyles = {
     birthday: {
       avatar: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
-      badge: 'bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/20',
+      todayRow: 'bg-pink-500/[0.05]',
     },
     anniversary: {
       avatar: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-      badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+      todayRow: 'bg-amber-500/[0.05]',
     },
   }[accent];
 
@@ -142,22 +205,35 @@ function CelebrationFeedCard({
   };
 
   return (
-    <article className="rounded-lg border border-border/80 bg-background overflow-hidden">
-      <div className="flex items-center gap-3 p-3 min-w-0">
-        <UserAvatar
-          user={person}
-          className="h-9 w-9 shrink-0"
-          fallbackClassName={cn('text-xs font-bold', accentStyles.avatar)}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight truncate">{getDisplayName(person, person.email)}</p>
-          <div className="mt-1 flex items-center">
-            <Badge variant="outline" className={cn('text-[10px] px-2 py-0 h-5', accentStyles.badge)}>
-              {badge}
-            </Badge>
-          </div>
-          <ReactionCountPills reactionCounts={reactionCounts} />
-        </div>
+    <div
+      className={cn(
+        'flex items-center gap-2.5 px-2.5 py-2.5 transition-colors',
+        today && accentStyles.todayRow
+      )}
+    >
+      <CelebrationDateBadge date={date} accent={accent} />
+
+      <UserAvatar
+        user={person}
+        className="h-8 w-8 shrink-0"
+        fallbackClassName={cn('text-[10px] font-bold', accentStyles.avatar)}
+      />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-tight truncate">
+          {getDisplayName(person, person.email)}
+        </p>
+        {subtitle ? (
+          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{subtitle}</p>
+        ) : (
+          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+            {celebrationDayLabel(celebrationDate)}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        <ReactionCountPills reactionCounts={reactionCounts} />
 
         {canReact ? (
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -167,7 +243,7 @@ function CelebrationFeedCard({
                 disabled={isSubmitting}
                 title="React"
                 className={cn(
-                  'shrink-0 inline-flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                  'inline-flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
                   myReaction && 'border-primary/30 bg-primary/5 text-primary'
                 )}
               >
@@ -200,48 +276,74 @@ function CelebrationFeedCard({
           </Popover>
         ) : null}
       </div>
-    </article>
+    </div>
   );
 }
 
 function CelebrationFeed({
   items,
   celebrationType,
-  celebrationDate,
   accent,
-  badgeFor,
+  subtitleFor,
   reactions,
   onReact,
   isSubmitting,
   emptyMessage,
+  emptyHint,
 }) {
+  const groups = useMemo(() => groupByCelebrationDate(items), [items]);
+
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground text-center py-6 col-span-full">{emptyMessage}</p>
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <div
+          className={cn(
+            'mb-3 flex h-10 w-10 items-center justify-center rounded-xl',
+            accent === 'anniversary' ? 'bg-amber-500/10' : 'bg-pink-500/10'
+          )}
+        >
+          {accent === 'anniversary' ? (
+            <Award className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <Cake className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+          )}
+        </div>
+        <p className="text-sm font-medium">{emptyMessage}</p>
+        {emptyHint ? (
+          <p className="mt-1 text-xs text-muted-foreground">{emptyHint}</p>
+        ) : null}
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {items.map((person) => (
-        <CelebrationFeedCard
-          key={person.id}
-          person={person}
-          celebrationType={celebrationType}
-          celebrationDate={celebrationDate}
-          badge={badgeFor(person)}
-          accent={accent}
-          reactions={reactions}
-          onReact={onReact}
-          isSubmitting={isSubmitting}
-        />
+    <div className="overflow-hidden divide-y divide-border/70 rounded-xl border border-border/70 bg-muted/10">
+      {groups.map((group) => (
+        <div key={group.dateKey}>
+          {group.people.map((person) => (
+            <CelebrationFeedCard
+              key={`${person.id}-${person.celebration_date || celebrationType}`}
+              person={person}
+              celebrationType={celebrationType}
+              celebrationDate={person.celebration_date}
+              subtitle={subtitleFor?.(person)}
+              accent={accent}
+              reactions={reactions}
+              onReact={onReact}
+              isSubmitting={isSubmitting}
+            />
+          ))}
+        </div>
       ))}
     </div>
   );
 }
 
 export default function TodaysCelebrationsWidget({ embedded = false }) {
-  const localDate = format(new Date(), 'yyyy-MM-dd');
+  const today = new Date();
+  const localDate = format(today, 'yyyy-MM-dd');
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
   const queryClient = useQueryClient();
   const queryKey = celebrationsQueryKey(localDate);
 
@@ -322,93 +424,77 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
   const serviceAnniversaries = data?.service_anniversaries || [];
   const reactions = data?.reactions || DEFAULT_REACTIONS;
   const defaultTab = birthdays.length > 0 ? 'birthdays' : 'anniversaries';
-  const hasCelebrations = birthdays.length > 0 || serviceAnniversaries.length > 0;
+  const totalCount = birthdays.length + serviceAnniversaries.length;
 
   const containerClass = embedded
     ? 'bg-transparent border-0 rounded-none'
     : 'bg-card rounded-2xl border border-border';
-  const contentPadding = embedded ? 'px-5 pb-5' : 'px-5 pb-5';
 
-  const SectionTitle = ({ tabs = null }) => (
-    <div className="p-5 pb-3 space-y-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <PartyPopper className="w-4 h-4 text-primary shrink-0" />
-        <h3 className="font-semibold text-sm">Today&apos;s Celebrations</h3>
-      </div>
-      {tabs}
-    </div>
-  );
-
-  const tabsList = (
-    <TabsList className="grid w-full grid-cols-2 h-auto p-1">
-      <TabsTrigger
-        value="birthdays"
-        className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400"
-      >
-        <Cake className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">Birthdays</span>
-        {birthdays.length > 0 ? (
-          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
-            {birthdays.length}
-          </Badge>
-        ) : null}
-      </TabsTrigger>
-      <TabsTrigger
-        value="anniversaries"
-        className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400"
-      >
-        <Award className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">Anniversaries</span>
-        {serviceAnniversaries.length > 0 ? (
-          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
-            {serviceAnniversaries.length}
-          </Badge>
-        ) : null}
-      </TabsTrigger>
-    </TabsList>
-  );
+  const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`;
 
   return (
     <div className={containerClass}>
-      {isLoading ? (
-        <>
-          <SectionTitle />
-          <p className={cn('text-sm text-muted-foreground text-center', contentPadding)}>
-            Loading celebrations...
-          </p>
-        </>
-      ) : isError ? (
-        <>
-          <SectionTitle />
-          <p className={cn('text-sm text-destructive text-center', contentPadding)}>
-            Could not load celebrations.
-          </p>
-        </>
-      ) : !hasCelebrations ? (
-        <>
-          <SectionTitle />
-          <p className={cn('text-sm text-muted-foreground text-center py-6', contentPadding)}>
-            No birthdays or anniversaries today.
-          </p>
-        </>
-      ) : (
-        <Tabs defaultValue={defaultTab}>
-          <SectionTitle tabs={tabsList} />
+      <div className="flex items-start gap-3 p-5 pb-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <PartyPopper className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-sm">Celebrations</h3>
+            {totalCount > 0 ? (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
+                {totalCount}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">{weekLabel}</p>
+        </div>
+      </div>
 
-          <div className={cn('max-h-80 overflow-y-auto px-5 pb-5', embedded && 'px-4 pb-4 pt-0')}>
+      {isLoading ? (
+        <p className="px-5 pb-5 text-sm text-muted-foreground text-center py-6">Loading celebrations...</p>
+      ) : isError ? (
+        <p className="px-5 pb-5 text-sm text-destructive text-center py-6">Could not load celebrations.</p>
+      ) : (
+        <Tabs defaultValue={defaultTab} className="px-5 pb-5">
+          <TabsList className="grid w-full grid-cols-2 h-auto p-1 mb-3">
+            <TabsTrigger
+              value="birthdays"
+              className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400"
+            >
+              <Cake className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Birthdays</span>
+              {birthdays.length > 0 ? (
+                <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
+                  {birthdays.length}
+                </Badge>
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger
+              value="anniversaries"
+              className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400"
+            >
+              <Award className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Anniversaries</span>
+              {serviceAnniversaries.length > 0 ? (
+                <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
+                  {serviceAnniversaries.length}
+                </Badge>
+              ) : null}
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="max-h-80 overflow-y-auto">
             <TabsContent value="birthdays" className="mt-0 focus-visible:outline-none">
               <CelebrationFeed
                 items={birthdays}
                 celebrationType="birthday"
-                celebrationDate={localDate}
                 accent="birthday"
-                badgeFor={(person) =>
-                  person.age != null && person.age > 0 ? `Turns ${person.age}` : 'Birthday'
-                }
                 reactions={reactions}
                 onReact={reactMutation.mutate}
                 isSubmitting={reactMutation.isPending}
-                emptyMessage="No birthdays today"
+                emptyMessage="No birthdays this week"
+                emptyHint="Check back next week"
               />
             </TabsContent>
 
@@ -416,15 +502,23 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
               <CelebrationFeed
                 items={serviceAnniversaries}
                 celebrationType="service_anniversary"
-                celebrationDate={localDate}
                 accent="anniversary"
-                badgeFor={(person) =>
-                  person.years_of_service === 1 ? '1 year' : `${person.years_of_service} years`
-                }
+                subtitleFor={(person) => {
+                  const day = celebrationDayLabel(person.celebration_date);
+                  const years =
+                    person.years_of_service === 1
+                      ? '1 year'
+                      : person.years_of_service != null
+                        ? `${person.years_of_service} years`
+                        : null;
+                  if (day && years) return `${day} · ${years}`;
+                  return day || years || 'Anniversary';
+                }}
                 reactions={reactions}
                 onReact={reactMutation.mutate}
                 isSubmitting={reactMutation.isPending}
-                emptyMessage="No anniversaries today"
+                emptyMessage="No anniversaries this week"
+                emptyHint="Milestones will show up here"
               />
             </TabsContent>
           </div>

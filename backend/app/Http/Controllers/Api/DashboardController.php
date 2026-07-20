@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CelebrationWish;
+use App\Models\Notification;
 use App\Models\User;
+use App\Services\PushNotificationService;
 use App\Support\ApiTokenAuth;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,30 +21,36 @@ class DashboardController extends Controller
 
     public function celebrations(Request $request): JsonResponse
     {
-        $today = $this->resolveCelebrationDate($request);
-        $month = $today->month;
-        $day = $today->day;
-        $todayDate = $today->toDateString();
+        $anchor = $this->resolveCelebrationDate($request);
+        $weekStart = $anchor->copy()->startOfWeek(Carbon::MONDAY);
+        $weekEnd = $anchor->copy()->endOfWeek(Carbon::SUNDAY);
+        $weekStartDate = $weekStart->toDateString();
+        $weekEndDate = $weekEnd->toDateString();
         $currentUser = ApiTokenAuth::userFromRequest($request);
+        $dayPairs = $this->monthDayPairsInRange($weekStart, $weekEnd);
 
         $birthdayUsers = User::query()
             ->where('is_approved', true)
             ->whereNotNull('date_of_birth')
-            ->whereMonth('date_of_birth', $month)
-            ->whereDay('date_of_birth', $day)
+            ->where(function (Builder $query) use ($dayPairs) {
+                $this->applyMonthDayPairs($query, 'date_of_birth', $dayPairs);
+            })
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'date_of_birth']);
 
         $serviceUsers = User::query()
             ->where('is_approved', true)
             ->whereNotNull('joined_at')
-            ->whereMonth('joined_at', $month)
-            ->whereDay('joined_at', $day)
-            ->whereDate('joined_at', '<', $todayDate)
+            ->where(function (Builder $query) use ($dayPairs) {
+                $this->applyMonthDayPairs($query, 'joined_at', $dayPairs);
+            })
+            ->whereDate('joined_at', '<', $weekStartDate)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'joined_at'])
-            ->filter(function (User $user) use ($today) {
-                return ($today->year - $user->joined_at->year) >= 1;
+            ->filter(function (User $user) use ($weekStart, $weekEnd) {
+                $celebrationDate = $this->matchDateInRange($weekStart, $weekEnd, $user->joined_at->month, $user->joined_at->day);
+
+                return $celebrationDate && ($celebrationDate->year - $user->joined_at->year) >= 1;
             })
             ->values();
 
@@ -51,9 +60,17 @@ class DashboardController extends Controller
             ->values()
             ->all();
 
-        $wishesByKey = $this->loadWishesForDate($todayDate, $recipientIds);
+        $wishesByKey = $this->loadWishesForWeek($weekStartDate, $weekEndDate, $recipientIds);
 
-        $birthdays = $birthdayUsers->map(function (User $user) use ($today, $todayDate, $currentUser, $wishesByKey) {
+        $birthdays = $birthdayUsers->map(function (User $user) use ($weekStart, $weekEnd, $currentUser, $wishesByKey) {
+            $celebrationDate = $this->matchDateInRange(
+                $weekStart,
+                $weekEnd,
+                $user->date_of_birth->month,
+                $user->date_of_birth->day
+            );
+            $celebrationDateString = $celebrationDate?->toDateString();
+
             return array_merge(
                 [
                     'id' => $user->id,
@@ -61,13 +78,30 @@ class DashboardController extends Controller
                     'email' => $user->email,
                     'profile_picture' => $user->profile_picture,
                     'date_of_birth' => $user->date_of_birth?->toDateString(),
-                    'age' => $user->date_of_birth ? $today->year - $user->date_of_birth->year : null,
+                    'celebration_date' => $celebrationDateString,
                 ],
-                $this->wishSummary($user->id, 'birthday', $todayDate, $currentUser, $wishesByKey)
+                $this->wishSummary($user->id, 'birthday', $celebrationDateString, $currentUser, $wishesByKey)
             );
-        })->values();
+        })
+            ->filter(fn (array $person) => filled($person['celebration_date'] ?? null))
+            ->sortBy([
+                ['celebration_date', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->values();
 
-        $serviceAnniversaries = $serviceUsers->map(function (User $user) use ($today, $todayDate, $currentUser, $wishesByKey) {
+        $serviceAnniversaries = $serviceUsers->map(function (User $user) use ($weekStart, $weekEnd, $currentUser, $wishesByKey) {
+            $celebrationDate = $this->matchDateInRange(
+                $weekStart,
+                $weekEnd,
+                $user->joined_at->month,
+                $user->joined_at->day
+            );
+            $celebrationDateString = $celebrationDate?->toDateString();
+            $years = $celebrationDate
+                ? $celebrationDate->year - $user->joined_at->year
+                : null;
+
             return array_merge(
                 [
                     'id' => $user->id,
@@ -75,14 +109,23 @@ class DashboardController extends Controller
                     'email' => $user->email,
                     'profile_picture' => $user->profile_picture,
                     'joined_at' => $user->joined_at?->toDateString(),
-                    'years_of_service' => $today->year - $user->joined_at->year,
+                    'years_of_service' => $years,
+                    'celebration_date' => $celebrationDateString,
                 ],
-                $this->wishSummary($user->id, 'service_anniversary', $todayDate, $currentUser, $wishesByKey)
+                $this->wishSummary($user->id, 'service_anniversary', $celebrationDateString, $currentUser, $wishesByKey)
             );
-        })->values();
+        })
+            ->filter(fn (array $person) => filled($person['celebration_date'] ?? null))
+            ->sortBy([
+                ['celebration_date', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->values();
 
         return response()->json([
-            'date' => $todayDate,
+            'date' => $anchor->toDateString(),
+            'week_start' => $weekStartDate,
+            'week_end' => $weekEndDate,
             'reactions' => self::REACTIONS,
             'birthdays' => $birthdays,
             'service_anniversaries' => $serviceAnniversaries,
@@ -135,6 +178,10 @@ class DashboardController extends Controller
             ]
         );
 
+        if ($wish->wasRecentlyCreated || $wish->wasChanged('reaction')) {
+            $this->notifyRecipientOfReaction($recipient, $sender, $validated['celebration_type'], $wish->reaction);
+        }
+
         return response()->json([
             'reaction' => [
                 'id' => $wish->id,
@@ -168,20 +215,57 @@ class DashboardController extends Controller
     }
 
     /**
+     * @return list<array{0: int, 1: int}>
+     */
+    private function monthDayPairsInRange(Carbon $start, Carbon $end): array
+    {
+        $pairs = [];
+
+        for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
+            $pairs[] = [$day->month, $day->day];
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * @param  list<array{0: int, 1: int}>  $dayPairs
+     */
+    private function applyMonthDayPairs(Builder $query, string $column, array $dayPairs): void
+    {
+        foreach ($dayPairs as [$month, $day]) {
+            $query->orWhere(function (Builder $inner) use ($column, $month, $day) {
+                $inner->whereMonth($column, $month)->whereDay($column, $day);
+            });
+        }
+    }
+
+    private function matchDateInRange(Carbon $start, Carbon $end, int $month, int $day): ?Carbon
+    {
+        for ($cursor = $start->copy(); $cursor->lte($end); $cursor->addDay()) {
+            if ($cursor->month === $month && $cursor->day === $day) {
+                return $cursor->copy()->startOfDay();
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<int>  $recipientIds
      * @return Collection<string, Collection<int, CelebrationWish>>
      */
-    private function loadWishesForDate(string $celebrationDate, array $recipientIds): Collection
+    private function loadWishesForWeek(string $weekStartDate, string $weekEndDate, array $recipientIds): Collection
     {
         if ($recipientIds === []) {
             return collect();
         }
 
         return CelebrationWish::query()
-            ->where('celebration_date', $celebrationDate)
+            ->whereBetween('celebration_date', [$weekStartDate, $weekEndDate])
             ->whereIn('recipient_user_id', $recipientIds)
             ->get()
-            ->groupBy(fn (CelebrationWish $wish) => "{$wish->recipient_user_id}:{$wish->celebration_type}");
+            ->groupBy(fn (CelebrationWish $wish) => "{$wish->recipient_user_id}:{$wish->celebration_type}:{$wish->celebration_date->toDateString()}");
     }
 
     /**
@@ -191,11 +275,13 @@ class DashboardController extends Controller
     private function wishSummary(
         int $recipientId,
         string $celebrationType,
-        string $celebrationDate,
+        ?string $celebrationDate,
         ?User $currentUser,
         Collection $wishesByKey
     ): array {
-        $wishes = $wishesByKey->get("{$recipientId}:{$celebrationType}", collect());
+        $wishes = $celebrationDate
+            ? $wishesByKey->get("{$recipientId}:{$celebrationType}:{$celebrationDate}", collect())
+            : collect();
 
         $reactionCounts = $wishes
             ->countBy('reaction')
@@ -241,5 +327,37 @@ class DashboardController extends Controller
         return $recipient->joined_at->month === $date->month
             && $recipient->joined_at->day === $date->day
             && ($date->year - $recipient->joined_at->year) >= 1;
+    }
+
+    private function notifyRecipientOfReaction(
+        User $recipient,
+        User $sender,
+        string $celebrationType,
+        string $reaction
+    ): void {
+        $senderName = $sender->displayName();
+        $isBirthday = $celebrationType === 'birthday';
+        $occasion = $isBirthday ? 'birthday' : 'work anniversary';
+
+        $notification = Notification::create([
+            'user_id' => (string) $recipient->id,
+            'type' => 'info',
+            'priority' => 'medium',
+            'title' => "{$senderName} reacted to your {$occasion}",
+            'message' => "{$senderName} sent {$reaction} for your {$occasion}.",
+            'category' => 'hr',
+            'is_read' => false,
+            'is_broadcast' => false,
+            'action_url' => '/',
+            'delivery_channels' => ['in_app'],
+            'data' => [
+                'kind' => 'celebration_reaction',
+                'celebration_type' => $celebrationType,
+                'reaction' => $reaction,
+                'sender_user_id' => $sender->id,
+            ],
+        ]);
+
+        app(PushNotificationService::class)->sendNotification($notification);
     }
 }
