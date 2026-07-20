@@ -1,12 +1,11 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { LogIn, LogOut, MapPin, Camera, Loader2, Shield } from 'lucide-react';
+import { Camera, MapPin, Shield } from 'lucide-react';
 import AttendanceCamera from '@/components/attendance/AttendanceCamera';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAttendanceReminder';
 import { useAuth } from '@/lib/AuthContext';
@@ -32,6 +31,7 @@ export default function AttendanceClockIn() {
   const canViewAllRecords = canManageAttendance(user);
 
   const [capture, setCapture] = useState(null);
+  const [cameraKey, setCameraKey] = useState(0);
 
   const deviceInfo = useMemo(() => getDeviceInfo(), []);
 
@@ -39,32 +39,35 @@ export default function AttendanceClockIn() {
     enabled: true,
   });
 
+  const nextType = status?.next_type || 'clock_in';
+  const isClockIn = nextType === 'clock_in';
+
   const clockMutation = useMutation({
-    mutationFn: async () => {
-      if (!capture?.blob) {
+    mutationFn: async (photoCapture) => {
+      if (!photoCapture?.blob) {
         throw new Error('Capture a photo before clocking in or out.');
       }
 
       const upload = await db.integrations.Core.UploadFile({
-        file: new File([capture.blob], `attendance-${Date.now()}.jpg`, { type: 'image/jpeg' }),
+        file: new File([photoCapture.blob], `attendance-${Date.now()}.jpg`, { type: 'image/jpeg' }),
         folder: 'attendance-photos',
       });
 
       return db.attendance.clock({
-        type: status?.next_type,
+        type: nextType,
         photo_url: upload.file_url,
-        latitude: capture.location?.latitude ?? null,
-        longitude: capture.location?.longitude ?? null,
-        location_label: capture.location?.locationLabel ?? null,
+        latitude: photoCapture.location?.latitude ?? null,
+        longitude: photoCapture.location?.longitude ?? null,
+        location_label: photoCapture.location?.locationLabel ?? null,
         browser: deviceInfo.browser,
         browser_version: deviceInfo.browser_version,
         operating_system: deviceInfo.operating_system,
         device_type: deviceInfo.device_type,
         screen_resolution: deviceInfo.screen_resolution,
         timezone: deviceInfo.timezone,
-        captured_at: capture.capturedAt,
+        captured_at: photoCapture.capturedAt,
         metadata: {
-          watermark_lines: capture.watermarkLines,
+          watermark_lines: photoCapture.watermarkLines,
         },
       });
     },
@@ -73,9 +76,10 @@ export default function AttendanceClockIn() {
       if (policy?.is_overtime) {
         toast.success(`Clocked out with ${formatDurationMinutes(policy.overtime_minutes, { style: 'long' })} overtime`);
       } else {
-        toast.success(status?.next_type === 'clock_in' ? 'Clocked in successfully' : 'Clocked out successfully');
+        toast.success(isClockIn ? 'Clocked in successfully' : 'Clocked out successfully');
       }
       setCapture(null);
+      setCameraKey((key) => key + 1);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_STATUS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
       if (canViewAllRecords) {
@@ -86,6 +90,15 @@ export default function AttendanceClockIn() {
       toast.error(error?.data?.message || error.message || 'Failed to record attendance');
     },
   });
+
+  const handleCapture = useCallback((photoCapture) => {
+    setCapture(photoCapture);
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    if (!capture?.blob || clockMutation.isPending) return;
+    clockMutation.mutate(capture);
+  }, [capture, clockMutation]);
 
   const policy = status?.policy;
   const activeShift = policy ? findActiveShift(policy) : null;
@@ -103,38 +116,35 @@ export default function AttendanceClockIn() {
     )
   ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, policy?.radius_meters]);
 
-  const nextType = status?.next_type || 'clock_in';
-  const isClockIn = nextType === 'clock_in';
-  const ActionIcon = isClockIn ? LogIn : LogOut;
   const scheduleHint = status?.schedule_hint;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
       {!status?.reminder && scheduleHint ? (
-        <Card className="rounded-2xl border-dashed">
-          <CardHeader className="pb-3">
+        <Card className="min-w-0 rounded-2xl border-dashed">
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
             <CardTitle className="text-base">Shift schedule</CardTitle>
-            <CardDescription>{scheduleHint.message}</CardDescription>
+            <CardDescription className="text-pretty">{scheduleHint.message}</CardDescription>
           </CardHeader>
         </Card>
       ) : null}
 
       {policy ? (
-        <Card className="rounded-2xl border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" /> Department rules
+        <Card className="min-w-0 rounded-2xl border-primary/20 bg-primary/5">
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-4 w-4 shrink-0 text-primary" /> Department rules
             </CardTitle>
-            <CardDescription>{describeAttendancePolicy(policy)}</CardDescription>
+            <CardDescription className="text-pretty">{describeAttendancePolicy(policy)}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 text-sm">
+          <CardContent className="flex flex-wrap gap-2 p-4 pt-0 text-sm sm:p-6 sm:pt-0">
             {activeShift ? (
               <Badge variant="secondary">Active shift: {activeShift.name}</Badge>
             ) : policy.shifts?.length ? (
               <Badge variant="outline">Outside scheduled shift</Badge>
             ) : null}
             {nearestSite ? (
-              <Badge variant={matchedSite ? 'secondary' : 'destructive'}>
+              <Badge variant={matchedSite ? 'secondary' : 'destructive'} className="max-w-full truncate">
                 {matchedSite
                   ? `At ${matchedSite.site.name}`
                   : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
@@ -147,50 +157,60 @@ export default function AttendanceClockIn() {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <Card className="rounded-2xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Camera className="h-4 w-4 text-primary" /> Camera capture
+      <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <Card className="min-w-0 overflow-hidden rounded-2xl">
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Camera className="h-4 w-4 shrink-0 text-primary" />
+              {isClockIn ? 'Clock in' : 'Clock out'}
             </CardTitle>
-            <CardDescription>
-              Watermark is shown live on the camera and burned into the saved photo.
+            <CardDescription className="text-pretty">
+              Take a photo, then tap {isClockIn ? 'Clock In' : 'Clock Out'}. Use Flip to switch cameras.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <AttendanceCamera
+              key={cameraKey}
               watermarkConfig={appPublicSettings}
               userName={user?.full_name || user?.name || user?.email}
               deviceInfo={deviceInfo}
               attendanceSites={attendanceSites}
               siteRadiusMeters={policy?.radius_meters ?? 200}
-              disabled={clockMutation.isPending}
-              onCapture={setCapture}
+              actionType={nextType}
+              submitting={clockMutation.isPending}
+              canSubmit={Boolean(capture?.blob)}
+              disabled={clockMutation.isPending || statusLoading}
+              onCapture={handleCapture}
+              onSubmit={handleSubmit}
             />
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-3">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
+          <Card className="min-w-0 overflow-hidden rounded-2xl">
+            <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
               <CardTitle className="text-base">Current status</CardTitle>
-              <CardDescription>
-                {statusLoading ? 'Loading status…' : isClockIn ? 'You are ready to clock in.' : 'You are clocked in.'}
+              <CardDescription className="text-pretty">
+                {statusLoading
+                  ? 'Loading status…'
+                  : isClockIn
+                    ? 'You are ready to clock in.'
+                    : 'You are clocked in.'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
               {status?.last_record ? (
                 <div className="rounded-xl border bg-muted/30 p-3 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{formatRecordType(status.last_record.type)}</span>
-                    <Badge variant="secondary">
+                    <span className="min-w-0 truncate font-medium">{formatRecordType(status.last_record.type)}</span>
+                    <Badge variant="secondary" className="shrink-0">
                       {format(new Date(status.last_record.captured_at), 'MMM d, h:mm a')}
                     </Badge>
                   </div>
                   {status.last_record.location_label ? (
                     <p className="mt-2 flex items-start gap-1.5 text-muted-foreground">
                       <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      {status.last_record.location_label}
+                      <span className="min-w-0 break-words">{status.last_record.location_label}</span>
                     </p>
                   ) : null}
                 </div>
@@ -198,52 +218,28 @@ export default function AttendanceClockIn() {
                 <p className="text-sm text-muted-foreground">No attendance records yet.</p>
               )}
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
                 <div className="rounded-xl border p-3">
-                  <div className="text-muted-foreground">Today clock-ins</div>
+                  <div className="text-xs text-muted-foreground sm:text-sm">Today clock-ins</div>
                   <div className="mt-1 text-2xl font-semibold tabular-nums">{status?.today_summary?.clock_ins ?? 0}</div>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <div className="text-muted-foreground">Today clock-outs</div>
+                  <div className="text-xs text-muted-foreground sm:text-sm">Today clock-outs</div>
                   <div className="mt-1 text-2xl font-semibold tabular-nums">{status?.today_summary?.clock_outs ?? 0}</div>
                 </div>
               </div>
-
-              <Button
-                className="w-full gap-2"
-                size="lg"
-                disabled={!capture || clockMutation.isPending || statusLoading}
-                onClick={() => clockMutation.mutate()}
-              >
-                {clockMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ActionIcon className="h-4 w-4" />
-                )}
-                {clockMutation.isPending
-                  ? 'Submitting…'
-                  : isClockIn
-                    ? 'Clock In'
-                    : 'Clock Out'}
-              </Button>
-
-              {!capture ? (
-                <p className="text-center text-xs text-muted-foreground">
-                  Capture a photo first, then tap {isClockIn ? 'Clock In' : 'Clock Out'}.
-                </p>
-              ) : null}
             </CardContent>
           </Card>
 
           {capture?.watermarkLines?.length ? (
-            <Card className="rounded-2xl">
+            <Card className="hidden min-w-0 overflow-hidden rounded-2xl sm:block">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Watermark preview</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-1 rounded-xl border bg-muted/20 p-3 font-mono text-xs">
+                <div className="space-y-1 overflow-x-auto rounded-xl border bg-muted/20 p-3 font-mono text-xs">
                   {capture.watermarkLines.map((line) => (
-                    <div key={line}>{line}</div>
+                    <div key={line} className="whitespace-nowrap sm:whitespace-normal sm:break-words">{line}</div>
                   ))}
                 </div>
               </CardContent>

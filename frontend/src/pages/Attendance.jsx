@@ -73,15 +73,20 @@ export default function Attendance() {
   }
 
   return (
-    <div className={cn('mx-auto w-full space-y-4', activeSection === 'records' ? 'max-w-none' : 'max-w-5xl')}>
-      <div className="space-y-3">
-        <div>
+    <div
+      className={cn(
+        'mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4',
+        activeSection === 'records' ? 'max-w-none' : 'max-w-5xl',
+      )}
+    >
+      <div className="min-w-0 space-y-2.5 sm:space-y-3">
+        <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
             <Clock className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" /> Attendance
           </h1>
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
             {activeSection === 'clock-in'
-              ? 'Take a watermarked photo to clock in or out with date, time, and location.'
+              ? 'Take a selfie, then clock in or out with date, time, and location.'
               : 'Review your attendance history and export organization-wide records.'}
           </p>
         </div>
