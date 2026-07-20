@@ -47,6 +47,26 @@ export const ATTENDANCE_WATERMARK_POSITIONS = [
   { id: 'bottom-center', label: 'Bottom center', description: 'Centered along the bottom edge.' },
 ];
 
+/** Canvas CSS filters applied to the selfie frame before the watermark. */
+export const ATTENDANCE_SELFIE_FILTERS = [
+  { id: 'none', label: 'Original', css: 'none' },
+  { id: 'soft', label: 'Soft', css: 'brightness(1.08) contrast(0.92) saturate(0.9)' },
+  { id: 'warm', label: 'Warm', css: 'sepia(0.28) saturate(1.15) brightness(1.05)' },
+  { id: 'vivid', label: 'Vivid', css: 'saturate(1.45) contrast(1.12) brightness(1.03)' },
+  { id: 'bright', label: 'Bright', css: 'brightness(1.2) contrast(0.95) saturate(1.05)' },
+  { id: 'drama', label: 'Drama', css: 'contrast(1.35) brightness(0.95) saturate(0.85)' },
+  { id: 'fade', label: 'Fade', css: 'brightness(1.12) contrast(0.82) saturate(0.7)' },
+];
+
+const SELFIE_FILTER_MAP = Object.fromEntries(
+  ATTENDANCE_SELFIE_FILTERS.map((filter) => [filter.id, filter]),
+);
+
+export function resolveSelfieFilterCss(filterId) {
+  const filter = SELFIE_FILTER_MAP[String(filterId || '').trim().toLowerCase()];
+  return filter?.css || 'none';
+}
+
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 function clampInt(value, min, max) {
@@ -604,6 +624,7 @@ export function drawVideoFrameWithWatermark(
   displayAspect = null,
   logoImage = null,
   mirror = false,
+  filterId = 'none',
 ) {
   const sourceWidth = video.videoWidth || 640;
   const sourceHeight = video.videoHeight || 480;
@@ -617,10 +638,15 @@ export function drawVideoFrameWithWatermark(
     canvas.height = nextHeight;
   }
 
+  const filterCss = resolveSelfieFilterCss(filterId);
+
+  ctx.save();
   if (mirror) {
-    ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
+  }
+  if (filterCss !== 'none') {
+    ctx.filter = filterCss;
   }
 
   ctx.drawImage(
@@ -634,10 +660,7 @@ export function drawVideoFrameWithWatermark(
     canvas.width,
     canvas.height,
   );
-
-  if (mirror) {
-    ctx.restore();
-  }
+  ctx.restore();
 
   drawWatermarkOnCanvas(ctx, canvas, config, context, logoImage);
 }
@@ -649,10 +672,21 @@ export async function captureCanvasWithWatermark(
   displayAspect = null,
   logoImage = null,
   mirror = false,
+  filterId = 'none',
 ) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  drawVideoFrameWithWatermark(ctx, canvas, video, config, context, displayAspect, logoImage, mirror);
+  drawVideoFrameWithWatermark(
+    ctx,
+    canvas,
+    video,
+    config,
+    context,
+    displayAspect,
+    logoImage,
+    mirror,
+    filterId,
+  );
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

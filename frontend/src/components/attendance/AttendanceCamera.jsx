@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
+  ATTENDANCE_SELFIE_FILTERS,
   buildWatermarkLines,
   captureCanvasWithWatermark,
   drawVideoFrameWithWatermark,
@@ -19,6 +20,7 @@ import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
 const CAMERA_START_TIMEOUT_MS = 12000;
 const LIVE_DRAW_INTERVAL_MS = 50;
 const MIRROR_STORAGE_KEY = 'attendance-camera-mirror';
+const FILTER_STORAGE_KEY = 'attendance-camera-filter';
 
 function readMirrorPreference() {
   try {
@@ -31,6 +33,26 @@ function readMirrorPreference() {
 function persistMirrorPreference(mirror) {
   try {
     localStorage.setItem(MIRROR_STORAGE_KEY, String(mirror));
+  } catch {
+    // Ignore storage errors (private browsing, etc.).
+  }
+}
+
+function readFilterPreference() {
+  try {
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (ATTENDANCE_SELFIE_FILTERS.some((filter) => filter.id === stored)) {
+      return stored;
+    }
+  } catch {
+    // Ignore storage errors (private browsing, etc.).
+  }
+  return 'none';
+}
+
+function persistFilterPreference(filterId) {
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, filterId);
   } catch {
     // Ignore storage errors (private browsing, etc.).
   }
@@ -139,11 +161,14 @@ export default function AttendanceCamera({
   const [error, setError] = useState('');
   const [facingMode, setFacingMode] = useState('user');
   const [mirrorPreview, setMirrorPreview] = useState(readMirrorPreference);
+  const [selfieFilter, setSelfieFilter] = useState(readFilterPreference);
   const [previewUrl, setPreviewUrl] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [locationTick, setLocationTick] = useState(0);
   const mirrorRef = useRef(mirrorPreview);
   mirrorRef.current = mirrorPreview;
+  const filterRef = useRef(selfieFilter);
+  filterRef.current = selfieFilter;
 
   const config = useMemo(
     () => normalizeAttendanceWatermarkConfig(watermarkConfig),
@@ -205,6 +230,7 @@ export default function AttendanceCamera({
         displayAspectRef.current,
         logoImageRef.current,
         mirrorRef.current,
+        filterRef.current,
       );
     }
 
@@ -382,6 +408,7 @@ export default function AttendanceCamera({
         displayAspectRef.current,
         logoImageRef.current,
         mirrorRef.current,
+        filterRef.current,
       );
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
@@ -421,6 +448,11 @@ export default function AttendanceCamera({
     persistMirrorPreference(checked);
   };
 
+  const handleFilterChange = (filterId) => {
+    setSelfieFilter(filterId);
+    persistFilterPreference(filterId);
+  };
+
   const watermarkLines = useMemo(
     () => buildWatermarkLines(config, buildContext()),
     [config, buildContext, locationTick],
@@ -456,6 +488,41 @@ export default function AttendanceCamera({
           </div>
         ) : null}
       </div>
+
+      {status !== 'preview' ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <p className="text-sm font-medium">Filter</p>
+            <p className="text-xs text-muted-foreground">Applied to the saved photo</p>
+          </div>
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <div className="flex w-max gap-2" role="listbox" aria-label="Selfie filters">
+              {ATTENDANCE_SELFIE_FILTERS.map((filter) => {
+                const selected = selfieFilter === filter.id;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    disabled={disabled || capturing || status !== 'live'}
+                    onClick={() => handleFilterChange(filter.id)}
+                    className={cn(
+                      'min-w-[4.5rem] rounded-xl border px-3 py-2 text-center text-xs font-medium transition-colors',
+                      'disabled:pointer-events-none disabled:opacity-50',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'bg-background hover:bg-muted',
+                    )}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {status !== 'preview' ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
