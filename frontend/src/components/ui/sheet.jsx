@@ -4,6 +4,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva } from "class-variance-authority";
 import { X } from "lucide-react"
 
+import { useLightboxStack } from "@/components/media/LightboxStackContext"
 import { cn } from "@/lib/utils"
 
 const Sheet = SheetPrimitive.Root
@@ -44,21 +45,52 @@ const sheetVariants = cva(
   }
 )
 
-const SheetContent = React.forwardRef(({ side = "right", className, overlayClassName, hideCloseButton = false, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay className={overlayClassName} />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-      {!hideCloseButton ? (
-        <SheetPrimitive.Close
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-      ) : null}
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-))
+const SheetContent = React.forwardRef(({
+  side = "right",
+  className,
+  overlayClassName,
+  hideCloseButton = false,
+  children,
+  onPointerDownOutside,
+  onInteractOutside,
+  onFocusOutside,
+  onEscapeKeyDown,
+  ...props
+}, ref) => {
+  const { isLightboxOpen } = useLightboxStack()
+
+  const guardWhileLightbox = (handler) => (event) => {
+    if (isLightboxOpen) {
+      event.preventDefault()
+      return
+    }
+    handler?.(event)
+  }
+
+  return (
+    <SheetPortal>
+      <SheetOverlay className={overlayClassName} />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        onPointerDownOutside={guardWhileLightbox(onPointerDownOutside)}
+        onInteractOutside={guardWhileLightbox(onInteractOutside)}
+        onFocusOutside={guardWhileLightbox(onFocusOutside)}
+        onEscapeKeyDown={guardWhileLightbox(onEscapeKeyDown)}
+        {...props}
+      >
+        {!hideCloseButton ? (
+          <SheetPrimitive.Close
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        ) : null}
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  )
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({

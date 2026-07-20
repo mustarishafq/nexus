@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import MediaLightbox from '@/components/media/MediaLightbox';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
 
@@ -70,31 +70,18 @@ export default function PostImageGrid({ item, className }) {
     setLoading(true);
   }, [count]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return undefined;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        close();
-      } else if (event.key === 'ArrowRight' && count > 1) {
+  const onKeyDown = useCallback(
+    (event) => {
+      if (event.key === 'ArrowRight' && count > 1) {
+        event.preventDefault();
         showNext();
       } else if (event.key === 'ArrowLeft' && count > 1) {
+        event.preventDefault();
         showPrevious();
       }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [close, isOpen, count, showNext, showPrevious]);
+    },
+    [count, showNext, showPrevious]
+  );
 
   if (count === 0) {
     return null;
@@ -107,108 +94,6 @@ export default function PostImageGrid({ item, className }) {
 
   const visibleCount = Math.min(count, 4);
   const overflow = count > 4 ? count - 4 : 0;
-
-  const lightbox = isOpen
-    ? createPortal(
-        <div
-          className={cn(
-            'fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8',
-            'bg-black/80 backdrop-blur-md',
-            'animate-in fade-in-0 duration-200'
-          )}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Post photo preview"
-          onClick={close}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'absolute right-3 top-3 z-10 h-10 w-10 rounded-full',
-              'text-white/90 hover:bg-white/10 hover:text-white',
-              'sm:right-5 sm:top-5'
-            )}
-            aria-label="Close photo preview"
-            onClick={(event) => {
-              event.stopPropagation();
-              close();
-            }}
-          >
-            <X className="h-5 w-5" />
-          </Button>
-
-          {count > 1 ? (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'absolute left-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:left-5',
-                  'text-white/90 hover:bg-white/10 hover:text-white'
-                )}
-                aria-label="Previous photo"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  showPrevious();
-                }}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'absolute right-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:right-5',
-                  'text-white/90 hover:bg-white/10 hover:text-white'
-                )}
-                aria-label="Next photo"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  showNext();
-                }}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            </>
-          ) : null}
-
-          <div
-            className="relative flex max-h-full max-w-full flex-col items-center justify-center"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {loading ? (
-              <div className="flex flex-col items-center gap-3 py-20 text-white/80">
-                <Loader2 className="h-8 w-8 animate-spin" />
-                <span className="text-sm">Loading photo…</span>
-              </div>
-            ) : null}
-
-            <img
-              key={images[viewerIndex]}
-              src={toAbsoluteUrl(images[viewerIndex])}
-              alt={`Post attachment ${viewerIndex + 1}`}
-              className={cn(
-                'max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-2xl object-contain shadow-2xl',
-                loading && 'hidden'
-              )}
-              onLoad={() => setLoading(false)}
-              onError={() => setLoading(false)}
-            />
-
-            {count > 1 && !loading ? (
-              <p className="mt-4 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90">
-                {viewerIndex + 1} / {count}
-              </p>
-            ) : null}
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
 
   return (
     <>
@@ -282,7 +167,76 @@ export default function PostImageGrid({ item, className }) {
         ) : null}
       </div>
 
-      {lightbox}
+      <MediaLightbox
+        open={isOpen}
+        onClose={close}
+        ariaLabel="Post photo preview"
+        onKeyDown={onKeyDown}
+        contentClassName="flex-col"
+        controls={
+          count > 1 ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'absolute left-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:left-5',
+                  'text-white/90 hover:bg-white/10 hover:text-white'
+                )}
+                aria-label="Previous photo"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showPrevious();
+                }}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'absolute right-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:right-5',
+                  'text-white/90 hover:bg-white/10 hover:text-white'
+                )}
+                aria-label="Next photo"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showNext();
+                }}
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </>
+          ) : null
+        }
+      >
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-20 text-white/80">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">Loading photo…</span>
+          </div>
+        ) : null}
+
+        <img
+          key={images[viewerIndex]}
+          src={toAbsoluteUrl(images[viewerIndex])}
+          alt={`Post attachment ${viewerIndex + 1}`}
+          className={cn(
+            'max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-2xl object-contain shadow-2xl',
+            loading && 'hidden'
+          )}
+          onLoad={() => setLoading(false)}
+          onError={() => setLoading(false)}
+        />
+
+        {count > 1 && !loading ? (
+          <p className="mt-4 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90">
+            {viewerIndex + 1} / {count}
+          </p>
+        ) : null}
+      </MediaLightbox>
     </>
   );
 }

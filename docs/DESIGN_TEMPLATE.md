@@ -263,6 +263,8 @@ Use these layers consistently. Do not invent new z-index values without updating
 | `z-[9999]` | PWA splash screen |
 | `z-[130]` | SSO credential picker (above launch overlay at `z-[120]`) |
 | `z-[120]` | Mention autocomplete popover, application launch overlay |
+| `z-[110]` | Lightbox / media preview (`MediaLightbox`) |
+| `z-[100]` | Legacy Radix toast viewport |
 | `z-[61]` | Notification panel (slide-in sidebar) |
 | `z-[60]` | Notification panel backdrop |
 | `z-50` | Dialogs, sheets, drawers, dropdowns, selects, PWA install prompt |
@@ -925,6 +927,8 @@ Destructive: `border-destructive/50 text-destructive`
 - Content: `max-w-lg p-6 shadow-lg sm:rounded-lg`
 - Close: `absolute right-4 top-4 opacity-70`
 - Animation: 200ms zoom/fade
+
+**Photo lightbox:** Full-size image preview stacks above dialogs at `z-[110]` and must not dismiss the parent Dialog/Sheet. Spec: `docs/LIGHTBOX_DESIGN.md`.
 
 **Mobile width:** Do not use bare `w-full` on centered dialogs — it stretches edge-to-edge. Use `w-[calc(100vw-1.5rem)]` with a `sm:max-w-*` cap so the modal keeps side margins on phones (see §11.9).
 
@@ -2008,6 +2012,7 @@ Filters in collapsible card (mobile collapsed by default):
 - [ ] Mobile compact dialogs: `w-[calc(100vw-1.5rem)]`, not full-width (§11.9)
 - [ ] Two-button dialog footers: horizontal `flex-row` on mobile, not stacked (§11.9)
 - [ ] Glass pickers use `glassDialogPanelStyles` + `glassDialogMutedText` (§7.0, §11.9)
+- [ ] Photo lightbox uses `MediaLightbox` at `z-[110]`; opening it must not close parent Dialog/Sheet (`docs/LIGHTBOX_DESIGN.md`)
 - [ ] Destructive actions use AlertDialog
 
 ### States
@@ -2074,8 +2079,11 @@ Filters in collapsible card (mobile collapsed by default):
 | Notification visuals | `frontend/src/lib/notificationVisuals.js` |
 | Notifications page | `frontend/src/pages/Notifications.jsx` |
 | Media constants | `frontend/src/lib/media.js` |
+| Media lightbox shell | `frontend/src/components/media/MediaLightbox.jsx` |
+| Lightbox stack context | `frontend/src/components/media/LightboxStackContext.jsx` |
 | Brand color | `frontend/src/lib/imageColor.js` |
 | Bottom nav design spec | `docs/MOBILE_BOTTOM_NAV_DESIGN.md` |
+| Lightbox design | `docs/LIGHTBOX_DESIGN.md` |
 | Chart design | `docs/GRAPH_DESIGN.md` |
 
 ---

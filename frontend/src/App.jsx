@@ -7,6 +7,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import PageLoader from '@/components/PageLoader';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { LightboxStackProvider } from '@/components/media/LightboxStackContext';
 import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
 import { SplashGateProvider } from '@/lib/SplashGateContext';
 
@@ -135,6 +136,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
+          <LightboxStackProvider>
           <SplashGateProvider>
           <Suspense fallback={null}>
             <PwaSplashScreen />
@@ -158,6 +160,7 @@ function App() {
           </Suspense>
           </SplashGateProvider>
           <Toaster />
+          </LightboxStackProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

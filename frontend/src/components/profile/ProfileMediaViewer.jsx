@@ -1,14 +1,14 @@
 // @ts-nocheck
 import React, { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react';
+import { Loader2, MessageCircle, Send, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostReactions from '@/components/feed/PostReactions';
+import MediaLightbox from '@/components/media/MediaLightbox';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { toAbsoluteUrl } from '@/lib/media';
@@ -234,28 +234,6 @@ export default function ProfileMediaViewer({
 
   useEffect(() => {
     if (!open) {
-      return undefined;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        close();
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [close, open]);
-
-  useEffect(() => {
-    if (!open) {
       return;
     }
     setImageLoading(true);
@@ -279,122 +257,95 @@ export default function ProfileMediaViewer({
   const label = MEDIA_LABELS[mediaType] || 'Photo';
   const ownerName = getDisplayName(item?.owner || user, 'Profile');
 
-  if (!open || !userId) {
+  if (!userId) {
     return null;
   }
 
-  return createPortal(
-    <div
-      className={cn(
-        'fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6',
-        'bg-black/80 backdrop-blur-md',
-        'animate-in fade-in-0 duration-200'
+  return (
+    <MediaLightbox
+      open={open}
+      onClose={close}
+      ariaLabel={`${label} for ${ownerName}`}
+      closeLabel="Close photo viewer"
+      className="p-3 sm:p-6"
+      contentClassName={cn(
+        'h-full max-h-[min(92vh,900px)] w-full max-w-5xl items-stretch overflow-hidden rounded-2xl bg-card shadow-2xl',
+        'flex-col lg:flex-row'
       )}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${label} for ${ownerName}`}
-      onClick={close}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'absolute right-3 top-3 z-20 h-10 w-10 rounded-full',
-          'text-white/90 hover:bg-white/10 hover:text-white',
-          'sm:right-5 sm:top-5'
-        )}
-        aria-label="Close photo viewer"
-        onClick={(event) => {
-          event.stopPropagation();
-          close();
-        }}
-      >
-        <X className="h-5 w-5" />
-      </Button>
-
       <div
         className={cn(
-          'relative flex h-full max-h-[min(92vh,900px)] w-full max-w-5xl overflow-hidden rounded-2xl bg-card shadow-2xl',
-          'flex-col lg:flex-row'
+          'relative flex min-h-0 items-center justify-center bg-black/95',
+          'h-[42vh] shrink-0 lg:h-auto lg:flex-1'
         )}
-        onClick={(event) => event.stopPropagation()}
       >
-        <div
-          className={cn(
-            'relative flex min-h-0 items-center justify-center bg-black/95',
-            'h-[42vh] shrink-0 lg:h-auto lg:flex-1'
-          )}
-        >
-          {imageLoading && !imageError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="text-sm">Loading photo…</span>
-            </div>
-          ) : null}
+        {imageLoading && !imageError ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">Loading photo…</span>
+          </div>
+        ) : null}
 
-          {imageError ? (
-            <div className="px-6 py-16 text-center text-sm text-white/80">{imageError}</div>
-          ) : null}
+        {imageError ? (
+          <div className="px-6 py-16 text-center text-sm text-white/80">{imageError}</div>
+        ) : null}
 
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={`${label} for ${ownerName}`}
-              className={cn(
-                'max-h-full max-w-full object-contain',
-                (imageLoading || imageError) && 'hidden'
-              )}
-              onLoad={() => setImageLoading(false)}
-              onError={() => {
-                setImageLoading(false);
-                setImageError('Unable to load photo.');
-              }}
-            />
-          ) : (
-            <div className="px-6 py-16 text-center text-sm text-white/80">No photo uploaded yet.</div>
-          )}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={`${label} for ${ownerName}`}
+            className={cn(
+              'max-h-full max-w-full object-contain',
+              (imageLoading || imageError) && 'hidden'
+            )}
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageLoading(false);
+              setImageError('Unable to load photo.');
+            }}
+          />
+        ) : (
+          <div className="px-6 py-16 text-center text-sm text-white/80">No photo uploaded yet.</div>
+        )}
+      </div>
+
+      <aside className="flex min-h-0 w-full flex-1 flex-col border-t border-border bg-card p-3 sm:p-4 lg:w-[360px] lg:flex-none lg:border-l lg:border-t-0">
+        <div className="mb-3 flex items-center gap-2.5 border-b border-border/60 pb-3">
+          <UserAvatar user={item?.owner || user} className="h-9 w-9" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{ownerName}</p>
+            <p className="text-[11px] text-muted-foreground">{label}</p>
+          </div>
         </div>
 
-        <aside className="flex min-h-0 w-full flex-1 flex-col border-t border-border bg-card p-3 sm:p-4 lg:w-[360px] lg:flex-none lg:border-l lg:border-t-0">
-          <div className="mb-3 flex items-center gap-2.5 border-b border-border/60 pb-3">
-            <UserAvatar user={item?.owner || user} className="h-9 w-9" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{ownerName}</p>
-              <p className="text-[11px] text-muted-foreground">{label}</p>
-            </div>
+        {isLoading || !item ? (
+          <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading interactions...
           </div>
-
-          {isLoading || !item ? (
-            <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading interactions...
-            </div>
-          ) : (
-            <>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <PostReactions
-                  item={item}
-                  reactFn={(reaction) => db.profileMedia.react(userId, mediaType, reaction)}
-                  invalidateKeys={[queryKey]}
-                />
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  {item.comments_count || 0}
-                </span>
-              </div>
-
-              <ProfileMediaComments
-                userId={userId}
-                mediaType={mediaType}
-                commentsCount={item.comments_count || 0}
-                queryKey={queryKey}
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <PostReactions
+                item={item}
+                reactFn={(reaction) => db.profileMedia.react(userId, mediaType, reaction)}
+                invalidateKeys={[queryKey]}
               />
-            </>
-          )}
-        </aside>
-      </div>
-    </div>,
-    document.body
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <MessageCircle className="h-3.5 w-3.5" />
+                {item.comments_count || 0}
+              </span>
+            </div>
+
+            <ProfileMediaComments
+              userId={userId}
+              mediaType={mediaType}
+              commentsCount={item.comments_count || 0}
+              queryKey={queryKey}
+            />
+          </>
+        )}
+      </aside>
+    </MediaLightbox>
   );
 }
