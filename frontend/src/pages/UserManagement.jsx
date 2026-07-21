@@ -316,6 +316,8 @@ export default function UserManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [profileFilter, setProfileFilter] = useState('all');
   const [loginFilter, setLoginFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [accessGroupFilter, setAccessGroupFilter] = useState('all');
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const pageSize = 20;
@@ -380,6 +382,8 @@ export default function UserManagement() {
       status: statusFilter,
       profile: profileFilter,
       login: loginFilter,
+      department_id: departmentFilter,
+      access_group_id: accessGroupFilter,
       page,
       per_page: pageSize,
     }],
@@ -392,6 +396,8 @@ export default function UserManagement() {
       ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
       ...(profileFilter !== 'all' ? { profile: profileFilter } : {}),
       ...(loginFilter !== 'all' ? { login: loginFilter } : {}),
+      ...(departmentFilter !== 'all' ? { department_id: Number(departmentFilter) } : {}),
+      ...(accessGroupFilter !== 'all' ? { access_group_id: Number(accessGroupFilter) } : {}),
     }),
     placeholderData: (previous) => previous,
   });
@@ -414,6 +420,12 @@ export default function UserManagement() {
   const { data: accessGroupsRaw = [], isLoading: loadingGroups } = useQuery({
     queryKey: ['access-groups'],
     queryFn: () => db.entities.AccessGroup.list('name', 100),
+  });
+
+  const { data: departmentsRaw = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => db.listDepartments(),
+    staleTime: 60_000,
   });
 
   const { data: metabaseDashboardsRaw = [], isLoading: loadingDashboards } = useQuery({
@@ -447,6 +459,7 @@ export default function UserManagement() {
   const users = Array.isArray(usersPage?.data) ? usersPage.data : [];
   const pickerUsers = Array.isArray(pickerUsersRaw) ? pickerUsersRaw : [];
   const systems = Array.isArray(systemsRaw) ? systemsRaw : [];
+  const departments = Array.isArray(departmentsRaw) ? departmentsRaw : [];
   const publicSystems = systems.filter((system) => system.visibility === 'public');
   const totalMatching = Number(usersPage?.meta?.total) || 0;
   const totalPages = Math.max(1, Number(usersPage?.meta?.last_page) || 1);
@@ -455,7 +468,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, roleFilter, statusFilter, profileFilter, loginFilter]);
+  }, [debouncedSearch, roleFilter, statusFilter, profileFilter, loginFilter, departmentFilter, accessGroupFilter]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -1397,6 +1410,8 @@ export default function UserManagement() {
         ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
         ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
         ...(loginFilter !== 'all' ? { login: loginFilter } : {}),
+        ...(departmentFilter !== 'all' ? { department_id: Number(departmentFilter) } : {}),
+        ...(accessGroupFilter !== 'all' ? { access_group_id: Number(accessGroupFilter) } : {}),
       });
       toast.success('Users export downloaded');
     } catch (err) {
@@ -1470,6 +1485,8 @@ export default function UserManagement() {
     setStatusFilter('all');
     setProfileFilter('all');
     setLoginFilter('all');
+    setDepartmentFilter('all');
+    setAccessGroupFilter('all');
   };
 
   const selectableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
@@ -1694,7 +1711,35 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
 
-              {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all' || loginFilter !== 'all') ? (
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="w-full sm:w-[160px]">
+                  <SelectValue placeholder="Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All departments</SelectItem>
+                  {departments.map((department) => (
+                    <SelectItem key={department.id} value={String(department.id)}>
+                      {department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={accessGroupFilter} onValueChange={setAccessGroupFilter}>
+                <SelectTrigger className="w-full sm:w-[170px]">
+                  <SelectValue placeholder="Access group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All access groups</SelectItem>
+                  {accessGroups.map((group) => (
+                    <SelectItem key={group.id} value={String(group.id)}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(search || roleFilter !== 'all' || statusFilter !== 'all' || profileFilter !== 'all' || loginFilter !== 'all' || departmentFilter !== 'all' || accessGroupFilter !== 'all') ? (
                 <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1 w-full sm:w-auto" onClick={clearFilters}>
                   Clear filters
                 </Button>
