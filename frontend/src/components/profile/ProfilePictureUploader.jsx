@@ -27,7 +27,7 @@ import RoleAvatarRing from '@/components/users/RoleAvatarRing';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const PROFILE_CROP_MIN_ZOOM = 1;
+const PROFILE_CROP_MIN_ZOOM = 0.2;
 const PROFILE_CROP_MAX_ZOOM = 3;
 
 function ProfileAvatarMedia({ url, crop, alt, className }) {
@@ -182,10 +182,11 @@ export default function ProfilePictureUploader({
               zoom={zoom}
               minZoom={PROFILE_CROP_MIN_ZOOM}
               maxZoom={PROFILE_CROP_MAX_ZOOM}
+              restrictPosition={false}
               aspect={1}
               cropShape="round"
               showGrid={false}
-              objectFit="cover"
+              objectFit="contain"
               initialCroppedAreaPercentages={croppedAreaPercent || undefined}
               onCropChange={setCrop}
               onZoomChange={setZoom}

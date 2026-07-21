@@ -62,9 +62,15 @@ export function getCenteredCoverCrop(imageWidth, imageHeight, aspect) {
   };
 }
 
+/** Clamp helpers matching API crop validation (±100…200 range). */
+const CROP_COORD_MIN = -100;
+const CROP_COORD_MAX = 200;
+const CROP_SIZE_MIN = 0.01;
+const CROP_SIZE_MAX = 200;
+
 /**
- * Normalize cropper output into a 0–100% area.
- * Zooming out can produce negative coords / widths over 100 — treat that as “fit full image”.
+ * Normalize cropper output. Zoom-out may use negative coords / sizes over 100 —
+ * those are preserved so display can match the cropper (padded fit).
  * @returns {{ x: number, y: number, width: number, height: number } | null}
  */
 export function normalizeMediaCropArea(area) {
@@ -81,39 +87,36 @@ export function normalizeMediaCropArea(area) {
     return null;
   }
 
-  const extendsOutsideImage =
-    x < -0.01 ||
-    y < -0.01 ||
-    width > 100.01 ||
-    height > 100.01 ||
-    x + width > 100.01 ||
-    y + height > 100.01;
-
-  if (extendsOutsideImage) {
-    return { x: 0, y: 0, width: 100, height: 100 };
-  }
-
-  const nextWidth = Math.min(Math.max(width, 0.01), 100);
-  const nextHeight = Math.min(Math.max(height, 0.01), 100);
-
   return {
-    x: Math.min(Math.max(x, 0), 100 - nextWidth),
-    y: Math.min(Math.max(y, 0), 100 - nextHeight),
-    width: nextWidth,
-    height: nextHeight,
+    x: Math.min(Math.max(x, CROP_COORD_MIN), CROP_COORD_MAX),
+    y: Math.min(Math.max(y, CROP_COORD_MIN), CROP_COORD_MAX),
+    width: Math.min(Math.max(width, CROP_SIZE_MIN), CROP_SIZE_MAX),
+    height: Math.min(Math.max(height, CROP_SIZE_MIN), CROP_SIZE_MAX),
   };
+}
+
+function isExactFullImageCrop(crop) {
+  return (
+    Math.abs(crop.x) < 0.5 &&
+    Math.abs(crop.y) < 0.5 &&
+    crop.width >= 99.5 &&
+    crop.width <= 100.5 &&
+    crop.height >= 99.5 &&
+    crop.height <= 100.5
+  );
 }
 
 /**
  * CSS background framing so a percentage crop fills a cover container.
  * The full image URL stays intact for lightbox/full preview.
+ * Supports zoom-out crops (negative x/y or width/height &gt; 100).
  *
  * @param {string} imageUrl
  * @param {{ x: number, y: number, width: number, height: number } | null | undefined} crop
  * @param {{ fullImageFit?: 'contain' | 'cover' }} [options]
- *   fullImageFit — how to frame a ~100×100% crop.
+ *   fullImageFit — how to frame an exact 100×100% crop.
  *   Use 'contain' for banners (show entire image). Use 'cover' for circular
- *   avatars so the image fills the circle like the cropper preview.
+ *   avatars so a full-bleed square source fills the circle.
  */
 export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'contain' } = {}) {
   if (!imageUrl) return {};
@@ -129,8 +132,7 @@ export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'co
     };
   }
 
-  // Fully (or nearly) showing the source image.
-  if (normalized.width >= 99.5 && normalized.height >= 99.5) {
+  if (isExactFullImageCrop(normalized)) {
     return {
       backgroundImage: `url(${imageUrl})`,
       backgroundSize: fullImageFit === 'cover' ? 'cover' : 'contain',
@@ -139,15 +141,11 @@ export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'co
     };
   }
 
-  const width = Math.min(Math.max(normalized.width, 0.01), 100);
-  const height = Math.min(Math.max(normalized.height, 0.01), 100);
-  const x = Math.min(Math.max(normalized.x, 0), 100 - width);
-  const y = Math.min(Math.max(normalized.y, 0), 100 - height);
-
+  const { x, y, width, height } = normalized;
   const sizeX = 100 / (width / 100);
   const sizeY = 100 / (height / 100);
-  const posX = width >= 100 ? 0 : (x / (100 - width)) * 100;
-  const posY = height >= 100 ? 0 : (y / (100 - height)) * 100;
+  const posX = Math.abs(width - 100) < 0.01 ? 50 : (x / (100 - width)) * 100;
+  const posY = Math.abs(height - 100) < 0.01 ? 50 : (y / (100 - height)) * 100;
 
   return {
     backgroundImage: `url(${imageUrl})`,

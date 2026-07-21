@@ -4,9 +4,17 @@ namespace App\Support;
 
 class MediaCropNormalizer
 {
+    private const COORD_MIN = -100.0;
+
+    private const COORD_MAX = 200.0;
+
+    private const SIZE_MIN = 0.01;
+
+    private const SIZE_MAX = 200.0;
+
     /**
-     * Normalize cropper output into a 0–100% area.
-     * Zooming out can produce negative coords / widths over 100 — treat that as “fit full image”.
+     * Normalize cropper output. Zoom-out may use negative coords / sizes over 100 —
+     * those are preserved so display can match the cropper (padded fit).
      *
      * @param  array<string, mixed>|null  $area
      * @return array{x: float, y: float, width: float, height: float}|null
@@ -30,30 +38,11 @@ class MediaCropNormalizer
             return null;
         }
 
-        $extendsOutsideImage = $x < -0.01
-            || $y < -0.01
-            || $width > 100.01
-            || $height > 100.01
-            || ($x + $width) > 100.01
-            || ($y + $height) > 100.01;
-
-        if ($extendsOutsideImage) {
-            return [
-                'x' => 0.0,
-                'y' => 0.0,
-                'width' => 100.0,
-                'height' => 100.0,
-            ];
-        }
-
-        $nextWidth = min(max($width, 0.01), 100.0);
-        $nextHeight = min(max($height, 0.01), 100.0);
-
         return [
-            'x' => min(max($x, 0.0), 100.0 - $nextWidth),
-            'y' => min(max($y, 0.0), 100.0 - $nextHeight),
-            'width' => $nextWidth,
-            'height' => $nextHeight,
+            'x' => min(max($x, self::COORD_MIN), self::COORD_MAX),
+            'y' => min(max($y, self::COORD_MIN), self::COORD_MAX),
+            'width' => min(max($width, self::SIZE_MIN), self::SIZE_MAX),
+            'height' => min(max($height, self::SIZE_MIN), self::SIZE_MAX),
         ];
     }
 
