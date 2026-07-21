@@ -24,8 +24,8 @@ export default function UserAvatar({
           <span
             role="img"
             aria-label={displayName}
-            className="absolute inset-0 rounded-[inherit]"
-            style={getCoverCropBackgroundStyle(avatarUrl, crop)}
+            className="absolute inset-0 overflow-hidden rounded-[inherit]"
+            style={getCoverCropBackgroundStyle(avatarUrl, crop, { fullImageFit: 'cover' })}
           />
         ) : (
           <AvatarFallback

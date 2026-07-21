@@ -107,8 +107,15 @@ export function normalizeMediaCropArea(area) {
 /**
  * CSS background framing so a percentage crop fills a cover container.
  * The full image URL stays intact for lightbox/full preview.
+ *
+ * @param {string} imageUrl
+ * @param {{ x: number, y: number, width: number, height: number } | null | undefined} crop
+ * @param {{ fullImageFit?: 'contain' | 'cover' }} [options]
+ *   fullImageFit — how to frame a ~100×100% crop.
+ *   Use 'contain' for banners (show entire image). Use 'cover' for circular
+ *   avatars so the image fills the circle like the cropper preview.
  */
-export function getCoverCropBackgroundStyle(imageUrl, crop) {
+export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'contain' } = {}) {
   if (!imageUrl) return {};
 
   const normalized = normalizeMediaCropArea(crop) || crop;
@@ -122,11 +129,11 @@ export function getCoverCropBackgroundStyle(imageUrl, crop) {
     };
   }
 
-  // Fully (or nearly) showing the source image — contain so nothing is clipped.
+  // Fully (or nearly) showing the source image.
   if (normalized.width >= 99.5 && normalized.height >= 99.5) {
     return {
       backgroundImage: `url(${imageUrl})`,
-      backgroundSize: 'contain',
+      backgroundSize: fullImageFit === 'cover' ? 'cover' : 'contain',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     };

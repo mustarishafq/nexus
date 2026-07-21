@@ -27,7 +27,7 @@ import RoleAvatarRing from '@/components/users/RoleAvatarRing';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const PROFILE_CROP_MIN_ZOOM = 0.2;
+const PROFILE_CROP_MIN_ZOOM = 1;
 const PROFILE_CROP_MAX_ZOOM = 3;
 
 function ProfileAvatarMedia({ url, crop, alt, className }) {
@@ -37,8 +37,8 @@ function ProfileAvatarMedia({ url, crop, alt, className }) {
     <span
       role="img"
       aria-label={alt}
-      className={cn('absolute inset-0 rounded-full', className)}
-      style={getCoverCropBackgroundStyle(url, crop)}
+      className={cn('absolute inset-0 overflow-hidden rounded-full bg-muted', className)}
+      style={getCoverCropBackgroundStyle(url, crop, { fullImageFit: 'cover' })}
     />
   );
 }
@@ -170,7 +170,7 @@ export default function ProfilePictureUploader({
         <DialogHeader>
           <DialogTitle>Crop profile picture</DialogTitle>
           <DialogDescription>
-            Drag to reposition and zoom. Crop controls the avatar fit; the full image is kept for preview.
+            Drag to reposition and zoom. The circle shows your avatar; the full image is kept for preview.
           </DialogDescription>
         </DialogHeader>
 
@@ -182,11 +182,10 @@ export default function ProfilePictureUploader({
               zoom={zoom}
               minZoom={PROFILE_CROP_MIN_ZOOM}
               maxZoom={PROFILE_CROP_MAX_ZOOM}
-              restrictPosition={false}
               aspect={1}
               cropShape="round"
               showGrid={false}
-              objectFit="contain"
+              objectFit="cover"
               initialCroppedAreaPercentages={croppedAreaPercent || undefined}
               onCropChange={setCrop}
               onZoomChange={setZoom}
