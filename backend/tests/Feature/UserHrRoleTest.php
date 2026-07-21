@@ -63,6 +63,56 @@ class UserHrRoleTest extends TestCase
             ]);
     }
 
+    public function test_hr_can_filter_users_by_department_and_access_group(): void
+    {
+        $hr = User::factory()->create(['is_approved' => true, 'role' => 'hr']);
+        $department = \App\Models\Department::query()->create(['name' => 'Engineering']);
+        $otherDepartment = \App\Models\Department::query()->create(['name' => 'Finance']);
+        $group = \App\Models\AccessGroup::query()->create([
+            'name' => 'Engineering Access',
+            'description' => null,
+        ]);
+        $otherGroup = \App\Models\AccessGroup::query()->create([
+            'name' => 'Finance Access',
+            'description' => null,
+        ]);
+
+        $matched = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Matched User',
+            'email' => 'matched@example.com',
+            'department_id' => $department->id,
+        ]);
+        $matched->accessGroups()->attach($group->id);
+
+        $wrongDepartment = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Wrong Department',
+            'email' => 'wrong.dept@example.com',
+            'department_id' => $otherDepartment->id,
+        ]);
+        $wrongDepartment->accessGroups()->attach($group->id);
+
+        $wrongGroup = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'full_name' => 'Wrong Group',
+            'email' => 'wrong.group@example.com',
+            'department_id' => $department->id,
+        ]);
+        $wrongGroup->accessGroups()->attach($otherGroup->id);
+
+        $token = $this->issueToken($hr);
+
+        $this->withToken($token)
+            ->getJson("/api/users?page=1&per_page=20&department_id={$department->id}&access_group_id={$group->id}")
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.email', 'matched@example.com');
+    }
+
     public function test_hr_can_import_hr_onboarding_csv(): void
     {
         $hr = User::factory()->create(['is_approved' => true, 'role' => 'hr']);

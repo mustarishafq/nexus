@@ -46,6 +46,8 @@ class UserController extends Controller
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
             'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
             'profile' => ['nullable', 'string', Rule::in(['incomplete', 'complete'])],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
             'q' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -154,6 +156,18 @@ class UserController extends Controller
         if (! empty($filters['profile'])) {
             $this->applyProfileCompletenessFilter($query, (string) $filters['profile']);
         }
+
+        if (! empty($filters['department_id'])) {
+            $query->where('department_id', (int) $filters['department_id']);
+        }
+
+        if (! empty($filters['access_group_id'])) {
+            $accessGroupId = (int) $filters['access_group_id'];
+            $query->whereHas(
+                'accessGroups',
+                fn ($builder) => $builder->where('access_groups.id', $accessGroupId)
+            );
+        }
     }
 
     private function applyProfileCompletenessFilter($query, string $profile): void
@@ -238,6 +252,8 @@ class UserController extends Controller
             'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
             'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
             'q' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -246,36 +262,7 @@ class UserController extends Controller
             ->orderBy('full_name')
             ->orderBy('email');
 
-        if (! empty($validated['role'])) {
-            $query->where('role', $validated['role']);
-        }
-
-        if (($validated['status'] ?? null) === 'approved') {
-            $query->where('is_approved', true);
-        } elseif (($validated['status'] ?? null) === 'pending') {
-            $query->where('is_approved', false);
-        }
-
-        if (($validated['login'] ?? null) === 'never') {
-            $query->whereNull('last_login_at');
-        } elseif (($validated['login'] ?? null) === 'has_logged_in') {
-            $query->whereNotNull('last_login_at');
-        } elseif (($validated['login'] ?? null) === 'last_7_days') {
-            $query->where('last_login_at', '>=', now()->subDays(7));
-        } elseif (($validated['login'] ?? null) === 'last_30_days') {
-            $query->where('last_login_at', '>=', now()->subDays(30));
-        }
-
-        if (! empty($validated['q'])) {
-            $search = trim($validated['q']);
-            $query->where(function ($builder) use ($search) {
-                $builder
-                    ->where('full_name', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('employee_id', 'like', "%{$search}%");
-            });
-        }
+        $this->applyAdminUserFilters($query, $validated);
 
         $filename = 'users-'.now()->format('Y-m-d-His').'.csv';
 
