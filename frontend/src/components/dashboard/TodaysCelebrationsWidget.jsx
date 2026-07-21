@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Cake, Award, PartyPopper, SmilePlus } from 'lucide-react';
@@ -12,6 +12,60 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
 
 const DEFAULT_REACTIONS = ['🎉', '🎂', '👏', '🎈', '❤️', '🥳', '🙌'];
+
+function ScrollingName({ name, className }) {
+  const containerRef = useRef(null);
+  const textRef = useRef(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const text = textRef.current;
+    if (!container || !text) return undefined;
+
+    const measure = () => {
+      setOverflowPx(Math.max(0, Math.ceil(text.scrollWidth - container.clientWidth)));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [name]);
+
+  const shouldScroll = overflowPx > 4;
+  const durationSec = Math.min(22, Math.max(10, overflowPx / 8));
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        'min-w-0 overflow-hidden',
+        shouldScroll && 'celebration-name-viewport',
+        className
+      )}
+      title={name}
+    >
+      <p
+        ref={textRef}
+        className={cn(
+          'whitespace-nowrap text-sm font-semibold leading-tight',
+          shouldScroll && 'celebration-name-track'
+        )}
+        style={
+          shouldScroll
+            ? {
+                '--celebration-name-shift': `-${overflowPx}px`,
+                animationDuration: `${durationSec}s`,
+              }
+            : undefined
+        }
+      >
+        {name}
+      </p>
+    </div>
+  );
+}
 
 function celebrationsQueryKey(localDate) {
   return ['dashboard-celebrations', localDate];
@@ -135,25 +189,41 @@ function CelebrationDateBadge({ date, accent }) {
   );
 }
 
-function ReactionCountPills({ reactionCounts }) {
-  const entries = Object.entries(reactionCounts);
+function ReactionSummary({ reactionCounts, limit = 3 }) {
+  const entries = Object.entries(reactionCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+
   if (entries.length === 0) return null;
 
+  const total = Object.values(reactionCounts).reduce((sum, count) => sum + count, 0);
+  const extraTypes = Object.keys(reactionCounts).length - entries.length;
+
   return (
-    <div className="flex items-center gap-1 overflow-hidden">
-      {entries.map(([emoji, count]) => (
-        <span
-          key={emoji}
-          className="inline-flex shrink-0 items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-muted/80 border border-border/60 text-sm leading-none"
-          title={`${count} reaction${count === 1 ? '' : 's'}`}
-        >
-          <span className="text-xs">{emoji}</span>
-          {count > 1 ? (
-            <span className="text-[9px] font-semibold text-muted-foreground ml-0.5 tabular-nums">{count}</span>
-          ) : null}
+    <span
+      className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5"
+      title={Object.entries(reactionCounts)
+        .map(([emoji, count]) => `${emoji} ${count}`)
+        .join(' · ')}
+    >
+      <span className="inline-flex items-center gap-1">
+        {entries.map(([emoji]) => (
+          <span key={emoji} className="text-[11px] leading-none">
+            {emoji}
+          </span>
+        ))}
+        {extraTypes > 0 ? (
+          <span className="text-[10px] font-medium leading-none text-muted-foreground">
+            +{extraTypes}
+          </span>
+        ) : null}
+      </span>
+      {total > 0 ? (
+        <span className="text-[10px] font-medium tabular-nums leading-none text-muted-foreground">
+          {total}
         </span>
-      ))}
-    </div>
+      ) : null}
+    </span>
   );
 }
 
@@ -173,6 +243,9 @@ function CelebrationFeedCard({
   const reactionCounts = person.reaction_counts || {};
   const date = parseCelebrationDate(celebrationDate);
   const today = date ? isToday(date) : false;
+  const displayName = getDisplayName(person, person.email);
+  const dayLabel = subtitle || celebrationDayLabel(celebrationDate);
+  const hasReactions = Object.keys(reactionCounts).length > 0;
 
   const accentStyles = {
     birthday: {
@@ -220,62 +293,68 @@ function CelebrationFeedCard({
       />
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold leading-tight truncate">
-          {getDisplayName(person, person.email)}
-        </p>
-        {subtitle ? (
-          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{subtitle}</p>
-        ) : (
-          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
-            {celebrationDayLabel(celebrationDate)}
-          </p>
-        )}
+        <ScrollingName name={displayName} />
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+          {dayLabel ? <span className="shrink-0">{dayLabel}</span> : null}
+          <ReactionSummary reactionCounts={reactionCounts} />
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        <ReactionCountPills reactionCounts={reactionCounts} />
-
-        {canReact ? (
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                title="React"
-                className={cn(
-                  'inline-flex items-center justify-center h-8 w-8 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                  myReaction && 'border-primary/30 bg-primary/5 text-primary'
-                )}
-              >
-                {myReaction ? (
-                  <span className="text-sm leading-none">{myReaction}</span>
-                ) : (
-                  <SmilePlus className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto p-2">
-              <div className="flex gap-1">
-                {reactions.map((reaction) => (
-                  <button
-                    key={reaction}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleReact(reaction)}
-                    title={myReaction === reaction ? 'Remove reaction' : `React with ${reaction}`}
-                    className={cn(
-                      'h-9 w-9 rounded-full text-lg transition-transform hover:scale-110 hover:bg-muted',
-                      myReaction === reaction && 'bg-primary/10 ring-2 ring-primary/30'
-                    )}
-                  >
-                    {reaction}
-                  </button>
-                ))}
+      {canReact ? (
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              title="React"
+              className={cn(
+                'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                myReaction && 'border-primary/30 bg-primary/5 text-primary'
+              )}
+            >
+              {myReaction ? (
+                <span className="text-sm leading-none">{myReaction}</span>
+              ) : (
+                <SmilePlus className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-auto p-2">
+            <div className="flex gap-1">
+              {reactions.map((reaction) => (
+                <button
+                  key={reaction}
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => handleReact(reaction)}
+                  title={myReaction === reaction ? 'Remove reaction' : `React with ${reaction}`}
+                  className={cn(
+                    'h-9 w-9 rounded-full text-lg transition-transform hover:scale-110 hover:bg-muted',
+                    myReaction === reaction && 'bg-primary/10 ring-2 ring-primary/30'
+                  )}
+                >
+                  {reaction}
+                </button>
+              ))}
+            </div>
+            {hasReactions ? (
+              <div className="mt-2 flex flex-wrap gap-1 border-t border-border/60 pt-2">
+                {Object.entries(reactionCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([emoji, count]) => (
+                    <span
+                      key={emoji}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted/80 px-2 py-0.5 text-xs"
+                    >
+                      <span>{emoji}</span>
+                      <span className="tabular-nums text-muted-foreground">{count}</span>
+                    </span>
+                  ))}
               </div>
-            </PopoverContent>
-          </Popover>
-        ) : null}
-      </div>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      ) : null}
     </div>
   );
 }

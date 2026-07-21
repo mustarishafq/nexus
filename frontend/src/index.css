@@ -153,6 +153,47 @@
   animation-play-state: paused;
 }
 
+@keyframes celebration-name-scroll {
+  0%,
+  28% {
+    transform: translateX(0);
+  }
+  48%,
+  58% {
+    transform: translateX(var(--celebration-name-shift, 0));
+  }
+  78%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.celebration-name-viewport {
+  mask-image: linear-gradient(
+    to right,
+    black 0,
+    black calc(100% - 12px),
+    transparent
+  );
+}
+
+.celebration-name-track {
+  animation-name: celebration-name-scroll;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebration-name-track {
+    animation: none;
+  }
+
+  .celebration-name-viewport {
+    mask-image: none;
+  }
+}
+
 @keyframes apps-orb-breathe {
   0%, 100% {
     transform: scale(1);
