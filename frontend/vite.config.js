@@ -12,13 +12,23 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return;
+          if (!id.includes('node_modules') || id.includes('\0')) return;
 
           if (id.includes('framer-motion')) return 'vendor-motion';
           if (id.includes('@lottiefiles')) return 'vendor-lottie';
           if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
-          if (id.includes('@radix-ui')) return 'vendor-radix';
+          // Keep React + Radix in one chunk. Splitting them caused a circular
+          // init (TDZ) crash: "Cannot access 'bn' before initialization".
+          // Also match real react packages only — `/react/` wrongly caught @tiptap/react.
+          if (
+            id.includes('/node_modules/react/')
+            || id.includes('/node_modules/react-dom/')
+            || id.includes('/node_modules/scheduler/')
+            || id.includes('@radix-ui')
+          ) {
+            return 'vendor-react';
+          }
+          if (id.includes('@tiptap') || id.includes('prosemirror')) return 'vendor-editor';
           if (id.includes('lucide-react')) return 'vendor-icons';
         },
       },
