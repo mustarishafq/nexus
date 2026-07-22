@@ -479,7 +479,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
               </div>
             </div>
           ) : item.body ? (
-            <div className="mt-2 text-foreground/90">
+            <div className="mt-2 text-sm leading-relaxed text-foreground/90 break-words md:break-normal">
               <MentionText text={item.body} />
             </div>
           ) : null}
