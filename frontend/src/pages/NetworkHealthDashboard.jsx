@@ -7,7 +7,7 @@ import {
   CheckCircle, Filter, FileDown, ChevronDown,
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
+import {
+  ChartTooltipBox,
+  chartAxisTick,
+  chartGridStroke,
+  chartTooltipProps,
+} from '@/lib/chartTooltip';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -417,9 +423,9 @@ export default function NetworkHealthDashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {[
-          { title: 'Latency Trend (hourly)', dataKey: 'avg_latency_ms', color: 'hsl(25 95% 53%)', unit: 'ms' },
-          { title: 'Download Speed Trend (hourly)', dataKey: 'avg_download_mbps', color: 'hsl(210 100% 52%)', unit: 'Mbps' },
-          { title: 'Upload Speed Trend (hourly)', dataKey: 'avg_upload_mbps', color: 'hsl(160 84% 39%)', unit: 'Mbps' },
+          { title: 'Latency Trend (hourly)', dataKey: 'avg_latency_ms', color: 'hsl(var(--chart-3))', unit: 'ms' },
+          { title: 'Download Speed Trend (hourly)', dataKey: 'avg_download_mbps', color: 'hsl(var(--chart-1))', unit: 'Mbps' },
+          { title: 'Upload Speed Trend (hourly)', dataKey: 'avg_upload_mbps', color: 'hsl(var(--chart-2))', unit: 'Mbps' },
         ].map((chart) => (
           <Card key={chart.dataKey}>
             <CardHeader className="pb-2">
@@ -432,26 +438,28 @@ export default function NetworkHealthDashboard() {
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartTrends}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                     <XAxis
                       dataKey="hourTimestamp"
                       type="number"
                       scale="time"
                       domain={['dataMin', 'dataMax']}
                       tickFormatter={formatHourLabel}
-                      tick={{ fontSize: 10 }}
+                      tick={{ ...chartAxisTick, fontSize: 10 }}
                       minTickGap={32}
                     />
-                    <YAxis tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ ...chartAxisTick, fontSize: 10 }} />
                     <Tooltip
-                      labelFormatter={formatHourLabel}
-                      formatter={(value) => [`${Number(value).toFixed(2)} ${chart.unit}`, chart.title]}
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}
+                      {...chartTooltipProps}
+                      content={
+                        <ChartTooltipBox
+                          labelFormatter={formatHourLabel}
+                          formatter={(value) => [
+                            `${Number(value).toFixed(2)} ${chart.unit}`,
+                            chart.title,
+                          ]}
+                        />
+                      }
                     />
                     <Line
                       type="monotone"

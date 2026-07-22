@@ -14,13 +14,15 @@ import {
 } from 'recharts';
 import { BarChart3, LineChart as LineChartIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  ChartTooltipBox,
+  chartAxisTick,
+  chartGridStroke,
+  chartTooltipProps,
+} from '@/lib/chartTooltip';
 
-const tooltipStyle = {
-  backgroundColor: 'hsl(var(--card))',
-  border: '1px solid hsl(var(--border))',
-  borderRadius: '8px',
-  fontSize: '12px',
-};
+const CHART_1 = 'hsl(var(--chart-1))';
+const CHART_2 = 'hsl(var(--chart-2))';
 
 function formatDayLabel(value) {
   try {
@@ -60,42 +62,47 @@ function DailyActiveUsersChart({ data, periodDays, scopeLabel }) {
               <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="activeUsersFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor={CHART_1} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={CHART_1} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={formatDayLabel}
-                  tick={{ fontSize: 10 }}
+                  tick={{ ...chartAxisTick, fontSize: 10 }}
                   minTickGap={24}
                 />
                 <YAxis
                   yAxisId="users"
-                  tick={{ fontSize: 10 }}
+                  tick={{ ...chartAxisTick, fontSize: 10 }}
                   allowDecimals={false}
                   width={32}
                 />
                 <YAxis
                   yAxisId="launches"
                   orientation="right"
-                  tick={{ fontSize: 10 }}
+                  tick={{ ...chartAxisTick, fontSize: 10 }}
                   allowDecimals={false}
                   width={32}
                 />
                 <Tooltip
-                  labelFormatter={formatDayLabel}
-                  contentStyle={tooltipStyle}
-                  formatter={(value, name) => {
-                    if (name === 'active_users') return [value, 'Active users'];
-                    if (name === 'launches') return [value, 'Launches'];
-                    return [value, name];
-                  }}
+                  {...chartTooltipProps}
+                  content={
+                    <ChartTooltipBox
+                      labelFormatter={formatDayLabel}
+                      formatter={(value, name) => {
+                        if (name === 'active_users') return [value, 'Active users'];
+                        if (name === 'launches') return [value, 'Launches'];
+                        return [value, name];
+                      }}
+                    />
+                  }
                 />
                 <Legend
                   verticalAlign="top"
                   height={28}
+                  wrapperStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                   formatter={(value) => (value === 'active_users' ? 'Active users' : 'Launches')}
                 />
                 <Area
@@ -103,7 +110,7 @@ function DailyActiveUsersChart({ data, periodDays, scopeLabel }) {
                   type="monotone"
                   dataKey="active_users"
                   name="active_users"
-                  stroke="hsl(var(--primary))"
+                  stroke={CHART_1}
                   fill="url(#activeUsersFill)"
                   strokeWidth={2}
                   dot={false}
@@ -113,7 +120,7 @@ function DailyActiveUsersChart({ data, periodDays, scopeLabel }) {
                   type="monotone"
                   dataKey="launches"
                   name="launches"
-                  stroke="hsl(210 100% 52%)"
+                  stroke={CHART_2}
                   fill="transparent"
                   strokeWidth={2}
                   strokeDasharray="4 4"
@@ -156,24 +163,28 @@ function ApplicationBreakdownChart({ data, period, periodDays }) {
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barSize={28} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 10 }}
+                tick={{ ...chartAxisTick, fontSize: 10 }}
                 interval={0}
                 angle={chartData.length > 4 ? -24 : 0}
                 textAnchor={chartData.length > 4 ? 'end' : 'middle'}
                 height={chartData.length > 4 ? 52 : 28}
               />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={32} />
+              <YAxis
+                tick={{ ...chartAxisTick, fontSize: 10 }}
+                allowDecimals={false}
+                width={32}
+              />
               <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(value) => [value, 'Active users']}
+                {...chartTooltipProps}
+                content={<ChartTooltipBox formatter={(value) => [value, 'Active users']} />}
               />
               <Bar
                 dataKey="active_users"
                 name="Active users"
-                fill="hsl(var(--primary))"
+                fill={CHART_1}
                 radius={[6, 6, 0, 0]}
               />
             </BarChart>

@@ -2,6 +2,12 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { BarChart3 } from 'lucide-react';
 import { buildNotificationChartData } from '@/lib/notificationVisuals';
+import {
+  ChartTooltipBox,
+  chartAxisTick,
+  chartGridStroke,
+  chartTooltipProps,
+} from '@/lib/chartTooltip';
 
 export default function NotificationChart({ notifications }) {
   const data = buildNotificationChartData(notifications);
@@ -15,16 +21,18 @@ export default function NotificationChart({ notifications }) {
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barSize={32}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-            <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" allowDecimals={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+            <XAxis
+              dataKey="name"
+              tick={{ ...chartAxisTick, fontSize: 11 }}
+            />
+            <YAxis
+              tick={{ ...chartAxisTick, fontSize: 11 }}
+              allowDecimals={false}
+            />
             <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px',
-                fontSize: '12px'
-              }}
+              {...chartTooltipProps}
+              content={<ChartTooltipBox formatter={(value) => [value, 'Count']} />}
             />
             <Bar dataKey="count" radius={[6, 6, 0, 0]}>
               {data.map((entry) => (
