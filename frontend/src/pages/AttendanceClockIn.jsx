@@ -3,7 +3,7 @@ import db from '@/api/apiClient';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Camera, MapPin, Shield } from 'lucide-react';
+import { MapPin, Shield } from 'lucide-react';
 import AttendanceCamera from '@/components/attendance/AttendanceCamera';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -158,17 +158,8 @@ export default function AttendanceClockIn() {
       ) : null}
 
       <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <Card className="min-w-0 overflow-hidden rounded-2xl">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Camera className="h-4 w-4 shrink-0 text-primary" />
-              {isClockIn ? 'Clock in' : 'Clock out'}
-            </CardTitle>
-            <CardDescription className="text-pretty">
-              Take a photo, then tap {isClockIn ? 'Clock In' : 'Clock Out'}. Use Flip to switch cameras.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+        <Card className="min-w-0 overflow-hidden rounded-2xl p-0">
+          <CardContent className="p-0">
             <AttendanceCamera
               key={cameraKey}
               watermarkConfig={appPublicSettings}

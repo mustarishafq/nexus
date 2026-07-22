@@ -625,6 +625,7 @@ export function drawVideoFrameWithWatermark(
   logoImage = null,
   mirror = false,
   filterId = 'none',
+  withWatermark = true,
 ) {
   const sourceWidth = video.videoWidth || 640;
   const sourceHeight = video.videoHeight || 480;
@@ -662,7 +663,9 @@ export function drawVideoFrameWithWatermark(
   );
   ctx.restore();
 
-  drawWatermarkOnCanvas(ctx, canvas, config, context, logoImage);
+  if (withWatermark) {
+    drawWatermarkOnCanvas(ctx, canvas, config, context, logoImage);
+  }
 }
 
 export async function captureCanvasWithWatermark(

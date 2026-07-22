@@ -15,10 +15,7 @@ const SECTIONS = [
 function AttendanceSectionNav({ activeSection }) {
   return (
     <div
-      className={cn(
-        'flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        'sm:gap-1.5',
-      )}
+      className="flex w-fit items-center gap-1 rounded-xl border border-border bg-muted/30 p-1"
       role="tablist"
       aria-label="Attendance sections"
     >
@@ -33,10 +30,10 @@ function AttendanceSectionNav({ activeSection }) {
             role="tab"
             aria-selected={active}
             className={cn(
-              'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition-colors touch-manipulation sm:min-h-[40px] sm:flex-none sm:px-4',
+              'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors touch-manipulation',
               active
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground',
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />

@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, LogIn, LogOut, RefreshCw, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   ATTENDANCE_SELFIE_FILTERS,
@@ -19,24 +17,7 @@ import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
 const LIVE_DRAW_INTERVAL_MS = 50;
-const MIRROR_STORAGE_KEY = 'attendance-camera-mirror';
 const FILTER_STORAGE_KEY = 'attendance-camera-filter';
-
-function readMirrorPreference() {
-  try {
-    return localStorage.getItem(MIRROR_STORAGE_KEY) !== 'false';
-  } catch {
-    return true;
-  }
-}
-
-function persistMirrorPreference(mirror) {
-  try {
-    localStorage.setItem(MIRROR_STORAGE_KEY, String(mirror));
-  } catch {
-    // Ignore storage errors (private browsing, etc.).
-  }
-}
 
 function readFilterPreference() {
   try {
@@ -164,11 +145,12 @@ export default function AttendanceCamera({
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [facingMode, setFacingMode] = useState('user');
-  const [mirrorPreview, setMirrorPreview] = useState(readMirrorPreference);
   const [selfieFilter, setSelfieFilter] = useState(readFilterPreference);
   const [previewUrl, setPreviewUrl] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [locationTick, setLocationTick] = useState(0);
+  // Front camera mirrors like a selfie; rear camera stays unmirrored.
+  const mirrorPreview = facingMode === 'user';
   const mirrorRef = useRef(mirrorPreview);
   mirrorRef.current = mirrorPreview;
   const filterRef = useRef(selfieFilter);
@@ -235,6 +217,7 @@ export default function AttendanceCamera({
         logoImageRef.current,
         mirrorRef.current,
         filterRef.current,
+        false,
       );
     }
 
@@ -447,11 +430,6 @@ export default function AttendanceCamera({
     setFacingMode((current) => (current === 'user' ? 'environment' : 'user'));
   };
 
-  const handleMirrorChange = (checked) => {
-    setMirrorPreview(checked);
-    persistMirrorPreference(checked);
-  };
-
   const handleFilterChange = (filterId) => {
     setSelfieFilter(filterId);
     persistFilterPreference(filterId);
@@ -470,13 +448,13 @@ export default function AttendanceCamera({
   const hasPreview = status === 'preview';
 
   return (
-    <div className={cn('min-w-0 max-w-full space-y-3 overflow-x-hidden', className)}>
+    <div className={cn('min-w-0 max-w-full overflow-x-hidden', className)}>
       <div
         ref={viewportRef}
         className={cn(
-          'relative mx-auto w-full max-w-full overflow-hidden rounded-2xl border bg-black',
-          // Cap height on phones so the preview doesn't force a tall page under the bottom nav.
-          'aspect-[3/4] max-h-[min(52dvh,26rem)] sm:max-h-none sm:aspect-[4/3]',
+          'relative mx-auto w-full max-w-full overflow-hidden bg-black',
+          // Fill the parent card; controls sit inside the frame as an overlay.
+          'aspect-[3/4] max-h-[min(72dvh,36rem)] sm:max-h-none sm:aspect-[4/3]',
         )}
       >
         <video ref={videoRef} playsInline muted autoPlay className="hidden" />
@@ -495,14 +473,14 @@ export default function AttendanceCamera({
         )}
 
         {status === 'loading' ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
             <Loader2 className="h-8 w-8 animate-spin" />
             <span className="text-sm">Starting camera…</span>
           </div>
         ) : null}
 
         {hasPreview && submitting ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/65 text-white">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/65 text-white">
             <Loader2 className="h-8 w-8 animate-spin" />
             <span className="text-sm font-medium">
               {isClockIn ? 'Clocking in…' : 'Clocking out…'}
@@ -511,146 +489,173 @@ export default function AttendanceCamera({
         ) : null}
 
         {status === 'error' ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center text-white">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center text-white">
             <p className="text-sm">{error || 'Camera unavailable'}</p>
             <Button type="button" variant="secondary" size="sm" onClick={startCamera} className="gap-2">
               <RefreshCw className="h-4 w-4" /> Retry camera
             </Button>
           </div>
         ) : null}
-      </div>
 
-      {!hasPreview ? (
-        <div className="min-w-0 space-y-2">
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <p className="text-sm font-medium">Filter</p>
-            <p className="hidden text-xs text-muted-foreground sm:block">Applied to the saved photo</p>
-          </div>
-          <div className="max-w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]">
-            <div className="flex w-max gap-2" role="listbox" aria-label="Selfie filters">
-              {ATTENDANCE_SELFIE_FILTERS.map((filter) => {
-                const selected = selfieFilter === filter.id;
-                return (
+        {status !== 'error' && status !== 'loading' ? (
+          <>
+            {/* Top: filters + flip */}
+            {!hasPreview ? (
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/50 via-black/15 to-transparent pb-12">
+                <div className="pointer-events-auto flex items-center gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
+                  <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex h-10 w-max items-center gap-1.5" role="listbox" aria-label="Selfie filters">
+                      {ATTENDANCE_SELFIE_FILTERS.map((filter) => {
+                        const selected = selfieFilter === filter.id;
+                        return (
+                          <button
+                            key={filter.id}
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            disabled={controlsLocked || status !== 'live'}
+                            onClick={() => handleFilterChange(filter.id)}
+                            className={cn(
+                              'inline-flex h-8 touch-manipulation items-center justify-center rounded-full border px-3 text-center text-xs font-medium transition-all',
+                              'shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl',
+                              'disabled:pointer-events-none disabled:opacity-50',
+                              selected
+                                ? 'border-white/55 bg-white/35 text-white'
+                                : 'border-white/20 bg-white/10 text-white/90 hover:border-white/35 hover:bg-white/18',
+                            )}
+                          >
+                            {filter.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <button
-                    key={filter.id}
                     type="button"
-                    role="option"
-                    aria-selected={selected}
+                    onClick={toggleCamera}
                     disabled={controlsLocked || status !== 'live'}
-                    onClick={() => handleFilterChange(filter.id)}
+                    aria-label="Flip camera"
                     className={cn(
-                      'min-h-10 min-w-[4.25rem] touch-manipulation rounded-xl border px-3 py-2 text-center text-xs font-medium transition-colors',
+                      'inline-flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-full',
+                      'border border-white/25 bg-white/12 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]',
+                      'backdrop-blur-xl transition-all hover:border-white/40 hover:bg-white/20',
                       'disabled:pointer-events-none disabled:opacity-50',
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'bg-background hover:bg-muted',
                     )}
                   >
-                    {filter.label}
+                    <SwitchCamera className="h-4 w-4" />
                   </button>
-                );
-              })}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Bottom: shutter / confirm actions */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/55 via-black/15 to-transparent pt-16">
+              <div className="pointer-events-auto px-4 pb-4 sm:pb-5">
+                {hasPreview ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={retake}
+                      disabled={controlsLocked}
+                      className={cn(
+                        'inline-flex h-12 min-w-[7rem] touch-manipulation items-center justify-center gap-2 rounded-full',
+                        'border border-white/25 bg-white/12 px-5 text-sm font-medium text-white',
+                        'shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl',
+                        'transition-all hover:border-white/40 hover:bg-white/20',
+                        'disabled:pointer-events-none disabled:opacity-50',
+                      )}
+                    >
+                      {capturing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      Retake
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onSubmit?.()}
+                      disabled={controlsLocked || !canSubmit}
+                      className={cn(
+                        'inline-flex h-12 min-w-[9rem] touch-manipulation items-center justify-center gap-2 rounded-full',
+                        'border border-primary/40 bg-primary/75 px-6 text-sm font-semibold text-primary-foreground',
+                        'shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-xl',
+                        'transition-all hover:bg-primary/85 disabled:pointer-events-none disabled:opacity-50',
+                      )}
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ActionIcon className="h-4 w-4" />
+                      )}
+                      {submitting
+                        ? (isClockIn ? 'Clocking in…' : 'Clocking out…')
+                        : actionLabel}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleCapture}
+                      disabled={controlsLocked || status !== 'live'}
+                      aria-label={capturing ? 'Capturing photo' : 'Take photo'}
+                      className={cn(
+                        'group relative flex h-[4.5rem] w-[4.5rem] touch-manipulation items-center justify-center rounded-full',
+                        'border border-white/45 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_24px_rgba(0,0,0,0.25)]',
+                        'backdrop-blur-xl transition-all active:scale-95',
+                        'hover:border-white/60 hover:bg-white/16',
+                        'disabled:pointer-events-none disabled:opacity-50',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full',
+                          'border border-white/35 bg-white/25 text-white',
+                          'shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md',
+                          'transition-colors group-hover:bg-white/35',
+                        )}
+                      >
+                        {capturing ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Camera className="h-5 w-5" />
+                        )}
+                      </span>
+                    </button>
+                    <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-wide text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl">
+                      {capturing ? 'Capturing…' : 'Take photo'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {!hasPreview ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3">
-          <div className="min-w-0">
-            <Label htmlFor="attendance-camera-mirror" className="text-sm font-medium">
-              Mirror preview
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              <span className="sm:hidden">Flip like a selfie mirror.</span>
-              <span className="hidden sm:inline">
-                Flip the camera like a selfie mirror. Your choice is remembered on this device.
-              </span>
-            </p>
-          </div>
-          <Switch
-            id="attendance-camera-mirror"
-            checked={mirrorPreview}
-            onCheckedChange={handleMirrorChange}
-            disabled={controlsLocked || status !== 'live'}
-          />
-        </div>
-      ) : null}
-
-      <div className="grid min-w-0 grid-cols-3 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={hasPreview ? retake : handleCapture}
-          disabled={controlsLocked || (!hasPreview && status !== 'live')}
-          className="h-11 touch-manipulation gap-1.5 px-2 sm:h-10 sm:gap-2 sm:px-3"
-        >
-          {capturing ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          ) : hasPreview ? (
-            <RefreshCw className="h-4 w-4 shrink-0" />
-          ) : (
-            <Camera className="h-4 w-4 shrink-0" />
-          )}
-          <span className="truncate text-xs sm:text-sm">
-            {capturing ? 'Capturing…' : hasPreview ? 'Retake' : 'Take photo'}
-          </span>
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => onSubmit?.()}
-          disabled={controlsLocked || !canSubmit || !hasPreview}
-          className="h-11 touch-manipulation gap-1.5 px-2 sm:h-10 sm:gap-2 sm:px-3"
-        >
-          {submitting ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          ) : (
-            <ActionIcon className="h-4 w-4 shrink-0" />
-          )}
-          <span className="truncate text-xs sm:text-sm">
-            {submitting
-              ? (isClockIn ? 'Clocking in…' : 'Clocking out…')
-              : actionLabel}
-          </span>
-        </Button>
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={toggleCamera}
-          disabled={controlsLocked || hasPreview || status !== 'live'}
-          className="h-11 touch-manipulation gap-1.5 px-2 sm:h-10 sm:gap-2 sm:px-3"
-        >
-          <SwitchCamera className="h-4 w-4 shrink-0" />
-          <span className="truncate text-xs sm:text-sm">Flip</span>
-        </Button>
+          </>
+        ) : null}
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
-        {hasPreview
-          ? `Photo ready — tap ${actionLabel} to finish, or Retake.`
-          : `Take a photo, then tap ${actionLabel}.`}
-      </p>
-
-      {status === 'live' && watermarkLines.length ? (
-        <div className="hidden rounded-xl border bg-muted/20 p-3 text-xs text-muted-foreground sm:block">
-          <p className="mb-1 font-medium text-foreground">Watermark on photo</p>
-          {locationRef.current.locationError != null && locationRef.current.latitude == null ? (
-            <p className="mb-2 text-amber-600 dark:text-amber-400">
-              Location permission is required for address and GPS lines in the watermark.
-            </p>
-          ) : null}
-          {watermarkLines.map((line) => (
-            <div key={line} className="break-words">{line}</div>
-          ))}
+      {hasPreview && watermarkLines.length ? (
+        <div className="hidden space-y-3 border-t p-3 text-xs text-muted-foreground sm:block sm:p-4">
+          <div className="rounded-xl border bg-muted/20 p-3">
+            <p className="mb-1 font-medium text-foreground">Watermark on photo</p>
+            {locationRef.current.locationError != null && locationRef.current.latitude == null ? (
+              <p className="mb-2 text-amber-600 dark:text-amber-400">
+                Location permission is required for address and GPS lines in the watermark.
+              </p>
+            ) : null}
+            {watermarkLines.map((line) => (
+              <div key={line} className="break-words">{line}</div>
+            ))}
+          </div>
         </div>
       ) : null}
 
       {status === 'live'
         && locationRef.current.locationError != null
         && locationRef.current.latitude == null ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400 sm:hidden">
+          <p className="border-t px-3 py-2 text-xs text-amber-600 dark:text-amber-400 sm:hidden">
             Location permission is required for address and GPS lines in the watermark.
           </p>
         ) : null}
