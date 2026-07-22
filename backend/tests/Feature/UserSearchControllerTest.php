@@ -106,7 +106,61 @@ class UserSearchControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('user.name', 'Preview Target')
             ->assertJsonMissingPath('user.full_name')
-            ->assertJsonStructure(['user']);
+            ->assertJsonStructure([
+                'user' => [
+                    'profile_completeness' => [
+                        'percent',
+                        'done_count',
+                        'total_count',
+                        'checks',
+                    ],
+                ],
+            ]);
+    }
+
+    public function test_public_profile_completeness_matches_full_user_even_when_private_fields_hidden(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $department = \App\Models\Department::query()->create(['name' => 'Engineering']);
+        $target = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'name' => 'Display',
+            'full_name' => 'Full Name',
+            'profile_picture' => 'https://example.com/p.jpg',
+            'cover_picture' => 'https://example.com/c.jpg',
+            'bio' => 'Hello',
+            'department_id' => $department->id,
+            'work_phone' => '123',
+            'date_of_birth' => '1990-01-01',
+            'joined_at' => '2020-01-01',
+            'gender' => 'male',
+            'nationality' => 'Malaysian',
+            'ic_number' => '900101-01-1234',
+            'current_address' => '123 Street',
+            'emergency_contact_name' => 'Kin',
+            'emergency_contact_phone' => '456',
+            'next_of_kin_relationship' => 'Spouse',
+        ]);
+        $target->educations()->create([
+            'institution' => 'Test University',
+            'qualification' => 'Degree',
+            'field_of_study' => 'CS',
+            'year_from' => '2010',
+            'year_to' => '2014',
+            'sort_order' => 0,
+        ]);
+        $token = $this->issueToken($viewer);
+
+        $expected = \App\Support\ProfileCompleteness::forUser($target->fresh());
+
+        $this->withToken($token)
+            ->getJson("/api/users/{$target->id}/profile")
+            ->assertOk()
+            ->assertJsonMissingPath('user.full_name')
+            ->assertJsonMissingPath('user.ic_number')
+            ->assertJsonPath('user.profile_completeness.percent', $expected['percent'])
+            ->assertJsonPath('user.profile_completeness.percent', 100);
     }
 
     public function test_admin_profile_returns_private_fields(): void

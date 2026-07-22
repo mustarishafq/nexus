@@ -72,23 +72,7 @@ function McpAccessSelect({ value, onChange, disabled = false }) {
 }
 
 function getUserProfileStrength(user) {
-  if (user?.profile_completeness) {
-    const { percent, done_count, total_count, checks } = user.profile_completeness;
-    return {
-      percent,
-      doneCount: done_count,
-      totalCount: total_count,
-      checks: (checks || []).map((item) => ({ ...item, done: item.done })),
-    };
-  }
-
-  const result = getProfileCompleteness(user);
-  return {
-    percent: result.percent,
-    doneCount: result.doneCount,
-    totalCount: result.totalCount,
-    checks: result.checks,
-  };
+  return getProfileCompleteness(user);
 }
 
 function useDebouncedValue(value, delay = 300) {

@@ -23,10 +23,12 @@ class Post extends Model
         'approval_status',
         'approved_by_user_id',
         'approved_at',
+        'edited_at',
     ];
 
     protected $casts = [
         'approved_at' => 'datetime',
+        'edited_at' => 'datetime',
         'image_urls' => 'array',
     ];
 
@@ -53,6 +55,11 @@ class Post extends Model
     public function reactions(): HasMany
     {
         return $this->hasMany(PostReaction::class);
+    }
+
+    public function edits(): HasMany
+    {
+        return $this->hasMany(PostEdit::class)->orderByDesc('created_at');
     }
 
     /**

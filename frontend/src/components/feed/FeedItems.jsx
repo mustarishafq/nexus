@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, Check, ImageIcon, Loader2, Megaphone, MessageCircle, Send, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Camera, Check, ImageIcon, Loader2, Megaphone, MessageCircle, Pencil, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import FeedTextEditor from '@/components/feed/FeedTextEditor';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
+import PostEditHistory from '@/components/feed/PostEditHistory';
 import PostReactions from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getDisplayName } from '@/lib/profile';
 import { useAuth } from '@/lib/AuthContext';
+import { isEmptyRichText } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
 
@@ -290,6 +293,8 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(initialExpanded);
+  const [editing, setEditing] = useState(false);
+  const [draftBody, setDraftBody] = useState(item.body || '');
   const isPending = Boolean(item.is_pending || item.approval_status === 'pending');
 
   useEffect(() => {
@@ -297,6 +302,12 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
       setExpanded(true);
     }
   }, [initialExpanded]);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraftBody(item.body || '');
+    }
+  }, [item.body, editing]);
 
   const deletePost = useMutation({
     mutationFn: () => db.feed.deletePost(item.id),
@@ -306,6 +317,19 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     },
     onError: (error) => {
       toast.error(error?.message || 'Failed to delete post.');
+    },
+  });
+
+  const updatePost = useMutation({
+    mutationFn: (body) => db.feed.updatePost(item.id, { body }),
+    onSuccess: () => {
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['post-edits', item.id] });
+      toast.success('Post updated.');
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to update post.');
     },
   });
 
@@ -333,6 +357,9 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
 
   const timeAgo = formatDistanceToNow(new Date(item.created_date), { addSuffix: true });
   const moderationBusy = approvePost.isPending || rejectPost.isPending;
+  const canSaveEdit =
+    !isEmptyRichText(draftBody) || Boolean(item.image_url || item.image_urls?.length);
+  const draftUnchanged = (draftBody || '') === (item.body || '');
 
   return (
     <article
@@ -374,11 +401,32 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
               ) : null}
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="whitespace-nowrap text-[10px] text-muted-foreground md:text-[11px]">
-                {timeAgo}
-              </span>
-              {item.can_delete && !compact ? (
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="whitespace-nowrap text-[10px] text-muted-foreground md:text-[11px]">
+                  {timeAgo}
+                </span>
+                {item.is_edited ? (
+                  <PostEditHistory postId={item.id} editedAt={item.edited_at} />
+                ) : null}
+              </div>
+              {item.can_edit && !compact && !editing ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground opacity-100 hover:text-foreground md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
+                  onClick={() => {
+                    setDraftBody(item.body || '');
+                    setEditing(true);
+                  }}
+                  disabled={updatePost.isPending}
+                  title="Edit post"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+              {item.can_delete && !compact && !editing ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -394,14 +442,50 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             </div>
           </div>
 
-          {item.body ? (
-            <div className="mt-2 text-sm leading-relaxed text-foreground/90 break-words md:break-normal">
+          {editing ? (
+            <div className="mt-2 space-y-2">
+              <FeedTextEditor
+                value={draftBody}
+                onChange={setDraftBody}
+                placeholder="Update your post..."
+                minHeight="6.5rem"
+                maxLength={2000}
+                disabled={updatePost.isPending}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <p className="mr-auto text-xs tabular-nums text-muted-foreground">{draftBody.length}/2000</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  disabled={updatePost.isPending}
+                  onClick={() => {
+                    setDraftBody(item.body || '');
+                    setEditing(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8"
+                  disabled={updatePost.isPending || !canSaveEdit || draftUnchanged}
+                  onClick={() => updatePost.mutate(draftBody)}
+                >
+                  {updatePost.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                </Button>
+              </div>
+            </div>
+          ) : item.body ? (
+            <div className="mt-2 text-foreground/90">
               <MentionText text={item.body} />
             </div>
           ) : null}
         </div>
 
-        {item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0) ? (
+        {!editing && (item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
           <div className="col-span-2 mt-2.5 min-w-0">
             <PostImageGrid item={item} />
           </div>
@@ -437,7 +521,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           </p>
         ) : null}
 
-        {!isPending ? (
+        {!isPending && !editing ? (
           <div
             className={cn(
               'col-start-2 mt-3 min-w-0 border-t border-border/40 pt-3',
@@ -477,7 +561,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           </div>
         ) : null}
 
-        {!isPending && expanded ? (
+        {!isPending && !editing && expanded ? (
           <PostComments
             postId={item.id}
             commentsCount={item.comments_count || 0}
@@ -600,12 +684,12 @@ export function FeedComposer({ className }) {
     addImageFiles(selected);
   };
 
-  const canPost = Boolean(body.trim() || imageItems.length > 0);
+  const canPost = Boolean(!isEmptyRichText(body) || imageItems.length > 0);
   const isSubmitting = createPost.isPending;
 
   return (
     <div className={cn('rounded-2xl border border-border bg-card p-3 sm:p-4', className)}>
-      <MentionInput
+      <FeedTextEditor
         value={body}
         onChange={setBody}
         placeholder={
@@ -613,9 +697,9 @@ export function FeedComposer({ className }) {
             ? 'Share an update...'
             : 'Share an update... Type @ to mention someone'
         }
-        rows={isMobile ? 2 : 3}
+        minHeight={isMobile ? '6.5rem' : '8rem'}
         maxLength={2000}
-        className="text-sm"
+        disabled={isSubmitting}
       />
 
       {requiresApproval ? (
@@ -717,7 +801,7 @@ export function FeedComposer({ className }) {
           title="Post"
           onClick={() =>
             createPost.mutate({
-              text: body.trim(),
+              text: body,
               files: imageItems.map((item) => item.file),
             })
           }

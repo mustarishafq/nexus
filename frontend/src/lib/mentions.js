@@ -166,39 +166,64 @@ export function mentionTokenLength(userId, label) {
   return `@[${userId}|${label}]`.length;
 }
 
-function appendSerializedPart(target, node) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    target.text += node.textContent || '';
-    return;
-  }
+const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return;
-  }
-
-  const element = node;
-
-  if (element.dataset?.mentionId && element.dataset?.mentionLabel) {
-    target.text += `@[${element.dataset.mentionId}|${element.dataset.mentionLabel}]`;
-    return;
-  }
-
-  if (element.tagName === 'BR') {
-    target.text += '\n';
-    return;
-  }
-
-  element.childNodes.forEach((child) => appendSerializedPart(target, child));
+function isBlockElement(element) {
+  return BLOCK_TAGS.has(element?.tagName);
 }
 
+/**
+ * Serialize a contentEditable mention editor to plain text while preserving
+ * line breaks. Browsers insert <br>, <div>, or <p> for Enter — all must map to \n.
+ */
 export function serializeMentionEditor(root) {
   if (!root) {
     return '';
   }
 
-  const target = { text: '' };
-  root.childNodes.forEach((child) => appendSerializedPart(target, child));
-  return target.text;
+  let text = '';
+  let isOnFreshLine = true;
+
+  const walk = (nodes) => {
+    nodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const value = node.textContent || '';
+        if (value) {
+          text += value;
+          isOnFreshLine = false;
+        }
+        return;
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+
+      const element = node;
+
+      if (element.dataset?.mentionId && element.dataset?.mentionLabel) {
+        text += `@[${element.dataset.mentionId}|${element.dataset.mentionLabel}]`;
+        isOnFreshLine = false;
+        return;
+      }
+
+      if (element.tagName === 'BR') {
+        text += '\n';
+        isOnFreshLine = true;
+        return;
+      }
+
+      if (isBlockElement(element) && !isOnFreshLine) {
+        text += '\n';
+        isOnFreshLine = true;
+      }
+
+      walk(element.childNodes);
+    });
+  };
+
+  walk(root.childNodes);
+  return text;
 }
 
 export function getSerializedCursorOffset(root) {
@@ -263,11 +288,23 @@ export function setSerializedCursorOffset(root, offset) {
   const range = document.createRange();
   let remaining = Math.max(0, offset);
   let placed = false;
+  let isOnFreshLine = true;
 
   const placeAtNode = (node, nodeOffset) => {
     range.setStart(node, nodeOffset);
     range.collapse(true);
     placed = true;
+  };
+
+  const consumeNewline = (beforeNode) => {
+    if (remaining <= 0) {
+      const parent = beforeNode.parentNode || root;
+      placeAtNode(parent, Array.from(parent.childNodes).indexOf(beforeNode));
+      return true;
+    }
+    remaining -= 1;
+    isOnFreshLine = true;
+    return false;
   };
 
   const walk = (node) => {
@@ -277,6 +314,9 @@ export function setSerializedCursorOffset(root, offset) {
 
     if (node.nodeType === Node.TEXT_NODE) {
       const length = node.textContent?.length || 0;
+      if (length > 0) {
+        isOnFreshLine = false;
+      }
       if (remaining <= length) {
         placeAtNode(node, remaining);
         return;
@@ -293,6 +333,7 @@ export function setSerializedCursorOffset(root, offset) {
 
     if (element.dataset?.mentionId && element.dataset?.mentionLabel) {
       const length = mentionTokenLength(element.dataset.mentionId, element.dataset.mentionLabel);
+      isOnFreshLine = false;
       if (remaining <= length) {
         placeAtNode(element.parentNode || root, Array.from((element.parentNode || root).childNodes).indexOf(element) + 1);
         return;
@@ -302,12 +343,16 @@ export function setSerializedCursorOffset(root, offset) {
     }
 
     if (element.tagName === 'BR') {
-      if (remaining <= 1) {
-        placeAtNode(element.parentNode || root, Array.from((element.parentNode || root).childNodes).indexOf(element));
+      if (consumeNewline(element)) {
         return;
       }
-      remaining -= 1;
       return;
+    }
+
+    if (isBlockElement(element) && !isOnFreshLine) {
+      if (consumeNewline(element)) {
+        return;
+      }
     }
 
     element.childNodes.forEach(walk);

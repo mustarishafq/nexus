@@ -77,6 +77,9 @@ class UserProfileSerializer
      */
     public static function publicProfile(User $user): array
     {
+        // Compute before stripping private fields so public viewers still see accurate strength.
+        $completeness = ProfileCompleteness::forUser($user);
+
         $array = $user->makeHidden([
             'password',
             'remember_token',
@@ -87,6 +90,7 @@ class UserProfileSerializer
 
         $array['name'] = $user->displayName();
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
+        $array['profile_completeness'] = $completeness;
 
         if ($user->personal_phone_visible) {
             $array['personal_phone'] = $user->personal_phone;
@@ -100,6 +104,8 @@ class UserProfileSerializer
      */
     public static function privateProfile(User $user): array
     {
+        $completeness = ProfileCompleteness::forUser($user);
+
         $array = $user->makeHidden([
             'password',
             'remember_token',
@@ -108,6 +114,7 @@ class UserProfileSerializer
 
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
         $array['feed_post_requires_approval'] = AppSettings::userRequiresFeedPostApproval($user);
+        $array['profile_completeness'] = $completeness;
 
         return $array;
     }

@@ -33,6 +33,9 @@ trait SerializesPosts
         $isPending = $post->isPending();
         $canModerate = UserRoles::isHrOrAdmin($viewer);
         $imageUrls = $post->resolvedImageUrls();
+        $isAuthor = (int) $viewer->id === (int) $post->author_user_id;
+        $editsCount = (int) ($post->edits_count ?? $post->edits()->count());
+        $isEdited = $editsCount > 0 || filled($post->edited_at);
 
         return [
             'type' => 'post',
@@ -48,7 +51,11 @@ trait SerializesPosts
             'my_reaction' => $myReaction,
             'available_reactions' => self::POST_REACTIONS,
             'created_date' => $post->created_date,
-            'can_delete' => $viewer->id === $post->author_user_id || $canModerate,
+            'edited_at' => $post->edited_at?->toISOString(),
+            'is_edited' => $isEdited,
+            'edits_count' => $editsCount,
+            'can_edit' => $isAuthor,
+            'can_delete' => $isAuthor || $canModerate,
             'can_moderate' => $canModerate && $isPending,
             'is_pending' => $isPending,
         ];

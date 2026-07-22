@@ -66,6 +66,7 @@ export default function MiniChatPanel({
     queryFn: () => db.messages.getThread(conversationId),
     enabled: Boolean(conversationId),
     refetchInterval: pollInterval,
+    refetchOnWindowFocus: true,
   });
 
   const messages = Array.isArray(threadData?.messages) ? threadData.messages : [];

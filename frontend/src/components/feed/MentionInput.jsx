@@ -185,7 +185,30 @@ export default function MentionInput({
     });
   };
 
+  const preferPlainTextBreaks = () => {
+    try {
+      document.execCommand('defaultParagraphSeparator', false, 'br');
+    } catch {
+      // Older browsers may not support this; serialization still handles div/p.
+    }
+  };
+
   const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      preferPlainTextBreaks();
+
+      if (document.queryCommandSupported?.('insertLineBreak')) {
+        document.execCommand('insertLineBreak');
+      } else {
+        document.execCommand('insertHTML', false, '<br>');
+      }
+
+      handleInput();
+      onKeyDown?.(event);
+      return;
+    }
+
     if (event.key === 'Backspace' || event.key === 'Delete') {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
@@ -302,16 +325,20 @@ export default function MentionInput({
         role="textbox"
         aria-multiline={rows > 1}
         aria-label={placeholder}
+        onFocus={preferPlainTextBreaks}
         onInput={handleInput}
         onClick={syncMentionState}
         onKeyDown={handleKeyDown}
         onPaste={(event) => {
           event.preventDefault();
+          preferPlainTextBreaks();
+          // Keep pasted text format (line breaks / spacing) as plain text.
           const text = event.clipboardData.getData('text/plain');
           document.execCommand('insertText', false, text);
+          handleInput();
         }}
         className={cn(
-          'w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm',
+          'w-full overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm',
           'whitespace-pre-wrap break-words',
           className
         )}

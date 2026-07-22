@@ -29,6 +29,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: [
+      'dompurify',
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      '@tiptap/extension-placeholder',
+      '@tiptap/extension-underline',
+    ],
+  },
   server: {
     proxy: {
       '/api': {

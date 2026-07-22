@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\SerializesFeedAuthors;
 use App\Http\Controllers\Api\Concerns\SerializesPosts;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
+use App\Models\PostEdit;
 use App\Models\User;
 use App\Services\FeedNotificationService;
 use App\Services\MentionService;
@@ -15,6 +16,7 @@ use App\Support\FeedLinks;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PostController extends Controller
 {
@@ -74,11 +76,96 @@ class PostController extends Controller
             $this->notifyMentions($viewer, $post, $body);
         }
 
-        $post->load(['author', 'reactions'])->loadCount('comments');
+        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
         ], 201);
+    }
+
+    public function update(Request $request, Post $post): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ((int) $viewer->id !== (int) $post->author_user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'body' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $body = trim($validated['body'] ?? '');
+        $imageUrls = $post->resolvedImageUrls();
+
+        if ($body === '' && $imageUrls === []) {
+            return response()->json(['message' => 'Post must include text or an image.'], 422);
+        }
+
+        $previousBody = (string) ($post->body ?? '');
+        if ($previousBody === $body) {
+            $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
+
+            return response()->json([
+                'item' => $this->serializePost($post, $viewer),
+            ]);
+        }
+
+        DB::transaction(function () use ($post, $viewer, $body, $previousBody) {
+            PostEdit::query()->create([
+                'post_id' => $post->id,
+                'editor_user_id' => $viewer->id,
+                'body' => $previousBody,
+            ]);
+
+            $post->forceFill([
+                'body' => $body,
+                'edited_at' => now(),
+            ])->save();
+        });
+
+        if ($body !== '' && ! $post->isPending()) {
+            $this->notifyMentions($viewer, $post, $body);
+        }
+
+        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
+
+        return response()->json([
+            'item' => $this->serializePost($post, $viewer),
+        ]);
+    }
+
+    public function edits(Request $request, Post $post): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $edits = $post->edits()
+            ->with(['editor.department'])
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (PostEdit $edit) {
+                return [
+                    'id' => $edit->id,
+                    'body' => $edit->body,
+                    'created_date' => $edit->created_date,
+                    'editor' => $this->serializeFeedAuthor($edit->editor),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'edits' => $edits,
+        ]);
     }
 
     public function approve(Request $request, Post $post): JsonResponse

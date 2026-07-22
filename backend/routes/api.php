@@ -99,6 +99,8 @@ Route::get('/dashboard/action-items', [UserTodoController::class, 'index']);
 Route::patch('/dashboard/action-items/{userTodo}/complete', [UserTodoController::class, 'complete']);
 Route::get('/feed', [FeedController::class, 'index']);
 Route::post('/posts', [PostController::class, 'store']);
+Route::put('/posts/{post}', [PostController::class, 'update']);
+Route::get('/posts/{post}/edits', [PostController::class, 'edits']);
 Route::post('/posts/{post}/approve', [PostController::class, 'approve']);
 Route::post('/posts/{post}/reject', [PostController::class, 'reject']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);

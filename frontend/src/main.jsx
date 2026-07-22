@@ -4,10 +4,15 @@ import App from '@/App.jsx'
 import '@/index.css'
 import { showNotificationAlert } from '@/lib/notificationAlerts'
 import {
+  invalidateDirectMessageQueries,
+  isViewingDirectMessageConversation,
+} from '@/lib/messagesCache'
+import {
   captureNotificationOpenFromUrl,
   dispatchNotificationOpen,
 } from '@/lib/pendingNotificationOpen'
 import { initPwaInstallListeners } from '@/lib/pwa'
+import { queryClientInstance } from '@/lib/query-client'
 
 if (typeof window !== 'undefined') {
   initPwaInstallListeners();
@@ -18,7 +23,18 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   // Register before load so notification clicks during startup are not missed.
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PUSH_RECEIVED') {
-      showNotificationAlert(event.data.payload || {});
+      const payload = event.data.payload || {};
+      invalidateDirectMessageQueries(queryClientInstance, payload);
+
+      // SW notifies every open client so chat caches stay fresh in background tabs.
+      // Only toast from the visible/focused client, and skip while already in that chat.
+      const canToast = typeof document !== 'undefined'
+        && !document.hidden
+        && (typeof document.hasFocus !== 'function' || document.hasFocus())
+        && !isViewingDirectMessageConversation(payload);
+      if (canToast) {
+        showNotificationAlert(payload);
+      }
       return;
     }
 

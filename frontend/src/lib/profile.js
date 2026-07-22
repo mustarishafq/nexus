@@ -294,6 +294,22 @@ export function getProfileCompleteness(user) {
     return { percent: 0, doneCount: 0, totalCount: PROFILE_CHECKS.length, checks: PROFILE_CHECKS.map((item) => ({ ...item, done: false })) };
   }
 
+  // Prefer server-computed completeness — public profile payloads strip private fields
+  // (full_name, HR details) that the client checklist needs, which under-reports strength.
+  if (user.profile_completeness) {
+    const { percent, done_count, total_count, checks } = user.profile_completeness;
+    return {
+      percent: Number(percent) || 0,
+      doneCount: Number(done_count) || 0,
+      totalCount: Number(total_count) || PROFILE_CHECKS.length,
+      checks: (checks || []).map((item) => ({
+        key: item.key,
+        label: item.label,
+        done: Boolean(item.done),
+      })),
+    };
+  }
+
   const checks = PROFILE_CHECKS.map((item) => ({
     ...item,
     done: isProfileCheckDone(user, item.key),

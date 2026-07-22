@@ -521,6 +521,17 @@ export const db = {
 			});
 		},
 
+		async updatePost(postId, { body = '' } = {}) {
+			return request(`/posts/${postId}`, {
+				method: 'PUT',
+				body: { body },
+			});
+		},
+
+		async listPostEdits(postId) {
+			return request(`/posts/${postId}/edits`);
+		},
+
 		async approvePost(postId) {
 			return request(`/posts/${postId}/approve`, { method: 'POST' });
 		},

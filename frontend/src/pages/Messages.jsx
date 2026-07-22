@@ -117,6 +117,7 @@ export default function Messages() {
     queryKey: MESSAGES_INBOX_QUERY_KEY,
     queryFn: () => db.messages.listConversations(),
     refetchInterval: pollInterval,
+    refetchOnWindowFocus: true,
   });
 
   const conversations = Array.isArray(inboxData?.conversations) ? inboxData.conversations : [];
@@ -136,6 +137,7 @@ export default function Messages() {
     queryFn: () => db.messages.getThread(conversationId),
     enabled: Boolean(conversationId) && !isCompose,
     refetchInterval: pollInterval,
+    refetchOnWindowFocus: true,
   });
 
   const messages = Array.isArray(threadData?.messages) ? threadData.messages : [];

@@ -136,11 +136,11 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Notify any focused client so the app can show an in-app alert when in the foreground.
-      const focusedClient = windowClients.find((c) => c.focused);
-      if (focusedClient) {
-        focusedClient.postMessage({ type: 'PUSH_RECEIVED', payload });
-      }
+      // Notify every open client so chat/inbox caches can invalidate immediately.
+      // Clients decide whether to show an in-app toast (focused + not already in that chat).
+      windowClients.forEach((client) => {
+        client.postMessage({ type: 'PUSH_RECEIVED', payload });
+      });
 
       // Always show the OS-level notification so the user gets it even in the background
       // or when no focused client is found (e.g. PWA backgrounded / device locked).

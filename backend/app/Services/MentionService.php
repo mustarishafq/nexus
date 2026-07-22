@@ -67,7 +67,8 @@ class MentionService
             ->get(['id', 'full_name', 'name']);
 
         $authorName = $author->displayName();
-        $preview = trim(preg_replace(self::TOKEN_PATTERN, '@$2', $body) ?? $body);
+            $preview = trim(preg_replace(self::TOKEN_PATTERN, '@$2', $body) ?? $body);
+        $preview = trim(html_entity_decode(strip_tags($preview), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
         $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
 
         foreach ($users as $user) {

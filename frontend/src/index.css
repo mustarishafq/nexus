@@ -508,3 +508,38 @@
       0 0 0 3px hsl(var(--background));
   }
 }
+
+/* TipTap text editor */
+.tiptap-editor .tiptap p.is-editor-empty:first-child::before,
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-editor .ProseMirror {
+  outline: none;
+}
+
+.tiptap-editor .ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+
+.tiptap-editor .ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+
+.tiptap-editor .ProseMirror p {
+  min-height: 1.5em;
+  margin: 0;
+}
+
+.tiptap-editor .ProseMirror li > p {
+  display: inline;
+  margin: 0;
+  min-height: 0;
+}
