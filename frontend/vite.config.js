@@ -11,23 +11,19 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Prevent Rollup from pulling transitive deps (e.g. react) into other
-        // manual chunks, which creates circular init / TDZ runtime crashes.
-        onlyExplicitManualChunks: true,
         manualChunks(id) {
-          if (!id.includes('node_modules') || id.includes('\0')) return;
+          if (!id.includes('node_modules')) return;
 
           if (id.includes('framer-motion')) return 'vendor-motion';
           if (id.includes('@lottiefiles')) return 'vendor-lottie';
           if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-          // Keep React + Radix together. A separate vendor-radix chunk caused
-          // "Cannot access 'bn' before initialization" from circular chunk init.
-          // Match real react packages only — `/react/` wrongly caught @tiptap/react.
+          // Match real react packages only. The old `/react/` check also caught
+          // @tiptap/react, and a separate @radix-ui chunk caused a circular
+          // init crash: "Cannot access 'bn' before initialization".
           if (
             id.includes('/node_modules/react/')
             || id.includes('/node_modules/react-dom/')
             || id.includes('/node_modules/scheduler/')
-            || id.includes('@radix-ui')
           ) {
             return 'vendor-react';
           }
