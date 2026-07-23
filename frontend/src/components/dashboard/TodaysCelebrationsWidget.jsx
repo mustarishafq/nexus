@@ -197,26 +197,20 @@ function ReactionSummary({ reactionCounts, limit = 3 }) {
   if (entries.length === 0) return null;
 
   const total = Object.values(reactionCounts).reduce((sum, count) => sum + count, 0);
-  const extraTypes = Object.keys(reactionCounts).length - entries.length;
 
   return (
     <span
-      className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5"
+      className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5"
       title={Object.entries(reactionCounts)
         .map(([emoji, count]) => `${emoji} ${count}`)
         .join(' · ')}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-0.5">
         {entries.map(([emoji]) => (
           <span key={emoji} className="text-[11px] leading-none">
             {emoji}
           </span>
         ))}
-        {extraTypes > 0 ? (
-          <span className="text-[10px] font-medium leading-none text-muted-foreground">
-            +{extraTypes}
-          </span>
-        ) : null}
       </span>
       {total > 0 ? (
         <span className="text-[10px] font-medium tabular-nums leading-none text-muted-foreground">
