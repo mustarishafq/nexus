@@ -409,6 +409,7 @@ function AttendanceAdminReport() {
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(0);
 
@@ -420,7 +421,7 @@ function AttendanceAdminReport() {
 
   useEffect(() => {
     setPage(0);
-  }, [dateFrom, dateTo, userId, type]);
+  }, [dateFrom, dateTo, userId, departmentId, type]);
 
   const filters = useMemo(() => ({
     date_from: dateFrom,
@@ -428,8 +429,9 @@ function AttendanceAdminReport() {
     limit: ADMIN_PAGE_SIZE,
     offset: page * ADMIN_PAGE_SIZE,
     ...(userId ? { user_id: userId } : {}),
+    ...(departmentId ? { department_id: departmentId } : {}),
     ...(type ? { type } : {}),
-  }), [dateFrom, dateTo, userId, type, page]);
+  }), [dateFrom, dateTo, userId, departmentId, type, page]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-dashboard', filters],
@@ -444,11 +446,18 @@ function AttendanceAdminReport() {
     staleTime: 120_000,
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => db.listDepartments(),
+    enabled: canViewAllRecords,
+    staleTime: 60_000,
+  });
+
   const totalRecords = data?.summary?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRecords / ADMIN_PAGE_SIZE));
   const pageStart = totalRecords === 0 ? 0 : page * ADMIN_PAGE_SIZE + 1;
   const pageEnd = Math.min(totalRecords, (page + 1) * ADMIN_PAGE_SIZE);
-  const activeFilterCount = [userId, type].filter(Boolean).length;
+  const activeFilterCount = [userId, departmentId, type].filter(Boolean).length;
 
   const handleExport = async () => {
     setExporting(true);
@@ -457,6 +466,7 @@ function AttendanceAdminReport() {
         date_from: dateFrom,
         date_to: dateTo,
         ...(userId ? { user_id: userId } : {}),
+        ...(departmentId ? { department_id: departmentId } : {}),
         ...(type ? { type } : {}),
       });
       toast.success('Attendance export downloaded');
@@ -535,7 +545,7 @@ function AttendanceAdminReport() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-3 border-t border-border/60 p-4 sm:p-6">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">Date from</label>
                   <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -552,6 +562,25 @@ function AttendanceAdminReport() {
                     onValueChange={setUserId}
                     placeholder="All users"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Department</label>
+                  <Select
+                    value={departmentId || 'all'}
+                    onValueChange={(value) => setDepartmentId(value === 'all' ? '' : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All departments</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">Type</label>

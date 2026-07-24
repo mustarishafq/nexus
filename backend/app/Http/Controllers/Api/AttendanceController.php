@@ -376,6 +376,7 @@ class AttendanceController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'type' => ['nullable', 'in:clock_in,clock_out'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'offset' => ['nullable', 'integer', 'min:0'],
@@ -426,6 +427,7 @@ class AttendanceController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'type' => ['nullable', 'in:clock_in,clock_out'],
         ]);
 
@@ -549,6 +551,13 @@ class AttendanceController extends Controller
 
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        }
+
+        if (! empty($filters['department_id'])) {
+            $query->whereHas(
+                'user',
+                fn (Builder $userQuery) => $userQuery->where('department_id', (int) $filters['department_id'])
+            );
         }
 
         if (! empty($filters['type'])) {
