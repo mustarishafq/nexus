@@ -11,7 +11,9 @@ import PostReactions from '@/components/feed/PostReactions';
 import MediaLightbox from '@/components/media/MediaLightbox';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
+import { flattenCommentReplies } from '@/lib/comments';
 import { toAbsoluteUrl } from '@/lib/media';
+import { buildMentionToken } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -63,83 +65,94 @@ function ProfileMediaComments({ userId, mediaType, commentsCount, queryKey }) {
 
   const comments = Array.isArray(data?.comments) ? data.comments : [];
 
-  const startReply = (comment) => {
+  const startReply = (comment, { isReply = false } = {}) => {
     setReplyingTo({
       id: comment.id,
       name: getDisplayName(comment.author),
     });
+
+    // Facebook-style: mention the person when replying to a reply (flat thread).
+    if (isReply && comment.author?.id) {
+      const token = `${buildMentionToken(comment.author)} `;
+      setCommentBody((prev) => {
+        const mention = buildMentionToken(comment.author);
+        if (prev.includes(mention)) return prev;
+        return `${token}${prev}`;
+      });
+    }
   };
 
-  const renderComment = (comment, { depth = 0 } = {}) => (
-    <div
-      key={comment.id}
-      className={cn('flex gap-2', depth > 0 && 'ml-5 border-l border-border/40 pl-2.5')}
-    >
-      <Link to={`/people/${comment.author?.id}`} className="shrink-0">
-        <UserAvatar
-          user={comment.author}
-          className={cn(depth > 0 ? 'h-6 w-6' : 'h-7 w-7')}
-          fallbackClassName="text-[10px]"
-        />
-      </Link>
-      <div className="min-w-0 flex-1">
-        <div className="rounded-2xl bg-background px-2.5 py-2 shadow-sm ring-1 ring-border/50">
-          <div className="flex items-start justify-between gap-1.5">
-            <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <Link
-                  to={`/people/${comment.author?.id}`}
-                  className="truncate text-xs font-semibold hover:text-primary hover:underline"
-                >
-                  {getDisplayName(comment.author)}
-                </Link>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
-                </span>
-              </div>
-              <div className="mt-1 text-sm leading-relaxed break-words">
-                <MentionText text={comment.body} />
-              </div>
-            </div>
-            {comment.can_delete ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => deleteComment.mutate(comment.id)}
-                disabled={deleteComment.isPending}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
+  const renderComment = (comment, { isReply = false } = {}) => {
+    const nestedReplies = !isReply ? flattenCommentReplies(comment.replies) : [];
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
-          <PostReactions
-            item={comment}
-            compact
-            reactFn={(reaction) => db.profileMedia.reactToComment(comment.id, reaction)}
-            invalidateKeys={[commentsQueryKey]}
+    return (
+      <div key={comment.id} className="flex gap-2">
+        <Link to={`/people/${comment.author?.id}`} className="shrink-0">
+          <UserAvatar
+            user={comment.author}
+            className={cn(isReply ? 'h-6 w-6' : 'h-7 w-7')}
+            fallbackClassName="text-[10px]"
           />
-          <button
-            type="button"
-            onClick={() => startReply(comment)}
-            className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Reply
-          </button>
-        </div>
-
-        {Array.isArray(comment.replies) && comment.replies.length > 0 ? (
-          <div className="mt-2.5 space-y-2.5">
-            {comment.replies.map((reply) => renderComment(reply, { depth: depth + 1 }))}
+        </Link>
+        <div className="min-w-0 flex-1">
+          <div className="rounded-2xl bg-background px-2.5 py-2 shadow-sm ring-1 ring-border/50">
+            <div className="flex items-start justify-between gap-1.5">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <Link
+                    to={`/people/${comment.author?.id}`}
+                    className="truncate text-xs font-semibold hover:text-primary hover:underline"
+                  >
+                    {getDisplayName(comment.author)}
+                  </Link>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm leading-relaxed break-words">
+                  <MentionText text={comment.body} />
+                </div>
+              </div>
+              {comment.can_delete ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => deleteComment.mutate(comment.id)}
+                  disabled={deleteComment.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+            </div>
           </div>
-        ) : null}
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+            <PostReactions
+              item={comment}
+              compact
+              reactFn={(reaction) => db.profileMedia.reactToComment(comment.id, reaction)}
+              invalidateKeys={[commentsQueryKey]}
+            />
+            <button
+              type="button"
+              onClick={() => startReply(comment, { isReply })}
+              className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Reply
+            </button>
+          </div>
+
+          {nestedReplies.length > 0 ? (
+            <div className="mt-2.5 ml-5 space-y-2.5 border-l border-border/40 pl-2.5">
+              {nestedReplies.map((reply) => renderComment(reply, { isReply: true }))}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

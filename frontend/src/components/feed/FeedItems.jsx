@@ -15,6 +15,8 @@ import PostReactions from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { flattenCommentReplies } from '@/lib/comments';
+import { buildMentionToken } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { useAuth } from '@/lib/AuthContext';
 import { isEmptyRichText } from '@/lib/richText';
@@ -94,47 +96,93 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
   const comments = Array.isArray(data?.comments) ? data.comments : [];
 
-  const startReply = (comment) => {
+  const startReply = (comment, { isReply = false } = {}) => {
     setReplyingTo({
       id: comment.id,
       name: getDisplayName(comment.author),
     });
+
+    // Facebook-style: mention the person when replying to a reply (flat thread).
+    if (isReply && comment.author?.id) {
+      const token = `${buildMentionToken(comment.author)} `;
+      setCommentBody((prev) => {
+        const mention = buildMentionToken(comment.author);
+        if (prev.includes(mention)) return prev;
+        return `${token}${prev}`;
+      });
+    }
   };
 
-  const renderComment = (comment, { depth = 0 } = {}) => (
-    <div
-      key={comment.id}
-      className={cn('flex gap-2 md:gap-2.5', depth > 0 && 'ml-5 border-l border-border/40 pl-2.5 md:ml-7 md:pl-3')}
-    >
-      <Link to={`/people/${comment.author?.id}`} className="shrink-0">
-        <UserAvatar
-          user={comment.author}
-          className={cn(depth > 0 ? 'h-6 w-6 md:h-7 md:w-7' : 'h-7 w-7 md:h-8 md:w-8')}
-          fallbackClassName="text-[10px]"
-        />
-      </Link>
-      <div className="min-w-0 flex-1">
-        <div className="rounded-2xl bg-background px-2.5 py-2 shadow-sm ring-1 ring-border/50 md:px-3">
-          {/* Mobile: header row + body below for more horizontal room */}
-          <div className="md:hidden">
-            <div className="flex items-start justify-between gap-1.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <Link
-                  to={`/people/${comment.author?.id}`}
-                  className="truncate text-xs font-semibold hover:text-primary hover:underline"
-                >
-                  {getDisplayName(comment.author)}
-                </Link>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
-                </span>
+  const renderComment = (comment, { isReply = false } = {}) => {
+    const nestedReplies = !isReply ? flattenCommentReplies(comment.replies) : [];
+
+    return (
+      <div key={comment.id} className="flex gap-2 md:gap-2.5">
+        <Link to={`/people/${comment.author?.id}`} className="shrink-0">
+          <UserAvatar
+            user={comment.author}
+            className={cn(isReply ? 'h-6 w-6 md:h-7 md:w-7' : 'h-7 w-7 md:h-8 md:w-8')}
+            fallbackClassName="text-[10px]"
+          />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <div className="rounded-2xl bg-background px-2.5 py-2 shadow-sm ring-1 ring-border/50 md:px-3">
+            {/* Mobile: header row + body below for more horizontal room */}
+            <div className="md:hidden">
+              <div className="flex items-start justify-between gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <Link
+                    to={`/people/${comment.author?.id}`}
+                    className="truncate text-xs font-semibold hover:text-primary hover:underline"
+                  >
+                    {getDisplayName(comment.author)}
+                  </Link>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
+                  </span>
+                </div>
+                {comment.can_delete ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteComment.mutate(comment.id)}
+                    disabled={deleteComment.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-1 text-sm leading-relaxed break-words">
+                <MentionText text={comment.body} />
+              </div>
+            </div>
+
+            {/* Tablet/desktop: original side-by-side layout */}
+            <div className="hidden md:flex md:items-start md:justify-between md:gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <Link
+                    to={`/people/${comment.author?.id}`}
+                    className="text-xs font-semibold hover:text-primary hover:underline"
+                  >
+                    {getDisplayName(comment.author)}
+                  </Link>
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm leading-relaxed">
+                  <MentionText text={comment.body} />
+                </div>
               </div>
               {comment.can_delete ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={() => deleteComment.mutate(comment.id)}
                   disabled={deleteComment.isPending}
                 >
@@ -142,63 +190,28 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                 </Button>
               ) : null}
             </div>
-            <div className="mt-1 text-sm leading-relaxed break-words">
-              <MentionText text={comment.body} />
+          </div>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+            <PostReactions item={comment} commentId={comment.id} postId={postId} compact />
+            <button
+              type="button"
+              onClick={() => startReply(comment, { isReply })}
+              className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Reply
+            </button>
+          </div>
+
+          {nestedReplies.length > 0 ? (
+            <div className="mt-2.5 ml-5 space-y-2.5 border-l border-border/40 pl-2.5 md:ml-7 md:space-y-3 md:pl-3">
+              {nestedReplies.map((reply) => renderComment(reply, { isReply: true }))}
             </div>
-          </div>
-
-          {/* Tablet/desktop: original side-by-side layout */}
-          <div className="hidden md:flex md:items-start md:justify-between md:gap-2">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <Link
-                  to={`/people/${comment.author?.id}`}
-                  className="text-xs font-semibold hover:text-primary hover:underline"
-                >
-                  {getDisplayName(comment.author)}
-                </Link>
-                <span className="text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
-                </span>
-              </div>
-              <div className="mt-1 text-sm leading-relaxed">
-                <MentionText text={comment.body} />
-              </div>
-            </div>
-            {comment.can_delete ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => deleteComment.mutate(comment.id)}
-                disabled={deleteComment.isPending}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
-
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
-          <PostReactions item={comment} commentId={comment.id} postId={postId} compact />
-          <button
-            type="button"
-            onClick={() => startReply(comment)}
-            className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Reply
-          </button>
-        </div>
-
-        {Array.isArray(comment.replies) && comment.replies.length > 0 ? (
-          <div className="mt-2.5 space-y-2.5 md:space-y-3">
-            {comment.replies.map((reply) => renderComment(reply, { depth: depth + 1 }))}
-          </div>
-        ) : null}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div
