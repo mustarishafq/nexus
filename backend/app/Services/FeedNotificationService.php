@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\Post;
 use App\Models\PostComment;
+use App\Models\PostReach;
 use App\Models\User;
 use App\Support\FeedLinks;
 use App\Support\UserRoles;
+use Illuminate\Support\Facades\DB;
 
 class FeedNotificationService
 {
@@ -151,6 +153,78 @@ class FeedNotificationService
             ]);
 
             app(PushNotificationService::class)->sendNotification($notification);
+        }
+    }
+
+    public function notifyPostPublished(Post $post, User $author): void
+    {
+        if (! $post->isApproved()) {
+            return;
+        }
+
+        $recipientIds = DB::table('push_subscriptions')
+            ->join('users', 'users.id', '=', 'push_subscriptions.user_id')
+            ->where('users.is_approved', true)
+            ->where('users.id', '!=', $author->id)
+            ->distinct()
+            ->pluck('users.id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if ($recipientIds === []) {
+            return;
+        }
+
+        $authorName = $author->displayName();
+        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', (string) $post->body) ?? (string) $post->body);
+        if ($preview === '' && $post->resolvedImageUrls() !== []) {
+            $preview = 'Shared an image';
+        }
+        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
+        $message = $preview !== ''
+            ? "{$authorName}: {$preview}"
+            : "{$authorName} shared a new post.";
+
+        $push = app(PushNotificationService::class);
+        $now = now();
+        $reachedUserIds = [];
+
+        foreach ($recipientIds as $recipientId) {
+            $notification = Notification::create([
+                'user_id' => (string) $recipientId,
+                'type' => 'info',
+                'priority' => 'medium',
+                'category' => 'other',
+                'title' => 'New feed post',
+                'message' => $message,
+                'action_url' => FeedLinks::post($post->id),
+                'is_read' => false,
+                'is_broadcast' => false,
+                'delivery_channels' => ['in_app'],
+                'data' => [
+                    'kind' => 'feed_post_published',
+                    'post_id' => $post->id,
+                    'author_user_id' => $author->id,
+                    'author_name' => $authorName,
+                ],
+            ]);
+
+            foreach ($push->sendNotification($notification) as $successfulUserId) {
+                $reachedUserIds[(int) $successfulUserId] = true;
+            }
+        }
+
+        foreach (array_keys($reachedUserIds) as $userId) {
+            PostReach::query()->firstOrCreate(
+                [
+                    'post_id' => $post->id,
+                    'user_id' => $userId,
+                ],
+                [
+                    'reached_at' => $now,
+                ]
+            );
         }
     }
 

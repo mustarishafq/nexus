@@ -38,7 +38,7 @@ class FeedController extends Controller
         $posts = Post::query()
             ->visibleTo($viewer)
             ->with(['author.department', 'reactions'])
-            ->withCount(['comments', 'edits'])
+            ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->latest()
             ->limit($limit)
             ->get()
@@ -84,7 +84,7 @@ class FeedController extends Controller
         $post = Post::query()
             ->visibleTo($viewer)
             ->with(['author.department', 'reactions'])
-            ->withCount(['comments', 'edits'])
+            ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->find($postId);
 
         if (! $post) {

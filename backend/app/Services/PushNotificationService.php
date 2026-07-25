@@ -27,21 +27,25 @@ class PushNotificationService
         return config('services.web_push.public_key');
     }
 
-    public function sendNotification(Notification $notification): void
+    /**
+     * @return list<int> Unique user IDs that received at least one successful push delivery.
+     */
+    public function sendNotification(Notification $notification): array
     {
         $subscriptions = collect();
         $successCount = 0;
         $failureCount = 0;
+        $successfulUserIds = [];
 
         try {
             if (! $this->isEnabled()) {
-                return;
+                return [];
             }
 
             $subscriptions = $this->subscriptionsForNotification($notification);
 
             if ($subscriptions->isEmpty()) {
-                return;
+                return [];
             }
 
             $payload = [
@@ -57,7 +61,7 @@ class PushNotificationService
                 'created_at' => $notification->created_at?->toISOString(),
             ];
 
-            $this->deliverPayload(
+            $successfulUserIds = $this->deliverPayload(
                 $subscriptions,
                 $payload,
                 (string) $notification->id,
@@ -73,17 +77,20 @@ class PushNotificationService
 
             $this->sendFallbackWithoutPayload($notification, $subscriptions, $exception);
         }
+
+        return $successfulUserIds;
     }
 
     /**
      * Send a web push directly to a user without creating an in-app Notification record.
      *
      * @param  array<string, mixed>  $payload
+     * @return list<int>
      */
-    public function sendToUser(int|string $userId, array $payload, ?string $topic = null): void
+    public function sendToUser(int|string $userId, array $payload, ?string $topic = null): array
     {
         if (! $this->isEnabled()) {
-            return;
+            return [];
         }
 
         $subscriptions = DB::table('push_subscriptions')
@@ -92,7 +99,7 @@ class PushNotificationService
             ->get();
 
         if ($subscriptions->isEmpty()) {
-            return;
+            return [];
         }
 
         $successCount = 0;
@@ -100,7 +107,7 @@ class PushNotificationService
         $resolvedTopic = $topic ?? (string) ($payload['id'] ?? uniqid('push-', true));
 
         try {
-            $this->deliverPayload(
+            return $this->deliverPayload(
                 $subscriptions,
                 $payload,
                 $resolvedTopic,
@@ -114,12 +121,15 @@ class PushNotificationService
                 'topic' => $resolvedTopic,
                 'error' => $exception->getMessage(),
             ]);
+
+            return [];
         }
     }
 
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $logContext
+     * @return list<int>
      */
     private function deliverPayload(
         Collection $subscriptions,
@@ -128,11 +138,11 @@ class PushNotificationService
         int &$successCount,
         int &$failureCount,
         array $logContext = [],
-    ): void {
+    ): array {
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         if ($encodedPayload === false) {
-            return;
+            return [];
         }
 
         $webPush = new WebPush([
@@ -143,7 +153,10 @@ class PushNotificationService
             ],
         ]);
 
+        $endpointUserIds = [];
         foreach ($subscriptions as $subscription) {
+            $endpointUserIds[(string) $subscription->endpoint] = (int) $subscription->user_id;
+
             $webPush->queueNotification(
                 Subscription::create([
                     'endpoint' => $subscription->endpoint,
@@ -162,9 +175,20 @@ class PushNotificationService
             );
         }
 
-        $webPush->flushPooled(function (MessageSentReport $report) use (&$successCount, &$failureCount): void {
+        $successfulUserIds = [];
+
+        $webPush->flushPooled(function (MessageSentReport $report) use (
+            &$successCount,
+            &$failureCount,
+            &$successfulUserIds,
+            $endpointUserIds
+        ): void {
             if ($report->isSuccess()) {
                 $successCount++;
+                $userId = $endpointUserIds[(string) $report->getEndpoint()] ?? null;
+                if ($userId) {
+                    $successfulUserIds[$userId] = true;
+                }
 
                 return;
             }
@@ -188,6 +212,8 @@ class PushNotificationService
             'success_count' => $successCount,
             'failure_count' => $failureCount,
         ]));
+
+        return array_map('intval', array_keys($successfulUserIds));
     }
 
     private function sendFallbackWithoutPayload(Notification $notification, Collection $subscriptions, Throwable $exception): void

@@ -311,9 +311,15 @@ export default function MentionInput({
       : null;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       {!value ? (
-        <div className="pointer-events-none absolute left-3 top-2 z-10 text-sm text-muted-foreground md:text-sm">
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-3 z-10 truncate text-sm text-muted-foreground md:text-sm',
+            rows <= 1 ? 'top-1/2 -translate-y-1/2' : 'top-2'
+          )}
+          aria-hidden="true"
+        >
           {placeholder}
         </div>
       ) : null}
@@ -338,7 +344,7 @@ export default function MentionInput({
           handleInput();
         }}
         className={cn(
-          'w-full overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm',
+          'w-full overflow-x-hidden overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm',
           'whitespace-pre-wrap break-words',
           className
         )}

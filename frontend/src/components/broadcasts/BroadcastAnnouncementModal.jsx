@@ -85,7 +85,7 @@ export default function BroadcastAnnouncementModal({ open, onOpenChange, broadca
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid w-[calc(100vw-1.5rem)] max-w-md max-h-[min(36rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-lg border-primary/20 p-0 sm:w-full">
+      <DialogContent className="grid w-[calc(100vw-1.5rem)] max-w-2xl max-h-[min(36rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-lg border-primary/20 p-0 sm:w-full">
         <div
           className={cn(
             'border-b bg-gradient-to-b px-4 py-3',

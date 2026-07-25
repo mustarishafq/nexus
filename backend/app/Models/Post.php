@@ -62,6 +62,16 @@ class Post extends Model
         return $this->hasMany(PostEdit::class)->orderByDesc('created_at');
     }
 
+    public function views(): HasMany
+    {
+        return $this->hasMany(PostView::class);
+    }
+
+    public function reaches(): HasMany
+    {
+        return $this->hasMany(PostReach::class);
+    }
+
     /**
      * @return list<string>
      */

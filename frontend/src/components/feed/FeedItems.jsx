@@ -11,6 +11,7 @@ import FeedTextEditor from '@/components/feed/FeedTextEditor';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostEditHistory from '@/components/feed/PostEditHistory';
+import PostInsights, { useMarkPostSeen } from '@/components/feed/PostInsights';
 import PostReactions from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { toast } from 'sonner';
@@ -264,14 +265,17 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
         }}
       >
         {replyingTo ? (
-          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-background/80 px-2.5 py-1.5 text-[11px] text-muted-foreground ring-1 ring-border/50">
-            <span>
-              Replying to <span className="font-medium text-foreground">{replyingTo.name}</span>
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-background/80 px-2.5 py-1.5 text-[11px] text-muted-foreground ring-1 ring-border/50">
+            <span className="min-w-0 flex-1 truncate">
+              Replying to{' '}
+              <span className="font-medium text-foreground" title={replyingTo.name}>
+                {replyingTo.name}
+              </span>
             </span>
             <button
               type="button"
               onClick={() => setReplyingTo(null)}
-              className="font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="shrink-0 font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Cancel
             </button>
@@ -282,10 +286,10 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
             <MentionInput
               value={commentBody}
               onChange={setCommentBody}
-              placeholder={replyingTo ? `Reply to ${replyingTo.name}...` : 'Write a comment...'}
+              placeholder={replyingTo ? 'Write a reply...' : 'Write a comment...'}
               rows={1}
               maxLength={1000}
-              className="min-h-9 text-sm md:min-h-10"
+              className="min-h-9 overflow-x-hidden text-sm md:min-h-10"
             />
           </div>
           <Button
@@ -305,10 +309,20 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
 function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const articleRef = useRef(null);
   const [expanded, setExpanded] = useState(initialExpanded);
   const [editing, setEditing] = useState(false);
   const [draftBody, setDraftBody] = useState(item.body || '');
   const isPending = Boolean(item.is_pending || item.approval_status === 'pending');
+  const isAuthor = Number(user?.id) === Number(item.author?.id);
+  const canMarkSeen = !isPending && !isAuthor && Boolean(item.id);
+
+  useMarkPostSeen({
+    postId: item.id,
+    enabled: canMarkSeen,
+    articleRef,
+  });
 
   useEffect(() => {
     if (initialExpanded) {
@@ -376,6 +390,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
 
   return (
     <article
+      ref={articleRef}
       id={feedPostElementId(item.id)}
       className={cn(
         'group scroll-mt-24 border-b border-border/50 transition-shadow last:border-b-0',
@@ -543,8 +558,9 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           >
             <PostReactions item={item} />
 
-            {!expanded ? (
-              <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <PostInsights item={item} />
+              {!expanded ? (
                 <button
                   type="button"
                   onClick={() => setExpanded(true)}
@@ -561,16 +577,16 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                     {(item.comments_count || 0) === 1 ? 'comment' : 'comments'}
                   </span>
                 </button>
-                {compact ? (
-                  <Link
-                    to={feedPostPath(item.id, { expandComments: expanded })}
-                    className="text-[11px] font-medium text-primary/80 hover:text-primary hover:underline"
-                  >
-                    Open in feed
-                  </Link>
-                ) : null}
-              </div>
-            ) : null}
+              ) : null}
+              {compact ? (
+                <Link
+                  to={feedPostPath(item.id, { expandComments: expanded })}
+                  className="text-[11px] font-medium text-primary/80 hover:text-primary hover:underline"
+                >
+                  Open in feed
+                </Link>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

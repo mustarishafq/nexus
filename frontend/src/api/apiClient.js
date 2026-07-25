@@ -532,6 +532,30 @@ export const db = {
 			return request(`/posts/${postId}/edits`);
 		},
 
+		async markPostsSeen(postIds) {
+			const ids = Array.isArray(postIds) ? postIds.filter(Boolean) : [];
+			if (ids.length === 0) {
+				return { marked_post_ids: [] };
+			}
+
+			return request('/posts/seen', {
+				method: 'POST',
+				body: { post_ids: ids },
+			});
+		},
+
+		async markPostSeen(postId) {
+			return request(`/posts/${postId}/seen`, { method: 'POST' });
+		},
+
+		async listPostSeen(postId) {
+			return request(`/posts/${postId}/seen`);
+		},
+
+		async listPostReaches(postId) {
+			return request(`/posts/${postId}/reaches`);
+		},
+
 		async approvePost(postId) {
 			return request(`/posts/${postId}/approve`, { method: 'POST' });
 		},

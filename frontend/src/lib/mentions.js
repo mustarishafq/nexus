@@ -245,10 +245,11 @@ export function getSerializedCursorOffset(root) {
 export function createMentionChip(userId, label) {
   const chip = document.createElement('span');
   chip.className =
-    'mention-chip mx-0.5 inline-flex max-w-full items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-baseline text-xs font-medium text-primary';
+    'mention-chip mx-0.5 inline-block max-w-[min(100%,11rem)] truncate align-baseline rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary';
   chip.contentEditable = 'false';
   chip.dataset.mentionId = String(userId);
   chip.dataset.mentionLabel = label;
+  chip.title = `@${label}`;
   chip.textContent = `@${label}`;
   return chip;
 }

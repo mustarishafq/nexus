@@ -36,6 +36,9 @@ trait SerializesPosts
         $isAuthor = (int) $viewer->id === (int) $post->author_user_id;
         $editsCount = (int) ($post->edits_count ?? $post->edits()->count());
         $isEdited = $editsCount > 0 || filled($post->edited_at);
+        $seenCount = (int) ($post->views_count ?? $post->views()->count());
+        $reachCount = (int) ($post->reaches_count ?? $post->reaches()->count());
+        $canViewInsights = $isAuthor || $canModerate;
 
         return [
             'type' => 'post',
@@ -50,6 +53,9 @@ trait SerializesPosts
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
             'available_reactions' => self::POST_REACTIONS,
+            'seen_count' => $seenCount,
+            'reach_count' => $reachCount,
+            'can_view_insights' => $canViewInsights,
             'created_date' => $post->created_date,
             'edited_at' => $post->edited_at?->toISOString(),
             'is_edited' => $isEdited,

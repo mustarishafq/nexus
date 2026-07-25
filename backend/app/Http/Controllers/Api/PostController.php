@@ -72,11 +72,15 @@ class PostController extends Controller
 
         if ($requiresApproval) {
             app(FeedNotificationService::class)->notifyModeratorsOfPendingPost($post, $viewer);
-        } elseif ($body !== '') {
-            $this->notifyMentions($viewer, $post, $body);
+        } else {
+            app(FeedNotificationService::class)->notifyPostPublished($post, $viewer);
+
+            if ($body !== '') {
+                $this->notifyMentions($viewer, $post, $body);
+            }
         }
 
-        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
+        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
@@ -108,7 +112,7 @@ class PostController extends Controller
 
         $previousBody = (string) ($post->body ?? '');
         if ($previousBody === $body) {
-            $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
+            $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
             return response()->json([
                 'item' => $this->serializePost($post, $viewer),
@@ -132,7 +136,7 @@ class PostController extends Controller
             $this->notifyMentions($viewer, $post, $body);
         }
 
-        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits']);
+        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
@@ -193,6 +197,7 @@ class PostController extends Controller
         $author = $post->author ?? User::query()->find($post->author_user_id);
         if ($author) {
             app(FeedNotificationService::class)->notifyAuthorOfReview($post, $viewer, true);
+            app(FeedNotificationService::class)->notifyPostPublished($post, $author);
 
             $body = trim((string) $post->body);
             if ($body !== '') {
@@ -200,7 +205,7 @@ class PostController extends Controller
             }
         }
 
-        $post->load(['author', 'reactions'])->loadCount('comments');
+        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
