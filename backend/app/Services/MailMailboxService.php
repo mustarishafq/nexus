@@ -1061,8 +1061,8 @@ class MailMailboxService
         }
 
         if (isset($structure->parts) && is_array($structure->parts)) {
-            foreach ($structure->parts as $index => $part) {
-                if ($this->partIsAttachment($part, $index + 1)) {
+            foreach ($structure->parts as $part) {
+                if ($this->partIsAttachment($part)) {
                     return true;
                 }
 
@@ -1072,27 +1072,17 @@ class MailMailboxService
             }
         }
 
-        return $this->partIsAttachment($structure, 0);
+        return $this->partIsAttachment($structure);
     }
 
-    protected function partIsAttachment($part, int $partNumber): bool
+    protected function partIsAttachment($part): bool
     {
         if (! $part) {
             return false;
         }
 
-        $disposition = strtolower((string) ($part->disposition ?? ''));
-        $isAttachment = $disposition === 'attachment';
-
-        if ($isAttachment) {
-            return true;
-        }
-
-        if ($partNumber > 0 && $disposition === 'inline' && isset($part->id)) {
-            return true;
-        }
-
-        return false;
+        // Only real file attachments; inline CID images are embedded in the body.
+        return strtolower((string) ($part->disposition ?? '')) === 'attachment';
     }
 
     /**
