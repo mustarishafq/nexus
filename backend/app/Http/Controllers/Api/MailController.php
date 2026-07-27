@@ -8,7 +8,9 @@ use App\Support\ApiTokenAuth;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Throwable;
 
 class MailController extends Controller
@@ -274,6 +276,46 @@ class MailController extends Controller
         }
 
         return response()->json($message);
+    }
+
+    public function downloadAttachment(Request $request, int $uid, string $part): Response|JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
+        try {
+            $attachment = $this->mail->getAttachment(
+                $user,
+                $uid,
+                $part,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to download attachment.'], 500);
+        }
+
+        $disposition = HeaderUtils::makeDisposition(
+            HeaderUtils::DISPOSITION_ATTACHMENT,
+            $attachment['filename'],
+            'attachment',
+        );
+
+        return response($attachment['content'], 200, [
+            'Content-Type' => $attachment['mime'] ?: 'application/octet-stream',
+            'Content-Disposition' => $disposition,
+            'Content-Length' => (string) strlen($attachment['content']),
+        ]);
     }
 
     public function send(Request $request): JsonResponse

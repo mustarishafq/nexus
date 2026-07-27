@@ -33,6 +33,7 @@ import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { EmptyState } from '@/components/ui/empty-state';
 import { UnreadBadge } from '@/components/ui/unread-badge';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
+import EmailAttachments from '@/components/email/EmailAttachments';
 
 const MAIL_STATUS_QUERY_KEY = ['mail-status'];
 const MAIL_ACCOUNT_STORAGE_KEY = 'nexus-mail-account-id';
@@ -1049,6 +1050,12 @@ export default function Email() {
                 ) : null}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                <EmailAttachments
+                  attachments={messageData?.attachments}
+                  uid={uid}
+                  accountId={activeAccountId}
+                  folder={folder}
+                />
                 <EmailMessageBody
                   html={messageData?.body_html}
                   text={messageData?.body_text || messageData?.body}

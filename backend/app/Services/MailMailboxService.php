@@ -520,6 +520,7 @@ class MailMailboxService
 
             $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
             $content = $this->extractMessageContent($connection, $uid, $structure);
+            $attachments = $this->collectAttachments($structure);
 
             return [
                 'uid' => $uid,
@@ -536,6 +537,40 @@ class MailMailboxService
                 'message_id' => $overview->message_id ?? null,
                 'reply_to' => $this->extractEmailAddress($this->decodeHeader($overview->from ?? '')),
                 'seen' => true,
+                'attachments' => $attachments,
+                'has_attachments' => $attachments !== [],
+            ];
+        } finally {
+            imap_close($connection);
+        }
+    }
+
+    /**
+     * @return array{filename: string, mime: string, content: string}
+     */
+    public function getAttachment(User $user, int $uid, string $partNumber, ?int $accountId = null, string $folder = self::FOLDER_INBOX): array
+    {
+        $partNumber = $this->normalizeAttachmentPartNumber($partNumber);
+        $credential = $this->resolveAccount($user, $accountId);
+        $folder = $this->normalizeLogicalFolder($folder);
+        $connection = $this->connect($user, $credential->id, $folder);
+
+        try {
+            $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
+            $part = $this->findPartByNumber($structure, $partNumber);
+
+            if (! $part || ! $this->partIsAttachment($part)) {
+                throw new RuntimeException('Attachment not found.');
+            }
+
+            $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
+            $content = $this->decodePart(is_string($raw) ? $raw : '', $part);
+            $filename = $this->partFilename($part) ?: 'attachment-'.$partNumber;
+
+            return [
+                'filename' => $this->decodeHeader($filename),
+                'mime' => $this->partMimeType($part),
+                'content' => $content,
             ];
         } finally {
             imap_close($connection);
@@ -1083,6 +1118,91 @@ class MailMailboxService
 
         // Only real file attachments; inline CID images are embedded in the body.
         return strtolower((string) ($part->disposition ?? '')) === 'attachment';
+    }
+
+    /**
+     * @return array<int, array{part: string, filename: string, mime: string, size: int|null}>
+     */
+    protected function collectAttachments($structure, string $prefix = ''): array
+    {
+        if (! $structure) {
+            return [];
+        }
+
+        $attachments = [];
+
+        if (isset($structure->parts) && is_array($structure->parts)) {
+            foreach ($structure->parts as $index => $part) {
+                $partNumber = $prefix === '' ? (string) ($index + 1) : $prefix.'.'.($index + 1);
+
+                if (isset($part->parts) && is_array($part->parts)) {
+                    $attachments = array_merge($attachments, $this->collectAttachments($part, $partNumber));
+
+                    continue;
+                }
+
+                if ($this->partIsAttachment($part)) {
+                    $attachments[] = $this->attachmentMeta($part, $partNumber);
+                }
+            }
+
+            return $attachments;
+        }
+
+        if ($this->partIsAttachment($structure)) {
+            $attachments[] = $this->attachmentMeta($structure, $prefix !== '' ? $prefix : '1');
+        }
+
+        return $attachments;
+    }
+
+    /**
+     * @return array{part: string, filename: string, mime: string, size: int|null}
+     */
+    protected function attachmentMeta($part, string $partNumber): array
+    {
+        $filename = $this->partFilename($part) ?: 'attachment-'.$partNumber;
+
+        return [
+            'part' => $partNumber,
+            'filename' => $this->decodeHeader($filename),
+            'mime' => $this->partMimeType($part),
+            'size' => isset($part->bytes) ? (int) $part->bytes : null,
+        ];
+    }
+
+    protected function partFilename($part): ?string
+    {
+        foreach (['dparameters', 'parameters'] as $key) {
+            if (! isset($part->{$key}) || ! is_array($part->{$key})) {
+                continue;
+            }
+
+            foreach ($part->{$key} as $param) {
+                $attribute = strtolower((string) ($param->attribute ?? ''));
+
+                if (in_array($attribute, ['filename', 'name'], true)) {
+                    $value = trim((string) ($param->value ?? ''));
+
+                    if ($value !== '') {
+                        return $value;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected function normalizeAttachmentPartNumber(string $partNumber): string
+    {
+        $partNumber = trim($partNumber);
+
+        if ($partNumber === '' || ! preg_match('/^\d+(?:\.\d+)*$/', $partNumber)) {
+            throw new RuntimeException('Invalid attachment part.');
+        }
+
+        return $partNumber;
     }
 
     /**

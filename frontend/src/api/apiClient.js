@@ -742,6 +742,44 @@ export const db = {
 			})}`);
 		},
 
+		async downloadAttachment(uid, part, { accountId, folder, filename } = {}) {
+			const token = getAuthToken();
+			const response = await fetch(`${API_BASE_URL}/mail/messages/${uid}/attachments/${encodeURIComponent(part)}${buildQuery({
+				account_id: accountId || undefined,
+				folder: folder || undefined,
+			})}`, {
+				method: 'GET',
+				credentials: 'include',
+				headers: {
+					Accept: '*/*',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+			});
+
+			if (!response.ok) {
+				let message = `HTTP ${response.status}`;
+				try {
+					const payload = await response.json();
+					message = payload?.message || message;
+				} catch {
+					// keep status message
+				}
+				const error = new Error(message);
+				error.status = response.status;
+				throw error;
+			}
+
+			const blob = await response.blob();
+			const objectUrl = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = objectUrl;
+			link.download = filename || `attachment-${part}`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(objectUrl);
+		},
+
 		async deleteMessage(uid, { accountId, folder } = {}) {
 			return request(`/mail/messages/${uid}${buildQuery({
 				account_id: accountId || undefined,

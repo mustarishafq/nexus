@@ -123,6 +123,8 @@ Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
 Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);
 Route::get('/mail/messages', [MailController::class, 'index']);
 Route::get('/mail/messages/{uid}', [MailController::class, 'show']);
+Route::get('/mail/messages/{uid}/attachments/{part}', [MailController::class, 'downloadAttachment'])
+    ->where('part', '[0-9.]+');
 Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);
 Route::patch('/mail/messages/{uid}/unread', [MailController::class, 'markUnread']);
 Route::post('/mail/send', [MailController::class, 'send']);
