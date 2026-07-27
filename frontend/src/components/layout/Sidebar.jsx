@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import { 
-  LayoutDashboard, Bell, Activity, Shield, Settings, 
+  LayoutDashboard, Bell, Shield, Settings, 
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
@@ -38,7 +38,6 @@ export default function Sidebar({
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
-    ...(isAdmin ? [{ path: '/activity', icon: Activity, label: 'Activity Feed' }] : []),
     { path: '/network-health', icon: Wifi, label: 'Network Health' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR' },
