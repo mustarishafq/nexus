@@ -574,11 +574,12 @@ Triggered by the dock **More** tab (`Grip` icon) — not a separate TopBar hambu
 |----------|-------|
 | Position | `fixed left-0 right-0 z-40`; `style={{ bottom: viewportBottomOffset }}` (see MOBILE_BOTTOM_NAV §2.1) |
 | Outer bottom padding | **PWA:** `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` · **Browser:** `pb-3` |
-| Horizontal inset | `px-3 sm:px-4`, centered |
+| Hit-testing | Outer shell `pointer-events-none`; glass pill only `pointer-events-auto` (see MOBILE_BOTTOM_NAV §2.0) |
+| Horizontal inset | `px-3 sm:px-4`, centered on outer shell |
 | Dock surface | `glassDockStyles` |
 | Internal padding | `px-1` |
 | Mobile height / width | `h-[4.25rem]` (68px), `w-full max-w-lg`, `overflow-visible` (orb) |
-| Desktop height / width | `h-16`, `w-fit max-w-full overflow-x-auto` (hidden scrollbar) |
+| Desktop height / width | `h-16`, `w-fit max-w-full overflow-x-auto` (hidden scrollbar) — content-sized hit area |
 
 #### Nav item states
 
@@ -2310,10 +2311,10 @@ Satellite login / consent screens should reuse:
 - [ ] Cards `rounded-2xl`; auth mobile card `rounded-3xl`
 - [ ] Focus rings use `ring-ring` (= primary)
 - [ ] Semantic status: `success` / `warning` / `info` / `critical` / `destructive`
-- [ ] If shell included: dock clearance `5.25rem`, safe-area **standalone only**, visual-viewport bottom pin
+- [ ] If shell included: dock clearance `5.25rem`, safe-area **standalone only**, visual-viewport bottom pin, hit-testing (`pointer-events-none` shell / `pointer-events-auto` pill, desktop `w-fit`)
 - [ ] Glass overlays `bg-black/25 backdrop-blur-sm` for compact pickers / More sheet
 - [ ] Lucide icons only; sizes per §27
 
 ---
 
-*Last updated from Nexus frontend codebase (glassStyles, AppLayout clearance `5.25rem`, dock labels `11px`, TopBar What's New). When patterns change in code, update this document and `MOBILE_BOTTOM_NAV_DESIGN.md` to match.*
+*Last updated from Nexus frontend codebase (glassStyles, AppLayout clearance `5.25rem`, dock hit-testing §2.0, dock labels `11px`, TopBar What's New). When patterns change in code, update this document and `MOBILE_BOTTOM_NAV_DESIGN.md` to match.*

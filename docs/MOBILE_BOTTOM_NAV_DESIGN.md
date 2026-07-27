@@ -74,10 +74,30 @@ Both mobile and desktop use the same outer shell.
 | Bottom offset | Visual-viewport offset (see §2.1) — not a hard-coded `bottom: 0` alone |
 | Outer bottom padding | **Standalone / PWA:** `12px + env(safe-area-inset-bottom)` → `pb-[calc(0.75rem+env(safe-area-inset-bottom))]` |
 |  | **Browser tab (Safari/Chrome):** `12px` only → `pb-3` (no safe-area — browser chrome already clears the home indicator) |
-| Horizontal wrapper | `flex justify-center px-3 sm:px-4` (12px mobile, 16px at `sm+`) |
+| Outer shell hit-testing | `pointer-events-none` — full-width wrapper centers the dock but **must not** capture clicks |
+| Horizontal centering | `flex justify-center px-3 sm:px-4` on the outer shell (12px mobile, 16px at `sm+`) |
 | Dock surface | `glassDockStyles` — dedicated mid-opacity recipe (**not** plain `glassPanelStyles` + radius) |
+| Dock hit-testing | `pointer-events-auto` **only** on the visible glass pill |
+| Dock width (hit + visual) | **Mobile:** `w-full max-w-lg` · **Desktop:** `w-fit max-w-full` (content-sized — hug icons/labels) |
 | Internal horizontal padding | `4px` (`px-1`) |
 | Dock corner radius | `16px` (`rounded-2xl`) |
+
+### 2.0 Hit-testing / pointer events (required)
+
+The outer positioning wrapper stays `fixed` + full-width for centering, but its **clickable/hit area must match the visible dock width only**.
+
+| Layer | Classes | Why |
+|-------|---------|-----|
+| Outer `<nav>` (centering shell) | `pointer-events-none fixed left-0 right-0 … flex justify-center px-3 sm:px-4` | Lets clicks pass through empty space beside/behind the dock to sidebars, list rows, and other UI |
+| Glass pill (dock container) | `pointer-events-auto` + `w-fit` (desktop) / `w-full max-w-lg` (mobile) | Only the visible pill receives taps |
+
+**Do not** let invisible padding, empty flex space, or a full-width `left-0 right-0` nav steal clicks from UI beside or behind the dock.
+
+**Width rules:**
+
+1. Hit area = visible width only (intrinsic / content-sized on desktop)
+2. Mobile may remain full-width within `max-w-lg`
+3. Desktop must hug its icons/labels (`w-fit`) — never a viewport-wide hit strip
 
 ### 2.1 iOS Safari / visual viewport (required)
 
@@ -163,6 +183,8 @@ When the bottom nav is visible, add bottom padding to `<main>` so content is not
 | Safe area | `env(safe-area-inset-bottom)` | Home indicator — **standalone only** |
 
 Top padding: `pt-16` (`64px`) for fixed TopBar. Adjust upward when alert strips are present (see `AppLayout.jsx`).
+
+**Scrollable sidebars / lists:** any nested `overflow-y-auto` column that can end under the dock (e.g. layout `Sidebar` nav, Email folder/inbox lists, Messages inbox list) must add enough bottom padding that the last items can scroll clear of the dock and remain usable. Main `pb-[5.25rem]` alone is not enough when an inner scroller fills the viewport.
 
 ---
 
@@ -593,7 +615,7 @@ Triggered by **More** tab. Not part of dock chrome.
 
 ### Desktop frame (`1440×900`)
 
-- [ ] Dock: `h-64px`, full-width scroll container, no max-width cap
+- [ ] Dock: `h-64px`, content-sized (`w-fit`) scroll container — not a full-viewport hit strip
 - [ ] 12–15 tabs, `min-width 72px` each, no orb
 - [ ] TopBar with search, What's New, theme, bell, avatar
 - [ ] Hidden scrollbar state
@@ -606,6 +628,9 @@ Triggered by **More** tab. Not part of dock chrome.
 - [ ] Active top pill indicator
 - [ ] `prefers-reduced-motion` orb fallback
 - [ ] iOS Safari: visual-viewport bottom pin (§2.1) — no mid-scroll jump / large gap
+- [ ] Hit-testing (§2.0): outer shell `pointer-events-none`; only the glass pill is `pointer-events-auto`
+- [ ] Desktop dock is content-sized (`w-fit`) — clicks beside the pill reach underlying UI
+- [ ] Scrollable sidebars/lists have bottom padding so last rows clear the dock
 
 ---
 
@@ -889,25 +914,24 @@ const navItems = isMobile
   : buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers });
 
 // Outer nav shell — same for both; pin to visual viewport (§2.1)
+// Hit-testing: full-width wrapper is pointer-events-none; only the pill is clickable (§2.0)
 <nav
   className={cn(
-    'fixed left-0 right-0 z-40',
+    'pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
     standalone
       ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
       : 'pb-3'
   )}
   style={{ bottom: viewportBottomOffset }}
 >
-  <div className="flex justify-center px-3 sm:px-4">
-    <div className={cn(
-      'flex items-stretch px-1',
-      glassDockStyles, // mid-opacity glass + rounded-2xl border — NOT glassPanelStyles alone
-      isMobile
-        ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
-        : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] ...'
-    )}>
-      {navItems.map(renderNavItem)}
-    </div>
+  <div className={cn(
+    'pointer-events-auto flex items-stretch px-1',
+    glassDockStyles, // mid-opacity glass + rounded-2xl border — NOT glassPanelStyles alone
+    isMobile
+      ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
+      : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] ...'
+  )}>
+    {navItems.map(renderNavItem)}
   </div>
 </nav>
 
@@ -937,6 +961,7 @@ const navItems = isMobile
 6. **Dark-first chrome tokens** — navy glass with blue accent; light mode via same tokens (higher TopBar opacity)
 7. **Progressive density** — mobile consolidates into More sheet; desktop exposes all routes
 8. **Visual-viewport pinned** — dock tracks the visible bottom on iOS Safari; safe-area only in standalone (§2.1)
+9. **Hit area = visible dock only** — outer shell `pointer-events-none`; pill `pointer-events-auto` + content-sized width (§2.0)
 
 ---
 
@@ -966,9 +991,11 @@ When recreating this dock in another EMZI SSO system:
 4. Implement `useVisualViewportBottomOffset` + `isRunningStandalone` safe-area policy (§2.1)
 5. Main clearance must be **`5.25rem`**, not `4.75rem`
 6. Keep the **5-tab** mobile map; put secondary routes in the More grid
+7. Apply **§2.0 hit-testing** — outer `pointer-events-none`, pill `pointer-events-auto`, desktop `w-fit`
+8. Add bottom padding on scrollable sidebars/lists so last items clear the dock
 
 Canonical product design SoT: `docs/DESIGN_TEMPLATE.md`.
 
 ---
 
-*Last updated from Nexus frontend: `glassDockStyles` (`bg-card/50`), labels `11px`, clearance `5.25rem`, Email / What's New routes, visual-viewport safe-area policy. Keep in sync with `DESIGN_TEMPLATE.md` §7 / §30.*
+*Last updated from Nexus frontend: `glassDockStyles` (`bg-card/50`), labels `11px`, clearance `5.25rem`, hit-testing (`pointer-events-none` shell / `pointer-events-auto` pill), Email / What's New routes, visual-viewport safe-area policy. Keep in sync with `DESIGN_TEMPLATE.md` §7 / §30.*
