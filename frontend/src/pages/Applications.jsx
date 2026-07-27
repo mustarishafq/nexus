@@ -19,12 +19,11 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Bell, Calendar as CalendarIcon, Monitor, Plus, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown, ExternalLink, PanelLeft, Maximize2 } from 'lucide-react';
+import { Bell, Calendar as CalendarIcon, Monitor, Plus, Upload, ImageIcon, RefreshCw, Copy, Check, ChevronsUpDown, GripVertical, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -63,6 +62,14 @@ import { getApplicationStatus } from '@/lib/applicationStatus';
 import { toast } from 'sonner';
 
 const API_BASE_URL = API_ORIGIN;
+
+function slugifyName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 const toAbsoluteUrl = (url) => {
   if (!url) return '';
@@ -146,119 +153,13 @@ function SortableReorderRow({ system }) {
   );
 }
 
-const OPEN_MODE_OPTIONS = [
-  {
-    value: 'embedded',
-    label: 'In-app browser',
-    description: 'Keeps Nexus sidebar visible while browsing',
-    icon: PanelLeft,
-    badge: 'Default',
-  },
-  {
-    value: 'new_tab',
-    label: 'New browser tab',
-    description: 'Opens in a separate tab outside Nexus',
-    icon: ExternalLink,
-  },
-  {
-    value: 'same_window',
-    label: 'Same window',
-    description: 'Navigates away from Nexus entirely',
-    icon: Maximize2,
-  },
-];
-
-function OpenModePreview({ mode }) {
-  if (mode === 'embedded') {
-    return (
-      <div className="flex h-14 w-full overflow-hidden rounded-lg border border-border/80 bg-muted/30">
-        <div className="flex w-5 shrink-0 flex-col gap-1 border-r border-border/60 bg-primary/10 p-1">
-          <div className="h-1 w-full rounded-full bg-primary/30" />
-          <div className="h-1 w-3/4 rounded-full bg-primary/20" />
-          <div className="h-1 w-full rounded-full bg-primary/20" />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1 p-1.5">
-          <div className="h-2 rounded bg-muted-foreground/15" />
-          <div className="flex-1 rounded-md border border-dashed border-primary/25 bg-background/80" />
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === 'new_tab') {
-    return (
-      <div className="flex h-14 w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-muted/30">
-        <div className="flex h-4 items-end gap-1 border-b border-border/60 bg-muted/50 px-1.5 pb-0">
-          <div className="h-3 w-10 rounded-t-md border border-b-0 border-border/60 bg-background shadow-sm" />
-          <div className="mb-0.5 ml-auto h-2 w-2 rounded-full bg-muted-foreground/20" />
-        </div>
-        <div className="flex flex-1 items-center justify-center p-1.5">
-          <div className="flex h-full w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/20 bg-background/80">
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-14 w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-background">
-      <div className="h-3 border-b border-border/60 bg-muted/40" />
-      <div className="flex flex-1 flex-col items-center justify-center gap-1 p-2">
-        <Maximize2 className="h-3.5 w-3.5 text-muted-foreground/40" />
-        <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/15" />
-      </div>
-    </div>
-  );
-}
-
-function OpenModeSelector({ value, onChange }) {
-  return (
-    <div className="space-y-3">
-      <Label>Open Link In</Label>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {OPEN_MODE_OPTIONS.map((option) => {
-          const Icon = option.icon;
-          const selected = value === option.value;
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className={cn(
-                'flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-all hover:border-primary/40',
-                selected
-                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm'
-                  : 'border-border bg-card hover:bg-muted/30'
-              )}
-            >
-              <OpenModePreview mode={option.value} />
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <Icon className={cn('h-3.5 w-3.5 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')} />
-                  <p className="text-sm font-medium leading-none">{option.label}</p>
-                  {option.badge ? (
-                    <Badge variant="secondary" className="h-4 px-1 text-[9px]">{option.badge}</Badge>
-                  ) : null}
-                </div>
-                <p className="text-[11px] leading-snug text-muted-foreground">{option.description}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Some sites block in-app embedding — use New browser tab for those.
-      </p>
-    </div>
-  );
-}
-
 export default function Applications() {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSystem, setEditSystem] = useState(null);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugManual, setSlugManual] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
@@ -271,8 +172,7 @@ export default function Applications() {
   const [healthCheckEnabled, setHealthCheckEnabled] = useState(true);
   const [healthCheckPath, setHealthCheckPath] = useState('/api/health');
   const [healthCheckMode, setHealthCheckMode] = useState('json_ok');
-  const [authMode, setAuthMode] = useState('jwt');
-  const [openMode, setOpenMode] = useState('embedded');
+  const [authMode, setAuthMode] = useState('redirect');
   const [status, setStatus] = useState('online');
   const [environment, setEnvironment] = useState('production');
   const [visibility, setVisibility] = useState('private');
@@ -325,7 +225,11 @@ export default function Applications() {
   };
 
   const openDialog = (system = null) => {
+    const admin = currentUser?.role === 'admin';
     setEditSystem(system);
+    setName(system?.name || '');
+    setSlug(system?.slug || '');
+    setSlugManual(Boolean(system));
     setLogoUrl(system?.icon_url || '');
     setBrandColor(system?.color || DEFAULT_BRAND_COLOR);
     setApiKey(system?.api_key || '');
@@ -337,8 +241,7 @@ export default function Applications() {
     setHealthCheckEnabled(system?.health_check_enabled !== false);
     setHealthCheckPath(system?.health_check_path || '/api/health');
     setHealthCheckMode(system?.health_check_mode || 'json_ok');
-    setAuthMode(system?.auth_mode || 'jwt');
-    setOpenMode(system?.open_mode || 'embedded');
+    setAuthMode(admin ? (system?.auth_mode || 'jwt') : 'redirect');
     setStatus(system?.status || 'online');
     setEnvironment(system?.environment || 'production');
     setVisibility(system?.visibility || 'private');
@@ -384,6 +287,9 @@ export default function Applications() {
   const resetDialogState = () => {
     setDialogOpen(false);
     setEditSystem(null);
+    setName('');
+    setSlug('');
+    setSlugManual(false);
     setLogoUrl('');
     setBrandColor(DEFAULT_BRAND_COLOR);
     setApiKey('');
@@ -395,8 +301,7 @@ export default function Applications() {
     setHealthCheckEnabled(true);
     setHealthCheckPath('/api/health');
     setHealthCheckMode('json_ok');
-    setAuthMode('jwt');
-    setOpenMode('embedded');
+    setAuthMode(currentUser?.role === 'admin' ? 'jwt' : 'redirect');
     setStatus('online');
     setEnvironment('production');
     setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
@@ -530,30 +435,34 @@ export default function Applications() {
   const handleSubmit = (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
+    const resolvedAuthMode = isAdmin ? authMode : 'redirect';
     const data = {
-      name: form.get('name'),
-      slug: form.get('slug'),
+      name: name.trim(),
+      slug: slug.trim(),
       description: form.get('description'),
       base_url: baseUrl || undefined,
-      api_key: authMode === 'jwt' ? (apiKey || undefined) : undefined,
-      mcp_catalog_path: mcpCatalogPath || undefined,
-      mcp_api_key: mcpApiKey || undefined,
-      mcp_auth_mode: mcpAuthMode || 'bearer',
-      mcp_enabled: mcpEnabled,
-      health_check_enabled: healthCheckEnabled,
-      health_check_path: healthCheckPath || undefined,
-      health_check_mode: healthCheckMode || undefined,
-      auth_mode: authMode,
-      open_mode: openMode,
+      auth_mode: resolvedAuthMode,
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
-      status,
-      environment,
       color: brandColor,
       icon_url: logoUrl || undefined,
-      notification_config: notificationConfig,
-      calendar_config: calendarConfig,
     };
+
+    if (isAdmin) {
+      data.status = status;
+      data.environment = environment;
+      data.api_key = resolvedAuthMode === 'jwt' ? (apiKey || undefined) : undefined;
+      data.mcp_catalog_path = mcpCatalogPath || undefined;
+      data.mcp_api_key = mcpApiKey || undefined;
+      data.mcp_auth_mode = mcpAuthMode || 'bearer';
+      data.mcp_enabled = mcpEnabled;
+      data.health_check_enabled = healthCheckEnabled;
+      data.health_check_path = healthCheckPath || undefined;
+      data.health_check_mode = healthCheckMode || undefined;
+      data.notification_config = notificationConfig;
+      data.calendar_config = calendarConfig;
+    }
+
     if (editSystem) {
       updateMut.mutate({ id: editSystem.id, data });
     } else {
@@ -612,7 +521,7 @@ export default function Applications() {
               <span className="hidden sm:inline">Reorder</span>
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditSystem(null); setLogoUrl(''); setApiKey(''); setAuthMode('jwt'); setOpenMode('embedded'); setStatus('online'); setEnvironment('production'); setVisibility(currentUser?.role === 'admin' ? 'public' : 'private'); setPrivateAllowedEmails([]); setPrivateUsersPickerOpen(false); setNotificationConfig(normalizeNotificationEventMapping()); setCalendarConfig(normalizeCalendarEventMapping()); } }}>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialogState(); else setDialogOpen(true); }}>
             <DialogTrigger asChild>
               <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
                 <Plus className="w-4 h-4" />
@@ -623,47 +532,89 @@ export default function Applications() {
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+            <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col" autoComplete="off">
               <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-6 py-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Name *</Label>
-                  <Input name="name" defaultValue={editSystem?.name} placeholder="Booking System" required />
+                  <Input
+                    name="application_name"
+                    value={name}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setName(nextName);
+                      if (!slugManual) {
+                        setSlug(slugifyName(nextName));
+                      }
+                    }}
+                    placeholder="Booking System"
+                    autoComplete="off"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Slug *</Label>
-                  <Input name="slug" defaultValue={editSystem?.slug} placeholder="booking" required />
+                  <Input
+                    name="application_slug"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlugManual(true);
+                      setSlug(e.target.value);
+                    }}
+                    placeholder="booking-system"
+                    autoComplete="off"
+                    required
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Input name="description" defaultValue={editSystem?.description} placeholder="Room booking management" />
+                <Input
+                  name="description"
+                  defaultValue={editSystem?.description}
+                  placeholder="Room booking management"
+                  autoComplete="off"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Base URL</Label>
                 <Input
+                  name="application_base_url"
+                  type="url"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder="https://booking.company.com"
+                  autoComplete="off"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-form-type="other"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Application Type</Label>
-                  <Select value={authMode} onValueChange={setAuthMode}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="jwt">JWT SSO</SelectItem>
-                      <SelectItem value="redirect">Redirect URL</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {isAdmin ? (
+                  <div className="space-y-2">
+                    <Label>Application Type</Label>
+                    <Select value={authMode} onValueChange={setAuthMode}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="jwt">JWT SSO</SelectItem>
+                        <SelectItem value="redirect">Redirect URL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Application Type</Label>
+                    <Input value="Redirect URL" disabled />
+                    <p className="text-[11px] text-muted-foreground">Non-admin users can only register redirect URL apps.</p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Visibility</Label>
                   <Select
                     value={visibility}
                     onValueChange={setVisibility}
-                    disabled={currentUser?.role !== 'admin'}
+                    disabled={!isAdmin}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -671,24 +622,27 @@ export default function Applications() {
                       <SelectItem value="private">Private</SelectItem>
                     </SelectContent>
                   </Select>
-                  {currentUser?.role !== 'admin' && (
+                  {!isAdmin && (
                     <p className="text-[11px] text-muted-foreground">Only admin can make systems public.</p>
                   )}
                 </div>
               </div>
-              <OpenModeSelector value={openMode} onChange={setOpenMode} />
-              {authMode === 'jwt' && (
+              {isAdmin && authMode === 'jwt' && (
                 <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <Input
+                      name="application_api_key"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="super-secret-key-min-32-chars"
-                      autoComplete="off"
+                      autoComplete="new-password"
                       spellCheck={false}
                       type="password"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      data-form-type="other"
                     />
                   </div>
                   <Button
@@ -771,92 +725,27 @@ export default function Applications() {
                   <p className="text-[11px] text-muted-foreground">Owner always has access. Selected users can view this private app.</p>
                 </div>
               )}
-              {/* Logo Upload */}
-              <div className="space-y-2">
-                <Label>System Logo</Label>
-                <div className="flex items-center gap-3">
-                  {logoUrl ? (
-                    <img src={toAbsoluteUrl(logoUrl)} alt="logo" className="w-12 h-12 rounded-xl object-cover border border-border" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center border border-border">
-                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                  <label className="cursor-pointer">
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                    <Button type="button" variant="outline" size="sm" className="gap-1.5 pointer-events-none" disabled={uploadingLogo}>
-                      <Upload className="w-3.5 h-3.5" />
-                      {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                    </Button>
-                  </label>
-                </div>
-              </div>
-              <ApplicationHealthConfigEditor
-                applicationId={editSystem?.id}
-                enabled={healthCheckEnabled}
-                onEnabledChange={setHealthCheckEnabled}
-                healthPath={healthCheckPath}
-                onHealthPathChange={setHealthCheckPath}
-                healthMode={healthCheckMode}
-                onHealthModeChange={setHealthCheckMode}
-                baseUrl={baseUrl}
-                resetKey={integrationResetKey}
-              />
-              <ApplicationMcpConfigEditor
-                applicationId={editSystem?.id}
-                enabled={mcpEnabled}
-                onEnabledChange={setMcpEnabled}
-                catalogPath={mcpCatalogPath}
-                onCatalogPathChange={setMcpCatalogPath}
-                mcpApiKey={mcpApiKey}
-                onMcpApiKeyChange={setMcpApiKey}
-                mcpAuthMode={mcpAuthMode}
-                onMcpAuthModeChange={setMcpAuthMode}
-                baseUrl={baseUrl}
-                apiKey={apiKey}
-                webhookSecret={notificationConfig?.webhook_secret}
-                notificationConfig={notificationConfig}
-                resetKey={integrationResetKey}
-              />
-              <ApplicationIntegrationsSection
-                notificationConfig={notificationConfig}
-                onNotificationConfigChange={setNotificationConfig}
-                calendarConfig={calendarConfig}
-                onCalendarConfigChange={setCalendarConfig}
-                applicationId={editSystem?.id}
-                resetKey={integrationResetKey}
-              />
+              {/* Logo Upload + Brand Color */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                      <SelectItem value="degraded">Degraded</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>System Logo</Label>
+                  <div className="flex h-9 items-center gap-3">
+                    {logoUrl ? (
+                      <img src={toAbsoluteUrl(logoUrl)} alt="logo" className="h-9 w-9 rounded-lg object-cover border border-border" />
+                    ) : (
+                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center border border-border">
+                        <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                      <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 pointer-events-none" disabled={uploadingLogo}>
+                        <Upload className="w-3.5 h-3.5" />
+                        {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                      </Button>
+                    </label>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Environment</Label>
-                  <Select value={environment} onValueChange={setEnvironment}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {APPLICATION_ENVIRONMENTS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Marks non-production apps with a badge on the grid.
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Brand Color</Label>
                   <Input
@@ -871,6 +760,77 @@ export default function Applications() {
                   </p>
                 </div>
               </div>
+              {isAdmin && (
+                <>
+                  <ApplicationHealthConfigEditor
+                    applicationId={editSystem?.id}
+                    enabled={healthCheckEnabled}
+                    onEnabledChange={setHealthCheckEnabled}
+                    healthPath={healthCheckPath}
+                    onHealthPathChange={setHealthCheckPath}
+                    healthMode={healthCheckMode}
+                    onHealthModeChange={setHealthCheckMode}
+                    baseUrl={baseUrl}
+                    resetKey={integrationResetKey}
+                  />
+                  <ApplicationMcpConfigEditor
+                    applicationId={editSystem?.id}
+                    enabled={mcpEnabled}
+                    onEnabledChange={setMcpEnabled}
+                    catalogPath={mcpCatalogPath}
+                    onCatalogPathChange={setMcpCatalogPath}
+                    mcpApiKey={mcpApiKey}
+                    onMcpApiKeyChange={setMcpApiKey}
+                    mcpAuthMode={mcpAuthMode}
+                    onMcpAuthModeChange={setMcpAuthMode}
+                    baseUrl={baseUrl}
+                    apiKey={apiKey}
+                    webhookSecret={notificationConfig?.webhook_secret}
+                    notificationConfig={notificationConfig}
+                    resetKey={integrationResetKey}
+                  />
+                  <ApplicationIntegrationsSection
+                    notificationConfig={notificationConfig}
+                    onNotificationConfigChange={setNotificationConfig}
+                    calendarConfig={calendarConfig}
+                    onCalendarConfigChange={setCalendarConfig}
+                    applicationId={editSystem?.id}
+                    resetKey={integrationResetKey}
+                  />
+                </>
+              )}
+              {isAdmin && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="online">Online</SelectItem>
+                        <SelectItem value="offline">Offline</SelectItem>
+                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                        <SelectItem value="degraded">Degraded</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Environment</Label>
+                    <Select value={environment} onValueChange={setEnvironment}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {APPLICATION_ENVIRONMENTS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Marks non-production apps with a badge on the grid.
+                    </p>
+                  </div>
+                </div>
+              )}
               </div>
               <div className="px-6 py-4 border-t border-border/70 bg-background">
                 <Button type="submit" className="w-full">

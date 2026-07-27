@@ -110,6 +110,22 @@ class ApplicationController extends Controller
         $validated['created_by_user_id'] = $user->id;
         if ($user->role !== 'admin') {
             $validated['visibility'] = 'private';
+            $validated['auth_mode'] = 'redirect';
+            $validated = Arr::except($validated, [
+                'api_key',
+                'mcp_catalog_path',
+                'mcp_api_key',
+                'mcp_auth_mode',
+                'mcp_enabled',
+                'health_check_enabled',
+                'health_check_path',
+                'health_check_mode',
+                'notification_config',
+                'calendar_config',
+                'open_mode',
+                'status',
+                'environment',
+            ]);
         }
         $privateEmails = $this->normalizePrivateEmails($validated['private_allowed_user_emails'] ?? null, $user->email);
         unset($validated['private_allowed_user_emails']);
@@ -194,7 +210,23 @@ class ApplicationController extends Controller
         ]);
 
         if ($user->role !== 'admin') {
-            $validated = Arr::except($validated, ['visibility']);
+            $validated = Arr::except($validated, [
+                'visibility',
+                'auth_mode',
+                'api_key',
+                'mcp_catalog_path',
+                'mcp_api_key',
+                'mcp_auth_mode',
+                'mcp_enabled',
+                'health_check_enabled',
+                'health_check_path',
+                'health_check_mode',
+                'notification_config',
+                'calendar_config',
+                'open_mode',
+                'status',
+                'environment',
+            ]);
         }
 
         $hadPrivateEmailsInput = array_key_exists('private_allowed_user_emails', $validated);
