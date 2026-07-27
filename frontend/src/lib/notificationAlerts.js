@@ -2,6 +2,12 @@ import { toast } from 'sonner';
 import { showPushNotificationToast } from '@/lib/notificationVisuals';
 import { getNotificationSettings } from '@/lib/notificationSettings';
 import { playNotificationSound } from '@/lib/notificationSound';
+import { stripHtml } from '@/lib/richText';
+
+function plainNotificationMessage(value) {
+  if (!value) return '';
+  return stripHtml(value).replace(/\s+/g, ' ').trim();
+}
 
 const DEDUP_MS = 5000;
 const recentAlerts = new Map();
@@ -31,11 +37,12 @@ function shouldSkipDuplicate(id) {
 }
 
 export function notificationToAlertPayload(notification) {
+  const message = plainNotificationMessage(notification.message);
   return {
     id: notification.id,
     title: notification.title,
-    message: notification.message,
-    body: notification.message,
+    message,
+    body: message,
     type: notification.type,
   };
 }

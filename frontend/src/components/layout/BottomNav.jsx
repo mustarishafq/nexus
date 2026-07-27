@@ -163,7 +163,8 @@ export default function BottomNav() {
   return (
     <nav
       className={cn(
-        'fixed left-0 right-0 z-40',
+        // Full-width only for centering — must not steal clicks beside the dock.
+        'pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
         // In Safari (browser tab), chrome already clears the home indicator — adding
         // safe-area on top creates the large bottom gap. Keep safe-area for PWA only.
         standalone
@@ -173,18 +174,16 @@ export default function BottomNav() {
       style={{ bottom: viewportBottomOffset }}
       aria-label="Main navigation"
     >
-      <div className="flex justify-center px-3 sm:px-4">
-        <div
-          className={cn(
-            'flex items-stretch px-1',
-            glassDockStyles,
-            isMobile
-              ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
-              : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
-          )}
-        >
-          {navItems.map(renderNavItem)}
-        </div>
+      <div
+        className={cn(
+          'pointer-events-auto flex items-stretch px-1',
+          glassDockStyles,
+          isMobile
+            ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
+            : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+        )}
+      >
+        {navItems.map(renderNavItem)}
       </div>
     </nav>
   );

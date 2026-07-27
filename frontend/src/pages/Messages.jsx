@@ -210,7 +210,7 @@ export default function Messages() {
               {inboxData?.unread_total ? `${inboxData.unread_total} unread` : 'All caught up'}
             </p>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
             {inboxLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

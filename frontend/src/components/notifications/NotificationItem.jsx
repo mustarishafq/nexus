@@ -12,12 +12,19 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { stripHtml } from '@/lib/richText';
+
+function plainNotificationMessage(value) {
+  if (!value) return '';
+  return stripHtml(value).replace(/\s+/g, ' ').trim();
+}
 
 export default function NotificationItem({ notification, onMarkRead, onSnooze, onDelete, onActivate, onClose }) {
   const config = getNotificationTypeVisual(notification.type);
   const TypeIcon = config.icon;
   const hasAction = Boolean(notification.action_url?.trim());
   const isUnread = notification.is_read !== true && notification.is_read !== 1 && notification.is_read !== '1';
+  const message = plainNotificationMessage(notification.message);
 
   const handleClick = async () => {
     // Close the drawer immediately so navigation never leaves it stuck open.
@@ -70,9 +77,9 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
             >
               {notification.title}
             </p>
-            {notification.message ? (
+            {message ? (
               <p className="text-xs text-foreground/75 dark:text-muted-foreground mt-0.5 line-clamp-2">
-                {notification.message}
+                {message}
               </p>
             ) : null}
           </div>

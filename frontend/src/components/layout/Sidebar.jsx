@@ -78,7 +78,7 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))]">
         {navItems.map((item) => {
           const isActive = item.path === '/applications'
             ? location.pathname === '/applications' || location.pathname.startsWith('/applications/')

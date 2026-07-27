@@ -35,8 +35,7 @@ class FeedNotificationService
         }
 
         $commenterName = $commenter->displayName();
-        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', $body) ?? $body);
-        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
+        $preview = $this->plainTextPreview($body);
 
         $notification = Notification::create([
             'user_id' => (string) $author->id,
@@ -81,8 +80,7 @@ class FeedNotificationService
         }
 
         $replierName = $replier->displayName();
-        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', $body) ?? $body);
-        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
+        $preview = $this->plainTextPreview($body);
 
         $notification = Notification::create([
             'user_id' => (string) $parentAuthor->id,
@@ -123,11 +121,10 @@ class FeedNotificationService
         }
 
         $authorName = $author->displayName();
-        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', (string) $post->body) ?? (string) $post->body);
+        $preview = $this->plainTextPreview((string) $post->body);
         if ($preview === '' && $post->resolvedImageUrls() !== []) {
             $preview = 'Shared an image';
         }
-        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
         $message = $preview !== ''
             ? "{$authorName} submitted a post for review: {$preview}"
             : "{$authorName} submitted a post for review.";
@@ -177,11 +174,10 @@ class FeedNotificationService
         }
 
         $authorName = $author->displayName();
-        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', (string) $post->body) ?? (string) $post->body);
+        $preview = $this->plainTextPreview((string) $post->body);
         if ($preview === '' && $post->resolvedImageUrls() !== []) {
             $preview = 'Shared an image';
         }
-        $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
         $message = $preview !== ''
             ? "{$authorName}: {$preview}"
             : "{$authorName} shared a new post.";
@@ -239,13 +235,13 @@ class FeedNotificationService
         }
 
         $reviewerName = $reviewer->displayName();
-        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', (string) $post->body) ?? (string) $post->body);
+        $preview = $this->plainTextPreview((string) $post->body, 80);
         if ($preview === '' && $post->resolvedImageUrls() !== []) {
             $preview = 'your image post';
         }
-        $preview = $preview !== ''
-            ? (mb_strlen($preview) > 80 ? mb_substr($preview, 0, 77).'...' : $preview)
-            : 'your post';
+        if ($preview === '') {
+            $preview = 'your post';
+        }
 
         $notification = Notification::create([
             'user_id' => (string) $author->id,
@@ -269,5 +265,23 @@ class FeedNotificationService
         ]);
 
         app(PushNotificationService::class)->sendNotification($notification);
+    }
+
+    /**
+     * Build a plain-text notification preview from rich post/comment HTML.
+     */
+    private function plainTextPreview(string $body, int $maxLength = 120): string
+    {
+        $preview = trim(preg_replace(MentionService::TOKEN_PATTERN, '@$2', $body) ?? $body);
+        $preview = preg_replace('/<br\s*\/?>/i', ' ', $preview) ?? $preview;
+        $preview = preg_replace('/<\/p>/i', ' ', $preview) ?? $preview;
+        $preview = trim(html_entity_decode(strip_tags($preview), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $preview = trim(preg_replace('/\s+/u', ' ', $preview) ?? $preview);
+
+        if (mb_strlen($preview) > $maxLength) {
+            return mb_substr($preview, 0, $maxLength - 3).'...';
+        }
+
+        return $preview;
     }
 }
