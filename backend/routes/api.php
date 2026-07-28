@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\Nexus\V1\AttendanceController as NexusV1AttendanceController;
+use App\Http\Controllers\Api\Nexus\V1\AttendancePolicyController as NexusV1AttendancePolicyController;
 use App\Http\Controllers\Api\Nexus\V1\EmployeeController as NexusV1EmployeeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
@@ -67,6 +68,8 @@ Route::prefix('nexus/v1')->group(function () {
     Route::get('employees', [NexusV1EmployeeController::class, 'index']);
     Route::post('employees', [NexusV1EmployeeController::class, 'store']);
     Route::get('attendance', [NexusV1AttendanceController::class, 'index']);
+    Route::get('attendance/policy', [NexusV1AttendancePolicyController::class, 'show']);
+    Route::put('attendance/policy', [NexusV1AttendancePolicyController::class, 'update']);
 });
 
 Route::post('/oauth/register', [OAuthController::class, 'register']);

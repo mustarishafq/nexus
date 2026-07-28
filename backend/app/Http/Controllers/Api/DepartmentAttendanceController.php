@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
+use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\DepartmentAttendanceSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,6 +81,8 @@ class DepartmentAttendanceController extends Controller
 
         $setting->load('attendanceLocation');
 
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
+
         return response()->json([
             'department' => $department->only(['id', 'name']),
             'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
@@ -132,6 +135,8 @@ class DepartmentAttendanceController extends Controller
                 'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             ];
         }
+
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
 
         return response()->json([
             'departments' => $results,

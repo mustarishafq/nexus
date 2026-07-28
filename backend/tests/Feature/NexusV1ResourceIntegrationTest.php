@@ -197,31 +197,76 @@ class NexusV1ResourceIntegrationTest extends TestCase
         });
     }
 
-    public function test_attendance_forwarder_fail_soft_on_ingest_error(): void
+    public function test_attendance_policy_upsert_by_name(): void
     {
         $this->createResourceApplication();
-        $user = User::factory()->create(['email' => 'clock@example.com']);
-        $record = AttendanceRecord::query()->create([
-            'user_id' => $user->id,
-            'type' => 'clock_out',
-            'photo_url' => '/storage/selfie.jpg',
-            'captured_at' => now(),
-        ]);
+        \App\Models\Department::query()->create(['name' => 'Operations']);
 
-        Http::fake([
-            'http://resource.test/.well-known/nexus-integration.json' => Http::response([
-                'capabilities' => ['attendance.ingest'],
-                'endpoints' => ['attendance_ingest' => '/api/nexus/v1/attendance/ingest'],
-            ]),
-            'http://resource.test/api/nexus/v1/attendance/ingest' => Http::response(['message' => 'boom'], 500),
-        ]);
+        $response = $this->putJson('/api/nexus/v1/attendance/policy', [
+            'locations' => [[
+                'name' => 'EMZI HQ',
+                'geofence_enabled' => true,
+                'center_latitude' => 5.64,
+                'center_longitude' => 100.48,
+                'radius_meters' => 150,
+                'allow_outside_radius' => false,
+                'sites' => [[
+                    'name' => 'Primary',
+                    'latitude' => 5.64,
+                    'longitude' => 100.48,
+                ]],
+            ]],
+            'departments' => [[
+                'department_name' => 'Operations',
+                'enabled' => true,
+                'location_name' => 'EMZI HQ',
+                'timezone' => 'Asia/Kuala_Lumpur',
+                'grace_period_minutes' => 10,
+                'allow_outside_shift_hours' => false,
+                'overtime_enabled' => true,
+                'standard_hours_per_day' => 8,
+                'overtime_threshold_minutes' => 0,
+                'shifts' => [[
+                    'name' => 'Day',
+                    'days_of_week' => [1, 2, 3, 4, 5],
+                    'start_time' => '09:00',
+                    'end_time' => '18:00',
+                    'crosses_midnight' => false,
+                ]],
+            ]],
+            'watermark' => [
+                'enabled' => true,
+                'show_user_name' => true,
+                'show_location' => false,
+                'custom_text' => 'Synced watermark',
+                'show_custom_text' => true,
+            ],
+            'prune_missing' => true,
+        ], $this->authHeaders('brain-attendance-policy'));
 
-        Log::spy();
+        $response->assertOk()
+            ->assertJsonPath('stats.locations_upserted', 1)
+            ->assertJsonPath('stats.departments_upserted', 1)
+            ->assertJsonPath('stats.watermark_updated', true);
 
-        app(ResourceAttendanceForwarder::class)->forward($record, $user);
+        $this->assertDatabaseHas('attendance_locations', ['name' => 'EMZI HQ', 'radius_meters' => 150]);
+        $this->assertDatabaseHas('department_attendance_settings', ['grace_period_minutes' => 10]);
 
-        Log::shouldHaveReceived('warning')->withArgs(function ($message) {
-            return $message === 'Resource attendance ingest failed';
-        })->once();
+        $export = $this->getJson('/api/nexus/v1/attendance/policy', $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $this->assertSame('EMZI HQ', $export->json('locations.0.name'));
+        $this->assertSame('Operations', $export->json('departments.0.department_name'));
+        $this->assertFalse($export->json('watermark.show_location'));
+    }
+
+    public function test_attendance_policy_requires_auth(): void
+    {
+        $this->createResourceApplication();
+
+        $this->putJson('/api/nexus/v1/attendance/policy', [
+            'locations' => [],
+            'departments' => [],
+        ])->assertUnauthorized();
     }
 }

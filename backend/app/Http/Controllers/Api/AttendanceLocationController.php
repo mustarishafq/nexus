@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceLocation;
+use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\AttendanceLocationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +45,8 @@ class AttendanceLocationController extends Controller
             AttendanceLocationSettings::toDatabaseColumns($config),
         );
 
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
+
         return response()->json([
             'location' => AttendanceLocationSettings::serializeForApi($location),
         ], 201);
@@ -59,6 +62,8 @@ class AttendanceLocationController extends Controller
         $config = AttendanceLocationSettings::normalizeConfig($validated);
 
         $attendanceLocation->update(AttendanceLocationSettings::toDatabaseColumns($config));
+
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
 
         return response()->json([
             'location' => AttendanceLocationSettings::serializeForApi(
@@ -86,6 +91,8 @@ class AttendanceLocationController extends Controller
         }
 
         $attendanceLocation->delete();
+
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
 
         return response()->json(['message' => 'Location deleted']);
     }

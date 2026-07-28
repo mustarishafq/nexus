@@ -275,7 +275,9 @@ export default function AdminSettings({ embedded = false }) {
                 <Card className="overflow-visible rounded-2xl">
                   <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Attendance watermark</CardTitle>
-                    <CardDescription>Clock in/out camera watermark fields, styling, and live preview.</CardDescription>
+                    <CardDescription>
+                      Clock in/out camera watermark fields, styling, and live preview. Synced bidirectionally with Kashfi (last-write-wins).
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
                     <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
@@ -290,7 +292,7 @@ export default function AdminSettings({ embedded = false }) {
                   <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Location radius</CardTitle>
                     <CardDescription>
-                      Shared geofence locations. Assign the same location to multiple departments.
+                      Shared geofence locations. Assign the same location to multiple departments. Changes sync with Kashfi.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
@@ -301,7 +303,7 @@ export default function AdminSettings({ embedded = false }) {
                   <CardHeader className="pb-3 px-4 sm:px-6">
                     <CardTitle className="text-base">Department attendance rules</CardTitle>
                     <CardDescription>
-                      Assign a shared location and set working hours, shifts, and overtime rules per department.
+                      Assign a shared location and set working hours, shifts, and overtime rules per department. Changes sync with Kashfi.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">

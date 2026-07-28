@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
+use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
@@ -118,6 +119,8 @@ class AppSettingController extends Controller
 
         AppSettings::forget();
 
+        app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
+
         return response()->json($this->adminPayload());
     }
 
@@ -160,6 +163,10 @@ class AppSettingController extends Controller
         }
 
         AppSettings::forget();
+
+        if ($hasAttendanceKeys) {
+            app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
+        }
 
         return response()->json($this->hrSettingsPayload());
     }
