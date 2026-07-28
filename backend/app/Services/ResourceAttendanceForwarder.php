@@ -14,6 +14,12 @@ class ResourceAttendanceForwarder
 {
     public const RESOURCE_APP_NAME = 'EMZI Nexus Resource';
 
+    /** @var list<string> */
+    public const RESOURCE_APP_NAME_MATCHERS = [
+        'EMZI Nexus Resource',
+        'EMZI Nexus Kashfi',
+    ];
+
     private const WELL_KNOWN_CACHE_SECONDS = 300;
 
     private const HTTP_TIMEOUT_SECONDS = 8;
@@ -122,9 +128,13 @@ class ResourceAttendanceForwarder
             ->whereNotNull('api_key')
             ->where('api_key', '!=', '')
             ->where(function ($query) {
-                $query->where('name', self::RESOURCE_APP_NAME)
-                    ->orWhere('name', 'like', '%Resource%')
-                    ->orWhere('slug', 'like', '%resource%');
+                foreach (self::RESOURCE_APP_NAME_MATCHERS as $name) {
+                    $query->orWhere('name', $name);
+                }
+                $query->orWhere('name', 'like', '%Resource%')
+                    ->orWhere('name', 'like', '%Kashfi%')
+                    ->orWhere('slug', 'like', '%resource%')
+                    ->orWhere('slug', 'like', '%kashfi%');
             })
             ->orderBy('sort_order')
             ->first();
