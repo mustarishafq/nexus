@@ -34,6 +34,8 @@ use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
+use App\Http\Controllers\Api\Nexus\V1\AttendanceController as NexusV1AttendanceController;
+use App\Http\Controllers\Api\Nexus\V1\EmployeeController as NexusV1EmployeeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\Api\PostCommentController;
@@ -60,6 +62,12 @@ Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback']);
 
 Route::post('/mcp', [McpController::class, 'handle']);
+
+Route::prefix('nexus/v1')->group(function () {
+    Route::get('employees', [NexusV1EmployeeController::class, 'index']);
+    Route::post('employees', [NexusV1EmployeeController::class, 'store']);
+    Route::get('attendance', [NexusV1AttendanceController::class, 'index']);
+});
 
 Route::post('/oauth/register', [OAuthController::class, 'register']);
 Route::get('/oauth/clients/{clientId}', [OAuthController::class, 'showClient']);

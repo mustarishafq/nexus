@@ -11,10 +11,10 @@ import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAtt
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance } from '@/lib/roles';
 import {
-  describeAttendancePolicy,
   findActiveShift,
   findMatchingAttendanceSite,
   findNearestAttendanceSite,
+  listAttendancePolicyParts,
   resolveAttendanceSites,
 } from '@/lib/attendancePolicy';
 import { getDeviceInfo } from '@/lib/deviceInfo';
@@ -68,6 +68,7 @@ export default function AttendanceClockIn() {
         captured_at: photoCapture.capturedAt,
         metadata: {
           watermark_lines: photoCapture.watermarkLines,
+          location_accuracy_meters: photoCapture.location?.accuracy ?? null,
         },
       });
     },
@@ -117,42 +118,56 @@ export default function AttendanceClockIn() {
   ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, policy?.radius_meters]);
 
   const scheduleHint = status?.schedule_hint;
+  const policyParts = useMemo(() => listAttendancePolicyParts(policy), [policy]);
 
   return (
-    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden">
       {!status?.reminder && scheduleHint ? (
         <Card className="min-w-0 rounded-2xl border-dashed">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="text-base">Shift schedule</CardTitle>
-            <CardDescription className="text-pretty">{scheduleHint.message}</CardDescription>
-          </CardHeader>
+          <CardContent className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3.5 py-2.5 sm:px-4">
+            <span className="text-sm font-semibold">Shift schedule</span>
+            <span className="text-sm text-muted-foreground">{scheduleHint.message}</span>
+          </CardContent>
         </Card>
       ) : null}
 
       {policy ? (
         <Card className="min-w-0 rounded-2xl border-primary/20 bg-primary/5">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Shield className="h-4 w-4 shrink-0 text-primary" /> Department rules
-            </CardTitle>
-            <CardDescription className="text-pretty">{describeAttendancePolicy(policy)}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 p-4 pt-0 text-sm sm:p-6 sm:pt-0">
-            {activeShift ? (
-              <Badge variant="secondary">Active shift: {activeShift.name}</Badge>
-            ) : policy.shifts?.length ? (
-              <Badge variant="outline">Outside scheduled shift</Badge>
-            ) : null}
-            {nearestSite ? (
-              <Badge variant={matchedSite ? 'secondary' : 'destructive'} className="max-w-full truncate">
-                {matchedSite
-                  ? `At ${matchedSite.site.name}`
-                  : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
-              </Badge>
-            ) : null}
-            {policy?.allow_outside_radius && !matchedSite && nearestSite ? (
-              <Badge variant="outline">Outstation allowed</Badge>
-            ) : null}
+          <CardContent className="space-y-2 px-3.5 py-2.5 sm:px-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-semibold">
+                <Shield className="h-3.5 w-3.5 shrink-0 text-primary" /> Department rules
+              </div>
+              {activeShift ? (
+                <Badge variant="secondary">Active shift: {activeShift.name}</Badge>
+              ) : policy.shifts?.length ? (
+                <Badge variant="outline">Outside scheduled shift</Badge>
+              ) : null}
+              {nearestSite ? (
+                <Badge variant={matchedSite ? 'secondary' : 'destructive'} className="max-w-full truncate">
+                  {matchedSite
+                    ? `At ${matchedSite.site.name}`
+                    : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
+                </Badge>
+              ) : null}
+              {policy?.allow_outside_radius && !matchedSite && nearestSite ? (
+                <Badge variant="outline">Outstation allowed</Badge>
+              ) : null}
+            </div>
+            {policyParts.length ? (
+              <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm">
+                {policyParts.map((part) => (
+                  <li
+                    key={part}
+                    className="rounded-md border border-border/60 bg-background/40 px-2 py-0.5"
+                  >
+                    {part}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No department attendance rules apply.</p>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -167,6 +182,7 @@ export default function AttendanceClockIn() {
               deviceInfo={deviceInfo}
               attendanceSites={attendanceSites}
               siteRadiusMeters={policy?.radius_meters ?? 200}
+              requirePreciseLocation={Boolean(policy?.geofence_enabled)}
               actionType={nextType}
               submitting={clockMutation.isPending}
               canSubmit={Boolean(capture?.blob)}

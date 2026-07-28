@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
+use App\Services\ResourceAttendanceForwarder;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
 use App\Support\AttendancePolicyValidator;
@@ -358,6 +359,8 @@ class AttendanceController extends Controller
             'captured_at' => $capturedAt,
         ]);
 
+        app(ResourceAttendanceForwarder::class)->forwardAfterResponse($record, $user);
+
         return response()->json($this->serializeRecord($record->load('user:id,full_name,name,email')), 201);
     }
 
@@ -432,7 +435,7 @@ class AttendanceController extends Controller
         ]);
 
         $query = AttendanceRecord::query()
-            ->with('user:id,full_name,name,email')
+            ->with(['user:id,full_name,name,email,department_id', 'user.department:id,name'])
             ->orderByDesc('captured_at');
 
         $this->applyFilters($query, $validated);
@@ -445,8 +448,10 @@ class AttendanceController extends Controller
                 'ID',
                 'User',
                 'Email',
+                'Department',
                 'Type',
-                'Captured At',
+                'Date',
+                'Time',
                 'Location',
                 'Latitude',
                 'Longitude',
@@ -470,13 +475,24 @@ class AttendanceController extends Controller
                 }
 
                 $policy = is_array($record->metadata['policy'] ?? null) ? $record->metadata['policy'] : [];
+                $capturedAt = $record->captured_at;
+                if ($capturedAt) {
+                    $timezone = $record->timezone ?: config('app.timezone');
+                    try {
+                        $capturedAt = $capturedAt->copy()->timezone($timezone);
+                    } catch (\Throwable) {
+                        // Keep stored timestamp if timezone is invalid.
+                    }
+                }
 
                 fputcsv($handle, [
                     $record->id,
                     $record->user?->full_name ?: $record->user?->name,
                     $record->user?->email,
+                    $record->user?->department?->name,
                     $record->type === 'clock_in' ? 'Clock In' : 'Clock Out',
-                    $record->captured_at?->toISOString(),
+                    $capturedAt?->format('Y-m-d'),
+                    $capturedAt?->format('H:i:s'),
                     $record->location_label,
                     $record->latitude,
                     $record->longitude,

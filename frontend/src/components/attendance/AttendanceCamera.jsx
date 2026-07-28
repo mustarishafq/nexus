@@ -1,23 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, LogIn, LogOut, RefreshCw, SwitchCamera } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   ATTENDANCE_SELFIE_FILTERS,
+  LOCATION_ACCURACY_GOOD_METERS,
+  LOCATION_ACCURACY_POOR_METERS,
+  LOCATION_ACCURACY_WARN_METERS,
   buildWatermarkLines,
   captureCanvasWithWatermark,
   drawVideoFrameWithWatermark,
   getCurrentLocation,
+  getLocationAccuracyGuidance,
+  isLocationAccuracyAcceptable,
+  isLocationAccuracyPoor,
   loadWatermarkLogo,
   normalizeAttendanceWatermarkConfig,
   reverseGeocodeAddress,
   startLocationWatch,
+  waitForAccurateLocation,
 } from '@/lib/watermarkConfig';
 import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
 const LIVE_DRAW_INTERVAL_MS = 50;
 const FILTER_STORAGE_KEY = 'attendance-camera-filter';
+const LOCATION_REFINE_WAIT_MS = 10000;
 
 function readFilterPreference() {
   try {
@@ -111,6 +120,7 @@ export default function AttendanceCamera({
   deviceInfo,
   attendanceSites = [],
   siteRadiusMeters = 200,
+  requirePreciseLocation = false,
   onCapture,
   onSubmit,
   actionType = 'clock_in',
@@ -130,6 +140,7 @@ export default function AttendanceCamera({
   const locationRef = useRef({
     latitude: null,
     longitude: null,
+    accuracy: null,
     locationLabel: null,
     locatingAddress: false,
     locatingPosition: true,
@@ -139,8 +150,10 @@ export default function AttendanceCamera({
   const deviceInfoRef = useRef(deviceInfo);
   const attendanceSitesRef = useRef(attendanceSites);
   const siteRadiusRef = useRef(siteRadiusMeters);
+  const requirePreciseLocationRef = useRef(requirePreciseLocation);
   attendanceSitesRef.current = attendanceSites;
   siteRadiusRef.current = siteRadiusMeters;
+  requirePreciseLocationRef.current = requirePreciseLocation;
 
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -164,6 +177,11 @@ export default function AttendanceCamera({
   configRef.current = config;
   userNameRef.current = userName;
   deviceInfoRef.current = deviceInfo;
+
+  const accuracyTargetMeters = Math.min(
+    LOCATION_ACCURACY_WARN_METERS,
+    Math.max(LOCATION_ACCURACY_GOOD_METERS, Math.round(Number(siteRadiusMeters) || 200) / 2),
+  );
 
   const buildContext = useCallback((capturedAt = new Date()) => ({
     userName: userNameRef.current,
@@ -330,6 +348,9 @@ export default function AttendanceCamera({
           || previous.locatingAddress !== location.locatingAddress
           || previous.locatingPosition !== location.locatingPosition
           || previous.locationError !== location.locationError
+          || previous.accuracy !== location.accuracy
+          || previous.latitude !== location.latitude
+          || previous.longitude !== location.longitude
         ) {
           setLocationTick((tick) => tick + 1);
         }
@@ -359,6 +380,49 @@ export default function AttendanceCamera({
         location = await getCurrentLocation();
         locationRef.current = location;
         setLocationTick((tick) => tick + 1);
+      }
+
+      const needsRefine = location.latitude == null
+        || location.longitude == null
+        || !isLocationAccuracyAcceptable(location.accuracy, accuracyTargetMeters)
+        || (requirePreciseLocationRef.current && isLocationAccuracyPoor(location.accuracy));
+
+      if (needsRefine) {
+        locationRef.current = {
+          ...locationRef.current,
+          locatingPosition: true,
+        };
+        setLocationTick((tick) => tick + 1);
+
+        const refined = await waitForAccurateLocation({
+          maxWaitMs: LOCATION_REFINE_WAIT_MS,
+          targetAccuracyMeters: accuracyTargetMeters,
+          initialLocation: location,
+        });
+
+        location = {
+          ...location,
+          ...refined,
+          locationLabel: refined.locationLabel ?? location.locationLabel,
+        };
+        locationRef.current = location;
+        setLocationTick((tick) => tick + 1);
+      }
+
+      if (
+        requirePreciseLocationRef.current
+        && location.latitude != null
+        && isLocationAccuracyPoor(location.accuracy, LOCATION_ACCURACY_POOR_METERS)
+      ) {
+        locationRef.current = {
+          ...location,
+          locatingPosition: false,
+          locatingAddress: false,
+        };
+        setLocationTick((tick) => tick + 1);
+        const guidance = getLocationAccuracyGuidance(location.accuracy, { requirePrecise: true });
+        toast.error(guidance || 'Location is too approximate. Enable Precise location and try again.');
+        return;
       }
 
       const siteLabel = resolveAttendanceSiteLabel(
@@ -446,6 +510,13 @@ export default function AttendanceCamera({
   const busy = capturing || submitting;
   const controlsLocked = disabled || busy;
   const hasPreview = status === 'preview';
+  const liveAccuracy = locationRef.current.accuracy;
+  const locationAccuracyGuidance = getLocationAccuracyGuidance(liveAccuracy, {
+    requirePrecise: requirePreciseLocation,
+  });
+  const showLocationDenied = locationRef.current.locationError != null
+    && locationRef.current.latitude == null;
+  const refiningLocation = Boolean(locationRef.current.locatingPosition && capturing);
 
   return (
     <div className={cn('min-w-0 max-w-full overflow-x-hidden', className)}>
@@ -626,7 +697,11 @@ export default function AttendanceCamera({
                       </span>
                     </button>
                     <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-wide text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl">
-                      {capturing ? 'Capturing…' : 'Take photo'}
+                      {refiningLocation
+                        ? 'Improving GPS…'
+                        : capturing
+                          ? 'Capturing…'
+                          : 'Take photo'}
                     </span>
                   </div>
                 )}
@@ -636,13 +711,37 @@ export default function AttendanceCamera({
         ) : null}
       </div>
 
+      {!hasPreview && (showLocationDenied || locationAccuracyGuidance) ? (
+        <div className="border-t px-3 py-2 text-xs sm:px-4">
+          {showLocationDenied ? (
+            <p className="text-amber-600 dark:text-amber-400">
+              Location permission is required for accurate attendance. Allow location access for this site.
+            </p>
+          ) : (
+            <p className={cn(
+              isLocationAccuracyPoor(liveAccuracy)
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-muted-foreground',
+            )}
+            >
+              {locationAccuracyGuidance}
+            </p>
+          )}
+        </div>
+      ) : null}
+
       {hasPreview && watermarkLines.length ? (
         <div className="hidden space-y-3 border-t p-3 text-xs text-muted-foreground sm:block sm:p-4">
           <div className="rounded-xl border bg-muted/20 p-3">
             <p className="mb-1 font-medium text-foreground">Watermark on photo</p>
-            {locationRef.current.locationError != null && locationRef.current.latitude == null ? (
+            {showLocationDenied ? (
               <p className="mb-2 text-amber-600 dark:text-amber-400">
                 Location permission is required for address and GPS lines in the watermark.
+              </p>
+            ) : null}
+            {locationAccuracyGuidance ? (
+              <p className="mb-2 text-amber-600 dark:text-amber-400">
+                {locationAccuracyGuidance}
               </p>
             ) : null}
             {watermarkLines.map((line) => (
@@ -651,14 +750,6 @@ export default function AttendanceCamera({
           </div>
         </div>
       ) : null}
-
-      {status === 'live'
-        && locationRef.current.locationError != null
-        && locationRef.current.latitude == null ? (
-          <p className="border-t px-3 py-2 text-xs text-amber-600 dark:text-amber-400 sm:hidden">
-            Location permission is required for address and GPS lines in the watermark.
-          </p>
-        ) : null}
     </div>
   );
 }

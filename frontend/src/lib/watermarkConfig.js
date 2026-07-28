@@ -754,39 +754,197 @@ function formatAddressLabel(address = {}, displayName = '') {
   return null;
 }
 
+/** GPS accuracy (meters) treated as usable for attendance / geofence. */
+export const LOCATION_ACCURACY_GOOD_METERS = 50;
+/** Show a warning when reported accuracy is worse than this. */
+export const LOCATION_ACCURACY_WARN_METERS = 100;
+/**
+ * Typical Approximate-location / cell-level fix. Strongly suggest Precise
+ * site permission when accuracy is at or above this.
+ */
+export const LOCATION_ACCURACY_POOR_METERS = 300;
+
+export function normalizeLocationAccuracy(accuracy) {
+  if (accuracy == null || accuracy === '') return null;
+  const value = Number(accuracy);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return value;
+}
+
+export function isLocationAccuracyPoor(accuracy, thresholdMeters = LOCATION_ACCURACY_POOR_METERS) {
+  const value = normalizeLocationAccuracy(accuracy);
+  return value != null && value >= thresholdMeters;
+}
+
+export function isLocationAccuracyAcceptable(accuracy, thresholdMeters = LOCATION_ACCURACY_WARN_METERS) {
+  const value = normalizeLocationAccuracy(accuracy);
+  // Unknown accuracy: allow, but callers may still wait for a better fix.
+  if (value == null) return true;
+  return value < thresholdMeters;
+}
+
+export function formatLocationAccuracy(accuracy) {
+  const value = normalizeLocationAccuracy(accuracy);
+  if (value == null) return null;
+  if (value < 10) return `±${Math.round(value)}m`;
+  if (value < 1000) return `±${Math.round(value)}m`;
+  return `±${(value / 1000).toFixed(1)}km`;
+}
+
+export function getLocationAccuracyGuidance(accuracy, { requirePrecise = false } = {}) {
+  const value = normalizeLocationAccuracy(accuracy);
+  const formatted = formatLocationAccuracy(value);
+
+  if (value == null) {
+    return null;
+  }
+
+  if (value >= LOCATION_ACCURACY_POOR_METERS) {
+    return `Location is approximate (${formatted}). Enable Precise location in your browser or device site settings, then wait a few seconds outdoors or near a window.`;
+  }
+
+  if (value >= LOCATION_ACCURACY_WARN_METERS) {
+    return requirePrecise
+      ? `Location accuracy is low (${formatted}). Enable Precise location for this site, then wait a moment before clocking.`
+      : `Location accuracy is low (${formatted}). For a better fix, enable Precise location and wait a moment before clocking.`;
+  }
+
+  return null;
+}
+
+function emptyLocationResult(extra = {}) {
+  return {
+    latitude: null,
+    longitude: null,
+    accuracy: null,
+    locationLabel: null,
+    locatingAddress: false,
+    locatingPosition: false,
+    ...extra,
+  };
+}
+
+function coordsFromPosition(position) {
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: normalizeLocationAccuracy(position.coords.accuracy),
+  };
+}
+
+function shouldPreferLocation(previous, next) {
+  if (next?.latitude == null || next?.longitude == null) return false;
+  if (previous?.latitude == null || previous?.longitude == null) return true;
+
+  const prevAccuracy = normalizeLocationAccuracy(previous.accuracy);
+  const nextAccuracy = normalizeLocationAccuracy(next.accuracy);
+
+  if (nextAccuracy == null) return true;
+  if (prevAccuracy == null) return true;
+
+  // Prefer a meaningfully more accurate fix (common Approximate → Precise upgrade).
+  if (nextAccuracy + 15 < prevAccuracy) return true;
+
+  // Prefer a newer reading when accuracy is similar or only slightly worse.
+  if (nextAccuracy <= prevAccuracy * 1.35) return true;
+
+  // Keep the better fix if the new one is much coarser and we have not moved far.
+  const moved = distanceMeters(
+    previous.latitude,
+    previous.longitude,
+    next.latitude,
+    next.longitude,
+  );
+  return moved >= Math.max(80, prevAccuracy || 0);
+}
+
 export async function getCurrentLocation(timeoutMs = 10000) {
   if (!navigator.geolocation) {
-    return {
-      latitude: null,
-      longitude: null,
-      locationLabel: null,
-      locatingAddress: false,
-      locatingPosition: false,
-    };
+    return emptyLocationResult();
   }
 
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const { latitude, longitude } = position.coords;
-        const locationLabel = await reverseGeocodeAddress(latitude, longitude);
+        const coords = coordsFromPosition(position);
+        const locationLabel = await reverseGeocodeAddress(coords.latitude, coords.longitude);
 
         resolve({
-          latitude,
-          longitude,
+          ...coords,
           locationLabel,
           locatingAddress: false,
           locatingPosition: false,
         });
       },
-      () => resolve({
-        latitude: null,
-        longitude: null,
-        locationLabel: null,
+      () => resolve(emptyLocationResult()),
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+    );
+  });
+}
+
+/**
+ * Watch until accuracy is good enough or maxWaitMs elapses, then resolve with
+ * the best reading seen (does not reverse-geocode).
+ */
+export function waitForAccurateLocation({
+  maxWaitMs = 10000,
+  targetAccuracyMeters = LOCATION_ACCURACY_GOOD_METERS,
+  initialLocation = null,
+} = {}) {
+  if (!navigator.geolocation) {
+    return Promise.resolve(emptyLocationResult({ locatingPosition: false }));
+  }
+
+  const initial = initialLocation?.latitude != null && initialLocation?.longitude != null
+    ? {
+      latitude: initialLocation.latitude,
+      longitude: initialLocation.longitude,
+      accuracy: normalizeLocationAccuracy(initialLocation.accuracy),
+    }
+    : null;
+
+  if (initial && isLocationAccuracyAcceptable(initial.accuracy, targetAccuracyMeters)) {
+    return Promise.resolve({
+      ...initial,
+      locationLabel: initialLocation.locationLabel ?? null,
+      locatingAddress: false,
+      locatingPosition: false,
+    });
+  }
+
+  return new Promise((resolve) => {
+    let best = initial;
+    let settled = false;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      navigator.geolocation.clearWatch(watchId);
+      resolve({
+        latitude: result?.latitude ?? null,
+        longitude: result?.longitude ?? null,
+        accuracy: normalizeLocationAccuracy(result?.accuracy),
+        locationLabel: initialLocation?.locationLabel ?? null,
         locatingAddress: false,
         locatingPosition: false,
-      }),
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+      });
+    };
+
+    const timeoutId = window.setTimeout(() => finish(best), maxWaitMs);
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const next = coordsFromPosition(position);
+        if (shouldPreferLocation(best, next)) {
+          best = next;
+        }
+        if (isLocationAccuracyAcceptable(best?.accuracy, targetAccuracyMeters)) {
+          finish(best);
+        }
+      },
+      () => finish(best),
+      { enableHighAccuracy: true, timeout: maxWaitMs, maximumAge: 0 },
     );
   });
 }
@@ -819,12 +977,19 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
   let lastLocationLabel = null;
   let lastGeocodedLatitude = null;
   let lastGeocodedLongitude = null;
+  let bestLocation = null;
 
   const watchId = navigator.geolocation.watchPosition(
     async (position) => {
       if (!active) return;
 
-      const { latitude, longitude } = position.coords;
+      const next = coordsFromPosition(position);
+      if (!shouldPreferLocation(bestLocation, next)) {
+        return;
+      }
+      bestLocation = next;
+
+      const { latitude, longitude, accuracy } = bestLocation;
       const siteLabel = resolveLabel?.(latitude, longitude);
 
       if (siteLabel) {
@@ -834,6 +999,7 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
         onUpdate({
           latitude,
           longitude,
+          accuracy,
           locationLabel: siteLabel,
           locatingAddress: false,
           locatingPosition: false,
@@ -849,6 +1015,7 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
         onUpdate({
           latitude,
           longitude,
+          accuracy,
           locationLabel: lastLocationLabel,
           locatingAddress: false,
           locatingPosition: false,
@@ -862,6 +1029,7 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
         onUpdate({
           latitude,
           longitude,
+          accuracy,
           locationLabel: null,
           locatingAddress: true,
           locatingPosition: false,
@@ -870,6 +1038,7 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
         onUpdate({
           latitude,
           longitude,
+          accuracy,
           locationLabel: lastLocationLabel,
           locatingAddress: false,
           locatingPosition: false,
@@ -886,6 +1055,7 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
       onUpdate({
         latitude,
         longitude,
+        accuracy,
         locationLabel,
         locatingAddress: false,
         locatingPosition: false,
@@ -897,18 +1067,20 @@ export function startLocationWatch(onUpdate, onError, options = {}) {
       onUpdate({
         latitude: null,
         longitude: null,
+        accuracy: null,
         locationLabel: null,
         locatingAddress: false,
         locatingPosition: false,
         locationError: error?.code,
       });
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
   );
 
   onUpdate({
     latitude: null,
     longitude: null,
+    accuracy: null,
     locationLabel: null,
     locatingAddress: false,
     locatingPosition: true,

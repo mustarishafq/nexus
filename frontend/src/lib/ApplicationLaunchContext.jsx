@@ -144,6 +144,7 @@ export function ApplicationLaunchProvider({ children }) {
             deferNavigation: true,
             openMode,
             ssoEmail: selectedSsoEmail,
+            actionUrl: options.actionUrl,
           });
           resolveLaunchTarget(result, navigate);
         } finally {
@@ -172,6 +173,7 @@ export function ApplicationLaunchProvider({ children }) {
         deferNavigation: true,
         openMode,
         ssoEmail: selectedSsoEmail,
+        actionUrl: options.actionUrl,
       })
         .then((result) => {
           launchTarget = result;

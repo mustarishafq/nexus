@@ -8,6 +8,7 @@ import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrati
 import BroadcastAnnouncementGate from '@/components/broadcasts/BroadcastAnnouncementGate';
 import { CelebrationGateProvider } from '@/lib/CelebrationGateContext';
 import WebPushPromptGate from '@/components/notifications/WebPushPromptGate';
+import LocationPromptGate from '@/components/location/LocationPromptGate';
 import NotificationToastGate from '@/components/notifications/NotificationToastGate';
 import NotificationClickGate from '@/components/notifications/NotificationClickGate';
 import NotificationAudioUnlock from '@/components/notifications/NotificationAudioUnlock';
@@ -70,6 +71,7 @@ export default function AppLayout() {
           <BroadcastAnnouncementGate />
         </CelebrationGateProvider>
         <WebPushPromptGate />
+        <LocationPromptGate />
         <NotificationToastGate />
         <NotificationClickGate />
         <MailNotificationGate />

@@ -493,15 +493,17 @@ function AttendanceAdminReport() {
             Filter and export clock in/out activity across the organization.
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleExport}
-          disabled={exporting}
-          className="h-10 w-full shrink-0 gap-2 touch-manipulation sm:w-auto lg:h-9"
-        >
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-          Export CSV
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting}
+            className="h-10 w-full shrink-0 gap-2 touch-manipulation sm:w-auto lg:h-9"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Collapsible

@@ -192,9 +192,9 @@ export function formatShiftSummary(shift) {
   return `${shift.name}: ${dayLabels || 'Every day'} ${shift.start_time}–${shift.end_time}`;
 }
 
-export function describeAttendancePolicy(policy) {
+export function listAttendancePolicyParts(policy) {
   if (!policy) {
-    return 'No department attendance rules apply.';
+    return [];
   }
 
   const parts = [];
@@ -207,16 +207,16 @@ export function describeAttendancePolicy(policy) {
   if (policy.geofence_enabled) {
     const siteCount = resolveAttendanceSites(policy).length;
     if (siteCount > 1) {
-      parts.push(`Must be within ${policy.radius_meters}m of one of ${siteCount} registered sites`);
+      parts.push(`Within ${policy.radius_meters}m of one of ${siteCount} registered sites`);
     } else {
-      parts.push(`Must be within ${policy.radius_meters}m of the assigned location`);
+      parts.push(`Within ${policy.radius_meters}m of assigned location`);
     }
     if (policy.allow_outside_radius) {
       parts.push('Outstation clock-in allowed with warning');
     }
   }
   if (policy.shifts?.length) {
-    parts.push(`Shifts: ${policy.shifts.map(formatShiftSummary).join(' · ')}`);
+    parts.push(...policy.shifts.map((shift) => formatShiftSummary(shift)));
   }
   if (policy.overtime_enabled) {
     parts.push(`Overtime after ${formatDecimalHours(policy.standard_hours_per_day)} standard day`);
@@ -225,5 +225,13 @@ export function describeAttendancePolicy(policy) {
     parts.push(`${formatDurationMinutes(policy.grace_period_minutes, { style: 'long' })} grace period`);
   }
 
+  return parts;
+}
+
+export function describeAttendancePolicy(policy) {
+  const parts = listAttendancePolicyParts(policy);
+  if (!parts.length) {
+    return 'No department attendance rules apply.';
+  }
   return parts.join(' · ');
 }
