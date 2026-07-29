@@ -25,6 +25,8 @@ class AttendanceRecord extends Model
         'ip_address',
         'metadata',
         'captured_at',
+        'source',
+        'external_id',
     ];
 
     protected $appends = [

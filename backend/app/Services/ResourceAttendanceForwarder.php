@@ -17,7 +17,7 @@ class ResourceAttendanceForwarder
     /** @var list<string> */
     public const RESOURCE_APP_NAME_MATCHERS = [
         'EMZI Nexus Resource',
-        'EMZI Nexus Kashfi',
+        'EMZI Nexus Insan',
     ];
 
     private const WELL_KNOWN_CACHE_SECONDS = 300;
@@ -132,9 +132,9 @@ class ResourceAttendanceForwarder
                     $query->orWhere('name', $name);
                 }
                 $query->orWhere('name', 'like', '%Resource%')
-                    ->orWhere('name', 'like', '%Kashfi%')
+                    ->orWhere('name', 'like', '%Insan%')
                     ->orWhere('slug', 'like', '%resource%')
-                    ->orWhere('slug', 'like', '%kashfi%');
+                    ->orWhere('slug', 'like', '%insan%');
             })
             ->orderBy('sort_order')
             ->first();
