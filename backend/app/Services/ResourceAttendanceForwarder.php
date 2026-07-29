@@ -18,11 +18,16 @@ class ResourceAttendanceForwarder
     public const RESOURCE_APP_NAME_MATCHERS = [
         'EMZI Nexus Resource',
         'EMZI Nexus Insan',
+        'EMZI Nexus Kashfi',
     ];
 
     private const WELL_KNOWN_CACHE_SECONDS = 300;
 
     private const HTTP_TIMEOUT_SECONDS = 8;
+
+    private const DEFAULT_ATTENDANCE_INGEST_PATH = '/api/nexus/v1/attendance/ingest';
+
+    private const DEFAULT_ATTENDANCE_POLICY_PATH = '/api/nexus/v1/attendance/policy';
 
     public function forwardAfterResponse(AttendanceRecord $record, User $user): void
     {
@@ -50,18 +55,18 @@ class ResourceAttendanceForwarder
             }
 
             $manifest = $this->fetchManifest(rtrim($application->base_url, '/'));
-            if ($manifest === null) {
-                return;
-            }
+            $namedResource = $this->isNamedResourceApplication($application);
+            $capabilities = is_array($manifest['capabilities'] ?? null) ? $manifest['capabilities'] : [];
 
-            $capabilities = $manifest['capabilities'] ?? [];
-            if (! is_array($capabilities) || ! in_array('attendance.ingest', $capabilities, true)) {
+            // Named Insan/Resource apps keep syncing even when well-known is blocked
+            // (common on OpenResty/nginx that deny /.well-known/* except ACME).
+            if (! $namedResource && ! in_array('attendance.ingest', $capabilities, true)) {
                 return;
             }
 
             $ingestPath = data_get($manifest, 'endpoints.attendance_ingest');
             if (! is_string($ingestPath) || $ingestPath === '') {
-                $ingestPath = '/api/nexus/v1/attendance/ingest';
+                $ingestPath = self::DEFAULT_ATTENDANCE_INGEST_PATH;
             }
 
             $url = rtrim($application->base_url, '/').'/'.ltrim($ingestPath, '/');
@@ -128,13 +133,7 @@ class ResourceAttendanceForwarder
             ->whereNotNull('api_key')
             ->where('api_key', '!=', '')
             ->where(function ($query) {
-                foreach (self::RESOURCE_APP_NAME_MATCHERS as $name) {
-                    $query->orWhere('name', $name);
-                }
-                $query->orWhere('name', 'like', '%Resource%')
-                    ->orWhere('name', 'like', '%Insan%')
-                    ->orWhere('slug', 'like', '%resource%')
-                    ->orWhere('slug', 'like', '%insan%');
+                $this->applyNamedResourceConstraints($query);
             })
             ->orderBy('sort_order')
             ->first();
@@ -162,29 +161,93 @@ class ResourceAttendanceForwarder
         return null;
     }
 
+    public function isNamedResourceApplication(?Application $application): bool
+    {
+        if (! $application) {
+            return false;
+        }
+
+        $name = (string) $application->name;
+        $slug = (string) $application->slug;
+
+        foreach (self::RESOURCE_APP_NAME_MATCHERS as $matcher) {
+            if (strcasecmp($name, $matcher) === 0) {
+                return true;
+            }
+        }
+
+        foreach (['Resource', 'Insan', 'Kashfi'] as $needle) {
+            if (stripos($name, $needle) !== false) {
+                return true;
+            }
+        }
+
+        foreach (['resource', 'insan', 'kashfi'] as $needle) {
+            if (stripos($slug, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function defaultAttendanceIngestPath(): string
+    {
+        return self::DEFAULT_ATTENDANCE_INGEST_PATH;
+    }
+
+    public function defaultAttendancePolicyPath(): string
+    {
+        return self::DEFAULT_ATTENDANCE_POLICY_PATH;
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Application>|\Illuminate\Database\Query\Builder  $query
+     */
+    public function applyNamedResourceConstraints($query): void
+    {
+        foreach (self::RESOURCE_APP_NAME_MATCHERS as $name) {
+            $query->orWhere('name', $name);
+        }
+        $query->orWhere('name', 'like', '%Resource%')
+            ->orWhere('name', 'like', '%Insan%')
+            ->orWhere('name', 'like', '%Kashfi%')
+            ->orWhere('slug', 'like', '%resource%')
+            ->orWhere('slug', 'like', '%insan%')
+            ->orWhere('slug', 'like', '%kashfi%');
+    }
+
     /**
      * @return array<string, mixed>|null
      */
     public function fetchManifest(string $baseUrl): ?array
     {
         $cacheKey = 'resource_well_known:'.md5($baseUrl);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-        return Cache::remember($cacheKey, self::WELL_KNOWN_CACHE_SECONDS, function () use ($baseUrl) {
-            try {
-                $response = Http::timeout(4)
-                    ->acceptJson()
-                    ->get($baseUrl.'/.well-known/nexus-integration.json');
+        try {
+            $response = Http::timeout(4)
+                ->acceptJson()
+                ->get($baseUrl.'/.well-known/nexus-integration.json');
 
-                if (! $response->successful()) {
-                    return null;
-                }
-
-                $json = $response->json();
-
-                return is_array($json) ? $json : null;
-            } catch (\Throwable) {
+            if (! $response->successful()) {
                 return null;
             }
-        });
+
+            $json = $response->json();
+            if (! is_array($json)) {
+                return null;
+            }
+
+            // Only cache successful manifests — failed fetches (403 on cloud) must retry.
+            Cache::put($cacheKey, $json, self::WELL_KNOWN_CACHE_SECONDS);
+
+            return $json;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

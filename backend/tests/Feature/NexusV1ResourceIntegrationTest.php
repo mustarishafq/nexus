@@ -6,6 +6,7 @@ use App\Models\Application;
 use App\Models\AttendanceRecord;
 use App\Models\User;
 use App\Services\ResourceAttendanceForwarder;
+use App\Services\ResourceAttendancePolicyForwarder;
 use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -194,6 +195,58 @@ class NexusV1ResourceIntegrationTest extends TestCase
                 && $request['email'] === 'clock@example.com'
                 && $request['type'] === 'clock_in'
                 && $request->hasHeader('X-Nexus-Api-Key', $this->apiKey);
+        });
+    }
+
+    public function test_attendance_forwarder_posts_when_well_known_blocked_for_named_app(): void
+    {
+        $this->createResourceApplication([
+            'name' => 'EMZI Nexus Kashfi',
+            'slug' => 'emzi-nexus-kashfi',
+        ]);
+        $user = User::factory()->create(['email' => 'clock@example.com']);
+        $record = AttendanceRecord::query()->create([
+            'user_id' => $user->id,
+            'type' => 'clock_out',
+            'photo_url' => '/storage/selfie.jpg',
+            'captured_at' => now(),
+        ]);
+
+        Http::fake([
+            'http://resource.test/.well-known/nexus-integration.json' => Http::response('Forbidden', 403),
+            'http://resource.test/api/nexus/v1/attendance/ingest' => Http::response(['ok' => true], 201),
+        ]);
+
+        app(ResourceAttendanceForwarder::class)->forward($record, $user);
+
+        Http::assertSent(fn ($request) => $request->url() === 'http://resource.test/api/nexus/v1/attendance/ingest'
+            && $request['type'] === 'clock_out');
+    }
+
+    public function test_attendance_policy_push_uses_default_path_when_well_known_blocked(): void
+    {
+        $this->createResourceApplication([
+            'name' => 'EMZI Nexus Insan',
+            'slug' => 'emzi-nexus-insan',
+            'base_url' => 'https://insan.example.test',
+        ]);
+
+        Http::fake([
+            'https://insan.example.test/.well-known/nexus-integration.json' => Http::response('Forbidden', 403),
+            'https://insan.example.test/api/nexus/v1/attendance/policy' => Http::response([
+                'message' => 'Attendance policy applied',
+                'stats' => ['locations_upserted' => 0, 'departments_upserted' => 0],
+            ], 200),
+        ]);
+
+        $result = app(ResourceAttendancePolicyForwarder::class)->push();
+
+        $this->assertTrue($result['ok'] ?? false);
+        Http::assertSent(function ($request) {
+            return $request->method() === 'PUT'
+                && $request->url() === 'https://insan.example.test/api/nexus/v1/attendance/policy'
+                && $request->hasHeader('X-Nexus-Api-Key', $this->apiKey)
+                && ($request['prune_missing'] ?? false) === true;
         });
     }
 
