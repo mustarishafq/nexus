@@ -7,10 +7,13 @@ import { MapPin, Shield } from 'lucide-react';
 import AttendanceCamera from '@/components/attendance/AttendanceCamera';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAttendanceReminder';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance } from '@/lib/roles';
 import {
+  evaluateLateClockIn,
   findActiveShift,
   findMatchingAttendanceSite,
   findNearestAttendanceSite,
@@ -32,6 +35,7 @@ export default function AttendanceClockIn() {
 
   const [capture, setCapture] = useState(null);
   const [cameraKey, setCameraKey] = useState(0);
+  const [lateClockInReason, setLateClockInReason] = useState('');
 
   const deviceInfo = useMemo(() => getDeviceInfo(), []);
 
@@ -41,11 +45,30 @@ export default function AttendanceClockIn() {
 
   const nextType = status?.next_type || 'clock_in';
   const isClockIn = nextType === 'clock_in';
+  const policy = status?.policy;
+
+  const lateClockIn = useMemo(() => {
+    if (!isClockIn || !policy?.require_late_clock_in_reason) {
+      return { is_late: false, late_minutes: 0 };
+    }
+    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date();
+    return evaluateLateClockIn(policy, at);
+  }, [isClockIn, policy, capture?.capturedAt]);
+
+  const needsLateReason = Boolean(
+    isClockIn && policy?.require_late_clock_in_reason && lateClockIn.is_late,
+  );
+  const reasonReady = !needsLateReason || lateClockInReason.trim().length > 0;
 
   const clockMutation = useMutation({
-    mutationFn: async (photoCapture) => {
+    mutationFn: async ({ photoCapture, lateReason, requireLateReason }) => {
       if (!photoCapture?.blob) {
         throw new Error('Capture a photo before clocking in or out.');
+      }
+
+      const trimmedLate = String(lateReason || '').trim();
+      if (requireLateReason && !trimmedLate) {
+        throw new Error('Please enter a reason for clocking in late.');
       }
 
       const upload = await db.integrations.Core.UploadFile({
@@ -53,7 +76,7 @@ export default function AttendanceClockIn() {
         folder: 'attendance-photos',
       });
 
-      return db.attendance.clock({
+      const payload = {
         type: nextType,
         photo_url: upload.file_url,
         latitude: photoCapture.location?.latitude ?? null,
@@ -70,16 +93,25 @@ export default function AttendanceClockIn() {
           watermark_lines: photoCapture.watermarkLines,
           location_accuracy_meters: photoCapture.location?.accuracy ?? null,
         },
-      });
+      };
+
+      if (requireLateReason && trimmedLate) {
+        payload.late_clock_in_reason = trimmedLate;
+      }
+
+      return db.attendance.clock(payload);
     },
     onSuccess: (record) => {
-      const policy = record?.metadata?.policy;
-      if (policy?.is_overtime) {
-        toast.success(`Clocked out with ${formatDurationMinutes(policy.overtime_minutes, { style: 'long' })} overtime`);
+      const recordPolicy = record?.metadata?.policy;
+      if (recordPolicy?.is_overtime) {
+        toast.success(`Clocked out with ${formatDurationMinutes(recordPolicy.overtime_minutes, { style: 'long' })} overtime`);
+      } else if (recordPolicy?.is_late) {
+        toast.success(`Clocked in late (+${formatDurationMinutes(recordPolicy.late_minutes, { style: 'long' })})`);
       } else {
         toast.success(isClockIn ? 'Clocked in successfully' : 'Clocked out successfully');
       }
       setCapture(null);
+      setLateClockInReason('');
       setCameraKey((key) => key + 1);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_STATUS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
@@ -97,11 +129,14 @@ export default function AttendanceClockIn() {
   }, []);
 
   const handleSubmit = useCallback(() => {
-    if (!capture?.blob || clockMutation.isPending) return;
-    clockMutation.mutate(capture);
-  }, [capture, clockMutation]);
+    if (!capture?.blob || clockMutation.isPending || !reasonReady) return;
+    clockMutation.mutate({
+      photoCapture: capture,
+      lateReason: lateClockInReason,
+      requireLateReason: needsLateReason,
+    });
+  }, [capture, clockMutation, lateClockInReason, needsLateReason, reasonReady]);
 
-  const policy = status?.policy;
   const activeShift = policy ? findActiveShift(policy) : null;
   const attendanceSites = useMemo(() => resolveAttendanceSites(policy), [policy]);
   const liveLocation = capture?.location;
@@ -121,23 +156,25 @@ export default function AttendanceClockIn() {
   const policyParts = useMemo(() => listAttendancePolicyParts(policy), [policy]);
 
   return (
-    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
       {!status?.reminder && scheduleHint ? (
         <Card className="min-w-0 rounded-2xl border-dashed">
-          <CardContent className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3.5 py-2.5 sm:px-4">
-            <span className="text-sm font-semibold">Shift schedule</span>
-            <span className="text-sm text-muted-foreground">{scheduleHint.message}</span>
-          </CardContent>
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+            <CardTitle className="text-base">Shift schedule</CardTitle>
+            <CardDescription className="text-pretty">{scheduleHint.message}</CardDescription>
+          </CardHeader>
         </Card>
       ) : null}
 
       {policy ? (
         <Card className="min-w-0 rounded-2xl border-primary/20 bg-primary/5">
-          <CardContent className="space-y-2 px-3.5 py-2.5 sm:px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 text-sm font-semibold">
-                <Shield className="h-3.5 w-3.5 shrink-0 text-primary" /> Department rules
-              </div>
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-4 w-4 shrink-0 text-primary" /> Department rules
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="flex flex-wrap gap-2 text-sm">
               {activeShift ? (
                 <Badge variant="secondary">Active shift: {activeShift.name}</Badge>
               ) : policy.shifts?.length ? (
@@ -185,7 +222,7 @@ export default function AttendanceClockIn() {
               requirePreciseLocation={Boolean(policy?.geofence_enabled)}
               actionType={nextType}
               submitting={clockMutation.isPending}
-              canSubmit={Boolean(capture?.blob)}
+              canSubmit={Boolean(capture?.blob) && reasonReady}
               disabled={clockMutation.isPending || statusLoading}
               onCapture={handleCapture}
               onSubmit={handleSubmit}
@@ -194,6 +231,33 @@ export default function AttendanceClockIn() {
         </Card>
 
         <div className="min-w-0 space-y-3 sm:space-y-4">
+          {needsLateReason ? (
+            <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
+              <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+                <CardTitle className="text-base">Late clock-in reason</CardTitle>
+                <CardDescription className="text-pretty">
+                  You are clocking in
+                  {lateClockIn.late_minutes
+                    ? ` ${formatDurationMinutes(lateClockIn.late_minutes, { style: 'long' })} late`
+                    : ' late'}
+                  . A reason is required.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 p-4 pt-0 sm:p-6 sm:pt-0">
+                <Label htmlFor="late-clock-in-reason">Reason</Label>
+                <Textarea
+                  id="late-clock-in-reason"
+                  value={lateClockInReason}
+                  onChange={(event) => setLateClockInReason(event.target.value)}
+                  placeholder="Why are you clocking in late?"
+                  maxLength={500}
+                  rows={3}
+                  disabled={clockMutation.isPending}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="min-w-0 overflow-hidden rounded-2xl">
             <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
               <CardTitle className="text-base">Current status</CardTitle>

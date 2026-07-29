@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\ResourceAttendanceForwarder;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
+use App\Support\AttendanceLateEvaluator;
 use App\Support\AttendancePolicyValidator;
 use App\Support\AttendanceReminderEvaluator;
 use Carbon\Carbon;
@@ -293,6 +294,7 @@ class AttendanceController extends Controller
             'device_type' => ['nullable', 'string', 'max:32'],
             'screen_resolution' => ['nullable', 'string', 'max:32'],
             'timezone' => ['nullable', 'string', 'max:64'],
+            'late_clock_in_reason' => ['nullable', 'string', 'max:500'],
             'metadata' => ['nullable', 'array'],
             'captured_at' => ['nullable', 'date'],
         ]);
@@ -339,6 +341,24 @@ class AttendanceController extends Controller
 
         if ($policyResult['warnings'] !== []) {
             $metadata['policy_warnings'] = $policyResult['warnings'];
+        }
+
+        if ($validated['type'] === 'clock_in') {
+            $late = AttendanceLateEvaluator::evaluate($user, $capturedAt);
+            $reason = trim((string) ($validated['late_clock_in_reason'] ?? ''));
+
+            if (! empty($late['require_late_clock_in_reason']) && ! empty($late['is_late']) && $reason === '') {
+                return response()->json([
+                    'message' => 'A late clock-in reason is required when arriving after your shift start.',
+                ], 422);
+            }
+
+            unset($late['require_late_clock_in_reason']);
+            $metadata['policy'] = array_merge($metadata['policy'] ?? [], $late);
+
+            if (! empty($late['is_late']) && $reason !== '') {
+                $metadata['policy']['late_clock_in_reason'] = $reason;
+            }
         }
 
         $record = AttendanceRecord::query()->create([

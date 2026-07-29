@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
 import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useAuth } from '@/lib/AuthContext';
@@ -46,6 +47,7 @@ export default function ApplicationBrowser() {
   const location = useLocation();
   const goBack = useGoBack('/applications');
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const { data: releaseNoteUnreadCounts = {} } = useApplicationReleaseNoteUnreadCounts();
   const redirectTo = useMemo(() => {
@@ -116,12 +118,28 @@ export default function ApplicationBrowser() {
   useEffect(() => {
     if (!launchUrl) return undefined;
 
+    // Mobile: leave the in-app iframe browser and open in the current tab.
+    if (isMobile) {
+      window.location.href = launchUrl;
+      return undefined;
+    }
+
     const timer = window.setTimeout(checkEmbedStatus, 2500);
     return () => window.clearTimeout(timer);
-  }, [launchUrl, iframeKey, checkEmbedStatus]);
+  }, [launchUrl, iframeKey, checkEmbedStatus, isMobile]);
+
+  const openInSameTab = () => {
+    if (!launchUrl) return;
+    window.location.href = launchUrl;
+  };
 
   const openInNewTab = () => {
     if (!launchUrl) return;
+
+    if (isMobile) {
+      openInSameTab();
+      return;
+    }
 
     const tab = window.open(launchUrl, '_blank', 'noopener,noreferrer');
     if (tab) {
@@ -155,6 +173,27 @@ export default function ApplicationBrowser() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
+      </div>
+    );
+  }
+
+  // Mobile never uses the iframe in-app browser — redirect happens in the effect above.
+  if (isMobile) {
+    if (launchError) {
+      return (
+        <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+          <p className="text-sm text-muted-foreground">{launchError}</p>
+          <Button variant="outline" onClick={goBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
       </div>
     );
   }

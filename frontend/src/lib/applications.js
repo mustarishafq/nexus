@@ -1,6 +1,18 @@
+import { isMobileViewport } from '@/hooks/use-mobile';
 import { pickSsoEmailForLaunch } from '@/lib/ssoCredentials';
 
 const LAUNCH_ACTIONS = new Set(['login', 'view']);
+
+/**
+ * Mobile in-app (iframe) browsers are unreliable for SSO apps.
+ * Prefer navigating the current tab instead of embedded / new-tab modes.
+ */
+export function resolveOpenModeForViewport(openMode) {
+  const mode = openMode || 'embedded';
+  if (!isMobileViewport()) return mode;
+  if (mode === 'embedded' || mode === 'new_tab') return 'same_window';
+  return mode;
+}
 
 export function getRecentApplications(applications = [], activities = [], limit = 6) {
   const bySlug = Object.fromEntries(applications.map((app) => [app.slug, app]));
@@ -86,7 +98,7 @@ export async function openApplicationTarget(db, system, {
   }
 
   const redirectTo = actionUrl?.trim() || undefined;
-  const resolvedOpenMode = openMode || system.open_mode || 'embedded';
+  const resolvedOpenMode = resolveOpenModeForViewport(openMode || system.open_mode || 'embedded');
   let selectedSsoEmail = ssoEmail ?? null;
 
   if (!selectedSsoEmail && system.auth_mode !== 'redirect') {

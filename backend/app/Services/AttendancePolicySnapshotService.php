@@ -49,6 +49,8 @@ class AttendancePolicySnapshotService
                 'location_name' => $setting->attendanceLocation?->name,
                 'timezone' => $serialized['timezone'],
                 'grace_period_minutes' => $serialized['grace_period_minutes'],
+                'require_early_clock_out_reason' => $serialized['require_early_clock_out_reason'],
+                'require_late_clock_in_reason' => $serialized['require_late_clock_in_reason'],
                 'allow_outside_shift_hours' => $serialized['allow_outside_shift_hours'],
                 'overtime_enabled' => $serialized['overtime_enabled'],
                 'standard_hours_per_day' => $serialized['standard_hours_per_day'],

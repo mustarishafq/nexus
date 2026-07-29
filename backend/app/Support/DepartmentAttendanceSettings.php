@@ -12,6 +12,8 @@ class DepartmentAttendanceSettings
         'attendance_location_id' => null,
         'timezone' => null,
         'grace_period_minutes' => 15,
+        'require_early_clock_out_reason' => false,
+        'require_late_clock_in_reason' => false,
         'allow_outside_shift_hours' => false,
         'overtime_enabled' => true,
         'standard_hours_per_day' => 8.0,
@@ -42,6 +44,8 @@ class DepartmentAttendanceSettings
         $config['attendance_location_id'] = self::toNullableInt($input['attendance_location_id'] ?? null);
         $config['timezone'] = self::normalizeTimezone($input['timezone'] ?? null);
         $config['grace_period_minutes'] = max(0, min(180, (int) ($input['grace_period_minutes'] ?? 15)));
+        $config['require_early_clock_out_reason'] = self::toBool($input['require_early_clock_out_reason'] ?? false);
+        $config['require_late_clock_in_reason'] = self::toBool($input['require_late_clock_in_reason'] ?? false);
         $config['allow_outside_shift_hours'] = self::toBool($input['allow_outside_shift_hours'] ?? false);
         $config['overtime_enabled'] = self::toBool($input['overtime_enabled'] ?? true);
         $config['standard_hours_per_day'] = max(0.5, min(24, (float) ($input['standard_hours_per_day'] ?? 8)));
@@ -62,6 +66,8 @@ class DepartmentAttendanceSettings
             // all_with_bc accepts IANA aliases browsers still expose (e.g. Asia/Calcutta, Europe/Kiev)
             'timezone' => ['nullable', 'timezone:all_with_bc'],
             'grace_period_minutes' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'require_early_clock_out_reason' => ['nullable', 'boolean'],
+            'require_late_clock_in_reason' => ['nullable', 'boolean'],
             'allow_outside_shift_hours' => ['nullable', 'boolean'],
             'overtime_enabled' => ['nullable', 'boolean'],
             'standard_hours_per_day' => ['nullable', 'numeric', 'min:0.5', 'max:24'],
@@ -87,6 +93,8 @@ class DepartmentAttendanceSettings
             'attendance_location_id' => $config['attendance_location_id'],
             'timezone' => $config['timezone'],
             'grace_period_minutes' => $config['grace_period_minutes'],
+            'require_early_clock_out_reason' => $config['require_early_clock_out_reason'],
+            'require_late_clock_in_reason' => $config['require_late_clock_in_reason'],
             'allow_outside_shift_hours' => $config['allow_outside_shift_hours'],
             'overtime_enabled' => $config['overtime_enabled'],
             'standard_hours_per_day' => $config['standard_hours_per_day'],
@@ -185,6 +193,8 @@ class DepartmentAttendanceSettings
             'attendance_location_id' => $setting->attendance_location_id,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
+            'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
+            'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'overtime_enabled' => $setting->overtime_enabled,
             'standard_hours_per_day' => (float) $setting->standard_hours_per_day,

@@ -101,6 +101,8 @@ class AttendancePolicyValidator
             'allow_outside_radius' => (bool) $location?->allow_outside_radius,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
+            'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
+            'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'overtime_enabled' => $setting->overtime_enabled,
             'standard_hours_per_day' => (float) $setting->standard_hours_per_day,

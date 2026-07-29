@@ -1,6 +1,12 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+export const MOBILE_BREAKPOINT = 768
+
+/** Sync viewport check for non-React launch helpers (matches useIsMobile). */
+export function isMobileViewport() {
+  if (typeof window === 'undefined') return false
+  return window.innerWidth < MOBILE_BREAKPOINT
+}
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState(undefined)

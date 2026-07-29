@@ -101,6 +101,16 @@ class ResourceAttendanceForwarder
                 'metadata' => $record->metadata ?? [],
             ];
 
+            $lateReason = data_get($record->metadata, 'policy.late_clock_in_reason');
+            if (is_string($lateReason) && trim($lateReason) !== '') {
+                $payload['late_clock_in_reason'] = trim($lateReason);
+            }
+
+            $earlyReason = data_get($record->metadata, 'policy.early_clock_out_reason');
+            if (is_string($earlyReason) && trim($earlyReason) !== '') {
+                $payload['early_clock_out_reason'] = trim($earlyReason);
+            }
+
             $response = Http::timeout(self::HTTP_TIMEOUT_SECONDS)
                 ->withToken($serviceToken)
                 ->withHeaders([

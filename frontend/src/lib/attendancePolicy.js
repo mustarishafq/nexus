@@ -29,6 +29,8 @@ export const DEFAULT_DEPARTMENT_ATTENDANCE_SETTINGS = {
   attendance_location_id: null,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   grace_period_minutes: 15,
+  require_early_clock_out_reason: false,
+  require_late_clock_in_reason: false,
   allow_outside_shift_hours: false,
   overtime_enabled: true,
   standard_hours_per_day: 8,
@@ -53,6 +55,8 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     attendance_location_id: input.attendance_location_id ?? null,
     timezone: input.timezone || base.timezone,
     grace_period_minutes: Number(input.grace_period_minutes ?? 15),
+    require_early_clock_out_reason: Boolean(input.require_early_clock_out_reason),
+    require_late_clock_in_reason: Boolean(input.require_late_clock_in_reason),
     allow_outside_shift_hours: Boolean(input.allow_outside_shift_hours),
     overtime_enabled: input.overtime_enabled !== false,
     standard_hours_per_day: Number(input.standard_hours_per_day ?? 8),
@@ -75,6 +79,8 @@ export function departmentAttendanceSettingsToPayload(form) {
     attendance_location_id: normalized.attendance_location_id,
     timezone: normalized.timezone,
     grace_period_minutes: normalized.grace_period_minutes,
+    require_early_clock_out_reason: normalized.require_early_clock_out_reason,
+    require_late_clock_in_reason: normalized.require_late_clock_in_reason,
     allow_outside_shift_hours: normalized.allow_outside_shift_hours,
     overtime_enabled: normalized.overtime_enabled,
     standard_hours_per_day: normalized.standard_hours_per_day,
@@ -116,6 +122,51 @@ export function findActiveShift(policy, date = new Date()) {
   if (!policy?.shifts?.length) return null;
   const grace = policy.grace_period_minutes ?? 0;
   return policy.shifts.find((shift) => isWithinShift(shift, date, grace)) || null;
+}
+
+/**
+ * Mirror backend AttendanceLateEvaluator: late if after shift start + grace.
+ * @returns {{ is_late: boolean, late_minutes: number, scheduled_start: Date|null, shift_name: string|null }}
+ */
+export function evaluateLateClockIn(policy, date = new Date()) {
+  const result = {
+    is_late: false,
+    late_minutes: 0,
+    scheduled_start: null,
+    shift_name: null,
+  };
+
+  if (!policy?.shifts?.length) {
+    return result;
+  }
+
+  const grace = Number(policy.grace_period_minutes ?? 0);
+  const isoDay = date.getDay() === 0 ? 7 : date.getDay();
+
+  for (const shift of policy.shifts) {
+    const days = shift?.days_of_week || [];
+    if (days.length && !days.includes(isoDay)) {
+      continue;
+    }
+
+    const start = parseTimeToMinutes(shift.start_time || '09:00');
+    const scheduledStart = new Date(date);
+    scheduledStart.setHours(0, 0, 0, 0);
+    scheduledStart.setMinutes(start);
+
+    result.scheduled_start = scheduledStart;
+    result.shift_name = shift.name || null;
+
+    const deadlineMs = scheduledStart.getTime() + (grace * 60 * 1000);
+    if (date.getTime() > deadlineMs) {
+      result.is_late = true;
+      result.late_minutes = Math.max(1, Math.round((date.getTime() - deadlineMs) / 60000));
+    }
+
+    break;
+  }
+
+  return result;
 }
 
 export function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -223,6 +274,12 @@ export function listAttendancePolicyParts(policy) {
   }
   if (policy.grace_period_minutes) {
     parts.push(`${formatDurationMinutes(policy.grace_period_minutes, { style: 'long' })} grace period`);
+  }
+  if (policy.require_early_clock_out_reason) {
+    parts.push('Early clock-out reason required');
+  }
+  if (policy.require_late_clock_in_reason) {
+    parts.push('Late clock-in reason required');
   }
 
   return parts;

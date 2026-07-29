@@ -404,6 +404,26 @@ export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) 
         />
       </AdminSettingsToggleRow>
 
+      <AdminSettingsToggleRow
+        className="border-0 bg-transparent p-0"
+        label={<Label>Require early clock-out reason</Label>}
+      >
+        <Switch
+          checked={form.require_early_clock_out_reason}
+          onCheckedChange={(checked) => setForm((current) => ({ ...current, require_early_clock_out_reason: checked }))}
+        />
+      </AdminSettingsToggleRow>
+
+      <AdminSettingsToggleRow
+        className="border-0 bg-transparent p-0"
+        label={<Label>Require late clock-in reason</Label>}
+      >
+        <Switch
+          checked={form.require_late_clock_in_reason}
+          onCheckedChange={(checked) => setForm((current) => ({ ...current, require_late_clock_in_reason: checked }))}
+        />
+      </AdminSettingsToggleRow>
+
       <div className="space-y-2">
         <Label>Shifts</Label>
         {form.shifts.map((shift, index) => (

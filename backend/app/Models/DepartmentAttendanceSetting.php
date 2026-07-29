@@ -15,6 +15,8 @@ class DepartmentAttendanceSetting extends Model
         'enabled',
         'timezone',
         'grace_period_minutes',
+        'require_early_clock_out_reason',
+        'require_late_clock_in_reason',
         'allow_outside_shift_hours',
         'overtime_enabled',
         'standard_hours_per_day',
@@ -27,6 +29,8 @@ class DepartmentAttendanceSetting extends Model
         return [
             'enabled' => 'boolean',
             'grace_period_minutes' => 'integer',
+            'require_early_clock_out_reason' => 'boolean',
+            'require_late_clock_in_reason' => 'boolean',
             'allow_outside_shift_hours' => 'boolean',
             'overtime_enabled' => 'boolean',
             'standard_hours_per_day' => 'decimal:2',
