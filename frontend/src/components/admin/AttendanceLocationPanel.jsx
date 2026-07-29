@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
+import GeofenceMapPicker from '@/components/maps/GeofenceMapPicker';
 import {
   attendanceLocationToPayload,
   DEFAULT_ATTENDANCE_LOCATION,
@@ -16,7 +17,7 @@ import {
 } from '@/lib/attendanceLocation';
 import { toast } from 'sonner';
 
-function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLocation }) {
+function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLocation, radiusMeters }) {
   return (
     <div className="rounded-xl border bg-muted/10 p-3 space-y-3">
       <div className="flex items-start gap-2">
@@ -53,16 +54,28 @@ function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLo
         ) : null}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onUseCurrentLocation(index)}
-        className="gap-2 w-full sm:w-auto"
-      >
-        <MapPin className="h-3.5 w-3.5" />
-        Use my location
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">Geofence pin</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onUseCurrentLocation(index)}
+          className="gap-2 w-full sm:w-auto"
+        >
+          <MapPin className="h-3.5 w-3.5" />
+          Use my location
+        </Button>
+      </div>
+
+      <GeofenceMapPicker
+        latitude={site.latitude}
+        longitude={site.longitude}
+        radiusMeters={radiusMeters}
+        onChange={({ latitude, longitude }) => {
+          onChange(index, { ...site, latitude, longitude });
+        }}
+      />
     </div>
   );
 }
@@ -304,6 +317,7 @@ export default function AttendanceLocationPanel({ peerHint = 'Insan' }) {
                 onRemove={removeSite}
                 canRemove={form.sites.length > 1}
                 onUseCurrentLocation={useCurrentLocation}
+                radiusMeters={form.radius_meters}
               />
             ))}
             <Button type="button" variant="outline" size="sm" onClick={addSite} className="gap-2">

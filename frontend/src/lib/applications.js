@@ -8,7 +8,7 @@ const LAUNCH_ACTIONS = new Set(['login', 'view']);
  * Prefer navigating the current tab instead of embedded / new-tab modes.
  */
 export function resolveOpenModeForViewport(openMode) {
-  const mode = openMode || 'embedded';
+  const mode = openMode || 'same_window';
   if (!isMobileViewport()) return mode;
   if (mode === 'embedded' || mode === 'new_tab') return 'same_window';
   return mode;
@@ -98,7 +98,7 @@ export async function openApplicationTarget(db, system, {
   }
 
   const redirectTo = actionUrl?.trim() || undefined;
-  const resolvedOpenMode = resolveOpenModeForViewport(openMode || system.open_mode || 'embedded');
+  const resolvedOpenMode = resolveOpenModeForViewport(openMode || system.open_mode || 'same_window');
   let selectedSsoEmail = ssoEmail ?? null;
 
   if (!selectedSsoEmail && system.auth_mode !== 'redirect') {

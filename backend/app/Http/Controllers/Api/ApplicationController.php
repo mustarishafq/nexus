@@ -122,7 +122,6 @@ class ApplicationController extends Controller
                 'health_check_mode',
                 'notification_config',
                 'calendar_config',
-                'open_mode',
                 'status',
                 'environment',
             ]);
@@ -223,7 +222,6 @@ class ApplicationController extends Controller
                 'health_check_mode',
                 'notification_config',
                 'calendar_config',
-                'open_mode',
                 'status',
                 'environment',
             ]);
@@ -698,7 +696,7 @@ class ApplicationController extends Controller
             return response()->json([
                 'launch_url' => $launchUrl,
                 'auth_mode'  => 'redirect',
-                'open_mode'  => $application->open_mode ?? 'embedded',
+                'open_mode'  => $application->open_mode ?? 'same_window',
             ]);
         }
 
@@ -776,7 +774,7 @@ class ApplicationController extends Controller
             'token'      => $token,
             'expires_in' => 60,
             'auth_mode'  => 'jwt',
-            'open_mode'  => $application->open_mode ?? 'embedded',
+            'open_mode'  => $application->open_mode ?? 'same_window',
         ]);
     }
 

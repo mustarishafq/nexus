@@ -22,7 +22,7 @@ class ApplicationFactory extends Factory
             'base_url' => fake()->url(),
             'status' => 'online',
             'auth_mode' => 'jwt',
-            'open_mode' => 'embedded',
+            'open_mode' => 'same_window',
             'visibility' => 'public',
             'created_by_user_id' => User::factory(),
             'is_enabled' => true,

@@ -173,6 +173,7 @@ export default function Applications() {
   const [healthCheckPath, setHealthCheckPath] = useState('/api/health');
   const [healthCheckMode, setHealthCheckMode] = useState('json_ok');
   const [authMode, setAuthMode] = useState('redirect');
+  const [openMode, setOpenMode] = useState('same_window');
   const [status, setStatus] = useState('online');
   const [environment, setEnvironment] = useState('production');
   const [visibility, setVisibility] = useState('private');
@@ -242,6 +243,7 @@ export default function Applications() {
     setHealthCheckPath(system?.health_check_path || '/api/health');
     setHealthCheckMode(system?.health_check_mode || 'json_ok');
     setAuthMode(admin ? (system?.auth_mode || 'jwt') : 'redirect');
+    setOpenMode(system?.open_mode || 'same_window');
     setStatus(system?.status || 'online');
     setEnvironment(system?.environment || 'production');
     setVisibility(system?.visibility || 'private');
@@ -302,6 +304,7 @@ export default function Applications() {
     setHealthCheckPath('/api/health');
     setHealthCheckMode('json_ok');
     setAuthMode(currentUser?.role === 'admin' ? 'jwt' : 'redirect');
+    setOpenMode('same_window');
     setStatus('online');
     setEnvironment('production');
     setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
@@ -442,6 +445,7 @@ export default function Applications() {
       description: form.get('description'),
       base_url: baseUrl || undefined,
       auth_mode: resolvedAuthMode,
+      open_mode: openMode,
       visibility: visibility,
       private_allowed_user_emails: visibility === 'private' ? privateAllowedEmails : [],
       color: brandColor,
@@ -626,6 +630,20 @@ export default function Applications() {
                     <p className="text-[11px] text-muted-foreground">Only admin can make systems public.</p>
                   )}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Open mode</Label>
+                <Select value={openMode} onValueChange={setOpenMode}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="same_window">Same tab</SelectItem>
+                    <SelectItem value="new_tab">New tab</SelectItem>
+                    <SelectItem value="embedded">In-app browser</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Default when clicking the app tile. Hover shortcuts can still override per launch.
+                </p>
               </div>
               {isAdmin && authMode === 'jwt' && (
                 <div className="space-y-2">
