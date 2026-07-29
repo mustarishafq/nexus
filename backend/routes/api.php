@@ -67,6 +67,7 @@ Route::post('/mcp', [McpController::class, 'handle']);
 Route::prefix('nexus/v1')->group(function () {
     Route::get('employees', [NexusV1EmployeeController::class, 'index']);
     Route::post('employees', [NexusV1EmployeeController::class, 'store']);
+    Route::put('employees', [NexusV1EmployeeController::class, 'update']);
     Route::get('attendance', [NexusV1AttendanceController::class, 'index']);
     Route::post('attendance/ingest', [NexusV1AttendanceController::class, 'ingest']);
     Route::get('attendance/policy', [NexusV1AttendancePolicyController::class, 'show']);

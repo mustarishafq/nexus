@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\Nexus\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\EmployeeSyncApplyService;
+use App\Support\EmployeeSyncGuard;
+use App\Support\EmployeeSyncSerializer;
 use App\Support\NexusSatelliteAuth;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
@@ -23,13 +26,49 @@ class EmployeeController extends Controller
 
         $employees = User::query()
             ->withTrashed()
-            ->with(['department:id,name', 'company:id,name'])
+            ->with([
+                'department:id,name',
+                'company:id,name',
+                'manager:id,name,full_name,job_title,profile_picture',
+                'educations',
+                'workExperiences',
+                'userSkills',
+            ])
             ->orderBy('id')
             ->get()
-            ->map(fn (User $user) => $this->serializeEmployee($user))
+            ->map(fn (User $user) => EmployeeSyncSerializer::serialize($user))
             ->values();
 
         return response()->json(['employees' => $employees]);
+    }
+
+    public function update(Request $request): JsonResponse
+    {
+        $auth = NexusSatelliteAuth::authenticate($request, ['brain-employees']);
+        if ($auth instanceof JsonResponse) {
+            return $auth;
+        }
+
+        $request->validate([
+            'employees' => ['required', 'array', 'min:1'],
+            'employees.*' => ['required', 'array'],
+            'employees.*.email' => ['required', 'email'],
+            'employees.*.nexus_user_id' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
+
+        $employees = $request->input('employees', []);
+        if (! is_array($employees)) {
+            $employees = [];
+        }
+
+        $stats = EmployeeSyncGuard::runWithoutPush(
+            fn () => app(EmployeeSyncApplyService::class)->apply($employees)
+        );
+
+        return response()->json([
+            'message' => 'Employee sync applied',
+            'stats' => $stats,
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -69,12 +108,19 @@ class EmployeeController extends Controller
                 'joined_at' => $validated['joined_at'] ?? $existing->joined_at,
             ])->save();
 
-            $existing->load(['department:id,name', 'company:id,name']);
+            $existing->load([
+                'department:id,name',
+                'company:id,name',
+                'manager:id,name,full_name,job_title,profile_picture',
+                'educations',
+                'workExperiences',
+                'userSkills',
+            ]);
 
             return response()->json([
                 'created' => false,
                 'temporary_password' => null,
-                'employee' => $this->serializeEmployee($existing),
+                'employee' => EmployeeSyncSerializer::serialize($existing),
             ]);
         }
 
@@ -93,36 +139,19 @@ class EmployeeController extends Controller
             'joined_at' => $validated['joined_at'] ?? null,
         ]);
 
-        $user->load(['department:id,name', 'company:id,name']);
+        $user->load([
+            'department:id,name',
+            'company:id,name',
+            'manager:id,name,full_name,job_title,profile_picture',
+            'educations',
+            'workExperiences',
+            'userSkills',
+        ]);
 
         return response()->json([
             'created' => true,
             'temporary_password' => $temporaryPassword,
-            'employee' => $this->serializeEmployee($user),
+            'employee' => EmployeeSyncSerializer::serialize($user),
         ], 201);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeEmployee(User $user): array
-    {
-        return [
-            'nexus_user_id' => (string) $user->id,
-            'email' => $user->email,
-            'name' => $user->name ?: $user->full_name,
-            'full_name' => $user->full_name ?: $user->name,
-            'role' => $user->role ?? UserRoles::USER,
-            'is_approved' => (bool) $user->is_approved,
-            'inactive' => ! (bool) $user->is_approved,
-            'deleted' => $user->trashed(),
-            'profile_picture' => $user->profile_picture,
-            'employee_id' => $user->employee_id,
-            'job_title' => $user->job_title,
-            'employment_type' => $user->employment_type,
-            'joined_at' => $user->joined_at?->toDateString(),
-            'department_name' => $user->department?->name,
-            'company_name' => $user->company?->name,
-        ];
     }
 }

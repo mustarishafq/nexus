@@ -1123,6 +1123,8 @@ class UserController extends Controller
             $user->accessGroups()->sync($groupIds);
         }
 
+        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+
         return response()->json($user->fresh()->load(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences', 'userSkills']));
     }
 

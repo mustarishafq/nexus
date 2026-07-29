@@ -19,11 +19,14 @@ Auth: `X-Nexus-Api-Key: <Application.api_key>` and/or Bearer JWT signed with tha
 
 | Method | Path | Audience (`aud`) | Purpose |
 |--------|------|------------------|---------|
-| `GET` | `/api/nexus/v1/employees` | `brain-employees` | Export identity roster for Resource sync |
+| `GET` | `/api/nexus/v1/employees` | `brain-employees` | Export identity + full staff profile for Resource sync |
 | `POST` | `/api/nexus/v1/employees` | `brain-employees` | Provision / link a Brain login from Resource |
+| `PUT` | `/api/nexus/v1/employees` | `brain-employees` | Bidirectional staff upsert (`{ employees: [...] }`, last-write-wins on save) |
 | `GET` | `/api/nexus/v1/attendance` | `brain-attendance` | Paginated history export (`after_id`, `limit`, optional `captured_from` / `captured_to`) |
 
-Employee export rows include `nexus_user_id`, identity fields, `department_name` / `company_name`, plus `inactive` / `deleted` flags for Resource deactivation.
+Employee rows include identity, full staff/HR profile (phones, demographics, IC/EPF/SOCSO/tax, next-of-kin, spouse/children, skills, education/work history, manager), plus `department_name` / `company_name` and `inactive` / `deleted` flags.
+
+On profile save in Brain (admin user update or self profile), Brain pushes the employee snapshot to Insan’s `PUT /api/nexus/v1/employees` (`employees.sync` well-known capability). Insan pushes back on employee create/update. Inbound apply uses an echo guard so pushes do not loop.
 
 Attendance export rows use Brain record id as `external_id` so Resource ingest/migrate stays idempotent.
 

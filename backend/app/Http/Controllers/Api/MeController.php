@@ -188,6 +188,8 @@ class MeController extends Controller
             SyncUserProfileRecords::syncSkills($user, $validated['skills']);
         }
 
+        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+
         return response()->json(UserProfileSerializer::privateProfile($this->loadProfile($user->fresh())));
     }
 }

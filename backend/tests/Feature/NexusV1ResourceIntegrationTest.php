@@ -65,6 +65,13 @@ class NexusV1ResourceIntegrationTest extends TestCase
     public function test_employees_export_returns_roster(): void
     {
         $this->createResourceApplication();
+        $manager = User::factory()->create([
+            'full_name' => 'Manager One',
+            'email' => 'manager@example.com',
+            'role' => 'user',
+            'is_approved' => true,
+            'job_title' => 'Lead',
+        ]);
         $user = User::factory()->create([
             'full_name' => 'Jane Doe',
             'email' => 'jane@example.com',
@@ -72,6 +79,23 @@ class NexusV1ResourceIntegrationTest extends TestCase
             'is_approved' => true,
             'employee_id' => 'E001',
             'job_title' => 'Engineer',
+            'work_phone' => '+60123456789',
+            'gender' => 'female',
+            'ic_number' => '900101-01-1234',
+            'manager_id' => $manager->id,
+            'current_address' => 'Kuala Lumpur',
+        ]);
+        $user->educations()->create([
+            'institution' => 'UM',
+            'qualification' => 'BSc',
+            'field_of_study' => 'CS',
+            'year_from' => '2010',
+            'year_to' => '2014',
+            'sort_order' => 0,
+        ]);
+        $user->userSkills()->create([
+            'name' => 'PHP',
+            'sort_order' => 0,
         ]);
 
         $response = $this->getJson('/api/nexus/v1/employees', $this->authHeaders('brain-employees'))
@@ -84,6 +108,13 @@ class NexusV1ResourceIntegrationTest extends TestCase
         $this->assertSame((string) $user->id, $jane['nexus_user_id']);
         $this->assertSame('E001', $jane['employee_id']);
         $this->assertSame('Engineer', $jane['job_title']);
+        $this->assertSame('+60123456789', $jane['work_phone']);
+        $this->assertSame('female', $jane['gender']);
+        $this->assertSame('900101-01-1234', $jane['ic_number']);
+        $this->assertSame('Kuala Lumpur', $jane['current_address']);
+        $this->assertSame((string) $manager->id, $jane['manager_nexus_user_id']);
+        $this->assertSame('PHP', $jane['skills'][0] ?? null);
+        $this->assertSame('UM', $jane['education_history'][0]['institution'] ?? null);
     }
 
     public function test_employees_provision_creates_brain_user(): void
@@ -128,6 +159,54 @@ class NexusV1ResourceIntegrationTest extends TestCase
             ->assertJsonPath('temporary_password', null)
             ->assertJsonPath('employee.nexus_user_id', (string) $existing->id)
             ->assertJsonPath('employee.job_title', 'Lead');
+    }
+
+    public function test_employees_put_updates_profile_from_resource(): void
+    {
+        $this->createResourceApplication();
+        $user = User::factory()->create([
+            'full_name' => 'Jane Doe',
+            'email' => 'jane-sync@example.com',
+            'job_title' => 'Old Title',
+            'work_phone' => null,
+        ]);
+
+        $this->putJson('/api/nexus/v1/employees', [
+            'employees' => [
+                [
+                    'nexus_user_id' => (string) $user->id,
+                    'email' => 'jane-sync@example.com',
+                    'name' => 'Jane',
+                    'full_name' => 'Jane Doe',
+                    'role' => 'user',
+                    'is_approved' => true,
+                    'job_title' => 'Senior Engineer',
+                    'work_phone' => '+60123456789',
+                    'gender' => 'female',
+                    'ic_number' => '900101-01-1234',
+                    'skills' => ['PHP', 'Laravel'],
+                    'education_history' => [
+                        [
+                            'institution' => 'UM',
+                            'qualification' => 'BSc',
+                            'field_of_study' => 'CS',
+                            'year_from' => '2010',
+                            'year_to' => '2014',
+                        ],
+                    ],
+                ],
+            ],
+        ], $this->authHeaders('brain-employees'))
+            ->assertOk()
+            ->assertJsonPath('stats.updated', 1);
+
+        $user->refresh();
+        $this->assertSame('Senior Engineer', $user->job_title);
+        $this->assertSame('+60123456789', $user->work_phone);
+        $this->assertSame('female', $user->gender);
+        $this->assertSame('900101-01-1234', $user->ic_number);
+        $this->assertSame(['PHP', 'Laravel'], $user->fresh()->load('userSkills')->skillsList());
+        $this->assertSame('UM', $user->fresh()->load('educations')->educationHistoryList()[0]['institution'] ?? null);
     }
 
     public function test_attendance_export_paginates_by_after_id(): void
