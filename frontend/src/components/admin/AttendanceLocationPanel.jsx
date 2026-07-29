@@ -297,7 +297,7 @@ export default function AttendanceLocationPanel({ peerHint = 'Insan' }) {
             <Label>Clock-in points</Label>
             {form.sites.map((site, index) => (
               <SiteEditor
-                key={`${site.name}-${index}`}
+                key={index}
                 site={site}
                 index={index}
                 onChange={updateSite}
