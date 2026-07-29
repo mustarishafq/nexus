@@ -1,9 +1,8 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronsUpDown, Clock3, Loader2, MapPin, Plus, Save, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +16,6 @@ import {
   WEEKDAYS,
 } from '@/lib/attendancePolicy';
 import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
-import AdminSettingsToolbar, { adminSettingsToolbarButtonClassName } from '@/components/admin/AdminSettingsToolbar';
 import TimezoneSelect from '@/components/admin/TimezoneSelect';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -65,7 +63,6 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
             <AdminSettingsToggleRow
               className="p-3"
               label={<Label className="text-xs">Crosses midnight</Label>}
-              description="Enable for night shifts that end after midnight, e.g. 22:00–06:00."
             >
               <Switch
                 checked={Boolean(shift.crosses_midnight)}
@@ -224,7 +221,7 @@ function formatDepartmentNames(names) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
-export default function DepartmentAttendancePolicyPanel() {
+export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) {
   const queryClient = useQueryClient();
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState([]);
   const [form, setForm] = useState(normalizeDepartmentAttendanceSettings());
@@ -266,8 +263,8 @@ export default function DepartmentAttendancePolicyPanel() {
       const count = selectedDepartmentIds.length;
       toast.success(
         count === 1
-          ? 'Department attendance policy saved'
-          : `Attendance policy saved to ${count} departments`,
+          ? `Department attendance policy saved — syncing to ${peerHint}`
+          : `Attendance policy saved to ${count} departments — syncing to ${peerHint}`,
       );
     },
     onError: (error) => {
@@ -280,11 +277,6 @@ export default function DepartmentAttendancePolicyPanel() {
       .filter((item) => selectedDepartmentIds.includes(String(item.department.id)))
       .map((item) => item.department),
     [departments, selectedDepartmentIds],
-  );
-
-  const selectedLocation = useMemo(
-    () => locations.find((item) => String(item.id) === String(form.attendance_location_id)),
-    [locations, form.attendance_location_id],
   );
 
   const updateShift = (index, nextShift) => {
@@ -317,43 +309,37 @@ export default function DepartmentAttendancePolicyPanel() {
   }
 
   const selectedNames = selectedDepartments.map((department) => department.name);
-  const description = selectedDepartments.length
-    ? selectedDepartments.length === 1
-      ? `Rules apply to users assigned to ${selectedNames[0]}.`
-      : `Saving applies these rules to ${formatDepartmentNames(selectedNames)}.`
-    : 'Select one or more departments to edit.';
 
   return (
-    <div className="space-y-4">
-      <AdminSettingsToolbar
-        label={<Label>Departments</Label>}
-        control={(
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Label>Departments</Label>
           <DepartmentMultiSelect
             departments={departments}
             selectedIds={selectedDepartmentIds}
             onChange={setSelectedDepartmentIds}
           />
-        )}
-        actions={(
-          <Button
-            type="button"
-            onClick={() => saveMutation.mutate()}
-            disabled={!selectedDepartmentIds.length || saveMutation.isPending}
-            className={adminSettingsToolbarButtonClassName('gap-2')}
-          >
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {selectedDepartmentIds.length > 1
-              ? `Save to ${selectedDepartmentIds.length} departments`
-              : 'Save department policy'}
-          </Button>
-        )}
-        description={description}
-      />
+          {selectedDepartments.length > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Saving applies to {formatDepartmentNames(selectedNames)}.
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          onClick={() => saveMutation.mutate()}
+          disabled={!selectedDepartmentIds.length || saveMutation.isPending}
+          className="min-h-[40px] gap-2"
+        >
+          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {selectedDepartmentIds.length > 1 ? `Save (${selectedDepartmentIds.length})` : 'Save'}
+        </Button>
+      </div>
 
       <AdminSettingsToggleRow
-        className="p-3"
-        label={<Label>Enable rules for selected departments</Label>}
-        description="When disabled, users in the selected departments are not restricted."
+        className="border-0 bg-transparent p-0"
+        label={<Label>Enable rules</Label>}
       >
         <Switch
           checked={form.enabled}
@@ -361,184 +347,117 @@ export default function DepartmentAttendancePolicyPanel() {
         />
       </AdminSettingsToggleRow>
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Card className="rounded-2xl">
-          <CardHeader className="pb-2 px-4 sm:px-5">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <MapPin className="h-4 w-4 text-primary" />
-              Location radius
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Assign a shared location. Multiple departments can use the same geofence.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
-            <div className="space-y-2">
-              <Label>Assigned location</Label>
-              <Select
-                value={form.attendance_location_id ? String(form.attendance_location_id) : 'none'}
-                onValueChange={(value) => setForm((current) => ({
-                  ...current,
-                  attendance_location_id: value === 'none' ? null : Number(value),
-                }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="No location assigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No location assigned</SelectItem>
-                  {locations.map((location) => (
-                    <SelectItem key={location.id} value={String(location.id)}>
-                      {location.name}
-                      {location.geofence_enabled ? ` · ${location.radius_meters}m` : ' · geofence off'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Manage locations in the Location radius section above. Changes apply to all assigned departments.
-              </p>
-            </div>
+      <div className="space-y-1.5">
+        <Label>Location</Label>
+        <Select
+          value={form.attendance_location_id ? String(form.attendance_location_id) : 'none'}
+          onValueChange={(value) => setForm((current) => ({
+            ...current,
+            attendance_location_id: value === 'none' ? null : Number(value),
+          }))}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="No location" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No location</SelectItem>
+            {locations.map((location) => (
+              <SelectItem key={location.id} value={String(location.id)}>
+                {location.name}
+                {location.geofence_enabled ? ` · ${location.radius_meters}m` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-            {selectedLocation ? (
-              <div className="rounded-xl border bg-muted/10 p-3 space-y-2 text-sm">
-                <div className="font-medium">{selectedLocation.name}</div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>
-                    Geofence: {selectedLocation.geofence_enabled ? `enabled · ${selectedLocation.radius_meters}m radius` : 'disabled'}
-                  </p>
-                  {selectedLocation.sites?.length ? (
-                    <p>
-                      Sites: {selectedLocation.sites.map((site) => site.name).join(', ')}
-                    </p>
-                  ) : null}
-                  {selectedLocation.allow_outside_radius ? (
-                    <p>Outstation clock-in allowed with warning</p>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No location assigned. Users in selected departments will not be geofence-restricted.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Timezone</Label>
+          <TimezoneSelect
+            value={form.timezone}
+            onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Grace period (min)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={180}
+            value={form.grace_period_minutes}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              grace_period_minutes: Number(event.target.value || 0),
+            }))}
+          />
+        </div>
+      </div>
 
-        <div className="space-y-4">
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2 px-4 sm:px-5">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Clock3 className="h-4 w-4 text-primary" />
-                Working hours & shifts
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                Define shifts for the selected departments, including night shifts.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Timezone</Label>
-                  <TimezoneSelect
-                    value={form.timezone}
-                    onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Used to evaluate shift hours, grace period, and overtime for selected departments.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Grace period (minutes)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={180}
-                    value={form.grace_period_minutes}
-                    onChange={(event) => setForm((current) => ({
-                      ...current,
-                      grace_period_minutes: Number(event.target.value || 0),
-                    }))}
-                  />
-                </div>
-              </div>
+      <AdminSettingsToggleRow
+        className="border-0 bg-transparent p-0"
+        label={<Label>Allow outside shift hours</Label>}
+      >
+        <Switch
+          checked={form.allow_outside_shift_hours}
+          onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_shift_hours: checked }))}
+        />
+      </AdminSettingsToggleRow>
 
-              <AdminSettingsToggleRow
-                className="p-3"
-                label={<Label>Allow outside shift hours</Label>}
-                description="Flag attendance recorded outside scheduled shifts."
-              >
-                <Switch
-                  checked={form.allow_outside_shift_hours}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_shift_hours: checked }))}
-                />
-              </AdminSettingsToggleRow>
+      <div className="space-y-2">
+        <Label>Shifts</Label>
+        {form.shifts.map((shift, index) => (
+          <ShiftEditor
+            key={`${shift.name}-${index}`}
+            shift={shift}
+            index={index}
+            onChange={updateShift}
+            onRemove={removeShift}
+            canRemove={form.shifts.length > 1}
+          />
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={addShift} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add shift
+        </Button>
+      </div>
 
-              <div className="space-y-2">
-                {form.shifts.map((shift, index) => (
-                  <ShiftEditor
-                    key={`${shift.name}-${index}`}
-                    shift={shift}
-                    index={index}
-                    onChange={updateShift}
-                    onRemove={removeShift}
-                    canRemove={form.shifts.length > 1}
-                  />
-                ))}
-              </div>
+      <div className="space-y-3 border-t pt-4">
+        <AdminSettingsToggleRow className="border-0 bg-transparent p-0" label={<Label>Track overtime</Label>}>
+          <Switch
+            checked={form.overtime_enabled}
+            onCheckedChange={(checked) => setForm((current) => ({ ...current, overtime_enabled: checked }))}
+          />
+        </AdminSettingsToggleRow>
 
-              <Button type="button" variant="outline" size="sm" onClick={addShift} className="gap-2 w-full sm:w-auto">
-                <Plus className="h-4 w-4" />
-                Add shift
-              </Button>
-
-              <div className="space-y-3 rounded-xl border bg-muted/10 p-3">
-                <div>
-                  <h4 className="text-sm font-medium">Overtime</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Calculate overtime when users clock out after their standard day.
-                  </p>
-                </div>
-
-                <AdminSettingsToggleRow className="border-0 bg-transparent p-0" label={<Label>Track overtime</Label>}>
-                  <Switch
-                    checked={form.overtime_enabled}
-                    onCheckedChange={(checked) => setForm((current) => ({ ...current, overtime_enabled: checked }))}
-                  />
-                </AdminSettingsToggleRow>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Standard hours per day</Label>
-                    <Input
-                      type="number"
-                      min={0.5}
-                      max={24}
-                      step={0.5}
-                      value={form.standard_hours_per_day}
-                      onChange={(event) => setForm((current) => ({
-                        ...current,
-                        standard_hours_per_day: Number(event.target.value || 8),
-                      }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Overtime threshold (minutes)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={480}
-                      value={form.overtime_threshold_minutes}
-                      onChange={(event) => setForm((current) => ({
-                        ...current,
-                        overtime_threshold_minutes: Number(event.target.value || 0),
-                      }))}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Standard hours / day</Label>
+            <Input
+              type="number"
+              min={0.5}
+              max={24}
+              step={0.5}
+              value={form.standard_hours_per_day}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                standard_hours_per_day: Number(event.target.value || 8),
+              }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>OT threshold (min)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={480}
+              value={form.overtime_threshold_minutes}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                overtime_threshold_minutes: Number(event.target.value || 0),
+              }))}
+            />
+          </div>
         </div>
       </div>
     </div>

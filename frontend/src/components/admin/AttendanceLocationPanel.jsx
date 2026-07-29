@@ -1,16 +1,14 @@
 import db from '@/api/apiClient';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, MapPin, Plus, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import AdminSettingsToggleRow from '@/components/admin/AdminSettingsToggleRow';
-import AdminSettingsToolbar, { adminSettingsToolbarButtonClassName } from '@/components/admin/AdminSettingsToolbar';
 import {
   attendanceLocationToPayload,
   DEFAULT_ATTENDANCE_LOCATION,
@@ -24,7 +22,7 @@ function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLo
       <div className="flex items-start gap-2">
         <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1.5">
-            <Label className="text-xs">Clock-in label</Label>
+            <Label className="text-xs">Label</Label>
             <Input
               value={site.name}
               onChange={(event) => onChange(index, { ...site, name: event.target.value })}
@@ -69,7 +67,7 @@ function SiteEditor({ site, index, onChange, onRemove, canRemove, onUseCurrentLo
   );
 }
 
-export default function AttendanceLocationPanel() {
+export default function AttendanceLocationPanel({ peerHint = 'Insan' }) {
   const queryClient = useQueryClient();
   const [locationId, setLocationId] = useState('');
   const [form, setForm] = useState(normalizeAttendanceLocation());
@@ -88,6 +86,13 @@ export default function AttendanceLocationPanel() {
   }, [locationId, locations]);
 
   useEffect(() => {
+    if (locationId === 'new') {
+      setForm(normalizeAttendanceLocation({
+        ...DEFAULT_ATTENDANCE_LOCATION,
+        name: `Location ${locations.length + 1}`,
+      }));
+      return;
+    }
     const entry = locations.find((item) => String(item.id) === locationId);
     if (entry) {
       setForm(normalizeAttendanceLocation(entry));
@@ -108,7 +113,11 @@ export default function AttendanceLocationPanel() {
       if (response?.location?.id) {
         setLocationId(String(response.location.id));
       }
-      toast.success(locationId === 'new' ? 'Location created' : 'Location saved');
+      toast.success(
+        locationId === 'new'
+          ? `Location created — syncing to ${peerHint}`
+          : `Location saved — syncing to ${peerHint}`,
+      );
     },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to save location');
@@ -121,17 +130,12 @@ export default function AttendanceLocationPanel() {
       queryClient.invalidateQueries({ queryKey: ['attendance-locations'] });
       queryClient.invalidateQueries({ queryKey: ['department-attendance-settings'] });
       setLocationId('');
-      toast.success('Location deleted');
+      toast.success(`Location deleted — syncing to ${peerHint}`);
     },
     onError: (error) => {
       toast.error(error?.data?.message || error.message || 'Failed to delete location');
     },
   });
-
-  const selectedLocation = useMemo(
-    () => locations.find((item) => String(item.id) === locationId),
-    [locations, locationId],
-  );
 
   const updateSite = (index, nextSite) => {
     setForm((current) => ({
@@ -192,14 +196,6 @@ export default function AttendanceLocationPanel() {
     );
   };
 
-  const startNewLocation = () => {
-    setLocationId('new');
-    setForm(normalizeAttendanceLocation({
-      ...DEFAULT_ATTENDANCE_LOCATION,
-      name: `Location ${locations.length + 1}`,
-    }));
-  };
-
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
@@ -209,10 +205,10 @@ export default function AttendanceLocationPanel() {
   }
 
   return (
-    <div className="space-y-4">
-      <AdminSettingsToolbar
-        label={<Label>Location</Label>}
-        control={(
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Label>Location</Label>
           <Select value={locationId} onValueChange={setLocationId}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select location" />
@@ -221,80 +217,61 @@ export default function AttendanceLocationPanel() {
               {locations.map((entry) => (
                 <SelectItem key={entry.id} value={String(entry.id)}>
                   {entry.name}
-                  {entry.department_count > 0 ? ` (${entry.department_count} dept${entry.department_count === 1 ? '' : 's'})` : ''}
+                  {entry.department_count > 0 ? ` (${entry.department_count})` : ''}
                 </SelectItem>
               ))}
-              <SelectItem value="new">+ Create new location</SelectItem>
+              <SelectItem value="new">+ New location</SelectItem>
             </SelectContent>
           </Select>
-        )}
-        actions={(
-          <>
+        </div>
+        <div className="flex gap-2">
+          {locationId && locationId !== 'new' ? (
             <Button
               type="button"
               variant="outline"
-              onClick={startNewLocation}
-              className={adminSettingsToolbarButtonClassName('gap-2')}
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="min-h-[40px] gap-2"
             >
-              <Plus className="h-4 w-4" />
-              New location
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete
             </Button>
-            {locationId && locationId !== 'new' ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-                className={adminSettingsToolbarButtonClassName('gap-2')}
-              >
-                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                Delete
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              onClick={() => saveMutation.mutate()}
-              disabled={!locationId || saveMutation.isPending}
-              className={adminSettingsToolbarButtonClassName('gap-2 shrink-0')}
-            >
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {locationId === 'new' ? 'Create location' : 'Save location'}
-            </Button>
-          </>
-        )}
-        description={selectedLocation
-          ? `Shared by ${selectedLocation.department_count} department${selectedLocation.department_count === 1 ? '' : 's'}. Edit once to update all assigned departments.`
-          : locationId === 'new'
-            ? 'Create a reusable location radius that can be assigned to multiple departments.'
-            : null}
-      />
+          ) : null}
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={!locationId || saveMutation.isPending}
+            className="min-h-[40px] gap-2"
+          >
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save
+          </Button>
+        </div>
+      </div>
 
       {locationId ? (
         <>
           <div className="space-y-1.5">
-            <Label>Location name</Label>
+            <Label>Name</Label>
             <Input
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               placeholder="EMZI HQ campus"
             />
-            <p className="text-xs text-muted-foreground">
-              Admin label for this shared geofence. Shown when assigning to departments.
-            </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <AdminSettingsToggleRow className="p-3 sm:col-span-2" label={<Label>Enable geofence</Label>}>
+          <div className="space-y-3">
+            <AdminSettingsToggleRow className="border-0 bg-transparent p-0" label={<Label>Geofence</Label>}>
               <Switch
                 checked={form.geofence_enabled}
                 onCheckedChange={(checked) => setForm((current) => ({ ...current, geofence_enabled: checked }))}
               />
             </AdminSettingsToggleRow>
 
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <Label>Allowed radius</Label>
-                <span className="text-sm font-medium tabular-nums">{form.radius_meters} m</span>
+                <Label>Radius</Label>
+                <span className="text-sm tabular-nums text-muted-foreground">{form.radius_meters} m</span>
               </div>
               <Slider
                 min={50}
@@ -306,9 +283,8 @@ export default function AttendanceLocationPanel() {
             </div>
 
             <AdminSettingsToggleRow
-              className="p-3 sm:col-span-2"
+              className="border-0 bg-transparent p-0"
               label={<Label>Allow outside radius</Label>}
-              description="Allow outstation clock-in/out with a warning when outside all sites."
             >
               <Switch
                 checked={form.allow_outside_radius}
@@ -318,12 +294,7 @@ export default function AttendanceLocationPanel() {
           </div>
 
           <div className="space-y-2">
-            <div>
-              <Label>Clock-in points</Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                GPS coordinates with a radius. Each point has its own label shown on the attendance photo when a user clocks in nearby.
-              </p>
-            </div>
+            <Label>Clock-in points</Label>
             {form.sites.map((site, index) => (
               <SiteEditor
                 key={`${site.name}-${index}`}
@@ -335,15 +306,14 @@ export default function AttendanceLocationPanel() {
                 onUseCurrentLocation={useCurrentLocation}
               />
             ))}
+            <Button type="button" variant="outline" size="sm" onClick={addSite} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add point
+            </Button>
           </div>
-
-          <Button type="button" variant="outline" size="sm" onClick={addSite} className="gap-2 w-full sm:w-auto">
-            <Plus className="h-4 w-4" />
-            Add clock-in point
-          </Button>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Select or create a location to configure geofence settings.</p>
+        <p className="text-sm text-muted-foreground">Select a location or create a new one.</p>
       )}
     </div>
   );

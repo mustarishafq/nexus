@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SettingsSectionNav from '@/components/settings/SettingsSectionNav';
+import AttendanceSettingsShell, { ATTENDANCE_SETTING_TABS } from '@/components/settings/AttendanceSettingsShell';
 import SplashSettingsPanel from '@/components/admin/SplashSettingsPanel';
 import LaunchSettingsPanel from '@/components/admin/LaunchSettingsPanel';
 import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
@@ -30,6 +31,8 @@ const ADMIN_SECTIONS = [
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'email', label: 'Email', icon: Server },
 ];
+
+const ATTENDANCE_TAB_IDS = new Set(ATTENDANCE_SETTING_TABS.map((tab) => tab.id));
 
 const ADMIN_SECTION_IDS = new Set(ADMIN_SECTIONS.map((item) => item.id));
 
@@ -99,11 +102,29 @@ export default function AdminSettings({ embedded = false }) {
     ? sectionParam
     : visibleSections[0]?.id || 'attendance';
 
+  const attendanceTabParam = searchParams.get('attendanceTab');
+  const attendanceTab = ATTENDANCE_TAB_IDS.has(attendanceTabParam) ? attendanceTabParam : 'locations';
+
   const setActiveSection = (section) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set('tab', 'admin');
       next.set('section', section);
+      if (section !== 'attendance') {
+        next.delete('attendanceTab');
+      } else if (!next.get('attendanceTab')) {
+        next.set('attendanceTab', 'locations');
+      }
+      return next;
+    });
+  };
+
+  const setAttendanceTab = (nextTab) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('tab', 'admin');
+      next.set('section', 'attendance');
+      next.set('attendanceTab', nextTab);
       return next;
     });
   };
@@ -145,11 +166,13 @@ export default function AdminSettings({ embedded = false }) {
       }
       setSettings((current) => mergeSettingsFromPayload(payload, current));
       toast.success(
-        isAdmin
-          ? 'Admin settings saved'
-          : activeSection === 'feed'
+        activeSection === 'attendance'
+          ? 'Watermark saved — syncing to Insan'
+          : activeSection === 'feed' && !isAdmin
             ? 'Feed settings saved'
-            : 'Attendance settings saved'
+            : isAdmin
+              ? 'Admin settings saved'
+              : 'Settings saved',
       );
       window.dispatchEvent(new Event('app-settings-updated'));
     } catch (error) {
@@ -271,46 +294,29 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection === 'attendance' ? (
-              <>
-                <Card className="overflow-visible rounded-2xl">
-                  <CardHeader className="pb-3 px-4 sm:px-6">
-                    <CardTitle className="text-base">Attendance watermark</CardTitle>
-                    <CardDescription>
-                      Clock in/out camera watermark fields, styling, and live preview. Synced bidirectionally with Insan (last-write-wins).
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="overflow-visible min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
+              <AttendanceSettingsShell
+                peerLocal="brain"
+                syncMeta={null}
+                tab={attendanceTab}
+                onTabChange={setAttendanceTab}
+              >
+                {attendanceTab === 'locations' ? (
+                  <AttendanceLocationPanel peerHint="Insan" />
+                ) : null}
+                {attendanceTab === 'rules' ? (
+                  <DepartmentAttendancePolicyPanel peerHint="Insan" />
+                ) : null}
+                {attendanceTab === 'watermark' ? (
+                  <div className="space-y-4">
                     <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
-                    <div className="mt-6 flex justify-end border-t pt-4">
-                      <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
-                        <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save watermark settings'}
+                    <div className="flex justify-end border-t pt-4">
+                      <Button onClick={save} disabled={saving} className="min-h-[44px] w-full gap-2 sm:w-auto">
+                        <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save watermark'}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="rounded-2xl">
-                  <CardHeader className="pb-3 px-4 sm:px-6">
-                    <CardTitle className="text-base">Location radius</CardTitle>
-                    <CardDescription>
-                      Shared geofence locations. Assign the same location to multiple departments. Changes sync with Insan.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
-                    <AttendanceLocationPanel />
-                  </CardContent>
-                </Card>
-                <Card className="rounded-2xl">
-                  <CardHeader className="pb-3 px-4 sm:px-6">
-                    <CardTitle className="text-base">Department attendance rules</CardTitle>
-                    <CardDescription>
-                      Assign a shared location and set working hours, shifts, and overtime rules per department. Changes sync with Insan.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="min-w-0 px-4 pb-4 sm:px-6 sm:pb-6">
-                    <DepartmentAttendancePolicyPanel />
-                  </CardContent>
-                </Card>
-              </>
+                  </div>
+                ) : null}
+              </AttendanceSettingsShell>
             ) : null}
 
             {activeSection === 'email' ? (
