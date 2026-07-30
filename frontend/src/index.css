@@ -110,6 +110,60 @@
   }
 }
 
+/*
+  HTML emails often ship hardcoded dark text (and light-only styles that get
+  stripped). Force body copy to follow the app theme so it stays readable in
+  both light and dark mode; keep links on the primary accent.
+*/
+.email-message-body {
+  color: hsl(var(--foreground));
+}
+
+.email-message-body :where(
+  p,
+  span,
+  div,
+  td,
+  th,
+  li,
+  font,
+  strong,
+  em,
+  b,
+  i,
+  u,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  label,
+  center,
+  article,
+  section,
+  header,
+  footer,
+  main,
+  blockquote,
+  pre,
+  table,
+  tbody,
+  thead,
+  tfoot,
+  tr
+) {
+  color: inherit !important;
+}
+
+.email-message-body a {
+  color: hsl(var(--primary)) !important;
+}
+
+.email-message-body a :where(span, font, strong, em, b, i, u) {
+  color: inherit !important;
+}
+
 /* Hide scrollbars system-wide (scroll still works) */
 * {
   scrollbar-width: none !important;

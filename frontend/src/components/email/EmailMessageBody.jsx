@@ -116,10 +116,10 @@ export default function EmailMessageBody({ html, text }) {
         <div
           ref={containerRef}
           className={cn(
-            'email-message-body max-w-none break-words text-sm leading-relaxed text-foreground',
+            'email-message-body max-w-none break-words text-sm leading-relaxed',
             '[&_img]:my-3 [&_img]:max-h-[480px] [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-border/60',
             '[&_img.email-image-failed]:border-dashed [&_img.email-image-failed]:opacity-50',
-            '[&_a]:text-primary [&_a]:underline [&_p]:my-2'
+            '[&_a]:underline [&_p]:my-2'
           )}
           dangerouslySetInnerHTML={{ __html: html }}
         />
