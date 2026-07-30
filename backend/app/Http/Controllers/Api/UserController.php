@@ -1144,6 +1144,8 @@ class UserController extends Controller
 
         $user->delete();
 
+        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+
         return response()->json(['message' => 'User removed.']);
     }
 
