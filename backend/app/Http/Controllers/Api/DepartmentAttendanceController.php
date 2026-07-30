@@ -6,10 +6,12 @@ use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
+use App\Models\User;
 use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\DepartmentAttendanceSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class DepartmentAttendanceController extends Controller
 {
@@ -30,12 +32,18 @@ class DepartmentAttendanceController extends Controller
             ->get()
             ->keyBy('department_id');
 
+        $companyIdsByDepartment = $this->companyIdsByDepartment();
+
         return response()->json([
-            'departments' => $departments->map(function (Department $department) use ($settings) {
+            'departments' => $departments->map(function (Department $department) use ($settings, $companyIdsByDepartment) {
                 $setting = $settings->get($department->id);
 
                 return [
-                    'department' => $department->only(['id', 'name']),
+                    'department' => [
+                        'id' => $department->id,
+                        'name' => $department->name,
+                        'company_ids' => $companyIdsByDepartment->get($department->id, []),
+                    ],
                     'settings' => $setting
                         ? DepartmentAttendanceSettings::serializeForApi($setting)
                         : DepartmentAttendanceSettings::normalizeConfig([]),
@@ -57,7 +65,11 @@ class DepartmentAttendanceController extends Controller
             ->first();
 
         return response()->json([
-            'department' => $department->only(['id', 'name']),
+            'department' => [
+                'id' => $department->id,
+                'name' => $department->name,
+                'company_ids' => $this->companyIdsByDepartment()->get($department->id, []),
+            ],
             'settings' => $setting
                 ? DepartmentAttendanceSettings::serializeForApi($setting)
                 : DepartmentAttendanceSettings::normalizeConfig([]),
@@ -84,7 +96,11 @@ class DepartmentAttendanceController extends Controller
         app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
 
         return response()->json([
-            'department' => $department->only(['id', 'name']),
+            'department' => [
+                'id' => $department->id,
+                'name' => $department->name,
+                'company_ids' => $this->companyIdsByDepartment()->get($department->id, []),
+            ],
             'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
         ]);
@@ -116,6 +132,7 @@ class DepartmentAttendanceController extends Controller
             ->get(['id', 'name'])
             ->keyBy('id');
 
+        $companyIdsByDepartment = $this->companyIdsByDepartment();
         $results = [];
 
         foreach ($departmentIds as $departmentId) {
@@ -131,7 +148,11 @@ class DepartmentAttendanceController extends Controller
             $setting->load('attendanceLocation');
 
             $results[] = [
-                'department' => $department->only(['id', 'name']),
+                'department' => [
+                    'id' => $department->id,
+                    'name' => $department->name,
+                    'company_ids' => $companyIdsByDepartment->get($department->id, []),
+                ],
                 'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             ];
         }
@@ -142,5 +163,25 @@ class DepartmentAttendanceController extends Controller
             'departments' => $results,
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
         ]);
+    }
+
+    /**
+     * @return Collection<int, list<int>>
+     */
+    private function companyIdsByDepartment(): Collection
+    {
+        return User::query()
+            ->whereNotNull('department_id')
+            ->whereNotNull('company_id')
+            ->select('department_id', 'company_id')
+            ->distinct()
+            ->get()
+            ->groupBy('department_id')
+            ->map(fn (Collection $rows) => $rows
+                ->pluck('company_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all());
     }
 }

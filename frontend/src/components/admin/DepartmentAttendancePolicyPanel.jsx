@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronsUpDown, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -105,6 +105,16 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
 
 function DepartmentMultiSelect({ departments, selectedIds, onChange }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const normalizedSearch = search.trim().toLowerCase();
+
+  const filteredDepartments = useMemo(() => {
+    if (!normalizedSearch) return departments;
+    return departments.filter((entry) =>
+      entry.department.name.toLowerCase().includes(normalizedSearch),
+    );
+  }, [departments, normalizedSearch]);
 
   const selectedDepartments = useMemo(
     () => departments.filter((entry) => selectedIds.includes(String(entry.department.id))),
@@ -139,7 +149,13 @@ function DepartmentMultiSelect({ departments, selectedIds, onChange }) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch('');
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -155,6 +171,18 @@ function DepartmentMultiSelect({ departments, selectedIds, onChange }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search departments..."
+              className="h-8 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
           <p className="text-xs text-muted-foreground">
             {selectedIds.length} selected
@@ -176,10 +204,12 @@ function DepartmentMultiSelect({ departments, selectedIds, onChange }) {
           </div>
         </div>
         <div className="max-h-64 overflow-auto p-1">
-          {departments.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">No departments available.</p>
+          {filteredDepartments.length === 0 ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">
+              {departments.length === 0 ? 'No departments available.' : 'No departments match your search.'}
+            </p>
           ) : (
-            departments.map((entry) => {
+            filteredDepartments.map((entry) => {
               const id = String(entry.department.id);
               const checked = selectedIds.includes(id);
 
@@ -221,8 +251,15 @@ function formatDepartmentNames(names) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
+function departmentMatchesCompany(entry, companyId) {
+  if (!companyId || companyId === 'all') return true;
+  const companyIds = (entry.department.company_ids || []).map(Number);
+  return companyIds.includes(Number(companyId));
+}
+
 export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) {
   const queryClient = useQueryClient();
+  const [companyId, setCompanyId] = useState('all');
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState([]);
   const [form, setForm] = useState(normalizeDepartmentAttendanceSettings());
 
@@ -236,14 +273,38 @@ export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) 
     queryFn: () => db.attendanceLocations.list(),
   });
 
+  const { data: companies = [] } = useQuery({
+    queryKey: ['companies'],
+    queryFn: () => db.listCompanies(),
+    staleTime: 60_000,
+  });
+
   const departments = data?.departments || [];
   const locations = locationsData?.locations || [];
+
+  const filteredDepartments = useMemo(
+    () => departments.filter((entry) => departmentMatchesCompany(entry, companyId)),
+    [departments, companyId],
+  );
+
   const settingsSourceId = selectedDepartmentIds[0] || '';
 
   useEffect(() => {
-    if (selectedDepartmentIds.length || !departments.length) return;
-    setSelectedDepartmentIds([String(departments[0].department.id)]);
-  }, [selectedDepartmentIds.length, departments]);
+    const visibleIds = new Set(filteredDepartments.map((entry) => String(entry.department.id)));
+    setSelectedDepartmentIds((current) => {
+      const kept = current.filter((id) => visibleIds.has(id));
+      if (
+        kept.length === current.length
+        && kept.every((id, index) => id === current[index])
+        && (kept.length > 0 || filteredDepartments.length === 0)
+      ) {
+        return current;
+      }
+      if (kept.length) return kept;
+      if (filteredDepartments.length) return [String(filteredDepartments[0].department.id)];
+      return [];
+    });
+  }, [filteredDepartments]);
 
   useEffect(() => {
     if (!settingsSourceId) return;
@@ -312,11 +373,28 @@ export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) 
 
   return (
     <div className="space-y-5">
+      <div className="space-y-1.5">
+        <Label>Company</Label>
+        <Select value={companyId} onValueChange={setCompanyId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="All companies" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All companies</SelectItem>
+            {companies.map((company) => (
+              <SelectItem key={company.id} value={String(company.id)}>
+                {company.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1 space-y-1.5">
           <Label>Departments</Label>
           <DepartmentMultiSelect
-            departments={departments}
+            departments={filteredDepartments}
             selectedIds={selectedDepartmentIds}
             onChange={setSelectedDepartmentIds}
           />
