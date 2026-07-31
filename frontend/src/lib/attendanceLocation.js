@@ -6,6 +6,7 @@ export const DEFAULT_ATTENDANCE_LOCATION = {
   sites: [{ name: 'EMZI HQ', latitude: '', longitude: '' }],
   radius_meters: 200,
   allow_outside_radius: false,
+  allow_clock_out_outside_radius: false,
 };
 
 export function normalizeAttendanceLocation(input = {}) {
@@ -41,6 +42,9 @@ export function normalizeAttendanceLocation(input = {}) {
     sites,
     radius_meters: Number(input.radius_meters ?? 200),
     allow_outside_radius: Boolean(input.allow_outside_radius),
+    allow_clock_out_outside_radius: Object.prototype.hasOwnProperty.call(input, 'allow_clock_out_outside_radius')
+      ? Boolean(input.allow_clock_out_outside_radius)
+      : Boolean(input.allow_outside_radius),
     department_count: Number(input.department_count ?? 0),
   };
 }
@@ -65,5 +69,6 @@ export function attendanceLocationToPayload(form) {
     center_longitude: primarySite?.longitude ?? null,
     radius_meters: normalized.radius_meters,
     allow_outside_radius: normalized.allow_outside_radius,
+    allow_clock_out_outside_radius: normalized.allow_clock_out_outside_radius,
   };
 }

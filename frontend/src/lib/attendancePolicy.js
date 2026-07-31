@@ -68,6 +68,9 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     sites: Array.isArray(input.sites) ? input.sites : [],
     radius_meters: Number(input.radius_meters ?? 200),
     allow_outside_radius: Boolean(input.allow_outside_radius),
+    allow_clock_out_outside_radius: Object.prototype.hasOwnProperty.call(input, 'allow_clock_out_outside_radius')
+      ? Boolean(input.allow_clock_out_outside_radius)
+      : Boolean(input.allow_outside_radius),
   };
 }
 
@@ -264,6 +267,9 @@ export function listAttendancePolicyParts(policy) {
     }
     if (policy.allow_outside_radius) {
       parts.push('Outstation clock-in allowed with warning');
+    }
+    if (policy.allow_clock_out_outside_radius) {
+      parts.push('Outstation clock-out allowed with warning');
     }
   }
   if (policy.shifts?.length) {

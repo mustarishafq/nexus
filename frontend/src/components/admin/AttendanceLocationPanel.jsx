@@ -297,11 +297,21 @@ export default function AttendanceLocationPanel({ peerHint = 'Insan' }) {
 
             <AdminSettingsToggleRow
               className="border-0 bg-transparent p-0"
-              label={<Label>Allow outside radius</Label>}
+              label={<Label>Allow clock in outside radius</Label>}
             >
               <Switch
                 checked={form.allow_outside_radius}
                 onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_radius: checked }))}
+              />
+            </AdminSettingsToggleRow>
+
+            <AdminSettingsToggleRow
+              className="border-0 bg-transparent p-0"
+              label={<Label>Allow clock out outside radius</Label>}
+            >
+              <Switch
+                checked={form.allow_clock_out_outside_radius}
+                onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_clock_out_outside_radius: checked }))}
               />
             </AdminSettingsToggleRow>
           </div>

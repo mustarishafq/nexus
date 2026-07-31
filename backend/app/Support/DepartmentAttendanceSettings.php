@@ -210,6 +210,7 @@ class DepartmentAttendanceSettings
             $payload['sites'] = AttendanceLocationSettings::resolveSites($location);
             $payload['radius_meters'] = $location->radius_meters;
             $payload['allow_outside_radius'] = $location->allow_outside_radius;
+            $payload['allow_clock_out_outside_radius'] = $location->allow_clock_out_outside_radius;
         } else {
             $payload['attendance_location'] = null;
             $payload['geofence_enabled'] = false;
@@ -218,6 +219,7 @@ class DepartmentAttendanceSettings
             $payload['sites'] = [];
             $payload['radius_meters'] = AttendanceLocationSettings::DEFAULTS['radius_meters'];
             $payload['allow_outside_radius'] = false;
+            $payload['allow_clock_out_outside_radius'] = false;
         }
 
         return $payload;

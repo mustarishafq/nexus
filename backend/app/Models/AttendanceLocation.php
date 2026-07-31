@@ -17,6 +17,7 @@ class AttendanceLocation extends Model
         'sites',
         'radius_meters',
         'allow_outside_radius',
+        'allow_clock_out_outside_radius',
     ];
 
     protected function casts(): array
@@ -28,7 +29,15 @@ class AttendanceLocation extends Model
             'sites' => 'array',
             'radius_meters' => 'integer',
             'allow_outside_radius' => 'boolean',
+            'allow_clock_out_outside_radius' => 'boolean',
         ];
+    }
+
+    public function allowsOutsideRadiusFor(string $type): bool
+    {
+        return $type === 'clock_out'
+            ? (bool) $this->allow_clock_out_outside_radius
+            : (bool) $this->allow_outside_radius;
     }
 
     public function departmentSettings(): HasMany

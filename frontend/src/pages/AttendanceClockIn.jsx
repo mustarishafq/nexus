@@ -46,6 +46,9 @@ export default function AttendanceClockIn() {
   const nextType = status?.next_type || 'clock_in';
   const isClockIn = nextType === 'clock_in';
   const policy = status?.policy;
+  const allowOutsideRadius = isClockIn
+    ? Boolean(policy?.allow_outside_radius)
+    : Boolean(policy?.allow_clock_out_outside_radius);
 
   const lateClockIn = useMemo(() => {
     if (!isClockIn || !policy?.require_late_clock_in_reason) {
@@ -187,7 +190,7 @@ export default function AttendanceClockIn() {
                     : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
                 </Badge>
               ) : null}
-              {policy?.allow_outside_radius && !matchedSite && nearestSite ? (
+              {allowOutsideRadius && !matchedSite && nearestSite ? (
                 <Badge variant="outline">Outstation allowed</Badge>
               ) : null}
             </div>

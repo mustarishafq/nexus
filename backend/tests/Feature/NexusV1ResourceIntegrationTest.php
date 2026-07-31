@@ -341,7 +341,8 @@ class NexusV1ResourceIntegrationTest extends TestCase
                 'center_latitude' => 5.64,
                 'center_longitude' => 100.48,
                 'radius_meters' => 150,
-                'allow_outside_radius' => false,
+                'allow_outside_radius' => true,
+                'allow_clock_out_outside_radius' => false,
                 'sites' => [[
                     'name' => 'Primary',
                     'latitude' => 5.64,
@@ -381,13 +382,20 @@ class NexusV1ResourceIntegrationTest extends TestCase
             ->assertJsonPath('stats.departments_upserted', 1)
             ->assertJsonPath('stats.watermark_updated', true);
 
-        $this->assertDatabaseHas('attendance_locations', ['name' => 'EMZI HQ', 'radius_meters' => 150]);
+        $this->assertDatabaseHas('attendance_locations', [
+            'name' => 'EMZI HQ',
+            'radius_meters' => 150,
+            'allow_outside_radius' => true,
+            'allow_clock_out_outside_radius' => false,
+        ]);
         $this->assertDatabaseHas('department_attendance_settings', ['grace_period_minutes' => 10]);
 
         $export = $this->getJson('/api/nexus/v1/attendance/policy', $this->authHeaders('brain-attendance-policy'))
             ->assertOk();
 
         $this->assertSame('EMZI HQ', $export->json('locations.0.name'));
+        $this->assertTrue($export->json('locations.0.allow_outside_radius'));
+        $this->assertFalse($export->json('locations.0.allow_clock_out_outside_radius'));
         $this->assertSame('Operations', $export->json('departments.0.department_name'));
         $this->assertFalse($export->json('watermark.show_location'));
     }

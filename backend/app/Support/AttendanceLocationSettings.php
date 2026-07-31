@@ -15,6 +15,7 @@ class AttendanceLocationSettings
         'sites' => [],
         'radius_meters' => 200,
         'allow_outside_radius' => false,
+        'allow_clock_out_outside_radius' => false,
     ];
 
     /**
@@ -36,6 +37,10 @@ class AttendanceLocationSettings
         $config['sites'] = DepartmentAttendanceSettings::normalizeSites($input['sites'] ?? []);
         $config['radius_meters'] = max(10, min(50000, (int) ($input['radius_meters'] ?? 200)));
         $config['allow_outside_radius'] = self::toBool($input['allow_outside_radius'] ?? false);
+        // Fall back to clock-in flag when peers/older clients omit the clock-out setting.
+        $config['allow_clock_out_outside_radius'] = array_key_exists('allow_clock_out_outside_radius', $input)
+            ? self::toBool($input['allow_clock_out_outside_radius'])
+            : $config['allow_outside_radius'];
 
         if ($config['sites'] === [] && $config['center_latitude'] !== null && $config['center_longitude'] !== null) {
             $config['sites'] = [[
@@ -74,6 +79,7 @@ class AttendanceLocationSettings
             'sites.*.longitude' => ['required_with:sites', 'numeric', 'between:-180,180'],
             'radius_meters' => ['nullable', 'integer', 'min:10', 'max:50000'],
             'allow_outside_radius' => ['nullable', 'boolean'],
+            'allow_clock_out_outside_radius' => ['nullable', 'boolean'],
         ];
     }
 
@@ -91,6 +97,7 @@ class AttendanceLocationSettings
             'sites' => $config['sites'],
             'radius_meters' => $config['radius_meters'],
             'allow_outside_radius' => $config['allow_outside_radius'],
+            'allow_clock_out_outside_radius' => $config['allow_clock_out_outside_radius'],
         ];
     }
 
@@ -108,6 +115,7 @@ class AttendanceLocationSettings
             'sites' => DepartmentAttendanceSettings::normalizeSites($location->sites ?? []),
             'radius_meters' => $location->radius_meters,
             'allow_outside_radius' => $location->allow_outside_radius,
+            'allow_clock_out_outside_radius' => $location->allow_clock_out_outside_radius,
             'department_count' => $location->department_settings_count ?? $location->departmentSettings()->count(),
         ];
     }

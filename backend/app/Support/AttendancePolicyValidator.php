@@ -56,7 +56,7 @@ class AttendancePolicyValidator
             'department_id' => $setting->department_id,
         ];
 
-        self::validateGeofence($setting, $latitude, $longitude, $errors, $warnings, $metadata);
+        self::validateGeofence($setting, $type, $latitude, $longitude, $errors, $warnings, $metadata);
         self::validateShiftHours($setting, $capturedAt, $errors, $warnings, $metadata);
 
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
@@ -99,6 +99,7 @@ class AttendancePolicyValidator
             'sites' => AttendanceLocationSettings::resolveSites($location),
             'radius_meters' => $location?->radius_meters ?? AttendanceLocationSettings::DEFAULTS['radius_meters'],
             'allow_outside_radius' => (bool) $location?->allow_outside_radius,
+            'allow_clock_out_outside_radius' => (bool) $location?->allow_clock_out_outside_radius,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
             'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
@@ -146,6 +147,7 @@ class AttendancePolicyValidator
      */
     private static function validateGeofence(
         DepartmentAttendanceSetting $setting,
+        string $type,
         ?float $latitude,
         ?float $longitude,
         array &$errors,
@@ -158,8 +160,10 @@ class AttendancePolicyValidator
             return;
         }
 
+        $allowOutside = $location->allowsOutsideRadiusFor($type);
+
         if ($latitude === null || $longitude === null) {
-            if (! $location->allow_outside_radius) {
+            if (! $allowOutside) {
                 $errors[] = 'Location is required for attendance in your department.';
             } else {
                 $warnings[] = 'Location unavailable; recorded without geofence verification.';
@@ -208,7 +212,7 @@ class AttendancePolicyValidator
         $metadata['distance_meters'] = round((float) $closestDistance, 1);
         $metadata['nearest_site_name'] = $closestSite['name'] ?? null;
 
-        if (! $location->allow_outside_radius) {
+        if (! $allowOutside) {
             $errors[] = sprintf(
                 'You must be within %dm of a registered site (nearest: %s, ~%dm away).',
                 $location->radius_meters,
