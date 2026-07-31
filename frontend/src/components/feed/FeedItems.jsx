@@ -617,6 +617,7 @@ export function FeedComposer({ className }) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const fileInputRef = useRef(null);
+  const submitLockRef = useRef(false);
   const cameraInputRef = useRef(null);
   const [body, setBody] = useState('');
   const [imageItems, setImageItems] = useState([]);
@@ -704,6 +705,9 @@ export function FeedComposer({ className }) {
     onError: (error) => {
       toast.error(error?.message || 'Failed to share post.');
     },
+    onSettled: () => {
+      submitLockRef.current = false;
+    },
   });
 
   const handleImageSelect = (event) => {
@@ -715,6 +719,15 @@ export function FeedComposer({ className }) {
 
   const canPost = Boolean(!isEmptyRichText(body) || imageItems.length > 0);
   const isSubmitting = createPost.isPending;
+
+  const handleSubmit = () => {
+    if (submitLockRef.current || createPost.isPending || !canPost) return;
+    submitLockRef.current = true;
+    createPost.mutate({
+      text: body,
+      files: imageItems.map((item) => item.file),
+    });
+  };
 
   return (
     <div className={cn('rounded-2xl border border-border bg-card p-3 sm:p-4', className)}>
@@ -828,12 +841,7 @@ export function FeedComposer({ className }) {
           className="h-10 w-10 shrink-0 touch-manipulation rounded-full sm:h-9 sm:w-9"
           disabled={isSubmitting || !canPost}
           title="Post"
-          onClick={() =>
-            createPost.mutate({
-              text: body,
-              files: imageItems.map((item) => item.file),
-            })
-          }
+          onClick={handleSubmit}
         >
           {isSubmitting ? (
             <Loader2 className="h-4 w-4 animate-spin" />

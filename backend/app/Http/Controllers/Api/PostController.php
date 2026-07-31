@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\SerializesFeedAuthors;
 use App\Http\Controllers\Api\Concerns\SerializesPosts;
 use App\Http\Controllers\Controller;
+use App\Jobs\NotifyFeedPostJob;
 use App\Models\Post;
 use App\Models\PostEdit;
 use App\Models\User;
@@ -71,9 +72,17 @@ class PostController extends Controller
         ]);
 
         if ($requiresApproval) {
-            app(FeedNotificationService::class)->notifyModeratorsOfPendingPost($post, $viewer);
+            NotifyFeedPostJob::dispatch(
+                NotifyFeedPostJob::ACTION_PENDING_MODERATION,
+                $post->id,
+                $viewer->id,
+            )->afterResponse();
         } else {
-            app(FeedNotificationService::class)->notifyPostPublished($post, $viewer);
+            NotifyFeedPostJob::dispatch(
+                NotifyFeedPostJob::ACTION_PUBLISHED,
+                $post->id,
+                $viewer->id,
+            )->afterResponse();
 
             if ($body !== '') {
                 $this->notifyMentions($viewer, $post, $body);
@@ -197,7 +206,11 @@ class PostController extends Controller
         $author = $post->author ?? User::query()->find($post->author_user_id);
         if ($author) {
             app(FeedNotificationService::class)->notifyAuthorOfReview($post, $viewer, true);
-            app(FeedNotificationService::class)->notifyPostPublished($post, $author);
+            NotifyFeedPostJob::dispatch(
+                NotifyFeedPostJob::ACTION_PUBLISHED,
+                $post->id,
+                $author->id,
+            )->afterResponse();
 
             $body = trim((string) $post->body);
             if ($body !== '') {

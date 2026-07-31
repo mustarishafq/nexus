@@ -18,6 +18,13 @@ class CalendarEvent extends Model
         'start_at',
         'end_at',
         'is_all_day',
+        'series_id',
+        'recurrence_frequency',
+        'series_index',
+        'series_share_qr',
+        'recurrence_month_mode',
+        'recurrence_month_day',
+        'recurrence_weekday',
         'created_by',
         'check_in_token',
         'check_in_opens_at',
@@ -55,6 +62,10 @@ class CalendarEvent extends Model
             'end_at' => 'datetime',
             'check_in_opens_at' => 'datetime',
             'is_all_day' => 'boolean',
+            'series_index' => 'integer',
+            'series_share_qr' => 'boolean',
+            'recurrence_month_day' => 'integer',
+            'recurrence_weekday' => 'integer',
         ];
     }
 

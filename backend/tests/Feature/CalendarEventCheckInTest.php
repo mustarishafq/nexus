@@ -6,6 +6,7 @@ use App\Models\CalendarEvent;
 use App\Models\CalendarEventAttendance;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class CalendarEventCheckInTest extends TestCase
@@ -150,6 +151,116 @@ class CalendarEventCheckInTest extends TestCase
             ->assertOk()
             ->assertJsonPath('count', 1)
             ->assertJsonPath('attendances.0.email', 'guest@example.com');
+    }
+
+    public function test_organizer_can_export_attendances_csv(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+            'role' => 'user',
+        ]);
+        $token = $this->issueToken($organizer);
+
+        $event = CalendarEvent::create([
+            'title' => 'Export day',
+            'start_at' => '2026-07-20T10:00:00Z',
+            'end_at' => '2026-07-20T11:00:00Z',
+            'created_by' => $organizer->email,
+        ]);
+
+        CalendarEventAttendance::create([
+            'calendar_event_id' => $event->id,
+            'email' => 'guest@example.com',
+            'user_id' => null,
+            'display_name' => 'Guest',
+            'source' => CalendarEventAttendance::SOURCE_PUBLIC_FORM,
+            'checked_in_at' => Carbon::parse('2026-07-20T10:05:00Z'),
+        ]);
+
+        $response = $this->withToken($token)
+            ->get('/api/calendar-events/'.$event->id.'/attendances/export')
+            ->assertOk();
+
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Name,Email,Type,Source,"Checked in at"', $csv);
+        $this->assertStringContainsString('Guest,guest@example.com,Public,'.CalendarEventAttendance::SOURCE_PUBLIC_FORM, $csv);
+    }
+
+    public function test_non_organizer_cannot_export_attendances_csv(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+            'role' => 'user',
+        ]);
+        $outsider = User::factory()->create([
+            'email' => 'outsider@example.com',
+            'is_approved' => true,
+            'role' => 'user',
+        ]);
+        $token = $this->issueToken($outsider);
+
+        $event = CalendarEvent::create([
+            'title' => 'Private export',
+            'start_at' => '2026-07-20T10:00:00Z',
+            'end_at' => '2026-07-20T11:00:00Z',
+            'created_by' => $organizer->email,
+        ]);
+
+        $this->withToken($token)
+            ->get('/api/calendar-events/'.$event->id.'/attendances/export')
+            ->assertForbidden();
+    }
+
+    public function test_organizer_can_list_series_occurrences_for_attendance_filter(): void
+    {
+        $organizer = User::factory()->create([
+            'email' => 'organizer@example.com',
+            'is_approved' => true,
+            'role' => 'user',
+        ]);
+        $token = $this->issueToken($organizer);
+        $seriesId = '33333333-3333-3333-3333-333333333333';
+
+        $first = CalendarEvent::create([
+            'title' => 'Weekly series',
+            'start_at' => '2026-07-31T01:30:00Z',
+            'end_at' => '2026-07-31T02:30:00Z',
+            'created_by' => $organizer->email,
+            'series_id' => $seriesId,
+            'series_index' => 0,
+            'recurrence_frequency' => 'weekly',
+        ]);
+
+        $second = CalendarEvent::create([
+            'title' => 'Weekly series',
+            'start_at' => '2026-08-07T01:30:00Z',
+            'end_at' => '2026-08-07T02:30:00Z',
+            'created_by' => $organizer->email,
+            'series_id' => $seriesId,
+            'series_index' => 1,
+            'recurrence_frequency' => 'weekly',
+        ]);
+
+        CalendarEventAttendance::create([
+            'calendar_event_id' => $second->id,
+            'email' => 'guest@example.com',
+            'user_id' => null,
+            'display_name' => 'Guest',
+            'source' => CalendarEventAttendance::SOURCE_PUBLIC_FORM,
+            'checked_in_at' => now(),
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/calendar-events/'.$first->id.'/series-occurrences')
+            ->assertOk()
+            ->assertJsonPath('series_id', $seriesId)
+            ->assertJsonPath('occurrences.0.id', $first->id)
+            ->assertJsonPath('occurrences.0.attendance_count', 0)
+            ->assertJsonPath('occurrences.1.id', $second->id)
+            ->assertJsonPath('occurrences.1.attendance_count', 1);
     }
 
     public function test_checked_in_user_can_see_event_in_calendar_list(): void

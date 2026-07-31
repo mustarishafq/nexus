@@ -471,6 +471,45 @@ export const db = {
 		async listAttendances(eventId) {
 			return request(`/calendar-events/${eventId}/attendances`);
 		},
+
+		async listSeriesOccurrences(eventId) {
+			return request(`/calendar-events/${eventId}/series-occurrences`);
+		},
+
+		async exportAttendancesCsv(eventId) {
+			const token = getAuthToken();
+			const response = await fetch(`${API_BASE_URL}/calendar-events/${eventId}/attendances/export`, {
+				method: 'GET',
+				headers: {
+					Accept: 'text/csv',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				let payload = null;
+				try {
+					payload = await response.json();
+				} catch {
+					payload = null;
+				}
+				const error = new Error(payload?.message || `HTTP ${response.status}`);
+				error.status = response.status;
+				error.data = payload;
+				throw error;
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `event-attendance-${eventId}-${new Date().toISOString().slice(0, 10)}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.URL.revokeObjectURL(url);
+		},
 	},
 
 	dashboard: {

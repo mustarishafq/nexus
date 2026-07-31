@@ -11,6 +11,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CalendarEventCheckInController extends Controller
 {
@@ -131,6 +132,102 @@ class CalendarEventCheckInController extends Controller
         ]);
     }
 
+    public function seriesOccurrences(Request $request, CalendarEvent $calendarEvent): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $this->userCanManageEvent($user, $calendarEvent)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (! $calendarEvent->series_id) {
+            return response()->json([
+                'series_id' => null,
+                'current_event_id' => $calendarEvent->id,
+                'occurrences' => [],
+            ]);
+        }
+
+        $occurrences = CalendarEvent::query()
+            ->where('series_id', $calendarEvent->series_id)
+            ->withCount('checkIns')
+            ->orderBy('series_index')
+            ->orderBy('start_at')
+            ->get()
+            ->map(fn (CalendarEvent $event) => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'start_at' => $event->start_at?->toISOString(),
+                'end_at' => $event->end_at?->toISOString(),
+                'is_all_day' => (bool) $event->is_all_day,
+                'series_index' => $event->series_index,
+                'attendance_count' => (int) $event->check_ins_count,
+            ])
+            ->values()
+            ->all();
+
+        return response()->json([
+            'series_id' => $calendarEvent->series_id,
+            'current_event_id' => $calendarEvent->id,
+            'occurrences' => $occurrences,
+        ]);
+    }
+
+    public function exportCsv(Request $request, CalendarEvent $calendarEvent): StreamedResponse|JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $this->userCanManageEvent($user, $calendarEvent)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $query = $calendarEvent->checkIns()
+            ->with('user:id,name,full_name,email')
+            ->orderBy('checked_in_at');
+
+        $safeTitle = preg_replace('/[^A-Za-z0-9_\-]+/', '-', (string) $calendarEvent->title) ?: 'event';
+        $filename = 'event-attendance-'.$safeTitle.'-'.now()->format('Y-m-d-His').'.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Name',
+                'Email',
+                'Type',
+                'Source',
+                'Checked in at',
+            ]);
+
+            foreach ($query->lazy(500) as $attendance) {
+                $name = $attendance->display_name
+                    ?: $attendance->user?->full_name
+                    ?: $attendance->user?->name
+                    ?: '';
+
+                fputcsv($handle, [
+                    $name,
+                    $attendance->email,
+                    $attendance->user_id !== null ? 'Staff' : 'Public',
+                    $attendance->source,
+                    $attendance->checked_in_at?->toIso8601String(),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
     protected function findEventByToken(string $token): ?CalendarEvent
     {
         $token = trim($token);
@@ -139,9 +236,59 @@ class CalendarEventCheckInController extends Controller
             return null;
         }
 
-        return CalendarEvent::query()
+        $events = CalendarEvent::query()
             ->where('check_in_token', $token)
+            ->orderBy('start_at')
+            ->get();
+
+        if ($events->isEmpty()) {
+            return null;
+        }
+
+        if ($events->count() === 1) {
+            return $events->first();
+        }
+
+        return $this->resolveSharedTokenOccurrence($events);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, CalendarEvent>  $events
+     */
+    protected function resolveSharedTokenOccurrence($events): CalendarEvent
+    {
+        $now = Carbon::now();
+
+        $openNow = $events->first(function (CalendarEvent $event) use ($now) {
+            if (! $event->isAttendanceOpen($now)) {
+                return false;
+            }
+
+            return ! $event->end_at || $event->end_at->greaterThanOrEqualTo($now);
+        });
+
+        if ($openNow) {
+            return $openNow;
+        }
+
+        $today = $events->first(function (CalendarEvent $event) use ($now) {
+            return $event->start_at && $event->start_at->isSameDay($now);
+        });
+
+        if ($today) {
+            return $today;
+        }
+
+        $upcoming = $events
+            ->filter(fn (CalendarEvent $event) => $event->end_at && $event->end_at->greaterThanOrEqualTo($now))
+            ->sortBy('start_at')
             ->first();
+
+        if ($upcoming) {
+            return $upcoming;
+        }
+
+        return $events->sortByDesc('start_at')->first();
     }
 
     protected function attendanceNotOpenResponse(CalendarEvent $event): ?JsonResponse

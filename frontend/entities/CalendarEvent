@@ -23,6 +23,30 @@
       "type": "boolean",
       "default": false
     },
+    "series_id": {
+      "type": "string"
+    },
+    "recurrence_frequency": {
+      "type": "string",
+      "enum": ["daily", "weekly", "monthly"]
+    },
+    "series_index": {
+      "type": "integer"
+    },
+    "series_share_qr": {
+      "type": "boolean",
+      "default": false
+    },
+    "recurrence_month_mode": {
+      "type": "string",
+      "enum": ["same_day", "first_day", "last_day", "day_of_month"]
+    },
+    "recurrence_month_day": {
+      "type": "integer"
+    },
+    "recurrence_weekday": {
+      "type": "integer"
+    },
     "created_by": {
       "type": "string"
     },

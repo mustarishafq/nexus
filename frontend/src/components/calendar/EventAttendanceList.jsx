@@ -1,9 +1,10 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
+import { ChevronRight, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function EventAttendanceList({ eventId, enabled }) {
   const { data, isLoading, isError } = useQuery({
@@ -24,40 +25,24 @@ export default function EventAttendanceList({ eventId, enabled }) {
     return <p className="mt-2 text-[11px] text-destructive">Could not load attendance.</p>;
   }
 
-  const attendances = Array.isArray(data?.attendances) ? data.attendances : [];
-  const count = data?.count ?? attendances.length;
+  const count = data?.count ?? (Array.isArray(data?.attendances) ? data.attendances.length : 0);
 
   return (
-    <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Attendance ({count})
-      </p>
-      {attendances.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground">No check-ins yet.</p>
-      ) : (
-        <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-          {attendances.map((row) => (
-            <li key={row.id} className="flex items-start justify-between gap-2 text-[11px]">
-              <div className="min-w-0">
-                <p className="font-medium truncate">
-                  {row.display_name || row.user?.name || row.email}
-                </p>
-                <p className="text-muted-foreground truncate">{row.email}</p>
-              </div>
-              <div className="shrink-0 text-right space-y-0.5">
-                <Badge variant={row.is_staff ? 'secondary' : 'outline'} className="h-4 text-[9px] px-1.5">
-                  {row.is_staff ? 'Staff' : 'Public'}
-                </Badge>
-                {row.checked_in_at ? (
-                  <p className="text-muted-foreground tabular-nums">
-                    {format(parseISO(row.checked_in_at), 'h:mm a')}
-                  </p>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 w-full justify-between text-xs gap-2"
+        asChild
+      >
+        <Link to={`/calendar/events/${eventId}/attendance`}>
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="h-3 w-3" />
+            View attendance ({count})
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+        </Link>
+      </Button>
     </div>
   );
 }

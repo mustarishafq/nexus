@@ -12,3 +12,4 @@ Schedule::command('attendance:send-reminders')->everyFiveMinutes();
 Schedule::command('applications:check-health')->everyFiveMinutes();
 Schedule::command('mail:check-inbox-push')->everyTwoMinutes()->withoutOverlapping(3);
 Schedule::command('conversations:prune-empty')->hourly();
+Schedule::command('calendar:spawn-next-recurring')->everyFiveMinutes()->withoutOverlapping(5);

@@ -243,5 +243,7 @@ Route::get('event-check-in/{token}', [CalendarEventCheckInController::class, 'sh
 Route::post('event-check-in/{token}', [CalendarEventCheckInController::class, 'store']);
 Route::post('event-check-in/{token}/me', [CalendarEventCheckInController::class, 'storeForMe']);
 Route::get('calendar-events/{calendarEvent}/attendances', [CalendarEventCheckInController::class, 'index']);
+Route::get('calendar-events/{calendarEvent}/attendances/export', [CalendarEventCheckInController::class, 'exportCsv']);
+Route::get('calendar-events/{calendarEvent}/series-occurrences', [CalendarEventCheckInController::class, 'seriesOccurrences']);
 Route::apiResource('calendar-events', CalendarEventController::class);
 Route::apiResource('activity-logs', ActivityLogController::class);

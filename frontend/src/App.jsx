@@ -31,6 +31,7 @@ const ApplicationBrowser = lazy(() => import('@/pages/ApplicationBrowser'));
 const BroadcastCenter = lazy(() => import('@/pages/BroadcastCenter'));
 const SystemEvents = lazy(() => import('@/pages/SystemEvents'));
 const AdminCalendar = lazy(() => import('@/pages/AdminCalendar'));
+const EventAttendance = lazy(() => import('@/pages/EventAttendance'));
 const ScanQr = lazy(() => import('@/pages/ScanQr'));
 const EventCheckInPublic = lazy(() => import('@/pages/EventCheckInPublic'));
 const Settings = lazy(() => import('@/pages/Settings'));
@@ -116,6 +117,7 @@ const ProtectedRoutes = () => {
           <Route path="/admin/events" element={<SystemEvents />} />
           <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
           <Route path="/calendar" element={<AdminCalendar />} />
+          <Route path="/calendar/events/:id/attendance" element={<EventAttendance />} />
           <Route path="/scan-qr" element={<ScanQr />} />
           <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
           <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />

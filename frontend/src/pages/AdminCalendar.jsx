@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Sheet,
   SheetContent,
@@ -98,6 +99,16 @@ function isInvitedEvent(event, user) {
 function isAttendedEvent(event) {
   return Boolean(event?.attended_by_me);
 }
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Sunday' },
+  { value: 1, label: 'Monday' },
+  { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' },
+  { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' },
+];
 
 function defaultStartForDate(date) {
   const base = startOfDay(date);
@@ -173,6 +184,11 @@ export default function AdminCalendar() {
   const [endAt, setEndAt] = useState(toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
   const [checkInOpensAt, setCheckInOpensAt] = useState('');
   const [isAllDay, setIsAllDay] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState('none');
+  const [seriesShareQr, setSeriesShareQr] = useState(false);
+  const [recurrenceMonthMode, setRecurrenceMonthMode] = useState('same_day');
+  const [recurrenceMonthDay, setRecurrenceMonthDay] = useState('1');
+  const [recurrenceWeekday, setRecurrenceWeekday] = useState(() => String(new Date().getDay()));
 
   const queryClient = useQueryClient();
 
@@ -263,7 +279,7 @@ export default function AdminCalendar() {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
       queryClient.invalidateQueries({ queryKey: ['calendar-events-week'] });
       resetForm();
-      toast.success('Event created');
+      toast.success(created?.series_id ? 'Recurring events created' : 'Event created');
       if (created?.check_in_url) {
         setQrEvent(created);
       }
@@ -347,6 +363,27 @@ export default function AdminCalendar() {
       attendee_emails: allInvitees.length ? allInvitees : null,
     };
 
+    if (!editingId && recurrenceFrequency && recurrenceFrequency !== 'none') {
+      payload.recurrence_frequency = recurrenceFrequency;
+      payload.series_share_qr = seriesShareQr;
+
+      if (recurrenceFrequency === 'weekly') {
+        payload.recurrence_weekday = Number(recurrenceWeekday);
+      }
+
+      if (recurrenceFrequency === 'monthly') {
+        payload.recurrence_month_mode = recurrenceMonthMode;
+        if (recurrenceMonthMode === 'day_of_month') {
+          const day = Number(recurrenceMonthDay);
+          if (!Number.isFinite(day) || day < 1 || day > 31) {
+            toast.error('Choose a day of the month between 1 and 31');
+            return;
+          }
+          payload.recurrence_month_day = Math.floor(day);
+        }
+      }
+    }
+
     if (editingId) {
       updateMut.mutate({ id: editingId, payload });
       return;
@@ -368,6 +405,11 @@ export default function AdminCalendar() {
     setCustomInvitees([]);
     setCustomInviteeInput('');
     setIsAllDay(false);
+    setRecurrenceFrequency('none');
+    setSeriesShareQr(false);
+    setRecurrenceMonthMode('same_day');
+    setRecurrenceMonthDay('1');
+    setRecurrenceWeekday(String(new Date().getDay()));
     setInviteePickerOpen(false);
   };
 
@@ -386,6 +428,11 @@ export default function AdminCalendar() {
     setCustomInvitees([]);
     setCustomInviteeInput('');
     setIsAllDay(false);
+    setRecurrenceFrequency('none');
+    setSeriesShareQr(false);
+    setRecurrenceMonthMode('same_day');
+    setRecurrenceMonthDay('1');
+    setRecurrenceWeekday(String(start.getDay()));
     setInviteePickerOpen(false);
     setFormOpen(true);
   };
@@ -431,10 +478,62 @@ export default function AdminCalendar() {
     setCustomInvitees(Array.from(new Set(custom)));
     setCustomInviteeInput('');
     setIsAllDay(Boolean(event.is_all_day));
+    setRecurrenceFrequency('none');
+    setSeriesShareQr(false);
+    setRecurrenceMonthMode('same_day');
+    setRecurrenceMonthDay('1');
+    setRecurrenceWeekday(String(new Date(event.start_at).getDay()));
     setFormOpen(true);
   };
 
   const isMutating = createMut.isPending || updateMut.isPending || deleteMut.isPending;
+
+  const recurrenceHelperText = useMemo(() => {
+    if (!recurrenceFrequency || recurrenceFrequency === 'none') {
+      return null;
+    }
+
+    if (recurrenceFrequency === 'weekly') {
+      const day = WEEKDAY_OPTIONS.find((option) => option.value === Number(recurrenceWeekday));
+      return day ? `Repeats every ${day.label}.` : 'Choose which day of the week.';
+    }
+
+    if (recurrenceFrequency === 'daily') {
+      return 'Repeats every day.';
+    }
+
+    if (recurrenceFrequency === 'monthly') {
+      if (recurrenceMonthMode === 'first_day') {
+        return 'Repeats on the 1st of each month.';
+      }
+      if (recurrenceMonthMode === 'last_day') {
+        return 'Repeats on the last day of each month.';
+      }
+      if (recurrenceMonthMode === 'day_of_month') {
+        const day = Number(recurrenceMonthDay);
+        if (!Number.isFinite(day) || day < 1) {
+          return 'Choose which day of the month.';
+        }
+        const suffix = day === 1 || day === 21 || day === 31
+          ? 'st'
+          : day === 2 || day === 22
+            ? 'nd'
+            : day === 3 || day === 23
+              ? 'rd'
+              : 'th';
+        return `Repeats on the ${day}${suffix} of each month.`;
+      }
+      if (startAt) {
+        const start = new Date(startAt);
+        if (!Number.isNaN(start.getTime())) {
+          return `Repeats on day ${format(start, 'd')} of each month.`;
+        }
+      }
+      return 'Repeats monthly on the same date.';
+    }
+
+    return null;
+  }, [recurrenceFrequency, startAt, recurrenceMonthMode, recurrenceMonthDay, recurrenceWeekday]);
 
   const handleFormOpenChange = (open) => {
     if (!open) {
@@ -553,6 +652,7 @@ export default function AdminCalendar() {
                       {event.title}
                     </p>
                     {invited && !attended ? <Badge variant="outline" className="h-5 text-[10px]">Invited</Badge> : null}
+                    {event.series_id ? <Badge variant="outline" className="h-5 text-[10px]">Recurring</Badge> : null}
                     {event.is_all_day ? <Badge variant="secondary" className="h-5 text-[10px]">All day</Badge> : null}
                   </div>
 
@@ -920,6 +1020,106 @@ export default function AdminCalendar() {
                 </div>
               ) : null}
             </div>
+
+            {!editingId ? (
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
+                <div className="space-y-2">
+                  <Label>Repeat</Label>
+                  <Select
+                    value={recurrenceFrequency}
+                    onValueChange={(value) => {
+                      setRecurrenceFrequency(value);
+                      if (value === 'weekly' && startAt) {
+                        const start = new Date(startAt);
+                        if (!Number.isNaN(start.getTime())) {
+                          setRecurrenceWeekday(String(start.getDay()));
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Does not repeat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Does not repeat</SelectItem>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {recurrenceHelperText ? (
+                    <p className="text-xs text-muted-foreground">{recurrenceHelperText}</p>
+                  ) : null}
+                </div>
+
+                {recurrenceFrequency === 'weekly' ? (
+                  <div className="space-y-2">
+                    <Label>Day of week</Label>
+                    <Select value={recurrenceWeekday} onValueChange={setRecurrenceWeekday}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WEEKDAY_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+
+                {recurrenceFrequency === 'monthly' ? (
+                  <div className="space-y-2">
+                    <Label>On</Label>
+                    <Select value={recurrenceMonthMode} onValueChange={setRecurrenceMonthMode}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="same_day">Same date each month</SelectItem>
+                        <SelectItem value="first_day">First day of the month</SelectItem>
+                        <SelectItem value="last_day">Last day of the month</SelectItem>
+                        <SelectItem value="day_of_month">Specific day of the month</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {recurrenceMonthMode === 'day_of_month' ? (
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={recurrenceMonthDay}
+                        onChange={(e) => setRecurrenceMonthDay(e.target.value)}
+                        placeholder="Day (1–31)"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {recurrenceFrequency !== 'none' ? (
+                  <>
+                    <div className="flex items-start justify-between gap-3 rounded-lg border bg-background/50 p-3">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-medium">Same QR for all</p>
+                        <p className="text-xs text-muted-foreground">
+                          One check-in QR for every session in this series. Turn off for a unique QR per date.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={seriesShareQr}
+                        onCheckedChange={setSeriesShareQr}
+                        aria-label="Share the same QR across recurring events"
+                      />
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Creates one event now. The next one is added automatically after this session ends.
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label>Invitees</Label>
