@@ -112,8 +112,10 @@
 
 /*
   HTML emails often ship hardcoded dark text (and light-only styles that get
-  stripped). Force body copy to follow the app theme so it stays readable in
-  both light and dark mode; keep links on the primary accent.
+  stripped). Default body copy follows the app theme so plain/dark-canvas
+  mail stays readable. EmailMessageBody then overrides color on light or dark
+  surfaces so white-on-white / black-on-black does not happen. Links stay on
+  the primary accent.
 */
 .email-message-body {
   color: hsl(var(--foreground));

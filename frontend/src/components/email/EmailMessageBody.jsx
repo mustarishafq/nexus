@@ -1,6 +1,45 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AlertTriangle, ImageOff, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const LIGHT_TEXT = '#f3f4f6';
+const DARK_TEXT = '#1f2937';
+
+function parseCssRgb(color) {
+  if (!color || color === 'transparent') return null;
+  const match = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+  if (!match) return null;
+  const alpha = match[4] === undefined ? 1 : Number(match[4]);
+  if (Number.isNaN(alpha) || alpha < 0.5) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function relativeLuminance([r, g, b]) {
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/**
+ * Theme-colored email text is forced via CSS for dark-mode readability, but
+ * many HTML emails paint their own light (or dark) surfaces. Re-tint text on
+ * those surfaces so contrast stays readable.
+ */
+function applySurfaceContrast(root) {
+  const nodes = [root, ...root.querySelectorAll('*')];
+
+  nodes.forEach((el) => {
+    if (el.tagName === 'A' || el.closest?.('a')) return;
+
+    const bg = parseCssRgb(getComputedStyle(el).backgroundColor);
+    if (!bg) return;
+
+    const luminance = relativeLuminance(bg);
+    if (luminance >= 0.55) {
+      el.style.setProperty('color', DARK_TEXT, 'important');
+    } else if (luminance <= 0.35) {
+      el.style.setProperty('color', LIGHT_TEXT, 'important');
+    }
+  });
+}
 
 export default function EmailMessageBody({ html, text }) {
   const containerRef = useRef(null);
@@ -10,6 +49,12 @@ export default function EmailMessageBody({ html, text }) {
     failed: 0,
     pending: 0,
   });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || !html) return;
+    applySurfaceContrast(container);
+  }, [html]);
 
   useEffect(() => {
     const container = containerRef.current;
