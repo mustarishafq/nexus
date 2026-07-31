@@ -1,30 +1,252 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, Check, ImageIcon, Loader2, Megaphone, MessageCircle, Pencil, Send, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Camera, Check, ImageIcon, ListChecks, Loader2, Megaphone, MessageCircle, Pencil, Plus, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import FeedTextEditor from '@/components/feed/FeedTextEditor';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostEditHistory from '@/components/feed/PostEditHistory';
 import PostInsights, { useMarkPostSeen } from '@/components/feed/PostInsights';
+import PostPoll from '@/components/feed/PostPoll';
 import PostReactions from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
+import { Expandable } from '@/components/ui/expandable';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { flattenCommentReplies } from '@/lib/comments';
 import { buildMentionToken } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { useAuth } from '@/lib/AuthContext';
-import { isEmptyRichText } from '@/lib/richText';
+import { isEmptyRichText, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
 
 const MAX_POST_IMAGES = 10;
+const MAX_POLL_OPTIONS = 6;
+const MAX_POLL_OPTIONS_EDIT = 12;
+const MIN_POLL_OPTIONS = 2;
+const MAX_POLLS_PER_POST = 3;
+
+function pollsFromItem(item) {
+  if (Array.isArray(item?.polls) && item.polls.length > 0) return item.polls;
+  if (item?.poll) return [item.poll];
+  return [];
+}
+
+function emptyPollDraft(key = `poll-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) {
+  return {
+    key,
+    id: null,
+    options: [
+      { key: `${key}-0`, id: null, label: '' },
+      { key: `${key}-1`, id: null, label: '' },
+    ],
+    allowMultiple: false,
+    allowAddOptions: false,
+  };
+}
+
+function pollDraftFromItem(poll, keyPrefix = 'poll') {
+  if (!poll || !Array.isArray(poll.options)) {
+    return emptyPollDraft(keyPrefix);
+  }
+
+  return {
+    key: `${keyPrefix}-${poll.id ?? 'new'}`,
+    id: poll.id ?? null,
+    options: poll.options.map((option, index) => ({
+      key: `opt-${option.id ?? index}`,
+      id: option.id ?? null,
+      label: option.label || '',
+    })),
+    allowMultiple: Boolean(poll.allow_multiple),
+    allowAddOptions: Boolean(poll.allow_add_options),
+  };
+}
+
+function pollDraftsFromItem(item) {
+  return pollsFromItem(item).map((poll, index) => pollDraftFromItem(poll, `poll-${index}`));
+}
+
+function serializePollDraft(options, allowMultiple, allowAddOptions) {
+  const cleaned = options
+    .map((option) => ({
+      id: option.id || undefined,
+      label: String(option.label || '').trim(),
+    }))
+    .filter((option) => option.label);
+
+  return {
+    options: cleaned,
+    allow_multiple: Boolean(allowMultiple),
+    allow_add_options: Boolean(allowAddOptions),
+  };
+}
+
+function isPollDraftValid(draft) {
+  const cleaned = (draft.options || [])
+    .map((option) => String(option.label || '').trim())
+    .filter(Boolean);
+  return cleaned.length >= MIN_POLL_OPTIONS;
+}
+
+function pollDraftUnchanged(poll, draft) {
+  if (!poll && !draft) return true;
+  if (!poll || !draft) return false;
+  const current = serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions);
+  const originalLabels = (poll.options || []).map((option) => ({
+    id: option.id,
+    label: String(option.label || '').trim(),
+  }));
+
+  if (Boolean(poll.allow_multiple) !== current.allow_multiple) return false;
+  if (Boolean(poll.allow_add_options) !== current.allow_add_options) return false;
+  if (originalLabels.length !== current.options.length) return false;
+
+  return originalLabels.every((option, index) => (
+    Number(option.id) === Number(current.options[index].id || 0)
+    && option.label === current.options[index].label
+  ));
+}
+
+function PollEditorPanel({
+  title = 'Poll',
+  options,
+  onOptionsChange,
+  allowMultiple,
+  onAllowMultipleChange,
+  allowAddOptions,
+  onAllowAddOptionsChange,
+  disabled = false,
+  maxOptions = MAX_POLL_OPTIONS,
+  onRemove = null,
+}) {
+  const updateOption = (index, value) => {
+    onOptionsChange(options.map((option, i) => (
+      i === index ? { ...option, label: value } : option
+    )));
+  };
+
+  const addOption = () => {
+    if (options.length >= maxOptions) return;
+    onOptionsChange([
+      ...options,
+      { key: `new-${Date.now()}`, id: null, label: '' },
+    ]);
+  };
+
+  const removeOption = (index) => {
+    if (options.length <= MIN_POLL_OPTIONS) {
+      onOptionsChange(options.map((option, i) => (
+        i === index ? { ...option, label: '' } : option
+      )));
+      return;
+    }
+    onOptionsChange(options.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/70 bg-muted/15 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          <ListChecks className="h-4 w-4 text-primary" />
+          {title}
+        </div>
+        {onRemove ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={onRemove}
+            disabled={disabled}
+          >
+            Remove
+          </Button>
+        ) : null}
+      </div>
+      {options.map((option, index) => (
+        <div key={option.key || `poll-option-${index}`} className="flex items-center gap-2">
+          <Input
+            value={option.label}
+            onChange={(event) => updateOption(index, event.target.value)}
+            placeholder={`Option ${index + 1}`}
+            maxLength={120}
+            disabled={disabled}
+            className="h-9"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 text-muted-foreground"
+            onClick={() => removeOption(index)}
+            disabled={disabled || (options.length <= MIN_POLL_OPTIONS && !option.label.trim())}
+            title="Remove option"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ))}
+      {options.length < maxOptions ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 px-2 text-xs text-muted-foreground"
+          onClick={addOption}
+          disabled={disabled}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add option
+        </Button>
+      ) : null}
+      <div className="space-y-2 border-t border-border/50 pt-2.5">
+        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={allowMultiple}
+            onCheckedChange={(checked) => onAllowMultipleChange(checked === true)}
+            disabled={disabled}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium text-foreground">Allow multiple choices</span>
+            <span className="mt-0.5 block">People can select more than one option</span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={allowAddOptions}
+            onCheckedChange={(checked) => onAllowAddOptionsChange(checked === true)}
+            disabled={disabled}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium text-foreground">Anyone can add options</span>
+            <span className="mt-0.5 block">Colleagues can suggest more answers</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
 
 function BroadcastFeedItem({ item, compact = false }) {
   return (
@@ -314,6 +536,10 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const [expanded, setExpanded] = useState(initialExpanded);
   const [editing, setEditing] = useState(false);
   const [draftBody, setDraftBody] = useState(item.body || '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const itemPolls = pollsFromItem(item);
+  const [draftPolls, setDraftPolls] = useState(() => pollDraftsFromItem(item));
+  const [removedPollIds, setRemovedPollIds] = useState([]);
   const isPending = Boolean(item.is_pending || item.approval_status === 'pending');
   const isAuthor = Number(user?.id) === Number(item.author?.id);
   const canMarkSeen = !isPending && !isAuthor && Boolean(item.id);
@@ -333,13 +559,31 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   useEffect(() => {
     if (!editing) {
       setDraftBody(item.body || '');
+      setDraftPolls(pollDraftsFromItem(item));
+      setRemovedPollIds([]);
     }
-  }, [item.body, editing]);
+  }, [item.body, item.polls, item.poll, editing]);
+
+  const beginEditing = () => {
+    setDraftBody(item.body || '');
+    setDraftPolls(pollDraftsFromItem(item));
+    setRemovedPollIds([]);
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setDraftBody(item.body || '');
+    setDraftPolls(pollDraftsFromItem(item));
+    setRemovedPollIds([]);
+    setEditing(false);
+  };
 
   const deletePost = useMutation({
     mutationFn: () => db.feed.deletePost(item.id),
     onSuccess: () => {
+      setConfirmDelete(false);
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       toast.success('Post deleted.');
     },
     onError: (error) => {
@@ -348,10 +592,44 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   });
 
   const updatePost = useMutation({
-    mutationFn: (body) => db.feed.updatePost(item.id, { body }),
-    onSuccess: () => {
+    mutationFn: async ({ body, pollsToSave, pollsToDelete }) => {
+      let result = await db.feed.updatePost(item.id, { body });
+
+      for (const pollId of pollsToDelete || []) {
+        result = await db.feed.deletePoll(item.id, pollId);
+      }
+
+      for (const poll of pollsToSave || []) {
+        if (poll.id) {
+          result = await db.feed.updatePoll(item.id, poll.id, poll.payload);
+        } else {
+          result = await db.feed.createPoll(item.id, {
+            options: poll.payload.options.map((option) => option.label),
+            allow_multiple: poll.payload.allow_multiple,
+            allow_add_options: poll.payload.allow_add_options,
+          });
+        }
+      }
+
+      return result;
+    },
+    onSuccess: (payload) => {
       setEditing(false);
+      if (payload?.item) {
+        queryClient.setQueriesData({ queryKey: ['company-feed'] }, (current) => {
+          if (!current || !Array.isArray(current.items)) return current;
+          return {
+            ...current,
+            items: current.items.map((entry) => (
+              entry?.type === 'post' && String(entry.id) === String(payload.item.id)
+                ? { ...entry, ...payload.item }
+                : entry
+            )),
+          };
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       queryClient.invalidateQueries({ queryKey: ['post-edits', item.id] });
       toast.success('Post updated.');
     },
@@ -384,11 +662,53 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
 
   const timeAgo = formatDistanceToNow(new Date(item.created_date), { addSuffix: true });
   const moderationBusy = approvePost.isPending || rejectPost.isPending;
+  const pollsValid = draftPolls.every(isPollDraftValid);
   const canSaveEdit =
-    !isEmptyRichText(draftBody) || Boolean(item.image_url || item.image_urls?.length);
-  const draftUnchanged = (draftBody || '') === (item.body || '');
+    (
+      !isEmptyRichText(draftBody)
+      || Boolean(item.image_url || item.image_urls?.length)
+      || draftPolls.length > 0
+      || itemPolls.length > 0
+    ) && pollsValid;
+  const bodyUnchanged = (draftBody || '') === (item.body || '');
+  const pollsUnchanged = removedPollIds.length === 0
+    && draftPolls.length === itemPolls.length
+    && draftPolls.every((draft, index) => pollDraftUnchanged(itemPolls[index], draft));
+  const draftUnchanged = bodyUnchanged && pollsUnchanged;
+
+  const updateDraftPoll = (index, patch) => {
+    setDraftPolls((current) => current.map((poll, i) => (
+      i === index ? { ...poll, ...patch } : poll
+    )));
+  };
+
+  const handleSaveEdit = () => {
+    if (updatePost.isPending || !canSaveEdit || draftUnchanged) return;
+    if (!pollsValid) {
+      toast.error(`Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
+      return;
+    }
+
+    const pollsToSave = draftPolls
+      .map((draft, index) => {
+        const payload = serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions);
+        const original = itemPolls.find((poll) => Number(poll.id) === Number(draft.id)) || null;
+        if (draft.id && pollDraftUnchanged(original, draft)) {
+          return null;
+        }
+        return { id: draft.id, payload, index };
+      })
+      .filter(Boolean);
+
+    updatePost.mutate({
+      body: draftBody,
+      pollsToSave,
+      pollsToDelete: removedPollIds,
+    });
+  };
 
   return (
+    <>
     <article
       ref={articleRef}
       id={feedPostElementId(item.id)}
@@ -444,10 +764,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground opacity-100 hover:text-foreground md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-                  onClick={() => {
-                    setDraftBody(item.body || '');
-                    setEditing(true);
-                  }}
+                  onClick={beginEditing}
                   disabled={updatePost.isPending}
                   title="Edit post"
                 >
@@ -460,7 +777,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground opacity-100 hover:text-destructive md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-                  onClick={() => deletePost.mutate()}
+                  onClick={() => setConfirmDelete(true)}
                   disabled={deletePost.isPending}
                   title="Delete post"
                 >
@@ -480,18 +797,54 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                 maxLength={2000}
                 disabled={updatePost.isPending}
               />
+              <div className="space-y-2">
+                {draftPolls.map((draft, index) => (
+                  <PollEditorPanel
+                    key={draft.key}
+                    title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
+                    options={draft.options}
+                    onOptionsChange={(options) => updateDraftPoll(index, { options })}
+                    allowMultiple={draft.allowMultiple}
+                    onAllowMultipleChange={(allowMultiple) => updateDraftPoll(index, { allowMultiple })}
+                    allowAddOptions={draft.allowAddOptions}
+                    onAllowAddOptionsChange={(allowAddOptions) => updateDraftPoll(index, { allowAddOptions })}
+                    disabled={updatePost.isPending}
+                    maxOptions={MAX_POLL_OPTIONS_EDIT}
+                    onRemove={() => {
+                      setDraftPolls((current) => current.filter((_, i) => i !== index));
+                      if (draft.id) {
+                        setRemovedPollIds((current) => (
+                          current.includes(draft.id) ? current : [...current, draft.id]
+                        ));
+                      }
+                    }}
+                  />
+                ))}
+                {draftPolls.length < MAX_POLLS_PER_POST ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    disabled={updatePost.isPending}
+                    onClick={() => setDraftPolls((current) => [...current, emptyPollDraft()])}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {draftPolls.length === 0 ? 'Add poll' : 'Add another poll'}
+                  </Button>
+                ) : null}
+              </div>
               <div className="flex items-center justify-end gap-2">
-                <p className="mr-auto text-xs tabular-nums text-muted-foreground">{draftBody.length}/2000</p>
+                <p className="mr-auto text-xs tabular-nums text-muted-foreground">
+                  {stripHtml(draftBody).length}/2000
+                </p>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-8"
                   disabled={updatePost.isPending}
-                  onClick={() => {
-                    setDraftBody(item.body || '');
-                    setEditing(false);
-                  }}
+                  onClick={cancelEditing}
                 >
                   Cancel
                 </Button>
@@ -500,7 +853,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                   size="sm"
                   className="h-8"
                   disabled={updatePost.isPending || !canSaveEdit || draftUnchanged}
-                  onClick={() => updatePost.mutate(draftBody)}
+                  onClick={handleSaveEdit}
                 >
                   {updatePost.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
                 </Button>
@@ -513,9 +866,22 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           ) : null}
         </div>
 
-        {!editing && (item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
+        {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
           <div className="col-span-2 mt-2.5 min-w-0">
             <PostImageGrid item={item} />
+          </div>
+        ) : null}
+
+        {!editing && itemPolls.length > 0 ? (
+          <div className="col-start-2 mt-2.5 min-w-0 space-y-2 mr-[calc(2.25rem+0.625rem)] md:mr-[calc(2.5rem+0.75rem)]">
+            {itemPolls.map((poll) => (
+              <PostPoll
+                key={poll.id}
+                postId={item.id}
+                poll={poll}
+                disabled={isPending}
+              />
+            ))}
           </div>
         ) : null}
 
@@ -590,17 +956,47 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           </div>
         ) : null}
 
-        {!isPending && !editing && expanded ? (
+        <Expandable
+          open={!isPending && !editing && expanded}
+          className="col-span-2 mt-2 md:col-span-1 md:col-start-2"
+        >
           <PostComments
             postId={item.id}
             commentsCount={item.comments_count || 0}
             compact={compact}
             onCollapse={() => setExpanded(false)}
-            className="col-span-2 mt-2 md:col-span-1 md:col-start-2"
           />
-        ) : null}
+        </Expandable>
       </div>
     </article>
+
+    <AlertDialog open={confirmDelete} onOpenChange={(open) => !open && !deletePost.isPending && setConfirmDelete(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the post
+            {itemPolls.length > 0 ? `, ${itemPolls.length === 1 ? 'poll' : 'polls'}` : ''}
+            {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? ', photos' : ''}
+            , and comments from the company feed.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deletePost.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={deletePost.isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              deletePost.mutate();
+            }}
+          >
+            {deletePost.isPending ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -621,6 +1017,7 @@ export function FeedComposer({ className }) {
   const cameraInputRef = useRef(null);
   const [body, setBody] = useState('');
   const [imageItems, setImageItems] = useState([]);
+  const [draftPolls, setDraftPolls] = useState([]);
   const requiresApproval = Boolean(user?.feed_post_requires_approval);
 
   const clearImages = () => {
@@ -683,7 +1080,7 @@ export function FeedComposer({ className }) {
   };
 
   const createPost = useMutation({
-    mutationFn: async ({ text, files }) => {
+    mutationFn: async ({ text, files, polls }) => {
       const image_urls = [];
 
       for (const file of files) {
@@ -693,12 +1090,14 @@ export function FeedComposer({ className }) {
         }
       }
 
-      return db.feed.createPost({ body: text, image_urls });
+      return db.feed.createPost({ body: text, image_urls, polls });
     },
     onSuccess: (payload) => {
       setBody('');
       clearImages();
+      setDraftPolls([]);
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';
       toast.success(pending ? 'Post submitted for approval.' : 'Post shared.');
     },
@@ -717,138 +1116,240 @@ export function FeedComposer({ className }) {
     addImageFiles(selected);
   };
 
-  const canPost = Boolean(!isEmptyRichText(body) || imageItems.length > 0);
+  const validPolls = draftPolls
+    .map((draft) => serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions))
+    .filter((poll) => poll.options.length >= MIN_POLL_OPTIONS);
+  const hasValidPolls = validPolls.length > 0 && validPolls.length === draftPolls.length;
+  const canPost = Boolean(
+    (!isEmptyRichText(body) || imageItems.length > 0 || hasValidPolls)
+    && (draftPolls.length === 0 || hasValidPolls)
+  );
   const isSubmitting = createPost.isPending;
+  const plainLength = stripHtml(body).length;
+  const nearLimit = plainLength >= 1800;
+
+  const updateComposerPoll = (index, patch) => {
+    setDraftPolls((current) => current.map((poll, i) => (
+      i === index ? { ...poll, ...patch } : poll
+    )));
+  };
+
+  const addComposerPoll = () => {
+    setDraftPolls((current) => (
+      current.length >= MAX_POLLS_PER_POST ? current : [...current, emptyPollDraft()]
+    ));
+  };
 
   const handleSubmit = () => {
     if (submitLockRef.current || createPost.isPending || !canPost) return;
+
+    if (draftPolls.length > 0 && !hasValidPolls) {
+      toast.error(`Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
+      return;
+    }
+
     submitLockRef.current = true;
     createPost.mutate({
       text: body,
       files: imageItems.map((item) => item.file),
+      polls: hasValidPolls ? validPolls : null,
     });
   };
 
   return (
-    <div className={cn('rounded-2xl border border-border bg-card p-3 sm:p-4', className)}>
-      <FeedTextEditor
-        value={body}
-        onChange={setBody}
-        placeholder={
-          isMobile
-            ? 'Share an update...'
-            : 'Share an update... Type @ to mention someone'
-        }
-        minHeight={isMobile ? '6.5rem' : '8rem'}
-        maxLength={2000}
-        disabled={isSubmitting}
-      />
+    <div className={cn('overflow-hidden rounded-2xl border border-border bg-card', className)}>
+      <div className="flex gap-3 p-3 sm:gap-3.5 sm:p-4">
+        <UserAvatar
+          user={user}
+          className="mt-0.5 h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+          showOnlineStatus={false}
+        />
+        <div className="min-w-0 flex-1">
+          <FeedTextEditor
+            value={body}
+            onChange={setBody}
+            placeholder={
+              isMobile
+                ? 'Share an update...'
+                : 'Share an update… Type @ to mention someone'
+            }
+            minHeight={isMobile ? '4.25rem' : '5rem'}
+            maxLength={2000}
+            disabled={isSubmitting}
+            editorClassName="border-0 shadow-none rounded-xl bg-muted/25"
+          />
 
-      {requiresApproval ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Your posts need admin or HR approval before they appear in the company feed.
-        </p>
-      ) : null}
+          {requiresApproval ? (
+            <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+              Your posts need admin or HR approval before they appear in the company feed.
+            </p>
+          ) : null}
 
-      {imageItems.length > 0 ? (
-        <div
-          className={cn(
-            'mt-3 grid gap-2',
-            imageItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'
-          )}
-        >
-          {imageItems.map((item) => (
-            <div
-              key={item.id}
-              className="relative overflow-hidden rounded-xl border border-border/60 bg-muted/20"
-            >
-              <img
-                src={item.preview}
-                alt="Selected photo preview"
-                className={cn(
-                  'w-full object-cover',
-                  imageItems.length === 1 ? 'max-h-56 sm:max-h-64' : 'h-28 sm:h-32'
-                )}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full bg-background/90 shadow-sm"
-                onClick={() => removeImage(item.id)}
-                disabled={isSubmitting}
-                title="Remove photo"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
+          {draftPolls.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {draftPolls.map((draft, index) => (
+                <PollEditorPanel
+                  key={draft.key}
+                  title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
+                  options={draft.options}
+                  onOptionsChange={(options) => updateComposerPoll(index, { options })}
+                  allowMultiple={draft.allowMultiple}
+                  onAllowMultipleChange={(allowMultiple) => updateComposerPoll(index, { allowMultiple })}
+                  allowAddOptions={draft.allowAddOptions}
+                  onAllowAddOptionsChange={(allowAddOptions) => updateComposerPoll(index, { allowAddOptions })}
+                  disabled={isSubmitting}
+                  maxOptions={MAX_POLL_OPTIONS}
+                  onRemove={() => setDraftPolls((current) => current.filter((_, i) => i !== index))}
+                />
+              ))}
+              {draftPolls.length < MAX_POLLS_PER_POST ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={addComposerPoll}
+                  disabled={isSubmitting}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add another poll
+                </Button>
+              ) : null}
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
 
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex shrink-0 items-center gap-0.5">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,image/jpeg,image/jpg,image/png,image/webp,image/gif,.heic,.heif"
-            multiple
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
-            title="Upload photos"
-          >
-            <ImageIcon className="h-4 w-4 sm:mr-1.5" />
-            <span className="hidden sm:inline">Photo</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-10 touch-manipulation px-2.5 text-muted-foreground hover:text-foreground sm:h-8 sm:px-2"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
-            title="Take photo"
-          >
-            <Camera className="h-4 w-4 sm:mr-1.5" />
-            <span className="hidden sm:inline">Camera</span>
-          </Button>
           {imageItems.length > 0 ? (
-            <span className="hidden text-[11px] text-muted-foreground sm:inline">
-              {imageItems.length}/{MAX_POST_IMAGES}
-            </span>
+            <div
+              className={cn(
+                'mt-3 grid gap-2',
+                imageItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'
+              )}
+            >
+              {imageItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="relative overflow-hidden rounded-xl border border-border/60 bg-muted/20"
+                >
+                  <img
+                    src={item.preview}
+                    alt="Selected photo preview"
+                    className={cn(
+                      'w-full object-cover',
+                      imageItems.length === 1 ? 'max-h-56 sm:max-h-64' : 'h-28 sm:h-32'
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full bg-background/90 shadow-sm"
+                    onClick={() => removeImage(item.id)}
+                    disabled={isSubmitting}
+                    title="Remove photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           ) : null}
         </div>
-        <p className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{body.length}/2000</p>
+      </div>
+
+      <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/10 px-2.5 py-2 sm:gap-2 sm:px-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,image/jpeg,image/jpg,image/png,image/webp,image/gif,.heic,.heif"
+          multiple
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleImageSelect}
+        />
         <Button
           type="button"
-          size="icon"
-          className="h-10 w-10 shrink-0 touch-manipulation rounded-full sm:h-9 sm:w-9"
-          disabled={isSubmitting || !canPost}
-          title="Post"
-          onClick={handleSubmit}
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground sm:h-8"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
+          title="Upload photos"
         >
-          {isSubmitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <SendHorizontal className="h-4 w-4" />
-          )}
+          <ImageIcon className="h-4 w-4" />
+          <span className="hidden text-xs sm:inline">Photo</span>
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground sm:h-8"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
+          title="Take photo"
+        >
+          <Camera className="h-4 w-4" />
+          <span className="hidden text-xs sm:inline">Camera</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'h-9 gap-1.5 rounded-full px-2.5 sm:h-8',
+            draftPolls.length > 0
+              ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+              : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          )}
+          onClick={addComposerPoll}
+          disabled={isSubmitting || draftPolls.length >= MAX_POLLS_PER_POST}
+          title={draftPolls.length >= MAX_POLLS_PER_POST ? `Up to ${MAX_POLLS_PER_POST} polls per post` : 'Add poll'}
+        >
+          <ListChecks className="h-4 w-4" />
+          <span className="hidden text-xs sm:inline">
+            {draftPolls.length > 0 ? `Poll (${draftPolls.length})` : 'Poll'}
+          </span>
+        </Button>
+        {imageItems.length > 0 ? (
+          <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:inline">
+            {imageItems.length}/{MAX_POST_IMAGES}
+          </span>
+        ) : null}
+
+        <div className="ml-auto flex items-center gap-2 sm:gap-2.5">
+          <p
+            className={cn(
+              'text-[11px] tabular-nums sm:text-xs',
+              nearLimit ? 'text-amber-500' : 'text-muted-foreground'
+            )}
+          >
+            {plainLength}/2000
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className={cn(
+              'h-9 gap-1.5 rounded-full px-3.5 touch-manipulation sm:h-8',
+              !canPost && 'opacity-50'
+            )}
+            disabled={isSubmitting || !canPost}
+            title="Post"
+            onClick={handleSubmit}
+          >
+            {isSubmitting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <SendHorizontal className="h-3.5 w-3.5" />
+            )}
+            <span className="text-xs font-medium">Post</span>
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Expandable } from '@/components/ui/expandable';
 import { cn } from '@/lib/utils';
 import IntegrationFieldMappingBuilder from '@/components/applications/mapping/IntegrationFieldMappingBuilder';
 
@@ -124,7 +125,7 @@ export default function WebhookIntegrationEditor({
         )}
       </button>
 
-      {open ? (
+      <Expandable open={open}>
         <div className="border-t border-border/60 px-4 pb-4 pt-3 space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full grid grid-cols-3 h-9 bg-muted/50">
@@ -282,7 +283,7 @@ export default function WebhookIntegrationEditor({
             </TabsContent>
           </Tabs>
         </div>
-      ) : null}
+      </Expandable>
     </div>
   );
 }

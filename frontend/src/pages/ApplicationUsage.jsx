@@ -1,7 +1,7 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
@@ -266,7 +266,11 @@ function FilterTabGroup({ tabs, value, onChange }) {
 
 export default function ApplicationUsage() {
   const { user } = useAuth();
-  const [selectedAppId, setSelectedAppId] = useState('overall');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const appFromQuery = searchParams.get('app');
+  const [selectedAppId, setSelectedAppId] = useState(
+    () => (appFromQuery && appFromQuery !== 'overall' ? String(appFromQuery) : 'overall')
+  );
   const [period, setPeriod] = useState('wau');
   const [userView, setUserView] = useState('active');
   const [search, setSearch] = useState('');
@@ -302,6 +306,22 @@ export default function ApplicationUsage() {
       setSelectedAppId('overall');
     }
   }, [manageableApps, selectedAppId]);
+
+  useEffect(() => {
+    const next = selectedAppId === 'overall' ? null : String(selectedAppId);
+    const current = searchParams.get('app');
+    if (next === current || (!next && !current)) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    if (next) {
+      nextParams.set('app', next);
+    } else {
+      nextParams.delete('app');
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [selectedAppId, searchParams, setSearchParams]);
 
   const {
     data: usageDetail,

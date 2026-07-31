@@ -280,6 +280,43 @@ class ApplicationController extends Controller
         return response()->json(['message' => 'Order updated']);
     }
 
+    public function myUsage(Request $request, Application $application): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $this->canViewSystem($user, $application)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $weekStart = now()->subDays(7);
+        $monthStart = now()->subDays(30);
+
+        $row = ActivityLog::query()
+            ->where('system_id', $application->slug)
+            ->where('user_id', (string) $user->id)
+            ->whereIn('action', ['login', 'view'])
+            ->selectRaw('MAX(created_at) as last_opened_at')
+            ->selectRaw('COUNT(*) as launches_all_time')
+            ->selectRaw('SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as launches_7d', [$weekStart])
+            ->selectRaw('SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as launches_30d', [$monthStart])
+            ->first();
+
+        $lastOpenedAt = $row?->last_opened_at
+            ? Carbon::parse($row->last_opened_at)->toISOString()
+            : null;
+
+        return response()->json([
+            'last_opened_at' => $lastOpenedAt,
+            'launches_7d' => (int) ($row?->launches_7d ?? 0),
+            'launches_30d' => (int) ($row?->launches_30d ?? 0),
+            'launches_all_time' => (int) ($row?->launches_all_time ?? 0),
+        ]);
+    }
+
     public function usageStats(Request $request): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);

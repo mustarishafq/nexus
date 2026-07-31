@@ -6,6 +6,7 @@ use App\Support\UserRoles;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Post extends Model
 {
@@ -70,6 +71,19 @@ class Post extends Model
     public function reaches(): HasMany
     {
         return $this->hasMany(PostReach::class);
+    }
+
+    public function polls(): HasMany
+    {
+        return $this->hasMany(PostPoll::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * @deprecated Use polls() — kept for transitional callers that expect a single poll.
+     */
+    public function poll(): HasOne
+    {
+        return $this->hasOne(PostPoll::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /**

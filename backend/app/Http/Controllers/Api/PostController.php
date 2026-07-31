@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\NotifyFeedPostJob;
 use App\Models\Post;
 use App\Models\PostEdit;
+use App\Models\PostPoll;
 use App\Models\User;
 use App\Services\FeedNotificationService;
 use App\Services\MentionService;
@@ -37,6 +38,16 @@ class PostController extends Controller
             'image_url' => ['nullable', 'string', 'max:2048'],
             'image_urls' => ['nullable', 'array', 'max:'.Post::MAX_IMAGES],
             'image_urls.*' => ['string', 'max:2048'],
+            'poll' => ['nullable', 'array'],
+            'poll.options' => ['required_with:poll', 'array', 'min:'.PostPoll::MIN_OPTIONS, 'max:'.PostPoll::MAX_OPTIONS],
+            'poll.options.*' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
+            'poll.allow_multiple' => ['sometimes', 'boolean'],
+            'poll.allow_add_options' => ['sometimes', 'boolean'],
+            'polls' => ['nullable', 'array', 'max:'.PostPoll::MAX_PER_POST],
+            'polls.*.options' => ['required', 'array', 'min:'.PostPoll::MIN_OPTIONS, 'max:'.PostPoll::MAX_OPTIONS],
+            'polls.*.options.*' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
+            'polls.*.allow_multiple' => ['sometimes', 'boolean'],
+            'polls.*.allow_add_options' => ['sometimes', 'boolean'],
         ]);
 
         $body = trim($validated['body'] ?? '');
@@ -54,22 +65,75 @@ class PostController extends Controller
 
         $imageUrl = $imageUrls[0] ?? null;
 
-        if ($body === '' && $imageUrls === []) {
-            return response()->json(['message' => 'Post must include text or an image.'], 422);
+        $pollPayloads = collect($validated['polls'] ?? []);
+        if ($pollPayloads->isEmpty() && isset($validated['poll'])) {
+            $pollPayloads = collect([$validated['poll']]);
+        }
+
+        $normalizedPolls = $pollPayloads
+            ->map(function (array $poll) {
+                $options = collect($poll['options'] ?? [])
+                    ->map(fn ($label) => trim((string) $label))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->take(PostPoll::MAX_OPTIONS)
+                    ->all();
+
+                return [
+                    'options' => $options,
+                    'allow_multiple' => (bool) ($poll['allow_multiple'] ?? false),
+                    'allow_add_options' => (bool) ($poll['allow_add_options'] ?? false),
+                ];
+            })
+            ->filter(fn (array $poll) => count($poll['options']) >= PostPoll::MIN_OPTIONS)
+            ->take(PostPoll::MAX_PER_POST)
+            ->values()
+            ->all();
+
+        $hasPolls = $normalizedPolls !== [];
+
+        if ($body === '' && $imageUrls === [] && ! $hasPolls) {
+            return response()->json(['message' => 'Post must include text, an image, or a poll.'], 422);
+        }
+
+        if (($pollPayloads->isNotEmpty() || isset($validated['poll'])) && ! $hasPolls) {
+            return response()->json([
+                'message' => 'Each poll needs at least '.PostPoll::MIN_OPTIONS.' unique options.',
+            ], 422);
         }
 
         $requiresApproval = AppSettings::userRequiresFeedPostApproval($viewer);
         $now = now();
 
-        $post = Post::create([
-            'author_user_id' => $viewer->id,
-            'body' => $body,
-            'image_url' => $imageUrl,
-            'image_urls' => $imageUrls === [] ? null : $imageUrls,
-            'approval_status' => $requiresApproval ? Post::APPROVAL_PENDING : Post::APPROVAL_APPROVED,
-            'approved_by_user_id' => $requiresApproval ? null : $viewer->id,
-            'approved_at' => $requiresApproval ? null : $now,
-        ]);
+        $post = DB::transaction(function () use ($viewer, $body, $imageUrl, $imageUrls, $requiresApproval, $now, $normalizedPolls) {
+            $post = Post::create([
+                'author_user_id' => $viewer->id,
+                'body' => $body,
+                'image_url' => $imageUrl,
+                'image_urls' => $imageUrls === [] ? null : $imageUrls,
+                'approval_status' => $requiresApproval ? Post::APPROVAL_PENDING : Post::APPROVAL_APPROVED,
+                'approved_by_user_id' => $requiresApproval ? null : $viewer->id,
+                'approved_at' => $requiresApproval ? null : $now,
+            ]);
+
+            foreach ($normalizedPolls as $sortOrder => $pollData) {
+                $poll = $post->polls()->create([
+                    'sort_order' => $sortOrder,
+                    'allow_multiple' => $pollData['allow_multiple'],
+                    'allow_add_options' => $pollData['allow_add_options'],
+                ]);
+
+                foreach ($pollData['options'] as $index => $label) {
+                    $poll->options()->create([
+                        'label' => $label,
+                        'sort_order' => $index,
+                    ]);
+                }
+            }
+
+            return $post;
+        });
 
         if ($requiresApproval) {
             NotifyFeedPostJob::dispatch(
@@ -89,7 +153,7 @@ class PostController extends Controller
             }
         }
 
-        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
@@ -114,14 +178,15 @@ class PostController extends Controller
 
         $body = trim($validated['body'] ?? '');
         $imageUrls = $post->resolvedImageUrls();
+        $hasPoll = $post->polls()->exists();
 
-        if ($body === '' && $imageUrls === []) {
-            return response()->json(['message' => 'Post must include text or an image.'], 422);
+        if ($body === '' && $imageUrls === [] && ! $hasPoll) {
+            return response()->json(['message' => 'Post must include text, an image, or a poll.'], 422);
         }
 
         $previousBody = (string) ($post->body ?? '');
         if ($previousBody === $body) {
-            $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
+            $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
             return response()->json([
                 'item' => $this->serializePost($post, $viewer),
@@ -145,7 +210,7 @@ class PostController extends Controller
             $this->notifyMentions($viewer, $post, $body);
         }
 
-        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
@@ -218,7 +283,7 @@ class PostController extends Controller
             }
         }
 
-        $post->load(['author', 'reactions'])->loadCount(['comments', 'edits', 'views', 'reaches']);
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),

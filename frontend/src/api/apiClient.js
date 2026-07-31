@@ -543,20 +543,98 @@ export const db = {
 			return request(`/feed${queryString}`);
 		},
 
-		async createPost({ body = '', image_url = null, image_urls = null } = {}) {
+		async activeDiscussions({ limit } = {}) {
+			return request(`/feed/active${buildQuery({ limit })}`);
+		},
+
+		async createPost({ body = '', image_url = null, image_urls = null, poll = null, polls = null } = {}) {
 			const urls = Array.isArray(image_urls)
 				? image_urls.filter(Boolean)
 				: image_url
 					? [image_url]
 					: [];
 
+			const payload = {
+				body,
+				image_url: urls[0] || null,
+				image_urls: urls,
+			};
+
+			const normalizePoll = (entry) => {
+				if (!entry || !Array.isArray(entry.options)) return null;
+				const options = entry.options
+					.map((option) => {
+						if (typeof option === 'string') return option.trim();
+						if (option && typeof option === 'object') return String(option.label || '').trim();
+						return '';
+					})
+					.filter(Boolean);
+				if (options.length < 2) return null;
+				return {
+					options,
+					allow_multiple: Boolean(entry.allow_multiple),
+					allow_add_options: Boolean(entry.allow_add_options),
+				};
+			};
+
+			const normalizedPolls = (Array.isArray(polls) ? polls : [])
+				.map(normalizePoll)
+				.filter(Boolean);
+
+			if (normalizedPolls.length > 0) {
+				payload.polls = normalizedPolls;
+			} else {
+				const single = normalizePoll(poll);
+				if (single) {
+					payload.poll = single;
+				}
+			}
+
 			return request('/posts', {
 				method: 'POST',
+				body: payload,
+			});
+		},
+
+		async voteOnPoll(postId, pollId, optionId) {
+			return request(`/posts/${postId}/polls/${pollId}/vote`, {
+				method: 'POST',
+				body: { option_id: optionId },
+			});
+		},
+
+		async addPollOption(postId, pollId, label) {
+			return request(`/posts/${postId}/polls/${pollId}/options`, {
+				method: 'POST',
+				body: { label },
+			});
+		},
+
+		async updatePoll(postId, pollId, { options, allow_multiple, allow_add_options } = {}) {
+			return request(`/posts/${postId}/polls/${pollId}`, {
+				method: 'PUT',
 				body: {
-					body,
-					image_url: urls[0] || null,
-					image_urls: urls,
+					options,
+					allow_multiple,
+					allow_add_options,
 				},
+			});
+		},
+
+		async createPoll(postId, { options, allow_multiple, allow_add_options } = {}) {
+			return request(`/posts/${postId}/polls`, {
+				method: 'POST',
+				body: {
+					options,
+					allow_multiple,
+					allow_add_options,
+				},
+			});
+		},
+
+		async deletePoll(postId, pollId) {
+			return request(`/posts/${postId}/polls/${pollId}`, {
+				method: 'DELETE',
 			});
 		},
 
@@ -1000,6 +1078,10 @@ export const db = {
 	async getApplicationUsageStats(applicationId = null) {
 		const params = applicationId ? `?application_id=${encodeURIComponent(applicationId)}` : '';
 		return request(`/applications/usage-stats${params}`);
+	},
+
+	async getMyApplicationUsage(applicationId) {
+		return request(`/applications/${applicationId}/my-usage`);
 	},
 
 	async previewApplicationEventMapping(applicationId, event, notificationConfig = null) {

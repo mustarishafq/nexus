@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 import { SmilePlus } from 'lucide-react';
 import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
+import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
 
@@ -18,6 +20,7 @@ export default function PostReactions({
 }) {
   const queryClient = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [popReaction, setPopReaction] = useState(null);
   const isComment = Boolean(commentId);
   const reactions = item.available_reactions || DEFAULT_REACTIONS;
   const reactionCounts = item.reaction_counts || {};
@@ -56,17 +59,33 @@ export default function PostReactions({
   const reactionButton = (reaction, { showCount = false, fromPicker = false } = {}) => {
     const count = reactionCounts[reaction] || 0;
     const isActive = myReaction === reaction;
+    const shouldPop = popReaction === reaction;
 
     return (
-      <button
+      <motion.button
         key={reaction}
         type="button"
+        layout
         disabled={reactMutation.isPending}
+        whileHover={reactionMotion.whileHover}
+        whileTap={reactionMotion.whileTap}
+        transition={shouldPop ? reactionMotion.activePopTransition : reactionMotion.spring}
+        animate={shouldPop ? { scale: reactionMotion.activePopScale } : { scale: 1 }}
+        onAnimationComplete={() => {
+          if (popReaction === reaction) {
+            setPopReaction(null);
+          }
+        }}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
           if (fromPicker) {
             setPickerOpen(false);
+          }
+          // Burst + chip pop only on add/change — skip toggle-off.
+          if (myReaction !== reaction) {
+            spawnReactionBurst(reaction, event.clientX, event.clientY, { compact });
+            setPopReaction(reaction);
           }
           reactMutation.mutate(reaction);
         }}
@@ -85,7 +104,7 @@ export default function PostReactions({
             {count}
           </span>
         ) : null}
-      </button>
+      </motion.button>
     );
   };
 
@@ -94,11 +113,27 @@ export default function PostReactions({
       className={cn('flex flex-wrap items-center', compact ? 'gap-1' : 'gap-1 md:gap-1.5')}
       onClick={(event) => event.stopPropagation()}
     >
-      {activeEntries.map(([reaction]) => reactionButton(reaction, { showCount: true }))}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {activeEntries.map(([reaction]) => (
+          <motion.div
+            key={reaction}
+            initial={reactionMotion.chipEnter.initial}
+            animate={reactionMotion.chipEnter.animate}
+            exit={reactionMotion.chipEnter.exit}
+            transition={reactionMotion.chipEnter.transition}
+            className="inline-flex"
+          >
+            {reactionButton(reaction, { showCount: true })}
+          </motion.div>
+        ))}
+      </AnimatePresence>
       <Popover open={pickerOpen} onOpenChange={setPickerOpen} modal={false}>
         <PopoverTrigger asChild>
-          <button
+          <motion.button
             type="button"
+            whileHover={reactionMotion.whileHover}
+            whileTap={reactionMotion.whileTap}
+            transition={reactionMotion.spring}
             className={cn(
               'inline-flex items-center justify-center gap-1 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted/60 hover:text-primary',
               compact ? 'h-6 min-w-6 px-1.5' : 'h-8 min-w-8 px-2',
@@ -112,7 +147,7 @@ export default function PostReactions({
             ) : (
               <SmilePlus className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
             )}
-          </button>
+          </motion.button>
         </PopoverTrigger>
         <PopoverContent align="start" className="z-[200] w-auto p-2" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap gap-1.5">

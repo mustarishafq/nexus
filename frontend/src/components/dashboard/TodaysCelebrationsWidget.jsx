@@ -1,12 +1,18 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO, startOfWeek, endOfWeek } from 'date-fns';
-import { Cake, Award, PartyPopper, SmilePlus } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Cake, Award, MessageCircle, PartyPopper, SmilePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MiniChatPanel from '@/components/messages/MiniChatPanel';
+import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { getDisplayName } from '@/lib/profile';
+import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -69,15 +75,6 @@ function ScrollingName({ name, className }) {
 
 function celebrationsQueryKey(localDate) {
   return ['dashboard-celebrations', localDate];
-}
-
-function celebrationDayLabel(celebrationDate) {
-  if (!celebrationDate) return 'Soon';
-
-  const date = typeof celebrationDate === 'string' ? parseISO(celebrationDate) : celebrationDate;
-  if (isToday(date)) return 'Today';
-  if (isTomorrow(date)) return 'Tomorrow';
-  return format(date, 'EEE');
 }
 
 function parseCelebrationDate(celebrationDate) {
@@ -159,34 +156,11 @@ function applyReactionChange(person, reaction, reactionId = person.my_reaction?.
   };
 }
 
-function CelebrationDateBadge({ date, accent }) {
-  const today = date ? isToday(date) : false;
-
-  const todayTone =
-    accent === 'anniversary'
-      ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
-      : 'bg-pink-500 text-white shadow-sm shadow-pink-500/20';
-
-  return (
-    <div
-      className={cn(
-        'flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl',
-        today ? todayTone : 'border border-border/70 bg-muted/30'
-      )}
-    >
-      <span
-        className={cn(
-          'text-[9px] font-semibold uppercase leading-none tracking-wide',
-          today ? 'text-white/80' : 'text-muted-foreground'
-        )}
-      >
-        {date ? format(date, 'MMM') : '—'}
-      </span>
-      <span className="mt-0.5 text-sm font-bold leading-none tabular-nums">
-        {date ? format(date, 'd') : '·'}
-      </span>
-    </div>
-  );
+function celebrationGroupLabel(date) {
+  if (!date) return 'Soon';
+  if (isToday(date)) return `Today · ${format(date, 'MMM d')}`;
+  if (isTomorrow(date)) return `Tomorrow · ${format(date, 'MMM d')}`;
+  return format(date, 'EEE · MMM d');
 }
 
 function ReactionSummary({ reactionCounts, limit = 3 }) {
@@ -229,17 +203,20 @@ function CelebrationFeedCard({
   accent,
   reactions,
   onReact,
+  onMessage,
   isSubmitting,
+  isMessaging,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const canReact = person.can_react ?? person.can_wish !== false;
+  const canMessage = canReact;
   const myReaction = person.my_reaction?.reaction ?? person.my_wish?.reaction ?? null;
   const reactionCounts = person.reaction_counts || {};
   const date = parseCelebrationDate(celebrationDate);
   const today = date ? isToday(date) : false;
   const displayName = getDisplayName(person, person.email);
-  const dayLabel = subtitle || celebrationDayLabel(celebrationDate);
   const hasReactions = Object.keys(reactionCounts).length > 0;
+  const hasMeta = Boolean(subtitle) || hasReactions;
 
   const accentStyles = {
     birthday: {
@@ -252,7 +229,7 @@ function CelebrationFeedCard({
     },
   }[accent];
 
-  const handleReact = (reaction) => {
+  const handleReact = (reaction, event) => {
     if (!canReact || isSubmitting) return;
 
     const reactionId = person.my_reaction?.id ?? person.my_wish?.id;
@@ -260,6 +237,10 @@ function CelebrationFeedCard({
       onReact({ removeReactionId: reactionId });
       setPickerOpen(false);
       return;
+    }
+
+    if (event) {
+      spawnReactionBurst(reaction, event.clientX, event.clientY);
     }
 
     onReact({
@@ -271,15 +252,16 @@ function CelebrationFeedCard({
     setPickerOpen(false);
   };
 
+  const wishLabel =
+    celebrationType === 'service_anniversary' ? 'Send anniversary message' : 'Send birthday message';
+
   return (
     <div
       className={cn(
-        'flex items-center gap-2.5 px-2.5 py-2.5 transition-colors',
+        'flex items-center gap-2.5 px-3 py-2.5 transition-colors sm:gap-3 sm:px-3.5',
         today && accentStyles.todayRow
       )}
     >
-      <CelebrationDateBadge date={date} accent={accent} />
-
       <UserAvatar
         user={person}
         className="h-8 w-8 shrink-0"
@@ -288,66 +270,94 @@ function CelebrationFeedCard({
 
       <div className="min-w-0 flex-1">
         <ScrollingName name={displayName} />
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
-          {dayLabel ? <span className="shrink-0">{dayLabel}</span> : null}
-          <ReactionSummary reactionCounts={reactionCounts} />
-        </div>
+        {hasMeta ? (
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+            {subtitle ? <span className="min-w-0 truncate">{subtitle}</span> : null}
+            <ReactionSummary reactionCounts={reactionCounts} />
+          </div>
+        ) : null}
       </div>
 
-      {canReact ? (
-        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-          <PopoverTrigger asChild>
-            <button
+      {(canReact || canMessage) ? (
+        <div className="flex shrink-0 items-center gap-1">
+          {canMessage ? (
+            <motion.button
               type="button"
-              disabled={isSubmitting}
-              title="React"
-              className={cn(
-                'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                myReaction && 'border-primary/30 bg-primary/5 text-primary'
-              )}
+              disabled={isMessaging}
+              title={wishLabel}
+              aria-label={wishLabel}
+              whileHover={reactionMotion.whileHover}
+              whileTap={reactionMotion.whileTap}
+              transition={reactionMotion.spring}
+              onClick={() => onMessage?.(person, celebrationType)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted hover:text-primary"
             >
-              {myReaction ? (
-                <span className="text-sm leading-none">{myReaction}</span>
-              ) : (
-                <SmilePlus className="h-3.5 w-3.5" />
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-auto p-2">
-            <div className="flex gap-1">
-              {reactions.map((reaction) => (
-                <button
-                  key={reaction}
+              <MessageCircle className="h-3.5 w-3.5" />
+            </motion.button>
+          ) : null}
+
+          {canReact ? (
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <motion.button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => handleReact(reaction)}
-                  title={myReaction === reaction ? 'Remove reaction' : `React with ${reaction}`}
+                  title="React"
+                  whileHover={reactionMotion.whileHover}
+                  whileTap={reactionMotion.whileTap}
+                  transition={reactionMotion.spring}
                   className={cn(
-                    'h-9 w-9 rounded-full text-lg transition-transform hover:scale-110 hover:bg-muted',
-                    myReaction === reaction && 'bg-primary/10 ring-2 ring-primary/30'
+                    'inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                    myReaction && 'border-primary/30 bg-primary/5 text-primary'
                   )}
                 >
-                  {reaction}
-                </button>
-              ))}
-            </div>
-            {hasReactions ? (
-              <div className="mt-2 flex flex-wrap gap-1 border-t border-border/60 pt-2">
-                {Object.entries(reactionCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([emoji, count]) => (
-                    <span
-                      key={emoji}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted/80 px-2 py-0.5 text-xs"
+                  {myReaction ? (
+                    <span className="text-sm leading-none">{myReaction}</span>
+                  ) : (
+                    <SmilePlus className="h-3.5 w-3.5" />
+                  )}
+                </motion.button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-auto p-2">
+                <div className="flex gap-1">
+                  {reactions.map((reaction) => (
+                    <motion.button
+                      key={reaction}
+                      type="button"
+                      disabled={isSubmitting}
+                      whileHover={reactionMotion.whileHover}
+                      whileTap={reactionMotion.whileTap}
+                      transition={reactionMotion.spring}
+                      onClick={(event) => handleReact(reaction, event)}
+                      title={myReaction === reaction ? 'Remove reaction' : `React with ${reaction}`}
+                      className={cn(
+                        'h-9 w-9 rounded-full text-lg hover:bg-muted',
+                        myReaction === reaction && 'bg-primary/10 ring-2 ring-primary/30'
+                      )}
                     >
-                      <span>{emoji}</span>
-                      <span className="tabular-nums text-muted-foreground">{count}</span>
-                    </span>
+                      {reaction}
+                    </motion.button>
                   ))}
-              </div>
-            ) : null}
-          </PopoverContent>
-        </Popover>
+                </div>
+                {hasReactions ? (
+                  <div className="mt-2 flex flex-wrap gap-1 border-t border-border/60 pt-2">
+                    {Object.entries(reactionCounts)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([emoji, count]) => (
+                        <span
+                          key={emoji}
+                          className="inline-flex items-center gap-1 rounded-full bg-muted/80 px-2 py-0.5 text-xs"
+                        >
+                          <span>{emoji}</span>
+                          <span className="tabular-nums text-muted-foreground">{count}</span>
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -360,7 +370,9 @@ function CelebrationFeed({
   subtitleFor,
   reactions,
   onReact,
+  onMessage,
   isSubmitting,
+  messagingUserId,
   emptyMessage,
   emptyHint,
 }) {
@@ -391,23 +403,52 @@ function CelebrationFeed({
 
   return (
     <div className="overflow-hidden divide-y divide-border/70 rounded-xl border border-border/70 bg-muted/10">
-      {groups.map((group) => (
-        <div key={group.dateKey}>
-          {group.people.map((person) => (
-            <CelebrationFeedCard
-              key={`${person.id}-${person.celebration_date || celebrationType}`}
-              person={person}
-              celebrationType={celebrationType}
-              celebrationDate={person.celebration_date}
-              subtitle={subtitleFor?.(person)}
-              accent={accent}
-              reactions={reactions}
-              onReact={onReact}
-              isSubmitting={isSubmitting}
-            />
-          ))}
-        </div>
-      ))}
+      {groups.map((group) => {
+        const isTodayGroup = group.date ? isToday(group.date) : false;
+        const headerTone =
+          accent === 'anniversary'
+            ? 'text-amber-700 dark:text-amber-300'
+            : 'text-pink-700 dark:text-pink-300';
+
+        return (
+          <div key={group.dateKey}>
+            <div
+              className={cn(
+                'flex items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5',
+                'bg-muted/50',
+                isTodayGroup && (accent === 'anniversary' ? 'bg-amber-500/10' : 'bg-pink-500/10')
+              )}
+            >
+              <p
+                className={cn(
+                  'text-[11px] font-semibold tracking-wide',
+                  isTodayGroup ? headerTone : 'text-muted-foreground'
+                )}
+              >
+                {celebrationGroupLabel(group.date)}
+              </p>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {group.people.length}
+              </span>
+            </div>
+            {group.people.map((person) => (
+              <CelebrationFeedCard
+                key={`${person.id}-${person.celebration_date || celebrationType}`}
+                person={person}
+                celebrationType={celebrationType}
+                celebrationDate={person.celebration_date}
+                subtitle={subtitleFor?.(person)}
+                accent={accent}
+                reactions={reactions}
+                onReact={onReact}
+                onMessage={onMessage}
+                isSubmitting={isSubmitting}
+                isMessaging={messagingUserId === person.id}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -419,6 +460,10 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
   const queryClient = useQueryClient();
   const queryKey = celebrationsQueryKey(localDate);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [activeChat, setActiveChat] = useState(null);
+  const [messagingUserId, setMessagingUserId] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey,
@@ -493,6 +538,36 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
     },
   });
 
+  const handleMessage = async (person) => {
+    if (!person?.id || messagingUserId) return;
+
+    setMessagingUserId(person.id);
+    try {
+      const payload = await db.messages.startConversation(person.id);
+      const conversationId = payload?.conversation?.id ?? null;
+      const chatUser = payload?.conversation?.other_user || payload?.recipient_user || person;
+
+      if (isMobile) {
+        if (conversationId) {
+          navigate(`/messages/${conversationId}`);
+        } else {
+          navigate(`/messages/new/${person.id}`);
+        }
+        return;
+      }
+
+      setActiveChat({ user: chatUser, conversationId });
+    } catch (error) {
+      if (isMobile) {
+        navigate(`/messages/new/${person.id}`);
+        return;
+      }
+      toast.error(error?.message || 'Could not open chat.');
+    } finally {
+      setMessagingUserId(null);
+    }
+  };
+
   const birthdays = data?.birthdays || [];
   const serviceAnniversaries = data?.service_anniversaries || [];
   const reactions = data?.reactions || DEFAULT_REACTIONS;
@@ -506,58 +581,58 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
   const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`;
 
   return (
-    <div className={containerClass}>
-      <div className="flex items-start gap-3 p-5 pb-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-          <PartyPopper className="h-4 w-4 text-primary" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Celebrations</h3>
-            {totalCount > 0 ? (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
-                {totalCount}
-              </Badge>
-            ) : null}
+    <>
+      <div className={containerClass}>
+        <div className="flex items-start gap-3 p-5 pb-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <PartyPopper className="h-4 w-4 text-primary" />
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">{weekLabel}</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm">Celebrations</h3>
+              {totalCount > 0 ? (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
+                  {totalCount}
+                </Badge>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{weekLabel}</p>
+          </div>
         </div>
-      </div>
 
-      {isLoading ? (
-        <p className="px-5 pb-5 text-sm text-muted-foreground text-center py-6">Loading celebrations...</p>
-      ) : isError ? (
-        <p className="px-5 pb-5 text-sm text-destructive text-center py-6">Could not load celebrations.</p>
-      ) : (
-        <Tabs defaultValue={defaultTab} className="px-5 pb-5">
-          <TabsList className="grid w-full grid-cols-2 h-auto p-1 mb-3">
-            <TabsTrigger
-              value="birthdays"
-              className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400"
-            >
-              <Cake className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Birthdays</span>
-              {birthdays.length > 0 ? (
-                <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
-                  {birthdays.length}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger
-              value="anniversaries"
-              className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400"
-            >
-              <Award className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Anniversaries</span>
-              {serviceAnniversaries.length > 0 ? (
-                <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
-                  {serviceAnniversaries.length}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-          </TabsList>
+        {isLoading ? (
+          <p className="px-5 pb-5 text-sm text-muted-foreground text-center py-6">Loading celebrations...</p>
+        ) : isError ? (
+          <p className="px-5 pb-5 text-sm text-destructive text-center py-6">Could not load celebrations.</p>
+        ) : (
+          <Tabs defaultValue={defaultTab} className="px-5 pb-5">
+            <TabsList className="grid w-full grid-cols-2 h-auto p-1 mb-3">
+              <TabsTrigger
+                value="birthdays"
+                className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400"
+              >
+                <Cake className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Birthdays</span>
+                {birthdays.length > 0 ? (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
+                    {birthdays.length}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger
+                value="anniversaries"
+                className="gap-1.5 px-2 py-2 text-xs data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400"
+              >
+                <Award className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Anniversaries</span>
+                {serviceAnniversaries.length > 0 ? (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] shrink-0">
+                    {serviceAnniversaries.length}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="max-h-80 overflow-y-auto">
             <TabsContent value="birthdays" className="mt-0 focus-visible:outline-none">
               <CelebrationFeed
                 items={birthdays}
@@ -565,7 +640,9 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
                 accent="birthday"
                 reactions={reactions}
                 onReact={reactMutation.mutate}
+                onMessage={handleMessage}
                 isSubmitting={reactMutation.isPending}
+                messagingUserId={messagingUserId}
                 emptyMessage="No birthdays this week"
                 emptyHint="Check back next week"
               />
@@ -577,26 +654,46 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
                 celebrationType="service_anniversary"
                 accent="anniversary"
                 subtitleFor={(person) => {
-                  const day = celebrationDayLabel(person.celebration_date);
-                  const years =
-                    person.years_of_service === 1
-                      ? '1 year'
-                      : person.years_of_service != null
-                        ? `${person.years_of_service} years`
-                        : null;
-                  if (day && years) return `${day} · ${years}`;
-                  return day || years || 'Anniversary';
+                  if (person.years_of_service === 1) return '1 year';
+                  if (person.years_of_service != null) return `${person.years_of_service} years`;
+                  return null;
                 }}
                 reactions={reactions}
                 onReact={reactMutation.mutate}
+                onMessage={handleMessage}
                 isSubmitting={reactMutation.isPending}
+                messagingUserId={messagingUserId}
                 emptyMessage="No anniversaries this week"
                 emptyHint="Milestones will show up here"
               />
             </TabsContent>
+          </Tabs>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {activeChat ? (
+          <div
+            className="pointer-events-none fixed right-3 z-30 hidden md:block"
+            style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom))' }}
+            data-mini-chat
+          >
+            <MiniChatPanel
+              key={activeChat.user?.id || activeChat.conversationId}
+              user={activeChat.user}
+              conversationId={activeChat.conversationId}
+              onClose={() => setActiveChat(null)}
+              onConversationStarted={(conversationId, user) => {
+                setActiveChat({ user, conversationId });
+                queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
+              }}
+              onMessaged={() => {
+                queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
+              }}
+            />
           </div>
-        </Tabs>
-      )}
-    </div>
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }

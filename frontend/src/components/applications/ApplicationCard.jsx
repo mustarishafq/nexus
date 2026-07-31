@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, KeyRound, Maximize2, Pencil, Sparkles, Trash2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, Info, KeyRound, Maximize2, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import ApplicationDetailsSheet from '@/components/applications/ApplicationDetailsSheet';
 import CornerRibbon from '@/components/applications/CornerRibbon';
 import { cn } from '@/lib/utils';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
@@ -46,11 +46,17 @@ export default function ApplicationCard({
   const footerDetail = footerSubtitle ?? (system.description?.trim() || 'No description provided');
   const showOverlayFooter = !footerOutside;
   const isLaunching = launching === system.id;
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const handleLaunch = (event, openMode) => {
     event?.stopPropagation?.();
     if (!isInteractive || isLaunching) return;
     onLaunch(system, openMode ? { openMode } : undefined);
+  };
+
+  const openDetails = (event) => {
+    event?.stopPropagation?.();
+    setDetailsOpen(true);
   };
 
   const card = (
@@ -100,7 +106,7 @@ export default function ApplicationCard({
       )}
 
       {isInteractive && (
-        <div className={cn('pointer-events-none absolute inset-0 z-[3] hidden md:block', hoverRevealClass)}>
+        <div className={cn('pointer-events-none absolute inset-0 z-[3] hidden lg:block', hoverRevealClass)}>
           <TooltipProvider delayDuration={200}>
             <div className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 scale-95 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:scale-100">
               <Tooltip>
@@ -149,19 +155,29 @@ export default function ApplicationCard({
         />
       )}
 
-      {(onWhatsNew || (system.auth_mode === 'jwt' && onManageSsoCredentials)) && (
-        <div
-          className={cn(
-            'absolute inset-0 z-[4] pointer-events-none',
-            unreadReleaseNotes > 0 ? 'opacity-100' : hoverRevealClass,
-          )}
-        >
-          <div className={cn('pointer-events-auto absolute top-2 left-2 flex items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg', hoverSlideClass)}>
+      <div
+        className={cn(
+          'absolute inset-x-0 top-0 z-[4] pointer-events-none',
+          unreadReleaseNotes > 0 ? 'opacity-100' : hoverRevealClass,
+        )}
+      >
+        <div className={cn('pointer-events-auto absolute inset-x-2 top-2 flex items-start justify-between gap-1', hoverSlideClass)}>
+          <div className="flex min-w-0 shrink items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 text-white hover:bg-white/15 hover:text-white"
+              title="About this app"
+              aria-label={`About ${system.name}`}
+              onClick={openDetails}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </Button>
             {system.auth_mode === 'jwt' && onManageSsoCredentials && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
+                className="hidden h-6 w-6 shrink-0 text-white hover:bg-white/15 hover:text-white lg:inline-flex"
                 title="Manage SSO accounts"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -176,7 +192,7 @@ export default function ApplicationCard({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  'relative h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6',
+                  'relative h-6 w-6 shrink-0 text-white hover:bg-white/15 hover:text-white',
                   unreadReleaseNotes > 0 && 'whats-new-trigger--unread',
                 )}
                 title="What's New"
@@ -194,8 +210,37 @@ export default function ApplicationCard({
               </Button>
             )}
           </div>
+
+          {canManageSystem && onEdit && onDelete && (
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-white hover:bg-white/15 hover:text-white"
+                title="Edit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(system);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-red-300 hover:bg-red-500/20 hover:text-red-200"
+                title="Delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(system);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {unreadReleaseNotes > 0 && !onWhatsNew && (
         <span
@@ -253,40 +298,6 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {canManageSystem && onEdit && onDelete && (
-        <div className={cn('absolute inset-0 z-[4] pointer-events-none', hoverRevealClass)}>
-          <div className={cn('pointer-events-auto absolute top-2 right-2 flex items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg', hoverSlideClass)}>
-            <Badge variant="outline" className="hidden h-5 border-white/25 bg-white/10 px-1 text-[9px] text-white sm:inline-flex">
-              {system.auth_mode === 'redirect' ? 'Redirect' : 'JWT'}
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-white hover:bg-white/15 hover:text-white sm:h-6 sm:w-6"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(system);
-              }}
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-red-300 hover:bg-red-500/20 hover:text-red-200 sm:h-6 sm:w-6"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(system);
-              }}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       {showOverlayFooter && (
         <div
           className={cn(
@@ -300,7 +311,7 @@ export default function ApplicationCard({
           )}
         >
           <h3 className="line-clamp-2 text-xs font-semibold leading-snug">{system.name}</h3>
-          <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-white/70">{footerDetail}</p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-white/70">{footerDetail}</p>
         </div>
       )}
     </motion.div>
@@ -318,27 +329,43 @@ export default function ApplicationCard({
     };
 
     return (
-      <div
-        role={isInteractive && !hasAdminActions ? 'button' : undefined}
-        tabIndex={isInteractive && !hasAdminActions ? 0 : undefined}
-        aria-label={system.name}
-        aria-disabled={isInteractive && isLaunching ? true : undefined}
-        onClick={isInteractive ? (event) => handleLaunch(event) : undefined}
-        onKeyDown={!hasAdminActions ? handleLaunchKeyDown : undefined}
-        className={cn(
-          'group/tile flex w-full flex-col items-center gap-1 text-center',
-          isInteractive && system.is_enabled ? 'cursor-pointer' : 'cursor-default',
-          !system.is_enabled && 'opacity-60',
-        )}
-      >
-        {card}
-        <div className="min-w-0 w-full px-0.5 pt-2 text-center">
-          <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
-          <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{footerDetail}</p>
+      <>
+        <div
+          role={isInteractive && !hasAdminActions ? 'button' : undefined}
+          tabIndex={isInteractive && !hasAdminActions ? 0 : undefined}
+          aria-label={system.name}
+          aria-disabled={isInteractive && isLaunching ? true : undefined}
+          onClick={isInteractive ? (event) => handleLaunch(event) : undefined}
+          onKeyDown={!hasAdminActions ? handleLaunchKeyDown : undefined}
+          className={cn(
+            'group/tile flex w-full flex-col items-center gap-1 text-center',
+            isInteractive && system.is_enabled ? 'cursor-pointer' : 'cursor-default',
+            !system.is_enabled && 'opacity-60',
+          )}
+        >
+          {card}
+          <div className="min-w-0 w-full px-0.5 pt-2 text-center">
+            <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{footerDetail}</p>
+          </div>
         </div>
-      </div>
+        <ApplicationDetailsSheet
+          system={system}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+        />
+      </>
     );
   }
 
-  return card;
+  return (
+    <>
+      {card}
+      <ApplicationDetailsSheet
+        system={system}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+      />
+    </>
+  );
 }

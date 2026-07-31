@@ -53,7 +53,7 @@ class PostReactionController extends Controller
             );
         }
 
-        $post->load(['author', 'reactions'])->loadCount('comments');
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount('comments');
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),
@@ -77,7 +77,7 @@ class PostReactionController extends Controller
             ->where('user_id', $viewer->id)
             ->delete();
 
-        $post->load(['author', 'reactions'])->loadCount('comments');
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount('comments');
 
         return response()->json([
             'item' => $this->serializePost($post, $viewer),

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\Post;
+use App\Models\PostPoll;
 use App\Models\User;
 use App\Support\UserRoles;
 
@@ -39,6 +40,7 @@ trait SerializesPosts
         $seenCount = (int) ($post->views_count ?? $post->views()->count());
         $reachCount = (int) ($post->reaches_count ?? $post->reaches()->count());
         $canViewInsights = $isAuthor || $canModerate;
+        $polls = $this->serializePostPolls($post, $viewer);
 
         return [
             'type' => 'post',
@@ -46,6 +48,9 @@ trait SerializesPosts
             'body' => $post->body,
             'image_url' => $imageUrls[0] ?? null,
             'image_urls' => $imageUrls,
+            'polls' => $polls,
+            // Back-compat for older clients that still read a single poll.
+            'poll' => $polls[0] ?? null,
             'approval_status' => $post->approval_status ?? Post::APPROVAL_APPROVED,
             'author' => $this->serializeFeedAuthor($post->author),
             'comments_count' => (int) ($post->comments_count ?? $post->comments()->count()),
@@ -64,6 +69,76 @@ trait SerializesPosts
             'can_delete' => $isAuthor || $canModerate,
             'can_moderate' => $canModerate && $isPending,
             'is_pending' => $isPending,
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function serializePostPolls(Post $post, User $viewer): array
+    {
+        $polls = $post->relationLoaded('polls')
+            ? $post->polls
+            : $post->polls()->with(['options', 'votes'])->get();
+
+        return $polls
+            ->map(fn (PostPoll $poll) => $this->serializeOnePostPoll($poll, $viewer))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function serializeOnePostPoll(PostPoll $poll, User $viewer): array
+    {
+        if (! $poll->relationLoaded('options')) {
+            $poll->load('options');
+        }
+
+        if (! $poll->relationLoaded('votes')) {
+            $poll->load('votes');
+        }
+
+        $votes = $poll->votes;
+        $myOptionIds = $votes
+            ->where('user_id', (int) $viewer->id)
+            ->pluck('post_poll_option_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        $voterCount = $votes->pluck('user_id')->unique()->count();
+        $countsByOption = $votes
+            ->groupBy('post_poll_option_id')
+            ->map->count();
+
+        $options = $poll->options->map(function ($option) use ($countsByOption, $voterCount, $myOptionIds) {
+            $votesCount = (int) ($countsByOption[$option->id] ?? 0);
+
+            return [
+                'id' => $option->id,
+                'label' => $option->label,
+                'sort_order' => (int) $option->sort_order,
+                'votes_count' => $votesCount,
+                'percent' => $voterCount > 0 ? (int) round(($votesCount / $voterCount) * 100) : 0,
+                'voted' => in_array((int) $option->id, $myOptionIds, true),
+            ];
+        })->values()->all();
+
+        $optionCount = count($options);
+
+        return [
+            'id' => $poll->id,
+            'sort_order' => (int) $poll->sort_order,
+            'allow_multiple' => (bool) $poll->allow_multiple,
+            'allow_add_options' => (bool) $poll->allow_add_options,
+            'can_add_options' => (bool) $poll->allow_add_options && $optionCount < PostPoll::ABSOLUTE_MAX_OPTIONS,
+            'total_votes' => $voterCount,
+            'has_voted' => $myOptionIds !== [],
+            'my_option_id' => $myOptionIds[0] ?? null,
+            'my_option_ids' => $myOptionIds,
+            'options' => $options,
         ];
     }
 }

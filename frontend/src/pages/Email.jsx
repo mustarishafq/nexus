@@ -32,6 +32,7 @@ import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { EmptyState } from '@/components/ui/empty-state';
 import { UnreadBadge } from '@/components/ui/unread-badge';
+import { Expandable } from '@/components/ui/expandable';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
 import EmailAttachments from '@/components/email/EmailAttachments';
 
@@ -1038,7 +1039,7 @@ export default function Email() {
                     </Button>
                   </div>
                 </div>
-                {detailsExpanded ? (
+                <Expandable open={detailsExpanded}>
                   <div className="mt-2 space-y-0.5">
                     <p className="text-sm text-muted-foreground">
                       From <span className="text-foreground">{messageData?.from}</span>
@@ -1047,7 +1048,7 @@ export default function Email() {
                     {messageData?.cc ? <p className="text-xs text-muted-foreground">Cc {messageData.cc}</p> : null}
                     {messageData?.date ? <p className="text-[11px] text-muted-foreground">{messageData.date}</p> : null}
                   </div>
-                ) : null}
+                </Expandable>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
                 <EmailAttachments

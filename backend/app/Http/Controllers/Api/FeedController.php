@@ -35,16 +35,19 @@ class FeedController extends Controller
         $limit = (int) ($validated['limit'] ?? 30);
         $focusPostId = isset($validated['focus_post']) ? (int) $validated['focus_post'] : null;
 
-        $posts = Post::query()
-            ->visibleTo($viewer)
-            ->with(['author.department', 'reactions'])
+        $postsQuery = Post::query()->visibleTo($viewer);
+        $broadcastsQuery = $this->activeBroadcastsQuery($viewer);
+        $total = (int) $postsQuery->count() + (int) (clone $broadcastsQuery)->count();
+
+        $posts = (clone $postsQuery)
+            ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->latest()
             ->limit($limit)
             ->get()
             ->map(fn (Post $post) => $this->serializePost($post, $viewer));
 
-        $broadcasts = $this->activeBroadcastsQuery($viewer)
+        $broadcasts = (clone $broadcastsQuery)
             ->latest()
             ->limit($limit)
             ->get()
@@ -63,7 +66,47 @@ class FeedController extends Controller
 
         return response()->json([
             'items' => $items,
-            'total' => $items->count(),
+            'total' => $total,
+        ]);
+    }
+
+    public function activeDiscussions(Request $request): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:10'],
+        ]);
+
+        $limit = (int) ($validated['limit'] ?? 5);
+        $since = now()->subDays(7);
+
+        $items = Post::query()
+            ->visibleTo($viewer)
+            ->where(function (Builder $query) use ($since) {
+                $query->where('created_at', '>=', $since)
+                    ->orWhereHas('reactions', fn (Builder $reactions) => $reactions->where('created_at', '>=', $since))
+                    ->orWhereHas('comments', fn (Builder $comments) => $comments->where('created_at', '>=', $since));
+            })
+            ->where(function (Builder $query) {
+                $query->whereHas('reactions')
+                    ->orWhereHas('comments');
+            })
+            ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
+            ->withCount(['comments', 'reactions', 'edits', 'views', 'reaches'])
+            ->orderByRaw('(comments_count + reactions_count) DESC')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Post $post) => $this->serializePost($post, $viewer))
+            ->values();
+
+        return response()->json([
+            'items' => $items,
         ]);
     }
 
@@ -83,7 +126,7 @@ class FeedController extends Controller
 
         $post = Post::query()
             ->visibleTo($viewer)
-            ->with(['author.department', 'reactions'])
+            ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->find($postId);
 

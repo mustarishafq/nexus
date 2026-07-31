@@ -42,6 +42,7 @@ export default function FeedTextEditor({
   onChange,
   placeholder,
   className,
+  editorClassName,
   minHeight = '7.5rem',
   maxLength = 2000,
   disabled = false,
@@ -228,6 +229,7 @@ export default function FeedTextEditor({
         minHeight={minHeight}
         editable={!disabled}
         onEditorReady={handleEditorReady}
+        className={editorClassName}
       />
       {dropdown}
     </div>

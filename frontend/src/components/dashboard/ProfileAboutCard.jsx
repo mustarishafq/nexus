@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Expandable } from '@/components/ui/expandable';
 import {
   formatBirthdayLabel,
   formatMemberSince,
@@ -57,7 +58,6 @@ function ProfileStrengthBlock({
   doneCount,
   totalCount,
   incompleteChecks,
-  visibleChecks,
   checklistExpanded,
   setChecklistExpanded,
   showCompleteLink,
@@ -80,7 +80,7 @@ function ProfileStrengthBlock({
           </p>
           {incompleteChecks.length > 0 ? (
             <ul className="space-y-1.5">
-              {visibleChecks.map((item) => (
+              {incompleteChecks.slice(0, 3).map((item) => (
                 <li key={item.key} className="flex items-center gap-2 text-xs">
                   <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
                   <span className="text-foreground font-medium">{item.label}</span>
@@ -88,6 +88,16 @@ function ProfileStrengthBlock({
               ))}
             </ul>
           ) : null}
+          <Expandable open={checklistExpanded && incompleteChecks.length > 3}>
+            <ul className="space-y-1.5 pt-1.5">
+              {incompleteChecks.slice(3).map((item) => (
+                <li key={item.key} className="flex items-center gap-2 text-xs">
+                  <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                  <span className="text-foreground font-medium">{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </Expandable>
           {incompleteChecks.length > 3 ? (
             <button
               type="button"
@@ -95,7 +105,7 @@ function ProfileStrengthBlock({
               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               {checklistExpanded ? 'Show less' : `Show all ${incompleteChecks.length} remaining`}
-              <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', checklistExpanded && 'rotate-180')} />
+              <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-300', checklistExpanded && 'rotate-180')} />
             </button>
           ) : null}
         </div>
@@ -134,7 +144,6 @@ export default function ProfileAboutCard({
   const [cardCollapsed, setCardCollapsed] = useState(defaultCollapsed);
   const { percent, doneCount, totalCount, checks } = getProfileCompleteness(user);
   const incompleteChecks = checks.filter((item) => !item.done);
-  const visibleChecks = checklistExpanded ? incompleteChecks : incompleteChecks.slice(0, 3);
   const groups = (user?.access_group_names || []).filter(Boolean);
   const skills = normalizeSkills(user?.skills);
   const memberSince = formatMemberSince(user?.joined_at);
@@ -150,7 +159,6 @@ export default function ProfileAboutCard({
       doneCount={doneCount}
       totalCount={totalCount}
       incompleteChecks={incompleteChecks}
-      visibleChecks={visibleChecks}
       checklistExpanded={checklistExpanded}
       setChecklistExpanded={setChecklistExpanded}
       showCompleteLink={showCompleteLink}
@@ -167,8 +175,8 @@ export default function ProfileAboutCard({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">Bio</p>
           <p
             className={cn(
-              'text-sm leading-relaxed whitespace-pre-wrap',
-              isMobile && !bioExpanded && 'line-clamp-3'
+              'text-sm leading-relaxed whitespace-pre-wrap overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+              isMobile && !bioExpanded ? 'max-h-[4.5rem]' : 'max-h-[80rem]'
             )}
           >
             {user.bio}
@@ -177,9 +185,10 @@ export default function ProfileAboutCard({
             <button
               type="button"
               onClick={() => setBioExpanded((prev) => !prev)}
-              className="mt-1.5 text-xs text-primary hover:underline"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               {bioExpanded ? 'Show less' : 'Read more'}
+              <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-300', bioExpanded && 'rotate-180')} />
             </button>
           ) : null}
         </div>
@@ -351,13 +360,38 @@ export default function ProfileAboutCard({
 
   const visibleLimit = isMobileCompact ? MOBILE_COMPACT_VISIBLE_COUNT : COMPACT_VISIBLE_COUNT;
   const hasHiddenAboutItems = compact && aboutItems.length > visibleLimit;
-  const visibleAboutItems = compact && !aboutExpanded
+  const alwaysVisibleAboutItems = compact
     ? aboutItems.slice(0, visibleLimit)
     : aboutItems;
+  const expandableAboutItems = hasHiddenAboutItems
+    ? aboutItems.slice(visibleLimit)
+    : [];
   const hiddenAboutCount = aboutItems.length - visibleLimit;
 
-  const gridItems = visibleAboutItems.filter((item) => item.mobileGrid);
-  const listItems = visibleAboutItems.filter((item) => !item.mobileGrid);
+  const renderAboutItems = (items) => {
+    if (isMobile) {
+      const list = items.filter((item) => !item.mobileGrid);
+      const grid = items.filter((item) => item.mobileGrid);
+      return (
+        <>
+          {list.map((item) => (
+            <React.Fragment key={item.key}>{item.content}</React.Fragment>
+          ))}
+          {grid.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {grid.map((item) => (
+                <React.Fragment key={item.key}>{item.content}</React.Fragment>
+              ))}
+            </div>
+          ) : null}
+        </>
+      );
+    }
+
+    return items.map((item) => (
+      <React.Fragment key={item.key}>{item.content}</React.Fragment>
+    ));
+  };
 
   const phoneActions = showContactActions ? (
     <div className="flex flex-wrap gap-2">
@@ -414,7 +448,7 @@ export default function ProfileAboutCard({
           </div>
           <ChevronDown
             className={cn(
-              'w-4 h-4 text-muted-foreground shrink-0 transition-transform',
+              'w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-300',
               !cardCollapsed && 'rotate-180'
             )}
           />
@@ -426,45 +460,40 @@ export default function ProfileAboutCard({
         </div>
       )}
 
-      {isCollapsible && cardCollapsed ? null : (
-      <div className={cn('px-5 pb-5 space-y-4', isMobile && 'px-4 pb-4 space-y-3')}>
-        {isMobileCompact ? profileStrength : null}
+      {(() => {
+        const body = (
+          <div className={cn('px-5 pb-5 space-y-4', isMobile && 'px-4 pb-4 space-y-3')}>
+            {isMobileCompact ? profileStrength : null}
 
-        {phoneActions}
+            {phoneActions}
 
-        {isMobile ? (
-          <>
-            {listItems.map((item) => (
-              <React.Fragment key={item.key}>{item.content}</React.Fragment>
-            ))}
-            {gridItems.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {gridItems.map((item) => (
-                  <React.Fragment key={item.key}>{item.content}</React.Fragment>
-                ))}
+            {renderAboutItems(alwaysVisibleAboutItems)}
+
+            <Expandable open={aboutExpanded && expandableAboutItems.length > 0}>
+              <div className={cn('space-y-4', isMobile && 'space-y-3')}>
+                {renderAboutItems(expandableAboutItems)}
               </div>
+            </Expandable>
+
+            {hasHiddenAboutItems ? (
+              <button
+                type="button"
+                onClick={() => setAboutExpanded((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                {aboutExpanded ? 'Show less' : `Show ${hiddenAboutCount} more`}
+                <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-300', aboutExpanded && 'rotate-180')} />
+              </button>
             ) : null}
-          </>
-        ) : (
-          visibleAboutItems.map((item) => (
-            <React.Fragment key={item.key}>{item.content}</React.Fragment>
-          ))
-        )}
 
-        {hasHiddenAboutItems ? (
-          <button
-            type="button"
-            onClick={() => setAboutExpanded((prev) => !prev)}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            {aboutExpanded ? 'Show less' : `Show ${hiddenAboutCount} more`}
-            <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', aboutExpanded && 'rotate-180')} />
-          </button>
-        ) : null}
+            {!isMobileCompact ? profileStrength : null}
+          </div>
+        );
 
-        {!isMobileCompact ? profileStrength : null}
-      </div>
-      )}
+        if (!isCollapsible) return body;
+
+        return <Expandable open={!cardCollapsed}>{body}</Expandable>;
+      })()}
     </div>
   );
 }

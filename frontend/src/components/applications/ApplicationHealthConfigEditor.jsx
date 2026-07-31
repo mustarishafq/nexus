@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Expandable } from '@/components/ui/expandable';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_HEALTH_PATH = '/api/health';
@@ -131,7 +132,7 @@ export default function ApplicationHealthConfigEditor({
         )}
       </button>
 
-      {open ? (
+      <Expandable open={open}>
         <div className="border-t border-border/60 px-4 pb-4 pt-3 space-y-4">
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <div className="flex items-center justify-between gap-4">
@@ -219,7 +220,7 @@ export default function ApplicationHealthConfigEditor({
             </p>
           )}
         </div>
-      ) : null}
+      </Expandable>
     </div>
   );
 }

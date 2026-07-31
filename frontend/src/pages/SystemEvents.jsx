@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { getNotificationTypeVisual } from '@/lib/notificationVisuals';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { Expandable } from '@/components/ui/expandable';
 import { format } from 'date-fns';
 
 function CodeBlock({ code, language = 'json' }) {
@@ -47,15 +48,7 @@ function IntegrationGuide() {
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
+      <Expandable open={open}>
             <div className="px-5 pb-6 space-y-6 border-t border-border">
               {/* Auth */}
               <div className="space-y-2 pt-5">
@@ -146,9 +139,7 @@ function IntegrationGuide() {
                 </div>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Expandable>
     </div>
   );
 }
