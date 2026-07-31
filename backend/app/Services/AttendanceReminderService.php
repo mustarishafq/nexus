@@ -70,6 +70,7 @@ class AttendanceReminderService
             ->keyBy('user_id');
 
         $cooldownKeys = $this->loadCooldownKeys($userIds);
+        $onLeaveByDate = $this->loadOnLeaveByTimezoneDate($users, $settingsByDepartment);
 
         $sent = 0;
         $skipped = 0;
@@ -78,6 +79,12 @@ class AttendanceReminderService
             $setting = $settingsByDepartment->get($user->department_id);
 
             if (! $setting) {
+                $skipped++;
+                continue;
+            }
+
+            $leaveDate = now()->timezone($setting->timezone ?? config('app.timezone'))->toDateString();
+            if (isset($onLeaveByDate[$leaveDate][(string) $user->id])) {
                 $skipped++;
                 continue;
             }
@@ -185,7 +192,43 @@ class AttendanceReminderService
                 ->first();
         }
 
+        $setting = $setting ?? AttendancePolicyValidator::resolveForUser($user);
+        $timezone = $setting?->timezone ?? config('app.timezone');
+        $leaveDate = now()->timezone($timezone)->toDateString();
+
+        if (app(ResourceTimeOffClient::class)->isUserOnLeave($user->id, $leaveDate)) {
+            return null;
+        }
+
         return AttendanceReminderEvaluator::evaluate($user, $lastRecord, $todayRecords, null, $setting);
+    }
+
+    /**
+     * Prefetch Insan leave for all users grouped by department "today" date.
+     *
+     * @param  Collection<int, User>  $users
+     * @param  Collection<int|string, DepartmentAttendanceSetting>  $settingsByDepartment
+     * @return array<string, array<string, true>>  date => [nexus_user_id => true]
+     */
+    private function loadOnLeaveByTimezoneDate(Collection $users, Collection $settingsByDepartment): array
+    {
+        $idsByDate = [];
+
+        foreach ($users as $user) {
+            $setting = $settingsByDepartment->get($user->department_id);
+            $timezone = $setting?->timezone ?? config('app.timezone');
+            $date = now()->timezone($timezone)->toDateString();
+            $idsByDate[$date][] = (string) $user->id;
+        }
+
+        $client = app(ResourceTimeOffClient::class);
+        $result = [];
+
+        foreach ($idsByDate as $date => $ids) {
+            $result[$date] = $client->onLeaveNexusUserIds($date, $ids);
+        }
+
+        return $result;
     }
 
     /**

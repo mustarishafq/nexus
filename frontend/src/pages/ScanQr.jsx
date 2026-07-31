@@ -10,6 +10,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 
 const SCANNER_ELEMENT_ID = 'nexus-event-qr-scanner';
+const VIDEO_READY_TIMEOUT_MS = 8000;
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function waitForScannerVideo(host, timeoutMs = VIDEO_READY_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+
+    const check = () => {
+      const video = host?.querySelector('video');
+      if (video && video.readyState >= 2 && video.videoWidth > 0) {
+        const playPromise = video.play?.();
+        if (playPromise?.catch) {
+          playPromise.catch(() => {});
+        }
+        resolve(video);
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error('Camera preview timed out. Try again.'));
+        return;
+      }
+
+      window.requestAnimationFrame(check);
+    };
+
+    check();
+  });
+}
 
 export function extractCheckInToken(rawValue) {
   const value = String(rawValue || '').trim();
@@ -58,6 +94,7 @@ export default function ScanQr() {
   const scannerRef = useRef(null);
   const handlingRef = useRef(false);
   const mountedRef = useRef(true);
+  const startGenerationRef = useRef(0);
   const [cameraError, setCameraError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [starting, setStarting] = useState(true);
@@ -66,6 +103,7 @@ export default function ScanQr() {
   const [lastResult, setLastResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [scannerKey, setScannerKey] = useState(0);
+  const [scannerSession, setScannerSession] = useState(0);
 
   const refreshCalendarViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
@@ -141,6 +179,9 @@ export default function ScanQr() {
     }
   }, [stopScanner]);
 
+  const handleDecodedRef = useRef(handleDecoded);
+  handleDecodedRef.current = handleDecoded;
+
   const confirmCheckIn = useCallback(async () => {
     if (!pendingConfirm?.token || busy) {
       return;
@@ -208,73 +249,180 @@ export default function ScanQr() {
     setPendingConfirm(null);
     setLoadingEvent(false);
     setStarting(true);
+    setScanning(false);
     setBusy(false);
     handlingRef.current = false;
 
     await stopScanner();
 
-    const nextKey = Date.now();
-    setScannerKey(nextKey);
-
-    await new Promise((resolve) => {
-      window.requestAnimationFrame(() => resolve());
-    });
-
     if (!mountedRef.current) {
       return;
     }
 
-    const host = document.getElementById(SCANNER_ELEMENT_ID);
-    if (!host) {
-      setStarting(false);
-      setCameraError('Camera view is not ready. Try again.');
-      return;
-    }
-
-    const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID);
-    scannerRef.current = scanner;
-
-    try {
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 8,
-          qrbox: { width: 240, height: 240 },
-          aspectRatio: 1,
-        },
-        (decodedText) => {
-          handleDecoded(decodedText);
-        },
-        () => {}
-      );
-      if (mountedRef.current) {
-        setScanning(true);
-        setStarting(false);
-      }
-    } catch (error) {
-      scannerRef.current = null;
-      try {
-        scanner.clear();
-      } catch {
-        // ignore
-      }
-      if (mountedRef.current) {
-        setCameraError(error?.message || 'Unable to access the camera.');
-        setScanning(false);
-        setStarting(false);
-      }
-    }
-  }, [handleDecoded, stopScanner]);
+    // Remount the scanner host, then start after React commits it.
+    setScannerKey(Date.now());
+    setScannerSession((value) => value + 1);
+  }, [stopScanner]);
 
   useEffect(() => {
     mountedRef.current = true;
     startScanner();
     return () => {
       mountedRef.current = false;
+      startGenerationRef.current += 1;
       stopScanner();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (scannerSession === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const generation = ++startGenerationRef.current;
+
+    const cleanupScanner = async (scanner) => {
+      try {
+        if (scanner?.isScanning) {
+          await scanner.stop();
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        scanner?.clear();
+      } catch {
+        // ignore
+      }
+    };
+
+    const startOnHost = async (host) => {
+      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID);
+      scannerRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 8,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1,
+          },
+          (decodedText) => {
+            handleDecodedRef.current(decodedText);
+          },
+          () => {}
+        );
+      } catch (firstError) {
+        // Some devices reject environment-only constraints on first open.
+        await cleanupScanner(scanner);
+        if (cancelled || !mountedRef.current || generation !== startGenerationRef.current) {
+          throw firstError;
+        }
+
+        const fallback = new Html5Qrcode(SCANNER_ELEMENT_ID);
+        scannerRef.current = fallback;
+        try {
+          await fallback.start(
+            { facingMode: { ideal: 'environment' } },
+            {
+              fps: 8,
+              qrbox: { width: 240, height: 240 },
+              aspectRatio: 1,
+            },
+            (decodedText) => {
+              handleDecodedRef.current(decodedText);
+            },
+            () => {}
+          );
+        } catch {
+          await cleanupScanner(fallback);
+          scannerRef.current = null;
+          throw firstError;
+        }
+      }
+
+      if (cancelled || !mountedRef.current || generation !== startGenerationRef.current) {
+        await cleanupScanner(scannerRef.current);
+        if (scannerRef.current) {
+          scannerRef.current = null;
+        }
+        return false;
+      }
+
+      // start() can resolve before the preview paints (esp. first open / WebView).
+      await waitForScannerVideo(host);
+
+      if (cancelled || !mountedRef.current || generation !== startGenerationRef.current) {
+        return false;
+      }
+
+      setScanning(true);
+      setStarting(false);
+      return true;
+    };
+
+    const run = async () => {
+      // Wait for the remounted scanner host to be in the DOM with layout.
+      await waitForNextPaint();
+      if (cancelled || !mountedRef.current || generation !== startGenerationRef.current) {
+        return;
+      }
+
+      let lastError = null;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (cancelled || !mountedRef.current || generation !== startGenerationRef.current) {
+          return;
+        }
+
+        if (attempt > 0) {
+          await stopScanner();
+          if (!mountedRef.current || generation !== startGenerationRef.current) {
+            return;
+          }
+          setScannerKey(Date.now());
+          await waitForNextPaint();
+          // Give WebView/camera stack a beat before retrying the first-open blank case.
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
+        }
+
+        const host = document.getElementById(SCANNER_ELEMENT_ID);
+        if (!host) {
+          lastError = new Error('Camera view is not ready. Try again.');
+          continue;
+        }
+
+        try {
+          const started = await startOnHost(host);
+          if (started) {
+            return;
+          }
+          return;
+        } catch (error) {
+          lastError = error;
+          if (scannerRef.current) {
+            await cleanupScanner(scannerRef.current);
+            scannerRef.current = null;
+          }
+        }
+      }
+
+      if (!cancelled && mountedRef.current && generation === startGenerationRef.current) {
+        setCameraError(lastError?.message || 'Unable to access the camera.');
+        setScanning(false);
+        setStarting(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scannerSession, stopScanner]);
 
   const whenLabel = formatEventWhen(pendingConfirm?.event);
   const attendanceOpen = pendingConfirm?.event?.attendance_open !== false;
@@ -316,9 +464,13 @@ export default function ScanQr() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative overflow-hidden rounded-xl border bg-black/90 min-h-[280px]">
-            <div key={scannerKey} id={SCANNER_ELEMENT_ID} className="w-full" />
+            <div
+              key={scannerKey}
+              id={SCANNER_ELEMENT_ID}
+              className="relative w-full min-h-[280px] [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full"
+            />
             {overlayLabel ? (
-              <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-white/80">
+              <div className="absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-sm text-white/80 bg-black/40">
                 {overlayLabel}
               </div>
             ) : null}

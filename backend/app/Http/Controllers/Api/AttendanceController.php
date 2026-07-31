@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
 use App\Services\ResourceAttendanceForwarder;
+use App\Services\ResourceTimeOffClient;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
 use App\Support\AttendanceLateEvaluator;
@@ -221,6 +222,13 @@ class AttendanceController extends Controller
 
         $nextType = $this->resolveNextType($lastRecord);
         $reminder = AttendanceReminderEvaluator::evaluate($user, $lastRecord, $todayRecords, null, $setting);
+
+        if ($reminder !== null) {
+            $leaveDate = now()->timezone($timezone)->toDateString();
+            if (app(ResourceTimeOffClient::class)->isUserOnLeave($user->id, $leaveDate)) {
+                $reminder = null;
+            }
+        }
 
         return response()->json([
             'next_type' => $nextType,

@@ -1,0 +1,173 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Application;
+use App\Models\Department;
+use App\Models\DepartmentAttendanceSetting;
+use App\Models\User;
+use App\Support\ApiTokenAuth;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class AttendanceReminderLeaveSuppressionTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private string $apiKey = 'resource-test-api-key-32chars-min!!';
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    private function makeUserWithShift(): User
+    {
+        $department = Department::query()->create(['name' => 'Ops']);
+
+        DepartmentAttendanceSetting::query()->create([
+            'department_id' => $department->id,
+            'enabled' => true,
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'grace_period_minutes' => 0,
+            'require_early_clock_out_reason' => false,
+            'require_late_clock_in_reason' => false,
+            'allow_outside_shift_hours' => true,
+            'overtime_enabled' => false,
+            'standard_hours_per_day' => 8,
+            'overtime_threshold_minutes' => 0,
+            'shifts' => [[
+                'name' => 'Day Shift',
+                'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
+                'start_time' => '09:00',
+                'end_time' => '18:00',
+                'crosses_midnight' => false,
+            ]],
+        ]);
+
+        return User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'department_id' => $department->id,
+            'email' => 'leave-reminder@example.com',
+        ]);
+    }
+
+    private function createInsanApplication(): Application
+    {
+        return Application::factory()->create([
+            'name' => 'EMZI Nexus Insan',
+            'slug' => 'emzi-nexus-insan',
+            'base_url' => 'http://resource.test',
+            'api_key' => $this->apiKey,
+            'auth_mode' => 'jwt',
+            'is_enabled' => true,
+        ]);
+    }
+
+    public function test_status_suppresses_clock_in_reminder_when_on_leave(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-28 09:23:00', 'Asia/Kuala_Lumpur'));
+
+        $user = $this->makeUserWithShift();
+        $this->createInsanApplication();
+
+        Http::fake([
+            'http://resource.test/.well-known/nexus-integration.json' => Http::response([
+                'name' => 'EMZI Nexus Insan',
+                'capabilities' => ['time_offs.covering', 'attendance.ingest'],
+                'endpoints' => [
+                    'time_offs_covering' => '/api/nexus/v1/time-offs/covering',
+                ],
+            ], 200),
+            'http://resource.test/api/nexus/v1/time-offs/covering*' => Http::response([
+                'date' => '2026-07-28',
+                'on_leave' => [[
+                    'nexus_user_id' => (string) $user->id,
+                    'type' => 'annual',
+                    'date' => '2026-07-28',
+                    'end_date' => null,
+                ]],
+            ], 200),
+        ]);
+
+        $token = ApiTokenAuth::issueToken($user);
+        $response = $this->withToken($token)->getJson('/api/attendance/status');
+
+        $response->assertOk()
+            ->assertJsonPath('reminder', null);
+    }
+
+    public function test_status_returns_clock_in_reminder_when_not_on_leave(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-28 09:23:00', 'Asia/Kuala_Lumpur'));
+
+        $user = $this->makeUserWithShift();
+        $this->createInsanApplication();
+
+        Http::fake([
+            'http://resource.test/.well-known/nexus-integration.json' => Http::response([
+                'name' => 'EMZI Nexus Insan',
+                'capabilities' => ['time_offs.covering', 'attendance.ingest'],
+                'endpoints' => [
+                    'time_offs_covering' => '/api/nexus/v1/time-offs/covering',
+                ],
+            ], 200),
+            'http://resource.test/api/nexus/v1/time-offs/covering*' => Http::response([
+                'date' => '2026-07-28',
+                'on_leave' => [],
+            ], 200),
+        ]);
+
+        $token = ApiTokenAuth::issueToken($user);
+        $response = $this->withToken($token)->getJson('/api/attendance/status');
+
+        $response->assertOk()
+            ->assertJsonPath('reminder.type', 'clock_in');
+    }
+
+    public function test_status_still_returns_reminder_when_insan_not_linked(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-28 09:23:00', 'Asia/Kuala_Lumpur'));
+
+        $user = $this->makeUserWithShift();
+
+        Http::fake();
+
+        $token = ApiTokenAuth::issueToken($user);
+        $response = $this->withToken($token)->getJson('/api/attendance/status');
+
+        $response->assertOk()
+            ->assertJsonPath('reminder.type', 'clock_in');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_status_fails_open_when_insan_leave_lookup_errors(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-28 09:23:00', 'Asia/Kuala_Lumpur'));
+
+        $user = $this->makeUserWithShift();
+        $this->createInsanApplication();
+
+        Http::fake([
+            'http://resource.test/.well-known/nexus-integration.json' => Http::response([
+                'name' => 'EMZI Nexus Insan',
+                'capabilities' => ['time_offs.covering'],
+                'endpoints' => [
+                    'time_offs_covering' => '/api/nexus/v1/time-offs/covering',
+                ],
+            ], 200),
+            'http://resource.test/api/nexus/v1/time-offs/covering*' => Http::response('error', 500),
+        ]);
+
+        $token = ApiTokenAuth::issueToken($user);
+        $response = $this->withToken($token)->getJson('/api/attendance/status');
+
+        $response->assertOk()
+            ->assertJsonPath('reminder.type', 'clock_in');
+    }
+}
