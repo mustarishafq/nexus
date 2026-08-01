@@ -36,7 +36,7 @@ function ColorField({ id, label, value, onChange }) {
           value={value}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
           className="min-w-0 font-mono uppercase"
-          placeholder="#022E96"
+          placeholder="#F4F4F5"
         />
       </div>
     </div>

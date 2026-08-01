@@ -27,8 +27,8 @@ export default function SplashAnimationPicker({ value, onChange, catalog, config
           >
             <div className="relative h-36 overflow-hidden">
               {option.id === 'lottie' ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-white/80" style={{ backgroundColor: config?.background_color || '#022e96' }}>
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-xs font-medium uppercase tracking-wide">
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-foreground/70" style={{ backgroundColor: config?.background_color || '#F4F4F5' }}>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background/80 text-xs font-medium uppercase tracking-wide">
                     Lottie
                   </div>
                   <span className="text-[11px]">Original file</span>

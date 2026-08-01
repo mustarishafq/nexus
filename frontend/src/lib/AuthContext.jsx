@@ -24,7 +24,7 @@ function resolveSplashThemeColor(settings) {
   ];
 
   const valid = candidates.find((value) => typeof value === 'string' && HEX_COLOR_REGEX.test(value.trim()));
-  return valid ? valid.toUpperCase() : '#022E96';
+  return valid ? valid.toUpperCase() : '#F4F4F5';
 }
 
 function applyThemeColor(color) {

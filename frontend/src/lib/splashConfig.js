@@ -4,7 +4,7 @@ export const DEFAULT_LOGO_SRC = '/icons/logo.png';
 export const DEFAULT_SPLASH_CONFIG = {
   enabled: true,
   animation_style: DEFAULT_SPLASH_ANIMATION,
-  background_color: '#022e96',
+  background_color: '#F4F4F5',
   accent_color: '#FA9D04',
   secondary_color: '#017CF3',
   min_duration_ms: 1200,
@@ -19,7 +19,7 @@ export const DEFAULT_SPLASH_CONFIG = {
   video_muted: true,
   show_system_name: false,
   system_name_animation: 'fade-rise',
-  system_name_color: '#FFFFFF',
+  system_name_color: '#18181B',
   system_name_size_percent: 100,
   system_name_position: 'below',
   backdrop_blur: 0,

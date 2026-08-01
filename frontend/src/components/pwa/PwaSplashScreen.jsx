@@ -51,7 +51,7 @@ function getNeutralStartupSeed() {
     splash: {
       splash_enabled: true,
       splash_animation_style: 'fade-rise',
-      splash_background_color: '#022e96',
+      splash_background_color: '#F4F4F5',
       splash_accent_color: '#FA9D04',
       splash_secondary_color: '#017CF3',
       splash_show_logo: false,

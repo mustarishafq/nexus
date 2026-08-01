@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 class PwaController extends Controller
 {
-    private const DEFAULT_THEME_COLOR = '#022E96';
+    private const DEFAULT_THEME_COLOR = '#F4F4F5';
 
     public function manifest(): JsonResponse
     {
