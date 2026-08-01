@@ -8,6 +8,7 @@ import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getDisplayName } from '@/lib/profile';
+import { queryClientInstance } from '@/lib/query-client';
 import { cn } from '@/lib/utils';
 
 function InsightUserList({ items, emptyLabel, timeKey, isLoading, isFetching, isError, onRetry }) {
@@ -193,9 +194,14 @@ function flushPendingSeen() {
 
   ids.forEach((id) => markedSeenSession.add(id));
 
-  db.feed.markPostsSeen(ids).catch(() => {
-    ids.forEach((id) => markedSeenSession.delete(id));
-  });
+  db.feed
+    .markPostsSeen(ids)
+    .then(() => {
+      queryClientInstance.invalidateQueries({ queryKey: ['company-feed'] });
+    })
+    .catch(() => {
+      ids.forEach((id) => markedSeenSession.delete(id));
+    });
 }
 
 function queueMarkSeen(postId) {

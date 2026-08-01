@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
+import { GAMIFICATION_ME_QUERY_KEY } from '@/lib/gamification';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
@@ -24,7 +25,13 @@ export default function BottomNav() {
   const { user } = useAuth();
   const viewportBottomOffset = useVisualViewportBottomOffset();
   const standalone = isRunningStandalone();
-  const [badgeCounts, setBadgeCounts] = useState({ notifications: 0, messages: 0, email: 0, whatsNew: 0 });
+  const [badgeCounts, setBadgeCounts] = useState({
+    notifications: 0,
+    messages: 0,
+    email: 0,
+    whatsNew: 0,
+    missions: 0,
+  });
 
   const { data: metabaseDashboards = [] } = useQuery({
     queryKey: ['metabase-dashboards'],
@@ -61,6 +68,13 @@ export default function BottomNav() {
     refetchInterval: messagePollInterval,
     enabled: Boolean(mailStatus?.connected),
     retry: false,
+  });
+
+  const { data: gamificationMe } = useQuery({
+    queryKey: GAMIFICATION_ME_QUERY_KEY,
+    queryFn: () => db.gamification.me(),
+    staleTime: 30_000,
+    refetchInterval: messagePollInterval,
   });
 
   const navItems = useMemo(() => {
@@ -102,6 +116,13 @@ export default function BottomNav() {
     }));
   }, [platformUnreadCount]);
 
+  useEffect(() => {
+    setBadgeCounts((prev) => ({
+      ...prev,
+      missions: Number(gamificationMe?.pending_count) || 0,
+    }));
+  }, [gamificationMe?.pending_count]);
+
   const renderNavItem = (item) => {
     if (item.type === 'apps-orb') {
       return (
@@ -134,6 +155,7 @@ export default function BottomNav() {
         to={item.path}
         aria-label={item.label}
         title={item.label}
+        data-exp-sink={item.path === '/missions' ? 'nav' : undefined}
         className={cn(
           'relative flex flex-col items-center justify-center gap-0.5 px-1 transition-colors',
           isMobile ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',

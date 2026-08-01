@@ -64,6 +64,47 @@ class PostInsightTest extends TestCase
         $this->assertFalse($viewerFeedItem['can_view_insights']);
     }
 
+    public function test_feed_includes_unseen_count_for_viewer(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $viewer = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $authorToken = ApiTokenAuth::issueToken($author);
+        $viewerToken = ApiTokenAuth::issueToken($viewer);
+
+        $unseenPostId = $this->withToken($authorToken)
+            ->postJson('/api/posts', ['body' => 'Unseen post'])
+            ->assertCreated()
+            ->json('item.id');
+
+        $seenPostId = $this->withToken($authorToken)
+            ->postJson('/api/posts', ['body' => 'Seen post'])
+            ->assertCreated()
+            ->json('item.id');
+
+        $ownPostId = $this->withToken($viewerToken)
+            ->postJson('/api/posts', ['body' => 'My own post'])
+            ->assertCreated()
+            ->json('item.id');
+
+        PostView::query()->create([
+            'post_id' => $seenPostId,
+            'user_id' => $viewer->id,
+            'seen_at' => now(),
+        ]);
+
+        $feed = $this->withToken($viewerToken)
+            ->getJson('/api/feed')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(1, $feed['unseen_count']);
+
+        $itemsById = collect($feed['items'])->keyBy('id');
+        $this->assertFalse($itemsById[$unseenPostId]['viewer_has_seen']);
+        $this->assertTrue($itemsById[$seenPostId]['viewer_has_seen']);
+        $this->assertTrue($itemsById[$ownPostId]['viewer_has_seen']);
+    }
+
     public function test_mark_seen_is_idempotent_and_skips_author(): void
     {
         $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);

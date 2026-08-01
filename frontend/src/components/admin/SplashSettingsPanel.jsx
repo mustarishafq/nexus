@@ -324,6 +324,9 @@ export default function SplashSettingsPanel({ settings, onChange }) {
           value={settings.splash_background_color}
           onChange={(splash_background_color) => patch({ splash_background_color })}
         />
+        <p className="sm:col-span-2 lg:col-span-3 -mt-2 text-xs text-muted-foreground">
+          Neutral defaults follow light/dark mode. A custom brand color stays fixed in both themes.
+        </p>
         <ColorField
           id="splash_accent_color"
           label="Accent"

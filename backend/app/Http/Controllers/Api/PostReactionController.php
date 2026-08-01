@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Models\PostReaction;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,9 +40,12 @@ class PostReactionController extends Controller
             ->where('user_id', $viewer->id)
             ->first();
 
+        $createdNew = false;
+
         if ($existing && $existing->reaction === $validated['reaction']) {
             $existing->delete();
         } else {
+            $createdNew = $existing === null;
             PostReaction::query()->updateOrCreate(
                 [
                     'post_id' => $post->id,
@@ -55,9 +59,21 @@ class PostReactionController extends Controller
 
         $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount('comments');
 
-        return response()->json([
+        $payload = [
             'item' => $this->serializePost($post, $viewer),
-        ]);
+        ];
+
+        if ($createdNew && (int) $post->author_user_id !== (int) $viewer->id) {
+            $offer = app(GamificationService::class)->offer(
+                $viewer,
+                'feed_react',
+                'post_reaction',
+                $post->id.'-'.$viewer->id,
+            );
+            $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+        }
+
+        return response()->json($payload);
     }
 
     public function destroy(Request $request, Post $post): JsonResponse

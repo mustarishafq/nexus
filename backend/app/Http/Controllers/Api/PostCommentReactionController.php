@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PostComment;
 use App\Models\PostCommentReaction;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
@@ -44,9 +45,12 @@ class PostCommentReactionController extends Controller
             ->where('user_id', $viewer->id)
             ->first();
 
+        $createdNew = false;
+
         if ($existing && $existing->reaction === $validated['reaction']) {
             $existing->delete();
         } else {
+            $createdNew = $existing === null;
             PostCommentReaction::query()->updateOrCreate(
                 [
                     'post_comment_id' => $postComment->id,
@@ -60,9 +64,21 @@ class PostCommentReactionController extends Controller
 
         $postComment->load(['author.department', 'reactions']);
 
-        return response()->json([
+        $payload = [
             'comment' => $this->serializeComment($postComment, $viewer),
-        ]);
+        ];
+
+        if ($createdNew && (int) $postComment->author_user_id !== (int) $viewer->id) {
+            $offer = app(GamificationService::class)->offer(
+                $viewer,
+                'feed_comment_react',
+                'post_comment_reaction',
+                $postComment->id.'-'.$viewer->id,
+            );
+            $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+        }
+
+        return response()->json($payload);
     }
 
     public function destroy(Request $request, PostComment $postComment): JsonResponse

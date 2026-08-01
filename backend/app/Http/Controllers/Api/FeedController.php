@@ -38,10 +38,17 @@ class FeedController extends Controller
         $postsQuery = Post::query()->visibleTo($viewer);
         $broadcastsQuery = $this->activeBroadcastsQuery($viewer);
         $total = (int) $postsQuery->count() + (int) (clone $broadcastsQuery)->count();
+        $unseenCount = (int) Post::query()
+            ->visibleTo($viewer)
+            ->where('approval_status', Post::APPROVAL_APPROVED)
+            ->where('author_user_id', '!=', $viewer->id)
+            ->whereDoesntHave('views', fn (Builder $views) => $views->where('user_id', $viewer->id))
+            ->count();
 
         $posts = (clone $postsQuery)
             ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
+            ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])
             ->latest()
             ->limit($limit)
             ->get()
@@ -67,6 +74,7 @@ class FeedController extends Controller
         return response()->json([
             'items' => $items,
             'total' => $total,
+            'unseen_count' => $unseenCount,
         ]);
     }
 
@@ -128,6 +136,7 @@ class FeedController extends Controller
             ->visibleTo($viewer)
             ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
+            ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])
             ->find($postId);
 
         if (! $post) {

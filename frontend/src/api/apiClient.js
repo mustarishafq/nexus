@@ -537,6 +537,34 @@ export const db = {
 		},
 	},
 
+	gamification: {
+		async me() {
+			return request('/gamification/me');
+		},
+
+		async missions() {
+			return request('/gamification/missions');
+		},
+
+		async rewards(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/gamification/rewards${query}`);
+		},
+
+		async claim(rewardId) {
+			return request(`/gamification/rewards/${rewardId}/claim`, { method: 'POST' });
+		},
+
+		async claimAll() {
+			return request('/gamification/rewards/claim-all', { method: 'POST' });
+		},
+
+		async leaderboard(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/gamification/leaderboard${query}`);
+		},
+	},
+
 	feed: {
 		async list({ limit, focusPost } = {}) {
 			const queryString = buildQuery({ limit, focus_post: focusPost });

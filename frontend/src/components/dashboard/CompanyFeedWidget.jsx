@@ -45,8 +45,11 @@ export default function CompanyFeedWidget() {
   });
 
   const latest = Array.isArray(data?.items) ? data.items[0] : null;
-  const total = Number(data?.total) || (latest ? 1 : 0);
-  const remaining = Math.max(0, total - (latest ? 1 : 0));
+  const unseenTotal = Number(data?.unseen_count) || 0;
+  // Exclude the previewed post from the badge when it still counts as unseen.
+  const latestIsUnseenPost =
+    latest?.type === 'post' && latest?.viewer_has_seen === false;
+  const remaining = Math.max(0, unseenTotal - (latestIsUnseenPost ? 1 : 0));
   const needsExpand = measured && fullHeight > COLLAPSED_HEIGHT + 8;
   const collapsed = !expanded && (needsExpand || !measured);
   const targetHeight = collapsed

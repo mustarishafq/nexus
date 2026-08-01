@@ -11,6 +11,7 @@ use App\Models\PostEdit;
 use App\Models\PostPoll;
 use App\Models\User;
 use App\Services\FeedNotificationService;
+use App\Services\GamificationService;
 use App\Services\MentionService;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
@@ -155,9 +156,17 @@ class PostController extends Controller
 
         $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
 
-        return response()->json([
+        $payload = [
             'item' => $this->serializePost($post, $viewer),
-        ], 201);
+        ];
+
+        if (! $requiresApproval) {
+            $gamification = app(GamificationService::class);
+            $offer = $gamification->offer($viewer, 'feed_post', 'post', $post->id);
+            $payload = array_merge($payload, $gamification->offerPayload($offer));
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function update(Request $request, Post $post): JsonResponse
@@ -281,6 +290,8 @@ class PostController extends Controller
             if ($body !== '') {
                 $this->notifyMentions($author, $post, $body);
             }
+
+            app(GamificationService::class)->offer($author, 'feed_post', 'post', $post->id);
         }
 
         $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);

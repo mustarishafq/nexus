@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { format } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import CoverPhotoUploader from '@/components/profile/CoverPhotoUploader';
 import ProfileMediaViewer from '@/components/profile/ProfileMediaViewer';
 import ProfilePictureUploader from '@/components/profile/ProfilePictureUploader';
+import db from '@/api/apiClient';
 import {
   COVER_PHOTO_DISPLAY_ASPECT,
   getCoverCropBackgroundStyle,
   toAbsoluteUrl,
 } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
+import { GAMIFICATION_ME_QUERY_KEY, levelProgress } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -85,11 +87,21 @@ function CoverPhotoImage({ coverPicture, coverCrops, userReady, onOpen }) {
 }
 
 export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = false }) {
-  const todayLabel = format(new Date(), 'EEEE, MMMM d');
   const userReady = user != null;
   const presenceOnline = useIsUserOnline(user?.id);
   const isOnline = user?.is_online ?? presenceOnline;
   const [viewer, setViewer] = useState(null);
+
+  const { data: gamificationMe } = useQuery({
+    queryKey: GAMIFICATION_ME_QUERY_KEY,
+    queryFn: () => db.gamification.me(),
+    enabled: !readOnly,
+    staleTime: 30_000,
+  });
+
+  const expTotal = !readOnly && typeof gamificationMe?.exp_total === 'number'
+    ? Number(gamificationMe.exp_total)
+    : (typeof user?.exp_total === 'number' ? Number(user.exp_total) : null);
 
   const openViewer = (mediaType) => {
     if (!user?.id) return;
@@ -148,10 +160,19 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
               {[user?.job_title, user?.department].filter(Boolean).join(' · ') || user?.email}
             </p>
+            {expTotal != null ? (
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
+                <span className="font-medium text-foreground tabular-nums">
+                  Lv {levelProgress(expTotal).level}
+                </span>
+                <span className="mx-1.5 text-border">·</span>
+                <span className="font-medium text-foreground tabular-nums">{expTotal.toLocaleString()}</span>
+                {' '}EXP
+              </p>
+            ) : null}
             {user?.job_title && user?.email ? (
               <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{user.email}</p>
             ) : null}
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">{todayLabel}</p>
           </div>
         </div>
       </div>

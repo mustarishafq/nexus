@@ -29,6 +29,8 @@ import PostReactions from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { Expandable } from '@/components/ui/expandable';
 import { toast } from 'sonner';
+import { notifyGamificationOffers } from '@/lib/gamification';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { flattenCommentReplies } from '@/lib/comments';
 import { buildMentionToken } from '@/lib/mentions';
@@ -294,11 +296,12 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
   const createComment = useMutation({
     mutationFn: ({ body, parentCommentId }) => db.feed.createComment(postId, body, parentCommentId),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       setCommentBody('');
       setReplyingTo(null);
       queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      notifyGamificationOffers(data);
       toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
     },
     onError: (error) => {
@@ -640,8 +643,9 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
 
   const approvePost = useMutation({
     mutationFn: () => db.feed.approvePost(item.id),
-    onSuccess: () => {
+    onSuccess: (payload) => {
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      notifyGamificationOffers(payload);
       toast.success('Post approved.');
     },
     onError: (error) => {
@@ -1098,6 +1102,7 @@ export function FeedComposer({ className }) {
       setDraftPolls([]);
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
       queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
+      notifyGamificationOffers(payload);
       const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';
       toast.success(pending ? 'Post submitted for approval.' : 'Post shared.');
     },
@@ -1323,6 +1328,7 @@ export function FeedComposer({ className }) {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2 sm:gap-2.5">
+          <ExpActionHint actionKey="feed_post" compact />
           <p
             className={cn(
               'text-[11px] tabular-nums sm:text-xs',

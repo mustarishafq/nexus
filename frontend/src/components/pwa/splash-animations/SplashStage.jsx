@@ -1,9 +1,16 @@
 import React, { useMemo, Suspense, lazy, useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 
 import MatrixRainOverlay, { usesFullScreenMatrixRain } from '@/components/pwa/splash-animations/MatrixRainOverlay';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
-import { buildSplashRuntime, isSplashAnimationInteractive, normalizeSplashConfig, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
+import {
+  buildSplashRuntime,
+  isSplashAnimationInteractive,
+  resolveSplashThemeSurface,
+  shouldUseFullscreenVideoSplash,
+  SPLASH_VIDEO_BACKDROP_FALLBACK,
+} from '@/lib/splashConfig';
 import { cn } from '@/lib/utils';
 
 const SplashAnimationVariants = lazy(() => import('@/components/pwa/splash-animations/SplashAnimationVariants'));
@@ -21,8 +28,13 @@ export default function SplashStage({
   className = 'relative flex h-full w-full items-center justify-center overflow-hidden',
   showBackground = true,
 }) {
-  const splashConfig = useMemo(() => normalizeSplashConfig(config), [config]);
-  const runtime = useMemo(() => buildSplashRuntime(splashConfig, variant, systemName), [splashConfig, variant, systemName]);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const splashConfig = useMemo(() => resolveSplashThemeSurface(config, isDark), [config, isDark]);
+  const runtime = useMemo(
+    () => buildSplashRuntime(splashConfig, variant, systemName, isDark),
+    [splashConfig, variant, systemName, isDark],
+  );
   const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
   const isThumbnail = mode === 'thumbnail';
   const isLive = mode === 'live';

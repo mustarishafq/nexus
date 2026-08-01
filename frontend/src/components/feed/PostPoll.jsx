@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 
 function patchFeedItem(queryClient, nextItem) {
@@ -42,6 +43,7 @@ export default function PostPoll({ postId, poll, disabled = false }) {
   const voteMutation = useMutation({
     mutationFn: (optionId) => db.feed.voteOnPoll(postId, poll.id, optionId),
     onSuccess: (payload) => {
+      notifyGamificationOffers(payload);
       if (payload?.item) {
         patchFeedItem(queryClient, payload.item);
       }

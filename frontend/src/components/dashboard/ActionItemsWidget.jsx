@@ -9,6 +9,7 @@ import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import {
   filterActionItems,
@@ -48,7 +49,8 @@ export default function ActionItemsWidget() {
   }, [queryClient]);
 
   const completeItem = useCallback(async (todo) => {
-    await db.dashboard.completeActionItem(todo.id);
+    const result = await db.dashboard.completeActionItem(todo.id);
+    notifyGamificationOffers(result);
     invalidateCaches();
   }, [invalidateCaches]);
 

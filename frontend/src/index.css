@@ -507,6 +507,31 @@
   }
 }
 
+@keyframes exp-sink-pulse {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgb(245 158 11 / 0));
+  }
+  40% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 10px rgb(245 158 11 / 0.55));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgb(245 158 11 / 0));
+  }
+}
+
+.exp-sink-pulse {
+  animation: exp-sink-pulse 0.65s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exp-sink-pulse {
+    animation: none;
+  }
+}
+
 .whats-new-trigger--unread {
   color: #eab308;
   background: transparent !important;

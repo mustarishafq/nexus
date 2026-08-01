@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Models\PostPoll;
 use App\Models\PostPollVote;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,7 +49,7 @@ class PostPollController extends Controller
 
         $optionId = (int) $validated['option_id'];
 
-        DB::transaction(function () use ($poll, $viewer, $optionId) {
+        $voted = DB::transaction(function () use ($poll, $viewer, $optionId) {
             if ($poll->allow_multiple) {
                 $existing = PostPollVote::query()
                     ->where('post_poll_id', $poll->id)
@@ -59,7 +60,7 @@ class PostPollController extends Controller
                 if ($existing) {
                     $existing->delete();
 
-                    return;
+                    return false;
                 }
 
                 PostPollVote::query()->create([
@@ -68,7 +69,7 @@ class PostPollController extends Controller
                     'post_poll_option_id' => $optionId,
                 ]);
 
-                return;
+                return true;
             }
 
             $existing = PostPollVote::query()
@@ -79,7 +80,7 @@ class PostPollController extends Controller
             if ($existing && (int) $existing->post_poll_option_id === $optionId) {
                 $existing->delete();
 
-                return;
+                return false;
             }
 
             PostPollVote::query()
@@ -92,11 +93,25 @@ class PostPollController extends Controller
                 'user_id' => $viewer->id,
                 'post_poll_option_id' => $optionId,
             ]);
+
+            return true;
         });
 
-        return response()->json([
+        $payload = [
             'item' => $this->serializePost($this->reloadPost($post), $viewer),
-        ]);
+        ];
+
+        if ($voted) {
+            $offer = app(GamificationService::class)->offer(
+                $viewer,
+                'feed_poll_vote',
+                'post_poll',
+                $poll->id.'-'.$viewer->id,
+            );
+            $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+        }
+
+        return response()->json($payload);
     }
 
     public function addOption(Request $request, Post $post, PostPoll $poll): JsonResponse

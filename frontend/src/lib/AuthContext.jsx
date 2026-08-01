@@ -10,13 +10,15 @@ import {
   startImpersonationSession,
   stopImpersonationSession,
 } from '@/lib/authStorage';
+import { registerAuthUserPatcher } from '@/lib/authUserPatch';
 import { queryClientInstance } from '@/lib/query-client';
+import { resolveSplashThemeSurface, SPLASH_THEME_SURFACES } from '@/lib/splashConfig';
 
 const AuthContext = createContext(null);
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
-const DARK_THEME_COLOR = '#0F172A';
+const DARK_THEME_COLOR = SPLASH_THEME_SURFACES.dark.background;
 
-function resolveSplashThemeColor(settings) {
+function resolveSplashThemeColor(settings, isDark) {
   const candidates = [
     settings?.splash?.background_color,
     settings?.splash_background_color,
@@ -24,7 +26,8 @@ function resolveSplashThemeColor(settings) {
   ];
 
   const valid = candidates.find((value) => typeof value === 'string' && HEX_COLOR_REGEX.test(value.trim()));
-  return valid ? valid.toUpperCase() : '#F4F4F5';
+  const configured = valid ? valid.toUpperCase() : SPLASH_THEME_SURFACES.light.background;
+  return resolveSplashThemeSurface({ background_color: configured }, isDark).background_color;
 }
 
 function applyThemeColor(color) {
@@ -49,8 +52,9 @@ function resolveThemePreference() {
 
 function resolveThemeColor(settings) {
   const preference = resolveThemePreference();
-  if (preference === 'dark') return DARK_THEME_COLOR;
-  return resolveSplashThemeColor(settings);
+  const isDark = preference === 'dark';
+  if (isDark) return DARK_THEME_COLOR;
+  return resolveSplashThemeColor(settings, false);
 }
 
 export const AuthProvider = ({ children }) => {
@@ -63,6 +67,13 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [isImpersonating, setIsImpersonating] = useState(() => readIsImpersonating());
+
+  const updateAuthUser = useCallback((patch) => {
+    if (!patch || typeof patch !== 'object') return;
+    setUser((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+
+  useEffect(() => registerAuthUserPatcher(updateAuthUser), [updateAuthUser]);
 
   const refreshPublicSettings = useCallback(async () => {
     try {
@@ -255,6 +266,7 @@ export const AuthProvider = ({ children }) => {
     navigateToLogin,
     checkUserAuth,
     checkAppState,
+    updateAuthUser,
   }), [
     user,
     isAuthenticated,
@@ -271,6 +283,7 @@ export const AuthProvider = ({ children }) => {
     navigateToLogin,
     checkUserAuth,
     checkAppState,
+    updateAuthUser,
   ]);
 
   return (

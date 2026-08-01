@@ -6,6 +6,7 @@ import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
@@ -37,7 +38,9 @@ export default function PostReactions({
         ? db.feed.reactToComment(commentId, reaction)
         : db.feed.reactToPost(item.id, reaction);
     },
-    onSuccess: () => {
+    onSuccess: (payload) => {
+      notifyGamificationOffers(payload);
+
       if (Array.isArray(invalidateKeys) && invalidateKeys.length > 0) {
         invalidateKeys.forEach((queryKey) => {
           queryClient.invalidateQueries({ queryKey });

@@ -9,6 +9,7 @@ use App\Models\ProfileMediaComment;
 use App\Models\ProfileMediaCommentReaction;
 use App\Models\ProfileMediaReaction;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -66,9 +67,12 @@ class ProfileMediaController extends Controller
             ->where('user_id', $viewer->id)
             ->first();
 
+        $createdNew = false;
+
         if ($existing && $existing->reaction === $validated['reaction']) {
             $existing->delete();
         } else {
+            $createdNew = $existing === null;
             ProfileMediaReaction::query()->updateOrCreate(
                 [
                     'owner_user_id' => $user->id,
@@ -81,9 +85,21 @@ class ProfileMediaController extends Controller
             );
         }
 
-        return response()->json([
+        $payload = [
             'item' => $this->serializeProfileMedia($user, $mediaType, $viewer),
-        ]);
+        ];
+
+        if ($createdNew && (int) $user->id !== (int) $viewer->id) {
+            $offer = app(GamificationService::class)->offer(
+                $viewer,
+                'profile_media_react',
+                'profile_media_reaction',
+                $user->id.'-'.$mediaType.'-'.$viewer->id,
+            );
+            $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+        }
+
+        return response()->json($payload);
     }
 
     public function destroyReaction(Request $request, User $user, string $mediaType): JsonResponse
@@ -196,9 +212,16 @@ class ProfileMediaController extends Controller
 
         $comment->load(['author.department', 'reactions']);
 
-        return response()->json([
+        $offer = app(GamificationService::class)->offer(
+            $viewer,
+            'profile_media_comment',
+            'profile_media_comment',
+            $comment->id,
+        );
+
+        return response()->json(array_merge([
             'comment' => $this->serializeProfileMediaComment($comment, $viewer),
-        ], 201);
+        ], app(GamificationService::class)->offerPayload($offer)), 201);
     }
 
     public function destroyComment(Request $request, ProfileMediaComment $profileMediaComment): JsonResponse

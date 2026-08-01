@@ -41,6 +41,7 @@ trait SerializesPosts
         $reachCount = (int) ($post->reaches_count ?? $post->reaches()->count());
         $canViewInsights = $isAuthor || $canModerate;
         $polls = $this->serializePostPolls($post, $viewer);
+        $viewerHasSeen = $isAuthor || $this->viewerHasSeenPost($post, $viewer);
 
         return [
             'type' => 'post',
@@ -60,6 +61,7 @@ trait SerializesPosts
             'available_reactions' => self::POST_REACTIONS,
             'seen_count' => $seenCount,
             'reach_count' => $reachCount,
+            'viewer_has_seen' => $viewerHasSeen,
             'can_view_insights' => $canViewInsights,
             'created_date' => $post->created_date,
             'edited_at' => $post->edited_at?->toISOString(),
@@ -70,6 +72,21 @@ trait SerializesPosts
             'can_moderate' => $canModerate && $isPending,
             'is_pending' => $isPending,
         ];
+    }
+
+    protected function viewerHasSeenPost(Post $post, User $viewer): bool
+    {
+        if (isset($post->viewer_has_seen)) {
+            return (bool) $post->viewer_has_seen;
+        }
+
+        if ($post->relationLoaded('views')) {
+            return $post->views->contains(
+                fn ($view) => (int) $view->user_id === (int) $viewer->id
+            );
+        }
+
+        return $post->views()->where('user_id', $viewer->id)->exists();
     }
 
     /**

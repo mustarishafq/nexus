@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CelebrationWish;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Services\PushNotificationService;
 use App\Support\ApiTokenAuth;
 use Carbon\Carbon;
@@ -182,12 +183,24 @@ class DashboardController extends Controller
             $this->notifyRecipientOfReaction($recipient, $sender, $validated['celebration_type'], $wish->reaction);
         }
 
-        return response()->json([
+        $payload = [
             'reaction' => [
                 'id' => $wish->id,
                 'reaction' => $wish->reaction,
             ],
-        ], 201);
+        ];
+
+        if ($wish->wasRecentlyCreated) {
+            $offer = app(GamificationService::class)->offer(
+                $sender,
+                'celebration_wish',
+                'celebration_wish',
+                $wish->id,
+            );
+            $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function destroyWish(Request $request, CelebrationWish $celebrationWish): JsonResponse

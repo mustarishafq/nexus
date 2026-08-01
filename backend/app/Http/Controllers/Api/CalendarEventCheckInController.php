@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CalendarEvent;
 use App\Models\CalendarEventAttendance;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -367,7 +368,7 @@ class CalendarEventCheckInController extends Controller
             throw $exception;
         }
 
-        return response()->json([
+        $payload = [
             'message' => 'Checked in successfully.',
             'attendance' => $this->presentAttendance($attendance),
             'event' => [
@@ -376,7 +377,22 @@ class CalendarEventCheckInController extends Controller
                 'start_at' => $event->start_at?->toISOString(),
                 'end_at' => $event->end_at?->toISOString(),
             ],
-        ], 201);
+        ];
+
+        if ($userId) {
+            $user = User::query()->find($userId);
+            if ($user) {
+                $offer = app(GamificationService::class)->offer(
+                    $user,
+                    'event_check_in',
+                    'calendar_event_attendance',
+                    $attendance->id,
+                );
+                $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
+            }
+        }
+
+        return response()->json($payload, 201);
     }
 
     /**

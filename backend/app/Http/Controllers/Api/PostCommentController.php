@@ -10,6 +10,7 @@ use App\Models\Post;
 use App\Models\PostComment;
 use App\Models\User;
 use App\Services\FeedNotificationService;
+use App\Services\GamificationService;
 use App\Services\MentionService;
 use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
@@ -129,9 +130,11 @@ class PostCommentController extends Controller
 
         $comment->load(['author.department', 'reactions']);
 
-        return response()->json([
+        $offer = app(GamificationService::class)->offer($viewer, 'feed_comment', 'post_comment', $comment->id);
+
+        return response()->json(array_merge([
             'comment' => $this->serializeComment($comment, $viewer),
-        ], 201);
+        ], app(GamificationService::class)->offerPayload($offer)), 201);
     }
 
     public function destroy(Request $request, PostComment $postComment): JsonResponse

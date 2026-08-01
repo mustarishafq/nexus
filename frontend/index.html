@@ -35,7 +35,11 @@
     <title id="page-title">EMZI Nexus Brain</title>
     <script>
       try {
-        if (localStorage.getItem('nexus-theme') === 'dark') {
+        const savedTheme = localStorage.getItem('nexus-theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const useDarkTheme = savedTheme === 'dark' || (savedTheme === 'system' && prefersDark);
+
+        if (useDarkTheme) {
           document.documentElement.classList.add('dark');
         }
 
@@ -48,13 +52,24 @@
           || splashCache?.background_color
           || splashCache?.splash_background_color;
 
-        const savedTheme = localStorage.getItem('nexus-theme');
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const useDarkTheme = savedTheme === 'dark' || (savedTheme === 'system' && prefersDark);
-        const resolvedSplashColor = typeof splashColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(splashColor)
+        const LIGHT_SPLASH = '#F4F4F5';
+        const DARK_SPLASH = '#0F172A';
+        const themeFollowBackgrounds = new Set([
+          LIGHT_SPLASH,
+          DARK_SPLASH,
+          '#FFFFFF',
+          '#000000',
+          '#022E96',
+        ]);
+
+        const configured = typeof splashColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(splashColor)
           ? splashColor.toUpperCase()
-          : '#F4F4F5';
-        const themeColor = useDarkTheme ? '#0F172A' : resolvedSplashColor;
+          : LIGHT_SPLASH;
+        const followsTheme = themeFollowBackgrounds.has(configured);
+        const resolvedSplashColor = followsTheme
+          ? (useDarkTheme ? DARK_SPLASH : LIGHT_SPLASH)
+          : configured;
+        const themeColor = useDarkTheme ? DARK_SPLASH : resolvedSplashColor;
 
         const themeMeta = document.querySelector('meta[name="theme-color"]');
         if (themeMeta) themeMeta.setAttribute('content', themeColor);

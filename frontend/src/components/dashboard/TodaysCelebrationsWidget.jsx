@@ -12,6 +12,7 @@ import MiniChatPanel from '@/components/messages/MiniChatPanel';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getDisplayName } from '@/lib/profile';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -512,6 +513,7 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
     },
     onSuccess: (result, variables) => {
       if (!variables.removeReactionId && result?.reaction?.id) {
+        notifyGamificationOffers(result);
         updateCelebrationPerson(
           queryClient,
           queryKey,

@@ -10,6 +10,7 @@ import CompanyFeedWidget from '@/components/dashboard/CompanyFeedWidget';
 import ProfileRecentApplicationsWidget from '@/components/dashboard/ProfileRecentApplicationsWidget';
 import TodaysCelebrationsWidget from '@/components/dashboard/TodaysCelebrationsWidget';
 import WeeklyCalendarWidget from '@/components/dashboard/WeeklyCalendarWidget';
+import GamificationWidget from '@/components/dashboard/GamificationWidget';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useAuth } from '@/lib/AuthContext';
@@ -75,6 +76,9 @@ export default function Dashboard() {
         </div>
 
         <div className="max-xl:contents xl:col-span-3 xl:flex xl:flex-col xl:gap-6">
+          <div className="max-xl:order-2 xl:order-none">
+            <GamificationWidget />
+          </div>
           <div className="max-xl:order-2 xl:order-none">
             <TodaysCelebrationsWidget />
           </div>

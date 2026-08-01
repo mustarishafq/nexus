@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserTodo;
+use App\Services\GamificationService;
 use App\Services\UserTodoService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,7 +64,12 @@ class UserTodoController extends Controller
 
         $item = $this->userTodoService->complete($userTodo);
 
-        return response()->json($item);
+        $offer = app(GamificationService::class)->offer($user, 'todo_complete', 'user_todo', $item->id);
+
+        return response()->json(array_merge(
+            $item->toArray(),
+            app(GamificationService::class)->offerPayload($offer),
+        ));
     }
 
     private function authenticatedUser(Request $request): ?User

@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 import SplashStage from '@/components/pwa/splash-animations/SplashStage';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
-import { buildSplashRuntime, detectSplashMediaType, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
+import {
+  buildSplashRuntime,
+  detectSplashMediaType,
+  resolveSplashThemeSurface,
+  shouldUseFullscreenVideoSplash,
+  SPLASH_VIDEO_BACKDROP_FALLBACK,
+} from '@/lib/splashConfig';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -37,15 +44,21 @@ export const SPLASH_PREVIEW_DEVICES = {
 };
 
 function PreviewCanvas({ settings, splashConfig }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const themedConfig = useMemo(
+    () => resolveSplashThemeSurface(splashConfig, isDark),
+    [splashConfig, isDark],
+  );
   const runtime = useMemo(
-    () => buildSplashRuntime(splashConfig, splashConfig.animation_style, settings.system_name),
-    [splashConfig, settings.system_name],
+    () => buildSplashRuntime(themedConfig, themedConfig.animation_style, settings.system_name, isDark),
+    [themedConfig, settings.system_name, isDark],
   );
   const [videoBackgroundColor, setVideoBackgroundColor] = useState(null);
-  const mediaType = splashConfig.logo_url ? detectSplashMediaType(splashConfig.logo_url) : 'default';
+  const mediaType = themedConfig.logo_url ? detectSplashMediaType(themedConfig.logo_url) : 'default';
   const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
   const previewBackgroundColor = videoBackgroundColor
-    || (fullscreenVideo ? SPLASH_VIDEO_BACKDROP_FALLBACK : splashConfig.background_color);
+    || (fullscreenVideo ? SPLASH_VIDEO_BACKDROP_FALLBACK : themedConfig.background_color);
 
   if (!settings.splash_enabled) {
     return (
@@ -79,10 +92,10 @@ function PreviewCanvas({ settings, splashConfig }) {
       );
     }
 
-    if (mediaType === 'image' && splashConfig.logo_url && splashConfig.show_logo) {
+    if (mediaType === 'image' && themedConfig.logo_url && themedConfig.show_logo) {
       return (
         <div className="relative h-full w-full overflow-hidden">
-          <SplashBackground config={splashConfig} />
+          <SplashBackground config={themedConfig} />
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4">
             <SplashMedia runtime={runtime} className="h-40 w-40" />
             {runtime.title.show ? <SplashSystemName runtime={runtime} /> : null}
@@ -93,9 +106,9 @@ function PreviewCanvas({ settings, splashConfig }) {
 
     return (
       <div className="relative h-full w-full overflow-hidden">
-        <SplashBackground config={splashConfig} />
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4 text-center text-white/80">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-xs font-medium uppercase tracking-wide">
+        <SplashBackground config={themedConfig} />
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4 text-center text-foreground/70">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-border bg-background/80 text-xs font-medium uppercase tracking-wide">
             Lottie
           </div>
           <span className="text-xs">Original Lottie file plays in the app</span>
@@ -106,7 +119,7 @@ function PreviewCanvas({ settings, splashConfig }) {
 
   return (
     <SplashStage
-      config={splashConfig}
+      config={themedConfig}
       variant={settings.splash_animation_style}
       systemName={settings.system_name}
       mode="live"

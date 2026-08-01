@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Services\ResourceAttendanceForwarder;
 use App\Services\ResourceTimeOffClient;
 use App\Support\ApiTokenAuth;
@@ -389,7 +390,24 @@ class AttendanceController extends Controller
 
         app(ResourceAttendanceForwarder::class)->forwardAfterResponse($record, $user);
 
-        return response()->json($this->serializeRecord($record->load('user:id,full_name,name,email')), 201);
+        $gamification = app(GamificationService::class);
+        $offers = [];
+
+        if ($validated['type'] === 'clock_in') {
+            $offers[] = $gamification->offer($user, 'clock_in', 'attendance_record', $record->id);
+            $isLate = (bool) data_get($metadata, 'policy.is_late', false);
+            $hasShift = filled(data_get($metadata, 'policy.scheduled_start'));
+            if ($hasShift && ! $isLate) {
+                $offers[] = $gamification->offer($user, 'clock_in_early', 'attendance_record', $record->id);
+            }
+        } else {
+            $offers[] = $gamification->offer($user, 'clock_out', 'attendance_record', $record->id);
+        }
+
+        return response()->json(array_merge(
+            $this->serializeRecord($record->load('user:id,full_name,name,email')),
+            $gamification->offersPayload($offers),
+        ), 201);
     }
 
     private function isAttendanceEnabled(): bool

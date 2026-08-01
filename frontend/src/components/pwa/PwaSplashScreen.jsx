@@ -1,13 +1,22 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 
 import SplashStage from '@/components/pwa/splash-animations/SplashStage';
 import SplashBackground from '@/components/pwa/splash-animations/SplashBackground';
 import SplashMedia from '@/components/pwa/splash-animations/SplashMedia';
 import SplashSystemName from '@/components/pwa/splash-animations/SplashSystemName';
 import { useAuth } from '@/lib/AuthContext';
-import { buildSplashRuntime, isSplashAnimationInteractive, resolveSplashConfigFromSettings, shouldUseFullscreenVideoSplash, SPLASH_VIDEO_BACKDROP_FALLBACK } from '@/lib/splashConfig';
+import {
+  buildSplashRuntime,
+  isSplashAnimationInteractive,
+  resolveSplashConfigFromSettings,
+  resolveSplashThemeSurface,
+  shouldUseFullscreenVideoSplash,
+  SPLASH_THEME_SURFACES,
+  SPLASH_VIDEO_BACKDROP_FALLBACK,
+} from '@/lib/splashConfig';
 import { markSplashCompleted, shouldShowPwaSplash } from '@/lib/splashSession';
 import { useSplashGate } from '@/lib/SplashGateContext';
 import { cn } from '@/lib/utils';
@@ -51,7 +60,7 @@ function getNeutralStartupSeed() {
     splash: {
       splash_enabled: true,
       splash_animation_style: 'fade-rise',
-      splash_background_color: '#F4F4F5',
+      splash_background_color: SPLASH_THEME_SURFACES.light.background,
       splash_accent_color: '#FA9D04',
       splash_secondary_color: '#017CF3',
       splash_show_logo: false,
@@ -65,6 +74,7 @@ function getNeutralStartupSeed() {
 
 export default function PwaSplashScreen() {
   const { appPublicSettings, isLoadingPublicSettings } = useAuth();
+  const { resolvedTheme } = useTheme();
   const { markSplashComplete } = useSplashGate();
   const [active, setActive] = useState(shouldShowPwaSplash);
   const [exiting, setExiting] = useState(false);
@@ -75,6 +85,7 @@ export default function PwaSplashScreen() {
   const splashConfigRef = useRef(null);
   const systemNameRef = useRef(null);
   const hydratedFromSettingsRef = useRef(false);
+  const isDark = resolvedTheme === 'dark';
 
   if (splashConfigRef.current === null) {
     const cachedSeed = readCachedSplashSeed();
@@ -90,9 +101,13 @@ export default function PwaSplashScreen() {
     hydratedFromSettingsRef.current = true;
   }
 
-  const splashConfig = splashConfigRef.current;
+  const splashConfig = useMemo(
+    () => resolveSplashThemeSurface(splashConfigRef.current, isDark),
+    // Hydration mutates the ref during render when public settings arrive.
+    [isDark, isLoadingPublicSettings, appPublicSettings],
+  );
   const systemName = systemNameRef.current || appPublicSettings?.system_name || 'EMZI Nexus Brain';
-  const runtime = splashConfig ? buildSplashRuntime(splashConfig, splashConfig.animation_style, systemName) : null;
+  const runtime = splashConfig ? buildSplashRuntime(splashConfig, splashConfig.animation_style, systemName, isDark) : null;
   const usesLottie = splashConfig?.animation_style === 'lottie';
   const fullscreenVideo = shouldUseFullscreenVideoSplash(runtime);
   const interactive = isSplashAnimationInteractive(splashConfig?.animation_style);

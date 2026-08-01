@@ -1,10 +1,37 @@
 export const DEFAULT_SPLASH_ANIMATION = 'pulse-ring';
 export const DEFAULT_LOGO_SRC = '/icons/logo.png';
 
+/** Theme-matched neutrals for splash / PWA theme-color handoff. */
+export const SPLASH_THEME_SURFACES = {
+  light: {
+    background: '#F4F4F5',
+    title: '#18181B',
+  },
+  dark: {
+    background: '#0F172A',
+    title: '#F8FAFC',
+  },
+};
+
+/** Backgrounds that should swap with light/dark instead of staying branded. */
+const THEME_FOLLOW_BACKGROUNDS = new Set([
+  SPLASH_THEME_SURFACES.light.background,
+  SPLASH_THEME_SURFACES.dark.background,
+  '#FFFFFF',
+  '#000000',
+  '#022E96', // legacy brand splash default
+].map((value) => value.toUpperCase()));
+
+const THEME_FOLLOW_TITLES = new Set([
+  SPLASH_THEME_SURFACES.light.title,
+  SPLASH_THEME_SURFACES.dark.title,
+  '#FFFFFF',
+].map((value) => value.toUpperCase()));
+
 export const DEFAULT_SPLASH_CONFIG = {
   enabled: true,
   animation_style: DEFAULT_SPLASH_ANIMATION,
-  background_color: '#F4F4F5',
+  background_color: SPLASH_THEME_SURFACES.light.background,
   accent_color: '#FA9D04',
   secondary_color: '#017CF3',
   min_duration_ms: 1200,
@@ -19,7 +46,7 @@ export const DEFAULT_SPLASH_CONFIG = {
   video_muted: true,
   show_system_name: false,
   system_name_animation: 'fade-rise',
-  system_name_color: '#18181B',
+  system_name_color: SPLASH_THEME_SURFACES.light.title,
   system_name_size_percent: 100,
   system_name_position: 'below',
   backdrop_blur: 0,
@@ -28,6 +55,41 @@ export const DEFAULT_SPLASH_CONFIG = {
   background_gradient_angle: 135,
   background_blur: 0,
 };
+
+export function isAppDarkTheme() {
+  if (typeof document !== 'undefined' && document.documentElement.classList.contains('dark')) {
+    return true;
+  }
+
+  if (typeof window === 'undefined') return false;
+
+  const saved = window.localStorage.getItem('nexus-theme');
+  if (saved === 'dark') return true;
+  if (saved === 'light') return false;
+
+  return Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+}
+
+/**
+ * Resolve splash surface colors for the active theme.
+ * Neutral / legacy defaults follow light|dark; custom brand colors stay fixed.
+ */
+export function resolveSplashThemeSurface(config, isDark = isAppDarkTheme()) {
+  const normalized = normalizeSplashConfig(config);
+  const surface = isDark ? SPLASH_THEME_SURFACES.dark : SPLASH_THEME_SURFACES.light;
+  const background = (normalized.background_color || '').toUpperCase();
+  const title = (normalized.system_name_color || '').toUpperCase();
+
+  return {
+    ...normalized,
+    background_color: THEME_FOLLOW_BACKGROUNDS.has(background)
+      ? surface.background
+      : normalized.background_color,
+    system_name_color: THEME_FOLLOW_TITLES.has(title)
+      ? surface.title
+      : normalized.system_name_color,
+  };
+}
 
 export const SPLASH_BACKGROUND_STYLES = [
   { id: 'solid', label: 'Solid', description: 'Flat background color.' },
@@ -341,8 +403,8 @@ export function normalizeSplashConfig(input) {
   };
 }
 
-export function buildSplashBackgroundLayers(config) {
-  const normalized = normalizeSplashConfig(config ?? {});
+export function buildSplashBackgroundLayers(config, isDark = isAppDarkTheme()) {
+  const normalized = resolveSplashThemeSurface(config, isDark);
   const { background_color: bg, accent_color: accent, secondary_color: secondary } = normalized;
   const style = normalized.background_style;
   const angle = normalized.background_gradient_angle;
@@ -482,8 +544,8 @@ export function splashConfigToFormState(config) {
   };
 }
 
-export function buildSplashRuntime(config, animationStyle, systemName = '') {
-  const normalized = normalizeSplashConfig(config);
+export function buildSplashRuntime(config, animationStyle, systemName = '', isDark = isAppDarkTheme()) {
+  const normalized = resolveSplashThemeSurface(config, isDark);
   const style = normalizeSplashAnimation(animationStyle ?? normalized.animation_style);
   const speedMultiplier = normalized.speed_percent / 100;
   const animationMeta = getSplashAnimationMeta(style);

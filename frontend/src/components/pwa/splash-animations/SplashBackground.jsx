@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 
-import { buildSplashBackgroundLayers, normalizeSplashConfig } from '@/lib/splashConfig';
+import { buildSplashBackgroundLayers, resolveSplashThemeSurface } from '@/lib/splashConfig';
 
 function hexToRgb(hex) {
   const value = hex.replace('#', '');
@@ -18,8 +19,10 @@ function withAlpha(color, alpha) {
 }
 
 export default function SplashBackground({ config, className = '' }) {
-  const normalized = normalizeSplashConfig(config);
-  const layers = buildSplashBackgroundLayers(normalized);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const normalized = resolveSplashThemeSurface(config, isDark);
+  const layers = buildSplashBackgroundLayers(normalized, isDark);
   const overlayOpacity = normalized.background_overlay_opacity / 100;
   const backdropBlur = normalized.backdrop_blur;
 

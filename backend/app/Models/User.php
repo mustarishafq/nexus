@@ -73,6 +73,7 @@ class User extends Authenticatable
         'joined_at',
         'last_profile_nudge_at',
         'last_login_at',
+        'exp_total',
     ];
 
     protected $appends = [
@@ -114,6 +115,7 @@ class User extends Authenticatable
             'joined_at' => 'date',
             'last_profile_nudge_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'exp_total' => 'integer',
         ];
     }
 
@@ -185,6 +187,16 @@ class User extends Authenticatable
     public function pushSubscriptions(): HasMany
     {
         return $this->hasMany(PushSubscription::class);
+    }
+
+    public function expRewards(): HasMany
+    {
+        return $this->hasMany(ExpReward::class);
+    }
+
+    public function streaks(): HasMany
+    {
+        return $this->hasMany(UserStreak::class);
     }
 
     /**

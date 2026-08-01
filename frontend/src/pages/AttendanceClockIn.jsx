@@ -22,6 +22,8 @@ import {
 } from '@/lib/attendancePolicy';
 import { getDeviceInfo } from '@/lib/deviceInfo';
 import { formatDurationMinutes } from '@/lib/formatDuration';
+import { notifyGamificationOffers } from '@/lib/gamification';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { toast } from 'sonner';
 
 function formatRecordType(type) {
@@ -113,6 +115,7 @@ export default function AttendanceClockIn() {
       } else {
         toast.success(isClockIn ? 'Clocked in successfully' : 'Clocked out successfully');
       }
+      notifyGamificationOffers(record);
       setCapture(null);
       setLateClockInReason('');
       setCameraKey((key) => key + 1);
@@ -271,6 +274,12 @@ export default function AttendanceClockIn() {
                     ? 'You are ready to clock in.'
                     : 'You are clocked in.'}
               </CardDescription>
+              {!statusLoading ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+                  <ExpActionHint actionKey={isClockIn ? 'clock_in' : 'clock_out'} />
+                  {isClockIn ? <ExpActionHint actionKey="clock_in_early" /> : null}
+                </div>
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
               {status?.last_record ? (

@@ -22,6 +22,7 @@ import {
   waitForAccurateLocation,
 } from '@/lib/watermarkConfig';
 import { resolveAttendanceSiteLabel } from '@/lib/attendancePolicy';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 
 const CAMERA_START_TIMEOUT_MS = 12000;
 const LIVE_DRAW_INTERVAL_MS = 50;
@@ -624,7 +625,12 @@ export default function AttendanceCamera({
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/55 via-black/15 to-transparent pt-16">
               <div className="pointer-events-auto px-4 pb-4 sm:pb-5">
                 {hasPreview ? (
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <ExpActionHint
+                      actionKey={isClockIn ? 'clock_in' : 'clock_out'}
+                      className="rounded-full bg-black/35 px-2.5 py-1 text-amber-300 drop-shadow"
+                    />
+                    <div className="flex items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={retake}
@@ -665,6 +671,7 @@ export default function AttendanceCamera({
                         ? (isClockIn ? 'Clocking in…' : 'Clocking out…')
                         : actionLabel}
                     </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2.5">
