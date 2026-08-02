@@ -1,9 +1,9 @@
 import db from '@/api/apiClient';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Loader2, Mail, MessageSquare, Send, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, MessageSquare, Search, Send, Trash2, Users } from 'lucide-react';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { displayMentionText } from '@/lib/mentions';
@@ -29,6 +30,27 @@ import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { UnreadBadge } from '@/components/ui/unread-badge';
+
+function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+function conversationMatchesQuery(conversation, query) {
+  const needle = query.toLowerCase();
+  const other = conversation?.other_user;
+  const name = getDisplayName(other, '').toLowerCase();
+  const fullName = String(other?.full_name || '').toLowerCase();
+  const email = String(other?.email || '').toLowerCase();
+  const preview = String(conversation?.last_message?.body || '').toLowerCase();
+  return name.includes(needle) || fullName.includes(needle) || email.includes(needle) || preview.includes(needle);
+}
 
 function ConversationListItem({ conversation, active, onClick, onDelete, deleting }) {
   const other = conversation.other_user;
@@ -96,15 +118,45 @@ function MessageBubble({ message }) {
   );
 }
 
+function PeopleSearchResultItem({ user, onSelect, disabled, loading }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect(user)}
+      className="flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-60"
+    >
+      <UserAvatar user={user} className="h-10 w-10" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{getDisplayName(user)}</p>
+        {user.department ? (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.department}</p>
+        ) : user.email ? (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.email}</p>
+        ) : null}
+      </div>
+      {loading ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+    </button>
+  );
+}
+
 export default function Messages() {
   const { conversationId, userId: composeUserId } = useParams();
   const isCompose = Boolean(composeUserId);
   const navigate = useNavigate();
   const goBack = useGoBack('/messages');
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
   const [draft, setDraft] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [peopleResults, setPeopleResults] = useState([]);
+  const [peopleSearching, setPeopleSearching] = useState(false);
+  const [openingUserId, setOpeningUserId] = useState(null);
   const bottomRef = useRef(null);
+  const trimmedSearchQuery = searchQuery.trim();
+  const debouncedSearchQuery = useDebouncedValue(trimmedSearchQuery);
+  const isSearchActive = trimmedSearchQuery.length > 0;
 
   useMetaTags({
     title: 'Messages - EMZI Nexus Brain',
@@ -122,6 +174,15 @@ export default function Messages() {
 
   const conversations = Array.isArray(inboxData?.conversations) ? inboxData.conversations : [];
   const activeConversation = conversations.find((item) => String(item.id) === String(conversationId));
+  const matchedConversations = useMemo(() => {
+    if (!trimmedSearchQuery) return [];
+    return conversations.filter((conversation) => conversationMatchesQuery(conversation, trimmedSearchQuery));
+  }, [conversations, trimmedSearchQuery]);
+  const hasMatchedConversations = matchedConversations.length > 0;
+  const shouldSearchPeople = isSearchActive && !hasMatchedConversations;
+  const isPeopleSearchPending = shouldSearchPeople && (
+    peopleSearching || trimmedSearchQuery !== debouncedSearchQuery
+  );
 
   const { data: composeUserData, isLoading: composeUserLoading } = useQuery({
     queryKey: ['user-profile', composeUserId],
@@ -147,6 +208,82 @@ export default function Messages() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, conversationId]);
+
+  useEffect(() => {
+    if (!shouldSearchPeople || debouncedSearchQuery.length < 1) {
+      setPeopleResults([]);
+      setPeopleSearching(false);
+      return;
+    }
+
+    // Wait until debounce matches the live query so we don't search a stale term.
+    if (trimmedSearchQuery !== debouncedSearchQuery) {
+      return;
+    }
+
+    let cancelled = false;
+    setPeopleSearching(true);
+
+    db.searchUsers(debouncedSearchQuery, 8)
+      .then((users) => {
+        if (cancelled) return;
+        const list = Array.isArray(users) ? users : [];
+        const selfId = authUser?.id != null ? String(authUser.id) : null;
+        const inboxUserIds = new Set(
+          conversations
+            .map((conversation) => conversation?.other_user?.id)
+            .filter((id) => id != null)
+            .map((id) => String(id))
+        );
+        setPeopleResults(
+          list.filter((user) => {
+            const id = String(user.id);
+            if (selfId && id === selfId) return false;
+            if (inboxUserIds.has(id)) return false;
+            return true;
+          })
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPeopleResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPeopleSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    shouldSearchPeople,
+    debouncedSearchQuery,
+    trimmedSearchQuery,
+    authUser?.id,
+    conversations,
+  ]);
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setPeopleResults([]);
+  };
+
+  const openConversationWithUser = async (user) => {
+    if (!user?.id || openingUserId) return;
+    setOpeningUserId(user.id);
+    try {
+      const payload = await db.messages.startConversation(user.id);
+      clearSearch();
+      if (payload?.conversation?.id) {
+        navigate(`/messages/${payload.conversation.id}`);
+        return;
+      }
+      navigate(`/messages/new/${user.id}`);
+    } catch (error) {
+      toast.error(error?.message || 'Could not open conversation.');
+    } finally {
+      setOpeningUserId(null);
+    }
+  };
 
   const sendMessage = useMutation({
     mutationFn: (body) => {
@@ -204,14 +341,79 @@ export default function Messages() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className={cn('flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r', showThread && 'hidden lg:flex')}>
-          <div className="shrink-0 border-b border-border/60 px-4 py-3">
-            <p className="text-sm font-semibold">Inbox</p>
-            <p className="text-xs text-muted-foreground">
-              {inboxData?.unread_total ? `${inboxData.unread_total} unread` : 'All caught up'}
-            </p>
+          <div className="shrink-0 space-y-3 border-b border-border/60 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">Inbox</p>
+              <p className="text-xs text-muted-foreground">
+                {inboxData?.unread_total ? `${inboxData.unread_total} unread` : 'All caught up'}
+              </p>
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search conversations..."
+                autoComplete="off"
+                className="h-9 pl-9"
+                aria-label="Search conversations"
+              />
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-            {inboxLoading ? (
+            {isSearchActive ? (
+              hasMatchedConversations ? (
+                matchedConversations.map((conversation) => (
+                  <ConversationListItem
+                    key={conversation.id}
+                    conversation={conversation}
+                    active={String(conversation.id) === String(conversationId)}
+                    onClick={() => {
+                      clearSearch();
+                      navigate(`/messages/${conversation.id}`);
+                    }}
+                    onDelete={setDeleteTarget}
+                    deleting={deleteConversation.isPending && String(deleteTarget?.id) === String(conversation.id)}
+                  />
+                ))
+              ) : (
+                <div className="flex flex-col">
+                  <div className="border-b border-border/50 px-4 py-4">
+                    <p className="text-sm font-semibold">No conversation exists</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Start a new conversation with someone below.
+                    </p>
+                  </div>
+                  {isPeopleSearchPending ? (
+                    <div className="flex justify-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : peopleResults.length === 0 ? (
+                    <EmptyState
+                      variant="compact"
+                      icon={Users}
+                      title="No people found"
+                      description="Try a different name or email."
+                    />
+                  ) : (
+                    <>
+                      <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Start new conversation
+                      </p>
+                      {peopleResults.map((user) => (
+                        <PeopleSearchResultItem
+                          key={user.id}
+                          user={user}
+                          onSelect={openConversationWithUser}
+                          disabled={Boolean(openingUserId)}
+                          loading={String(openingUserId) === String(user.id)}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
+              )
+            ) : inboxLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
@@ -220,7 +422,7 @@ export default function Messages() {
                 variant="compact"
                 icon={Users}
                 title="No conversations yet"
-                description="Find a colleague and start a conversation from their profile."
+                description="Search above to message a colleague."
                 action={(
                   <Button asChild variant="outline" size="sm">
                     <Link to="/people">Browse people</Link>
