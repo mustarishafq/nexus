@@ -12,6 +12,7 @@ import {
   toAbsoluteUrl,
 } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
+import BadgesStrip from '@/components/gamification/BadgesStrip';
 import { GAMIFICATION_ME_QUERY_KEY, levelProgress } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -102,6 +103,14 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
   const expTotal = !readOnly && typeof gamificationMe?.exp_total === 'number'
     ? Number(gamificationMe.exp_total)
     : (typeof user?.exp_total === 'number' ? Number(user.exp_total) : null);
+  const displayLevel = !readOnly && gamificationMe?.level != null
+    ? Number(gamificationMe.level)
+    : (user?.level != null
+      ? Number(user.level)
+      : (expTotal != null ? levelProgress(expTotal).level : null));
+  const displayRank = !readOnly
+    ? (gamificationMe?.rank != null ? Number(gamificationMe.rank) : null)
+    : (user?.rank != null ? Number(user.rank) : null);
 
   const openViewer = (mediaType) => {
     if (!user?.id) return;
@@ -161,14 +170,29 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
               {[user?.job_title, user?.department].filter(Boolean).join(' · ') || user?.email}
             </p>
             {expTotal != null ? (
-              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
-                <span className="font-medium text-foreground tabular-nums">
-                  Lv {levelProgress(expTotal).level}
-                </span>
-                <span className="mx-1.5 text-border">·</span>
-                <span className="font-medium text-foreground tabular-nums">{expTotal.toLocaleString()}</span>
-                {' '}EXP
-              </p>
+              <div className="mt-0.5 space-y-1">
+                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground tabular-nums">
+                    Lv {displayLevel}
+                  </span>
+                  <span className="mx-1.5 text-border">·</span>
+                  <span className="font-medium text-foreground tabular-nums">{expTotal.toLocaleString()}</span>
+                  {' '}EXP
+                  {displayRank != null ? (
+                    <>
+                      <span className="mx-1.5 text-border">·</span>
+                      <span className="font-medium text-foreground tabular-nums">#{displayRank}</span>
+                    </>
+                  ) : null}
+                </p>
+                {!readOnly && gamificationMe?.achievements ? (
+                  <BadgesStrip
+                    achievements={gamificationMe.achievements}
+                    maxVisible={3}
+                    compact
+                  />
+                ) : null}
+              </div>
             ) : null}
             {user?.job_title && user?.email ? (
               <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{user.email}</p>

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Services\GamificationService;
 
 class UserProfileSerializer
 {
@@ -75,7 +76,7 @@ class UserProfileSerializer
     /**
      * @return array<string, mixed>
      */
-    public static function publicProfile(User $user): array
+    public static function publicProfile(User $user, bool $includeRank = true): array
     {
         // Compute before stripping private fields so public viewers still see accurate strength.
         $completeness = ProfileCompleteness::forUser($user);
@@ -91,6 +92,10 @@ class UserProfileSerializer
         $array['name'] = $user->displayName();
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
         $array['profile_completeness'] = $completeness;
+        $array = array_merge($array, self::expDirectoryFields($user));
+        if ($includeRank) {
+            $array['rank'] = app(GamificationService::class)->resolveRank($user);
+        }
 
         if ($user->personal_phone_visible) {
             $array['personal_phone'] = $user->personal_phone;
@@ -115,7 +120,34 @@ class UserProfileSerializer
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
         $array['feed_post_requires_approval'] = AppSettings::userRequiresFeedPostApproval($user);
         $array['profile_completeness'] = $completeness;
+        $array = array_merge($array, self::expPublicFields($user));
 
         return $array;
+    }
+
+    /**
+     * Lightweight EXP fields for directory cards (no rank query).
+     *
+     * @return array{exp_total: int, level: int}
+     */
+    public static function expDirectoryFields(User $user): array
+    {
+        $expTotal = (int) ($user->exp_total ?? 0);
+        $progress = GamificationCatalog::levelProgress($expTotal);
+
+        return [
+            'exp_total' => $expTotal,
+            'level' => $progress['level'],
+        ];
+    }
+
+    /**
+     * @return array{exp_total: int, level: int, rank: int|null}
+     */
+    private static function expPublicFields(User $user): array
+    {
+        return array_merge(self::expDirectoryFields($user), [
+            'rank' => app(GamificationService::class)->resolveRank($user),
+        ]);
     }
 }

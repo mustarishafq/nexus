@@ -9,6 +9,7 @@ import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import {
@@ -89,9 +90,12 @@ export default function ActionItemsWidget() {
             ) : null}
           </div>
           {pendingCount > 0 ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {pendingCount} task{pendingCount !== 1 ? 's' : ''} waiting on you
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <p className="text-[11px] text-muted-foreground">
+                {pendingCount} task{pendingCount !== 1 ? 's' : ''} waiting on you
+              </p>
+              <ExpActionHint actionKey="todo_complete" compact />
+            </div>
           ) : null}
         </div>
         <Link to="/notifications">

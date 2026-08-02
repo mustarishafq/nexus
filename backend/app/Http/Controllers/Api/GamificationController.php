@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ExpReward;
 use App\Models\User;
+use App\Services\AchievementService;
 use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +15,8 @@ use RuntimeException;
 class GamificationController extends Controller
 {
     public function __construct(
-        protected GamificationService $gamification
+        protected GamificationService $gamification,
+        protected AchievementService $achievements,
     ) {}
 
     public function me(Request $request): JsonResponse
@@ -64,9 +66,11 @@ class GamificationController extends Controller
         }
 
         $outcome = $this->gamification->claimOutcome($user, $previousExp, $previousRank, collect([$claimed]));
+        $newBadges = $this->achievements->evaluateAfterClaim($user, $outcome, collect([$claimed]));
 
         return response()->json(array_merge([
             'reward' => $this->gamification->serializeReward($claimed),
+            'new_badges' => $newBadges,
         ], $outcome));
     }
 
@@ -82,6 +86,9 @@ class GamificationController extends Controller
 
         $result = $this->gamification->claimAll($user);
         $outcome = $this->gamification->claimOutcome($user, $previousExp, $previousRank, $result['rewards']);
+        $newBadges = ($result['claimed_count'] ?? 0) > 0
+            ? $this->achievements->evaluateAfterClaim($user, $outcome, $result['rewards'])
+            : [];
 
         return response()->json(array_merge([
             'claimed_count' => $result['claimed_count'],
@@ -89,6 +96,7 @@ class GamificationController extends Controller
             'rewards' => $result['rewards']
                 ->map(fn (ExpReward $reward) => $this->gamification->serializeReward($reward))
                 ->values(),
+            'new_badges' => $newBadges,
         ], $outcome));
     }
 

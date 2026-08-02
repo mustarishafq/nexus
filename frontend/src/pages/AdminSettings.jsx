@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock, Newspaper } from 'lucide-react';
+import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock, Newspaper, Zap } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
 import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
 import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
 import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettingsPanel';
+import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ const ADMIN_SECTIONS = [
   { id: 'splash', label: 'Splash', icon: Sparkles },
   { id: 'launch', label: 'App Launch', icon: Rocket },
   { id: 'feed', label: 'Feed', icon: Newspaper },
+  { id: 'gamification', label: 'EXP', icon: Zap },
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'email', label: 'Email', icon: Server },
 ];
@@ -66,6 +68,8 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
       : Array.isArray(fallback.feed_post_approval_exempt_users)
         ? fallback.feed_post_approval_exempt_users
         : [],
+    gamification: payload?.gamification || fallback.gamification || { actions: [] },
+    gamification_overrides: payload?.gamification_overrides || fallback.gamification_overrides || { actions: {} },
     splash_animations: payload?.splash_animations || fallback.splash_animations || [],
     splash_system_name_animations: payload?.splash_system_name_animations || fallback.splash_system_name_animations || [],
     launch_animations: payload?.launch_animations || fallback.launch_animations || [],
@@ -289,6 +293,20 @@ export default function AdminSettings({ embedded = false }) {
                       </Button>
                     </div>
                   ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {activeSection === 'gamification' && isAdmin ? (
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Experience rewards</CardTitle>
+                  <CardDescription>
+                    Tune EXP amounts and daily caps for missions without a code deploy.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <GamificationSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
             ) : null}

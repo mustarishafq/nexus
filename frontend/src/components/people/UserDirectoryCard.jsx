@@ -28,12 +28,19 @@ export default function UserDirectoryCard({ user, className }) {
       <div className="flex items-start gap-3">
         <UserAvatar user={user} className="h-12 w-12" />
         <div className="min-w-0 flex-1">
-          <Link
-            to={`/people/${user.id}`}
-            className="block truncate text-sm font-semibold hover:text-primary"
-          >
-            {displayName}
-          </Link>
+          <div className="flex items-center gap-2 min-w-0">
+            <Link
+              to={`/people/${user.id}`}
+              className="block truncate text-sm font-semibold hover:text-primary"
+            >
+              {displayName}
+            </Link>
+            {typeof user?.level === 'number' || typeof user?.exp_total === 'number' ? (
+              <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                Lv {user.level ?? 1}
+              </span>
+            ) : null}
+          </div>
           {isOnline ? (
             <p className="mt-0.5 text-[11px] font-medium text-success">Online</p>
           ) : null}

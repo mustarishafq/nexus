@@ -51,7 +51,19 @@ class GamificationCatalog
      *   streak_key: string|null
      * }>
      */
-    public static function actions(): array
+    /**
+     * Code defaults (no admin overrides applied).
+     *
+     * @return array<string, array{
+     *   base: int,
+     *   title: string,
+     *   description: string,
+     *   href: string|null,
+     *   daily_cap: int|null,
+     *   streak_key: string|null
+     * }>
+     */
+    public static function defaultActions(): array
     {
         return [
             'clock_in' => [
@@ -159,6 +171,23 @@ class GamificationCatalog
                 'streak_key' => null,
             ],
         ];
+    }
+
+    /**
+     * Effective actions (defaults merged with admin overrides).
+     *
+     * @return array<string, array{
+     *   base: int,
+     *   title: string,
+     *   description: string,
+     *   href: string|null,
+     *   daily_cap: int|null,
+     *   streak_key: string|null
+     * }>
+     */
+    public static function actions(): array
+    {
+        return GamificationSettings::applyToActions(self::defaultActions());
     }
 
     /**

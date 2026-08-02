@@ -599,7 +599,9 @@ class UserController extends Controller
             ->values();
 
         return response()->json([
-            'users' => $users->map(fn (User $user) => $this->publicUserProfile($user))->values(),
+            'users' => $users->map(fn (User $user) => app(UserPresenceService::class)->enrichPayload(
+                UserProfileSerializer::publicProfile($user, includeRank: false)
+            ))->values(),
             'departments' => $departments,
             'access_groups' => $accessGroups,
             'total' => $users->count(),

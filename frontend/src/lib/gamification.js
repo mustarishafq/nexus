@@ -17,6 +17,38 @@ export const STREAK_LABELS = {
   feed_post: 'Feed post',
 };
 
+function localDateString(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function shiftLocalDateString(isoDate, days) {
+  const [y, m, d] = String(isoDate || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return localDateString(date);
+}
+
+/** Streak is at risk when last qualified day was yesterday (local calendar). */
+export function isStreakAtRisk(streak) {
+  const last = streak?.last_qualified_on;
+  if (!last || !(Number(streak?.current_count) > 0)) return false;
+  const yesterday = shiftLocalDateString(localDateString(), -1);
+  return last === yesterday;
+}
+
+export function formatStreakCounts(streak) {
+  const current = Number(streak?.current_count) || 0;
+  const best = Number(streak?.longest_count) || current;
+  if (best > current) {
+    return `${current}d · best ${best}d`;
+  }
+  return `${current}d`;
+}
+
 /**
  * @param {number} expTotal
  * @returns {{ level: number, exp_into_level: number, exp_for_level: number, progress: number }}
@@ -82,6 +114,14 @@ function celebrateClaimMoments(result) {
     toast.success(`${days}-day streak`, {
       description: label,
       duration: 5000,
+    });
+  }
+
+  const badges = Array.isArray(result.new_badges) ? result.new_badges : [];
+  for (const badge of badges) {
+    toast.success(badge.title || 'Badge unlocked', {
+      description: badge.description || 'New achievement',
+      duration: 6000,
     });
   }
 }

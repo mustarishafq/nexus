@@ -383,4 +383,90 @@ class GamificationTest extends TestCase
 
         $this->assertSame(0, ExpReward::query()->where('user_id', $author->id)->count());
     }
+
+    public function test_missions_includes_rival_and_week_spotlight(): void
+    {
+        $leader = User::factory()->create(['is_approved' => true, 'exp_total' => 200, 'name' => 'Leader']);
+        $viewer = User::factory()->create(['is_approved' => true, 'exp_total' => 50, 'name' => 'Viewer']);
+
+        ExpReward::query()->create([
+            'user_id' => $viewer->id,
+            'action_key' => 'todo_complete',
+            'amount' => 15,
+            'title' => 'Complete todo',
+            'status' => ExpReward::STATUS_CLAIMED,
+            'source_type' => 'user_todo',
+            'source_id' => '1',
+            'claimed_at' => now()->subDay(),
+        ]);
+
+        $payload = $this->withToken($this->token($viewer))
+            ->getJson('/api/gamification/missions')
+            ->assertOk()
+            ->json();
+
+        $this->assertNotNull($payload['rival']);
+        $this->assertSame($leader->id, $payload['rival']['user_id']);
+        $this->assertSame(150, $payload['rival']['exp_ahead']);
+        $this->assertSame('week', $payload['week_spotlight']['period']);
+        $this->assertArrayHasKey('podium', $payload['week_spotlight']);
+        $this->assertArrayHasKey('achievements', $payload);
+        $this->assertNotEmpty($payload['achievements']['catalog']);
+    }
+
+    public function test_first_claim_unlocks_badge(): void
+    {
+        $user = User::factory()->create(['is_approved' => true, 'exp_total' => 0]);
+        $reward = app(GamificationService::class)->offer($user, 'todo_complete', 'user_todo', 303);
+        $this->assertNotNull($reward);
+
+        $response = $this->withToken($this->token($user))
+            ->postJson("/api/gamification/rewards/{$reward->id}/claim")
+            ->assertOk()
+            ->json();
+
+        $badgeKeys = collect($response['new_badges'] ?? [])->pluck('badge_key')->all();
+        $this->assertContains('first_claim', $badgeKeys);
+        $this->assertDatabaseHas('user_achievements', [
+            'user_id' => $user->id,
+            'badge_key' => 'first_claim',
+        ]);
+    }
+
+    public function test_admin_override_changes_offer_amount(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'gamification_overrides' => json_encode([
+                'actions' => ['todo_complete' => ['base' => 40]],
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AppSettings::forget();
+
+        $user = User::factory()->create(['is_approved' => true]);
+        $reward = app(GamificationService::class)->offer($user, 'todo_complete', 'user_todo', 404);
+        $this->assertNotNull($reward);
+        $this->assertSame(40, (int) $reward->amount);
+
+        $this->withToken($this->token($admin))
+            ->getJson('/api/admin/app-settings')
+            ->assertOk()
+            ->assertJsonPath('gamification_overrides.actions.todo_complete.base', 40);
+    }
+
+    public function test_public_profile_includes_level_and_rank(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true, 'exp_total' => 10]);
+        $target = User::factory()->create(['is_approved' => true, 'exp_total' => 250]);
+
+        $this->withToken($this->token($viewer))
+            ->getJson("/api/users/{$target->id}/profile")
+            ->assertOk()
+            ->assertJsonPath('user.exp_total', 250)
+            ->assertJsonPath('user.level', 3)
+            ->assertJsonPath('user.rank', 1);
+    }
 }

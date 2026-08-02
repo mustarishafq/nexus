@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import PageLoader from '@/components/PageLoader';
 
@@ -54,6 +55,7 @@ export default function EventCheckInPublic() {
     onSuccess: (data) => {
       setAlreadyCheckedIn(false);
       setResult(data);
+      notifyGamificationOffers(data);
       if (isAuthenticated) {
         refreshCalendarViews();
       }
@@ -77,6 +79,7 @@ export default function EventCheckInPublic() {
     onSuccess: (data) => {
       setAlreadyCheckedIn(false);
       setResult(data);
+      notifyGamificationOffers(data);
       refreshCalendarViews();
     },
     onError: (error) => {

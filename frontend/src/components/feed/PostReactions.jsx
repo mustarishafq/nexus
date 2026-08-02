@@ -6,6 +6,7 @@ import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 
@@ -18,6 +19,7 @@ export default function PostReactions({
   compact = false,
   reactFn = null,
   invalidateKeys = null,
+  expHintActionKey = null,
 }) {
   const queryClient = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -111,6 +113,8 @@ export default function PostReactions({
     );
   };
 
+  const hintKey = expHintActionKey || (!isComment && !reactFn ? 'feed_react' : null);
+
   return (
     <div
       className={cn('flex flex-wrap items-center', compact ? 'gap-1' : 'gap-1 md:gap-1.5')}
@@ -158,6 +162,7 @@ export default function PostReactions({
           </div>
         </PopoverContent>
       </Popover>
+      {hintKey ? <ExpActionHint actionKey={hintKey} compact /> : null}
     </div>
   );
 }

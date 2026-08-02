@@ -9,7 +9,9 @@ import ExpLevelBar from '@/components/gamification/ExpLevelBar';
 import { EXP_SINK_PULSE_EVENT } from '@/components/gamification/ExpClaimCelebration';
 import {
   claimAllGamificationRewards,
+  formatStreakCounts,
   GAMIFICATION_ME_QUERY_KEY,
+  isStreakAtRisk,
   levelProgress,
   STREAK_LABELS,
 } from '@/lib/gamification';
@@ -137,20 +139,30 @@ export default function GamificationWidget() {
 
             {streaks.length > 0 ? (
               <ul className="space-y-1.5">
-                {streaks.map((streak) => (
-                  <li
-                    key={streak.streak_key}
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
-                  >
-                    <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                    <span className="truncate">
-                      {STREAK_LABELS[streak.streak_key] || streak.streak_key}
-                    </span>
-                    <span className="ml-auto font-medium text-foreground tabular-nums">
-                      {streak.current_count}d
-                    </span>
-                  </li>
-                ))}
+                {streaks.map((streak) => {
+                  const atRisk = isStreakAtRisk(streak);
+                  return (
+                    <li
+                      key={streak.streak_key}
+                      className="space-y-0.5 text-xs text-muted-foreground"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Flame className={cn('h-3.5 w-3.5 shrink-0', atRisk ? 'text-amber-500' : 'text-orange-500')} />
+                        <span className="truncate">
+                          {STREAK_LABELS[streak.streak_key] || streak.streak_key}
+                        </span>
+                        <span className="ml-auto font-medium text-foreground tabular-nums">
+                          {formatStreakCounts(streak)}
+                        </span>
+                      </div>
+                      {atRisk ? (
+                        <p className="pl-5 text-[10px] text-amber-700/90 dark:text-amber-300/80">
+                          Don’t break your streak
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
 

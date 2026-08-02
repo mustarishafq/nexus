@@ -246,6 +246,9 @@ class GamificationService
                 'pending_amount' => (int) $pending->sum('amount'),
                 'streaks' => $streaks,
                 'pending_rewards' => $pending->map(fn (ExpReward $reward) => $this->serializeReward($reward))->values()->all(),
+                'rival' => $this->resolveRival($user),
+                'week_spotlight' => $this->weekSpotlight($user),
+                'achievements' => app(AchievementService::class)->forUser($user),
             ]
         );
     }
@@ -317,6 +320,9 @@ class GamificationService
                 'pending_rewards' => $pending->map(fn (ExpReward $reward) => $this->serializeReward($reward))->values()->all(),
                 'streaks' => $streaks,
                 'missions' => $missions,
+                'rival' => $this->resolveRival($user),
+                'week_spotlight' => $this->weekSpotlight($user),
+                'achievements' => app(AchievementService::class)->forUser($user),
             ]
         );
     }
@@ -458,7 +464,7 @@ class GamificationService
         return $payload;
     }
 
-    private function resolveRank(User $user): ?int
+    public function resolveRank(User $user): ?int
     {
         $expTotal = (int) $user->exp_total;
         if ($expTotal <= 0) {
@@ -472,6 +478,80 @@ class GamificationService
             ->count();
 
         return $ahead + 1;
+    }
+
+    /**
+     * Closest person above the viewer on the all-time board.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function resolveRival(User $user): ?array
+    {
+        $expTotal = (int) $user->exp_total;
+        if ($expTotal <= 0) {
+            return null;
+        }
+
+        $rival = User::query()
+            ->where('is_approved', true)
+            ->whereNull('deleted_at')
+            ->where('exp_total', '>', $expTotal)
+            ->orderBy('exp_total')
+            ->orderByDesc('id')
+            ->first(['id', 'name', 'full_name', 'email', 'profile_picture', 'job_title', 'department_id', 'exp_total']);
+
+        if (! $rival) {
+            return null;
+        }
+
+        $rivalExp = (int) $rival->exp_total;
+
+        return [
+            'user_id' => $rival->id,
+            'name' => $rival->displayName(),
+            'profile_picture' => $rival->profile_picture,
+            'exp_total' => $rivalExp,
+            'rank' => $this->resolveRank($rival),
+            'exp_ahead' => max(0, $rivalExp - $expTotal),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   period: string,
+     *   podium: list<array<string, mixed>>,
+     *   viewer_week_rank: int|null,
+     *   viewer_week_exp: int
+     * }
+     */
+    public function weekSpotlight(User $user): array
+    {
+        $entries = $this->leaderboard('week', 50);
+        $podium = $entries->take(3)->values()->all();
+
+        $viewerIndex = $entries->search(fn (array $row) => (int) $row['user_id'] === (int) $user->id);
+        $viewerWeekExp = 0;
+        $viewerWeekRank = null;
+
+        if ($viewerIndex !== false) {
+            $row = $entries->values()->get($viewerIndex);
+            $viewerWeekExp = (int) ($row['exp'] ?? 0);
+            $viewerWeekRank = (int) ($row['rank'] ?? ($viewerIndex + 1));
+        } else {
+            $since = now()->subDays(7);
+            $viewerWeekExp = (int) ExpReward::query()
+                ->where('user_id', $user->id)
+                ->where('status', ExpReward::STATUS_CLAIMED)
+                ->where('claimed_at', '>=', $since)
+                ->sum('amount');
+        }
+
+        return [
+            'period' => 'week',
+            'podium' => $podium,
+            'viewer_week_rank' => $viewerWeekRank,
+            'viewer_week_exp' => $viewerWeekExp,
+        ];
     }
 
     private function advanceStreak(User $user, string $streakKey, string $today): UserStreak

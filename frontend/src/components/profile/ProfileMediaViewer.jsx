@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { flattenCommentReplies } from '@/lib/comments';
 import { toAbsoluteUrl } from '@/lib/media';
 import { buildMentionToken } from '@/lib/mentions';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -40,11 +41,12 @@ function ProfileMediaComments({ userId, mediaType, commentsCount, queryKey }) {
   const createComment = useMutation({
     mutationFn: ({ body, parentCommentId }) =>
       db.profileMedia.createComment(userId, mediaType, body, parentCommentId),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       setCommentBody('');
       setReplyingTo(null);
       queryClient.invalidateQueries({ queryKey: commentsQueryKey });
       queryClient.invalidateQueries({ queryKey });
+      notifyGamificationOffers(data);
       toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
     },
     onError: (error) => {
@@ -343,6 +345,7 @@ export default function ProfileMediaViewer({
                 item={item}
                 reactFn={(reaction) => db.profileMedia.react(userId, mediaType, reaction)}
                 invalidateKeys={[queryKey]}
+                expHintActionKey="profile_media_react"
               />
               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <MessageCircle className="h-3.5 w-3.5" />

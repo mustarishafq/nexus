@@ -10,6 +10,7 @@ use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\FeedModerationSettings;
+use App\Support\GamificationSettings;
 use App\Support\SplashAnimationSettings;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
@@ -74,13 +75,16 @@ class AppSettingController extends Controller
             'imap_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'imap_encryption' => ['nullable', 'in:ssl,tls,null'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
-        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules()));
+        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules(), GamificationSettings::validationRules()));
 
         $current = (array) DB::table('app_settings')->first();
         $splash = SplashAnimationSettings::normalizeConfig(array_merge($current, $validated));
         $launch = ApplicationLaunchSettings::normalizeConfig(array_merge($current, $validated));
         $attendance = AttendanceWatermarkSettings::normalizeConfig(array_merge($current, $validated));
         $feed = self::resolveFeedModerationColumns($current, $validated);
+        $gamification = array_key_exists('gamification_overrides', $validated)
+            ? GamificationSettings::toDatabaseColumns($validated['gamification_overrides'] ?? [])
+            : [];
 
         $settings = DB::table('app_settings')->first();
 
@@ -98,7 +102,7 @@ class AppSettingController extends Controller
                 'imap_port' => $validated['imap_port'] ?? null,
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
         } else {
             DB::table('app_settings')->insert(array_merge([
                 'system_name' => $validated['system_name'],
@@ -114,7 +118,7 @@ class AppSettingController extends Controller
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
         }
 
         AppSettings::forget();
@@ -320,6 +324,9 @@ class AppSettingController extends Controller
             'launch_overlay_modes' => ApplicationLaunchSettings::overlayModeCatalog(),
             'launch_progress_styles' => ApplicationLaunchSettings::progressStyleCatalog(),
             'launch_durations' => ApplicationLaunchSettings::durationCatalog(),
-        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true));
+        ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true), [
+            'gamification' => GamificationSettings::adminPayload($settings),
+            'gamification_overrides' => GamificationSettings::overrides($settings),
+        ]);
     }
 }

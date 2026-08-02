@@ -5,8 +5,10 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { CheckCircle2, Clock, MapPin, QrCode, RefreshCw, X } from 'lucide-react';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { notifyGamificationOffers } from '@/lib/gamification';
 import { toast } from 'sonner';
 
 const SCANNER_ELEMENT_ID = 'nexus-event-qr-scanner';
@@ -202,6 +204,7 @@ export default function ScanQr() {
         attendance: data?.attendance,
       });
       refreshCalendarViews();
+      notifyGamificationOffers(data);
       toast.success(
         data?.event?.title || pendingConfirm.event?.title
           ? `Checked in: ${data?.event?.title || pendingConfirm.event?.title}`
@@ -514,6 +517,12 @@ export default function ScanQr() {
               {!attendanceOpen ? (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
                   Attendance opens{opensAtLabel ? ` at ${opensAtLabel}` : ' later'}.
+                </div>
+              ) : null}
+
+              {attendanceOpen ? (
+                <div className="flex justify-end">
+                  <ExpActionHint actionKey="event_check_in" />
                 </div>
               ) : null}
 

@@ -517,15 +517,18 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
               className="min-h-9 overflow-x-hidden text-sm md:min-h-10"
             />
           </div>
-          <Button
-            type="submit"
-            size="icon"
-            className="h-9 w-9 shrink-0 md:h-10 md:w-10"
-            disabled={createComment.isPending || !commentBody.trim()}
-            title={replyingTo ? 'Post reply' : 'Post comment'}
-          >
-            {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {!replyingTo ? <ExpActionHint actionKey="feed_comment" compact /> : null}
+            <Button
+              type="submit"
+              size="icon"
+              className="h-9 w-9 shrink-0 md:h-10 md:w-10"
+              disabled={createComment.isPending || !commentBody.trim()}
+              title={replyingTo ? 'Post reply' : 'Post comment'}
+            >
+              {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </form>
     </div>
