@@ -30,7 +30,7 @@ class GamificationTest extends TestCase
         $user = User::factory()->create(['is_approved' => true, 'exp_total' => 0]);
         $service = app(GamificationService::class);
 
-        $reward = $service->offer($user, 'todo_complete', 'user_todo', 101);
+        $reward = $service->offer($user, 'event_check_in', 'calendar_event', 101);
         $this->assertNotNull($reward);
         $this->assertSame(ExpReward::STATUS_PENDING, $reward->status);
         $this->assertSame(0, (int) $user->fresh()->exp_total);
@@ -39,11 +39,11 @@ class GamificationTest extends TestCase
             ->postJson("/api/gamification/rewards/{$reward->id}/claim")
             ->assertOk()
             ->assertJsonPath('reward.status', 'claimed')
-            ->assertJsonPath('exp_total', 15)
+            ->assertJsonPath('exp_total', 25)
             ->assertJsonPath('level', 1)
             ->assertJsonPath('leveled_up', false);
 
-        $this->assertSame(15, (int) $user->fresh()->exp_total);
+        $this->assertSame(25, (int) $user->fresh()->exp_total);
 
         $this->withToken($this->token($user))
             ->postJson("/api/gamification/rewards/{$reward->id}/claim")
@@ -241,22 +241,22 @@ class GamificationTest extends TestCase
 
         ExpReward::query()->create([
             'user_id' => $low->id,
-            'action_key' => 'todo_complete',
+            'action_key' => 'event_check_in',
             'amount' => 10,
-            'title' => 'Complete todo',
+            'title' => 'Event check-in',
             'status' => ExpReward::STATUS_CLAIMED,
-            'source_type' => 'user_todo',
+            'source_type' => 'calendar_event',
             'source_id' => '1',
             'claimed_at' => now()->subDays(2),
         ]);
 
         ExpReward::query()->create([
             'user_id' => $high->id,
-            'action_key' => 'todo_complete',
+            'action_key' => 'event_check_in',
             'amount' => 5,
-            'title' => 'Complete todo',
+            'title' => 'Event check-in',
             'status' => ExpReward::STATUS_CLAIMED,
-            'source_type' => 'user_todo',
+            'source_type' => 'calendar_event',
             'source_id' => '2',
             'claimed_at' => now()->subDays(2),
         ]);
@@ -296,15 +296,15 @@ class GamificationTest extends TestCase
     {
         $user = User::factory()->create(['is_approved' => true, 'exp_total' => 0]);
         $service = app(GamificationService::class);
-        $service->offer($user, 'todo_complete', 'user_todo', 1);
+        $service->offer($user, 'event_check_in', 'calendar_event', 1);
         $service->offer($user, 'celebration_wish', 'celebration_wish', 2);
 
         $this->withToken($this->token($user))
             ->postJson('/api/gamification/rewards/claim-all')
             ->assertOk()
             ->assertJsonPath('claimed_count', 2)
-            ->assertJsonPath('claimed_amount', 25)
-            ->assertJsonPath('exp_total', 25);
+            ->assertJsonPath('claimed_amount', 35)
+            ->assertJsonPath('exp_total', 35);
 
         $this->assertSame(0, ExpReward::query()->where('user_id', $user->id)->where('status', 'pending')->count());
     }
@@ -343,17 +343,17 @@ class GamificationTest extends TestCase
 
         $user = User::factory()->create(['is_approved' => true, 'exp_total' => 90]);
         $service = app(GamificationService::class);
-        $reward = $service->offer($user, 'todo_complete', 'user_todo', 202);
+        $reward = $service->offer($user, 'event_check_in', 'calendar_event', 202);
         $this->assertNotNull($reward);
 
         $this->withToken($this->token($user))
             ->postJson("/api/gamification/rewards/{$reward->id}/claim")
             ->assertOk()
-            ->assertJsonPath('exp_total', 105)
+            ->assertJsonPath('exp_total', 115)
             ->assertJsonPath('level', 2)
             ->assertJsonPath('previous_level', 1)
             ->assertJsonPath('leveled_up', true)
-            ->assertJsonPath('exp_into_level', 5);
+            ->assertJsonPath('exp_into_level', 15);
 
         $me = $this->withToken($this->token($user))
             ->getJson('/api/gamification/me')
@@ -361,7 +361,7 @@ class GamificationTest extends TestCase
             ->json();
 
         $this->assertSame(2, $me['level']);
-        $this->assertSame(5, $me['exp_into_level']);
+        $this->assertSame(15, $me['exp_into_level']);
         $this->assertSame(100, $me['exp_for_level']);
     }
 
@@ -391,11 +391,11 @@ class GamificationTest extends TestCase
 
         ExpReward::query()->create([
             'user_id' => $viewer->id,
-            'action_key' => 'todo_complete',
+            'action_key' => 'event_check_in',
             'amount' => 15,
-            'title' => 'Complete todo',
+            'title' => 'Event check-in',
             'status' => ExpReward::STATUS_CLAIMED,
-            'source_type' => 'user_todo',
+            'source_type' => 'calendar_event',
             'source_id' => '1',
             'claimed_at' => now()->subDay(),
         ]);
@@ -417,7 +417,7 @@ class GamificationTest extends TestCase
     public function test_first_claim_unlocks_badge(): void
     {
         $user = User::factory()->create(['is_approved' => true, 'exp_total' => 0]);
-        $reward = app(GamificationService::class)->offer($user, 'todo_complete', 'user_todo', 303);
+        $reward = app(GamificationService::class)->offer($user, 'event_check_in', 'calendar_event', 303);
         $this->assertNotNull($reward);
 
         $response = $this->withToken($this->token($user))
@@ -439,7 +439,7 @@ class GamificationTest extends TestCase
         DB::table('app_settings')->insert([
             'system_name' => 'Nexus',
             'gamification_overrides' => json_encode([
-                'actions' => ['todo_complete' => ['base' => 40]],
+                'actions' => ['event_check_in' => ['base' => 40]],
             ]),
             'created_at' => now(),
             'updated_at' => now(),
@@ -447,14 +447,14 @@ class GamificationTest extends TestCase
         AppSettings::forget();
 
         $user = User::factory()->create(['is_approved' => true]);
-        $reward = app(GamificationService::class)->offer($user, 'todo_complete', 'user_todo', 404);
+        $reward = app(GamificationService::class)->offer($user, 'event_check_in', 'calendar_event', 404);
         $this->assertNotNull($reward);
         $this->assertSame(40, (int) $reward->amount);
 
         $this->withToken($this->token($admin))
             ->getJson('/api/admin/app-settings')
             ->assertOk()
-            ->assertJsonPath('gamification_overrides.actions.todo_complete.base', 40);
+            ->assertJsonPath('gamification_overrides.actions.event_check_in.base', 40);
     }
 
     public function test_public_profile_includes_level_and_rank(): void

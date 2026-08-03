@@ -83,6 +83,11 @@ export default function ApplicationCard({
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/10" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-white/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      {isInteractive ? (
+        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+          <div className="absolute inset-y-0 left-[-40%] w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 transition-[left,opacity] duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100" />
+        </div>
+      ) : null}
 
       {logoUrl ? (
         <img
@@ -344,9 +349,18 @@ export default function ApplicationCard({
           )}
         >
           {card}
-          <div className="min-w-0 w-full px-0.5 pt-2 text-center">
-            <p className="line-clamp-2 text-xs font-semibold leading-tight">{system.name}</p>
-            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{footerDetail}</p>
+          <div className="min-w-0 w-full px-0.5 pt-2 text-center transition-transform duration-300 group-hover/tile:translate-y-0">
+            <p className="line-clamp-2 text-xs font-semibold leading-tight transition-colors group-hover/tile:text-primary">
+              {system.name}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+              {footerDetail}
+            </p>
+            {isInteractive && !footerSubtitle ? (
+              <p className="mt-1 h-3 text-[10px] font-medium text-primary opacity-0 transition-opacity duration-300 group-hover/tile:opacity-80">
+                Tap to open
+              </p>
+            ) : null}
           </div>
         </div>
         <ApplicationDetailsSheet

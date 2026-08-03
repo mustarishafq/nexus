@@ -174,7 +174,6 @@ class GamificationSeeder extends Seeder
             ['action_key' => 'feed_comment', 'source_id' => 'pending-comment-2', 'amount' => 8],
             ['action_key' => 'feed_react', 'source_id' => 'pending-react-1', 'amount' => 2],
             ['action_key' => 'feed_react', 'source_id' => 'pending-react-2', 'amount' => 2],
-            ['action_key' => 'todo_complete', 'source_id' => 'pending-todo', 'amount' => 15],
             ['action_key' => 'celebration_wish', 'source_id' => 'pending-wish', 'amount' => 10],
             ['action_key' => 'event_check_in', 'source_id' => 'pending-event', 'amount' => 25],
         ];

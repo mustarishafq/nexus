@@ -1,5 +1,5 @@
 import db, { API_ORIGIN } from '@/api/apiClient';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -38,12 +38,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
 import { applicationNotificationsEnabled, normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
 import { applicationCalendarSyncEnabled, normalizeCalendarEventMapping } from '@/lib/calendarEventMapping';
-import ApplicationCard from '@/components/applications/ApplicationCard';
+import ApplicationsCatalogGrid from '@/components/applications/ApplicationsCatalogGrid';
+import ApplicationsCatalogToolbar from '@/components/applications/ApplicationsCatalogToolbar';
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import ApplicationIntegrationsSection from '@/components/applications/ApplicationIntegrationsSection';
 import ApplicationMcpConfigEditor from '@/components/applications/ApplicationMcpConfigEditor';
@@ -51,12 +53,12 @@ import ApplicationHealthConfigEditor from '@/components/applications/Application
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
 import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
+import { useMetaTags } from '@/hooks/useMetaTags';
 import {
   DEFAULT_BRAND_COLOR,
   extractDominantColorFromFile,
 } from '@/lib/imageColor';
 import { motion } from 'framer-motion';
-import { formatDistanceToNow } from 'date-fns';
 import { APPLICATION_ENVIRONMENTS } from '@/lib/applicationEnvironment';
 import { getApplicationStatus } from '@/lib/applicationStatus';
 import { toast } from 'sonner';
@@ -153,9 +155,34 @@ function SortableReorderRow({ system }) {
   );
 }
 
+function matchesApplicationSearch(system, term) {
+  if (!term) return true;
+
+  return [system.name, system.description, system.slug]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(term);
+}
+
+function matchesApplicationStatusFilter(system, statusFilter) {
+  if (statusFilter === 'all') return true;
+  if (statusFilter === 'online') return system.status === 'online';
+  if (statusFilter === 'issues') {
+    return ['offline', 'maintenance', 'degraded'].includes(system.status);
+  }
+  return true;
+}
+
 export default function Applications() {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window === 'undefined') return 'grid';
+    return window.localStorage.getItem('applications-view-mode') === 'list' ? 'list' : 'grid';
+  });
   const [editSystem, setEditSystem] = useState(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -269,6 +296,38 @@ export default function Applications() {
 
   const isAdmin = currentUser?.role === 'admin';
   const showUsage = canViewApplicationUsage(currentUser, systems);
+
+  useMetaTags({
+    title: 'Applications - EMZI Nexus Brain',
+    description: 'Browse and launch the systems available to you',
+  });
+
+  const onlineCount = useMemo(
+    () => systems.filter((system) => system.status === 'online').length,
+    [systems]
+  );
+  const issueCount = useMemo(
+    () => systems.filter((system) => ['offline', 'maintenance', 'degraded'].includes(system.status)).length,
+    [systems]
+  );
+  const filteredSystems = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return systems.filter(
+      (system) =>
+        matchesApplicationStatusFilter(system, statusFilter)
+        && matchesApplicationSearch(system, term)
+    );
+  }, [systems, search, statusFilter]);
+  const hasCatalogFilters = Boolean(search.trim() || statusFilter !== 'all');
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      window.localStorage.setItem('applications-view-mode', mode);
+    } catch {
+      // Ignore storage failures (private mode, etc).
+    }
+  };
 
   const openReorderDialog = () => {
     setOrderedSystems([...systems]);
@@ -506,32 +565,32 @@ export default function Applications() {
         </DialogContent>
       </Dialog>
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-        <div className="space-y-3">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" /> Application
-          </h1>
-          <div className="flex items-center justify-between gap-3">
-            <ApplicationsNav showUsage={showUsage} />
-            <div className="flex items-center gap-2 shrink-0">
-          {isAdmin && systems.length > 1 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
-              title="Reorder"
-              onClick={openReorderDialog}
-            >
-              <ArrowUpDown className="w-4 h-4" />
-              <span className="hidden sm:inline">Reorder</span>
-            </Button>
-          )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialogState(); else setDialogOpen(true); }}>
-            <DialogTrigger asChild>
-              <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add</span>
-              </Button>
-            </DialogTrigger>
+        <PageHeader
+          icon={Monitor}
+          title="Applications"
+          description="Launch your systems, check status, and manage integrations."
+          meta={`${systems.length} app${systems.length === 1 ? '' : 's'}${onlineCount ? ` · ${onlineCount} online` : ''}`}
+          actions={
+            <div className="flex items-center gap-2">
+              {isAdmin && systems.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
+                  title="Reorder"
+                  onClick={openReorderDialog}
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                  <span className="hidden sm:inline">Reorder</span>
+                </Button>
+              )}
+              <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialogState(); else setDialogOpen(true); }}>
+                <DialogTrigger asChild>
+                  <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Add</span>
+                  </Button>
+                </DialogTrigger>
           <DialogContent className="sm:max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
@@ -857,58 +916,51 @@ export default function Applications() {
               </div>
             </form>
           </DialogContent>
-          </Dialog>
+              </Dialog>
             </div>
-          </div>
-        </div>
+          }
+        />
+
+        <ApplicationsNav showUsage={showUsage} />
+
+        {(systems.length > 0 || hasCatalogFilters) && !isLoading ? (
+          <ApplicationsCatalogToolbar
+            search={search}
+            onSearchChange={setSearch}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
+            resultCount={filteredSystems.length}
+            totalCount={systems.length}
+            onlineCount={onlineCount}
+            issueCount={issueCount}
+          />
+        ) : null}
       </motion.div>
 
-      {/* Systems Grid */}
-      {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-        </div>
-      ) : systems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card rounded-2xl border border-border">
-          <Monitor className="w-12 h-12 mb-4 opacity-20" />
-          <p className="font-medium">No applications</p>
-          <p className="text-sm mt-1">
-            {currentUser?.role === 'admin'
-              ? 'Register your first system to get started'
-              : 'You have not been granted access to any systems yet'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-7 lg:gap-4">
-          {systems.map((system, i) => {
-            const canManageSystem = currentUser?.role === 'admin' || Number(system.created_by_user_id) === Number(currentUser?.id);
-
-            return (
-              <div
-                key={system.id}
-                className="rounded-xl border border-border bg-card p-2 shadow-sm transition-shadow hover:shadow-md sm:p-2.5"
-              >
-                <ApplicationCard
-                  system={system}
-                  index={i}
-                  canManageSystem={canManageSystem}
-                  launching={launching ?? launchingId}
-                  footerOutside
-                  onLaunch={handleLaunch}
-                  onEdit={openDialog}
-                  onDelete={(selectedSystem) => {
-                    setDeleteConfirmName('');
-                    setPendingDeleteSystem(selectedSystem);
-                  }}
-                  onManageSsoCredentials={setSsoCredentialsSystem}
-                  onWhatsNew={setWhatsNewSystem}
-                  unreadReleaseNotes={Number(releaseNoteUnreadCounts?.[String(system.id)] || 0)}
-                />
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <ApplicationsCatalogGrid
+        systems={filteredSystems}
+        isLoading={isLoading}
+        viewMode={viewMode}
+        hasFilters={hasCatalogFilters}
+        onClearFilters={() => {
+          setSearch('');
+          setStatusFilter('all');
+        }}
+        currentUser={currentUser}
+        launching={launching ?? launchingId}
+        releaseNoteUnreadCounts={releaseNoteUnreadCounts}
+        onLaunch={handleLaunch}
+        onEdit={openDialog}
+        onDelete={(selectedSystem) => {
+          setDeleteConfirmName('');
+          setPendingDeleteSystem(selectedSystem);
+        }}
+        onManageSsoCredentials={setSsoCredentialsSystem}
+        onWhatsNew={setWhatsNewSystem}
+        onAdd={() => openDialog()}
+      />
 
       <AlertDialog open={Boolean(pendingDeleteSystem)} onOpenChange={(open) => !open && closeDeleteDialog()}>
         <AlertDialogContent>

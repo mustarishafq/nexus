@@ -138,14 +138,6 @@ class GamificationCatalog
                 'daily_cap' => null,
                 'streak_key' => null,
             ],
-            'todo_complete' => [
-                'base' => 15,
-                'title' => 'Complete todo',
-                'description' => 'Complete a dashboard action item.',
-                'href' => '/',
-                'daily_cap' => null,
-                'streak_key' => null,
-            ],
             'celebration_wish' => [
                 'base' => 10,
                 'title' => 'Celebration wish',

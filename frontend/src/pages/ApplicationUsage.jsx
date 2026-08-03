@@ -403,34 +403,32 @@ export default function ApplicationUsage() {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-        <div className="space-y-3">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
-            Application
-          </h1>
-          <div className="flex items-center justify-between gap-3">
-            <ApplicationsNav showUsage />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5 shrink-0"
-              title="Refresh usage data"
-              onClick={() => refetchUsage()}
-              disabled={fetchingUsage}
-            >
-              <RefreshCw className={cn('w-4 h-4', fetchingUsage && 'animate-spin')} />
-              <span className="hidden sm:inline">Refresh</span>
-            </Button>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Monitor className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" />
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Applications</h1>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Track active and inactive users with access, based on app launches in Nexus
+            </p>
+            {lastUpdatedLabel ? (
+              <p className="mt-1 text-xs text-muted-foreground">{lastUpdatedLabel}</p>
+            ) : null}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 shrink-0 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
+            title="Refresh usage data"
+            onClick={() => refetchUsage()}
+            disabled={fetchingUsage}
+          >
+            <RefreshCw className={cn('w-4 h-4', fetchingUsage && 'animate-spin')} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
         </div>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Track active and inactive users with access, based on app launches in Nexus
-          </p>
-          {lastUpdatedLabel ? (
-            <p className="text-xs text-muted-foreground sm:text-sm">{lastUpdatedLabel}</p>
-          ) : null}
-        </div>
+        <ApplicationsNav showUsage />
       </motion.div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
