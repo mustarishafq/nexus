@@ -887,6 +887,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
                 postId={item.id}
                 poll={poll}
                 disabled={isPending}
+                isAuthor={isAuthor}
               />
             ))}
           </div>

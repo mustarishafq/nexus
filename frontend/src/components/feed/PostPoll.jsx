@@ -36,7 +36,7 @@ function patchFeedItem(queryClient, nextItem) {
   });
 }
 
-export default function PostPoll({ postId, poll, disabled = false }) {
+export default function PostPoll({ postId, poll, disabled = false, isAuthor = false }) {
   const queryClient = useQueryClient();
   const [draftOption, setDraftOption] = useState('');
 
@@ -72,7 +72,8 @@ export default function PostPoll({ postId, poll, disabled = false }) {
   }
 
   const allowMultiple = Boolean(poll.allow_multiple);
-  const showResults = Boolean(poll.has_voted);
+  // Authors can monitor results without voting; others must vote first.
+  const showResults = Boolean(poll.has_voted) || Boolean(isAuthor);
   const totalVotes = Number(poll.total_votes) || 0;
   const busy = voteMutation.isPending || addOptionMutation.isPending || disabled;
   const canAddOptions = Boolean(poll.can_add_options) && !disabled;
