@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v8.0.10';
+const CACHE_NAME = 'nexus-shell-v8.0.11';
 // Client ids reported as running in standalone/installed-PWA display mode.
 // Notification clicks must only reuse these, never a plain browser tab,
 // otherwise Android opens the click target in Chrome instead of the app.
@@ -77,7 +77,11 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           const cachedShell = await caches.match('/') || await caches.match('/offline.html');
-          return cachedShell;
+          return cachedShell || new Response('Offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
         })
     );
     return;
@@ -91,7 +95,14 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        return cached || new Response('Offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      })
   );
 });
 

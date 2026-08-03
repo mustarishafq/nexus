@@ -271,7 +271,9 @@ class MailController extends Controller
             );
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            report($exception);
+
             return response()->json(['message' => 'Unable to load message.'], 500);
         }
 

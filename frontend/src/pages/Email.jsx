@@ -557,10 +557,11 @@ export default function Email() {
     refetchInterval: debouncedSearch || folder !== 'inbox' ? false : pollInterval,
   });
 
-  const { data: messageData, isLoading: messageLoading } = useQuery({
+  const { data: messageData, isLoading: messageLoading, isError: messageError, refetch: refetchMessage } = useQuery({
     queryKey: ['mail-message', activeAccountId, folder, uid],
     queryFn: () => db.mail.getMessage(uid, { accountId: activeAccountId, folder }),
     enabled: Boolean(uid) && !isCompose && Boolean(status?.connected) && Boolean(activeAccountId),
+    retry: 1,
   });
 
   useEffect(() => {
@@ -963,6 +964,26 @@ export default function Email() {
             <div className="flex flex-1 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : messageError || !messageData ? (
+            <EmptyState
+              variant="inline"
+              icon={Mail}
+              title="Couldn't load this message"
+              description="The email could not be opened. It may use an unsupported encoding, or the mail server returned an error."
+              className="flex-1"
+              action={(
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="outline" className="gap-2" onClick={() => refetchMessage()}>
+                    <RefreshCw className="h-4 w-4" />
+                    Try again
+                  </Button>
+                  <Button variant="ghost" className="gap-2 lg:hidden" onClick={goBack}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to inbox
+                  </Button>
+                </div>
+              )}
+            />
           ) : (
             <>
               <div className="shrink-0 border-b border-border/60 px-3 py-2 sm:px-4 sm:py-3">

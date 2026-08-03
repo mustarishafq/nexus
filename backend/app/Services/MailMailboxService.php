@@ -564,7 +564,7 @@ class MailMailboxService
             }
 
             $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
-            $content = $this->decodePart(is_string($raw) ? $raw : '', $part);
+            $content = $this->decodePart(is_string($raw) ? $raw : '', $part, convertCharset: false);
             $filename = $this->partFilename($part) ?: 'attachment-'.$partNumber;
 
             return [
@@ -1074,9 +1074,9 @@ class MailMailboxService
             return '';
         }
 
-        $decoded = imap_utf8($value);
+        $decoded = function_exists('imap_utf8') ? imap_utf8($value) : $value;
 
-        return trim($decoded !== '' ? $decoded : $value);
+        return $this->ensureUtf8(trim($decoded !== '' ? $decoded : $value));
     }
 
     /**
@@ -1212,7 +1212,7 @@ class MailMailboxService
     {
         if (! $structure) {
             $raw = imap_body($connection, (string) $uid, FT_UID);
-            $text = $this->normalizeBody($raw);
+            $text = $this->normalizeBody(is_string($raw) ? $this->ensureUtf8($raw) : '');
 
             return [
                 'html' => null,
@@ -1239,9 +1239,9 @@ class MailMailboxService
         }
 
         return [
-            'html' => $html ?: null,
-            'text' => $text,
-            'html_text' => $htmlText,
+            'html' => $html ? $this->ensureUtf8($html) : null,
+            'text' => $this->ensureUtf8($text ?? ''),
+            'html_text' => $this->ensureUtf8($htmlText),
         ];
     }
 
@@ -1303,7 +1303,7 @@ class MailMailboxService
             $html = $this->fetchPartBody($connection, $uid, $partNumber, $structure);
         } else {
             $raw = imap_body($connection, (string) $uid, FT_UID);
-            $text = $this->normalizeBody($this->decodePart($raw, $structure));
+            $text = $this->normalizeBody($this->decodePart(is_string($raw) ? $raw : '', $structure));
         }
 
         return [
@@ -1327,7 +1327,7 @@ class MailMailboxService
             }
 
             $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
-            $decoded = $this->decodePart($raw, $part);
+            $decoded = $this->decodePart(is_string($raw) ? $raw : '', $part, convertCharset: false);
             $mime = $this->partMimeType($part);
             $dataUri = 'data:'.$mime.';base64,'.base64_encode($decoded);
 
@@ -1420,23 +1420,127 @@ class MailMailboxService
     {
         $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
 
-        return $this->decodePart($raw, $part);
+        return $this->decodePart(is_string($raw) ? $raw : '', $part);
     }
 
-    protected function decodePart(string $raw, $part): string
+    protected function decodePart(string $raw, $part, bool $convertCharset = true): string
     {
         $encoding = (int) ($part->encoding ?? ENC7BIT);
 
-        return match ($encoding) {
-            ENCBASE64 => base64_decode($raw) ?: $raw,
+        $decoded = match ($encoding) {
+            ENCBASE64 => (($value = base64_decode($raw, true)) !== false ? $value : $raw),
             ENCQUOTEDPRINTABLE => quoted_printable_decode($raw),
             default => $raw,
         };
+
+        if (! $convertCharset) {
+            return $decoded;
+        }
+
+        $type = (int) ($part->type ?? TYPETEXT);
+
+        // Only charset-convert textual parts; binary payloads must stay intact.
+        if ($type !== TYPETEXT && $type !== TYPEMESSAGE) {
+            return $decoded;
+        }
+
+        return $this->ensureUtf8($decoded, $this->partCharset($part));
+    }
+
+    protected function partCharset($part): ?string
+    {
+        foreach (['parameters', 'dparameters'] as $key) {
+            if (! isset($part->{$key}) || ! is_array($part->{$key})) {
+                continue;
+            }
+
+            foreach ($part->{$key} as $param) {
+                if (strtolower((string) ($param->attribute ?? '')) !== 'charset') {
+                    continue;
+                }
+
+                $charset = trim((string) ($param->value ?? ''), " \t\"'");
+
+                if ($charset !== '') {
+                    return $charset;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Convert MIME text to valid UTF-8 so JSON responses never fail encoding.
+     */
+    protected function ensureUtf8(string $value, ?string $charset = null): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $charset = $charset !== null ? strtoupper(trim($charset, " \t\"'")) : null;
+
+        if ($charset !== null && $charset !== '') {
+            $charset = match ($charset) {
+                'UTF8', 'UTF-8' => 'UTF-8',
+                'US-ASCII', 'ASCII' => 'ASCII',
+                'KS_C_5601-1987', 'KSC_5601', 'ISO-2022-KR' => 'CP949',
+                'GB2312', 'GB_2312-80' => 'GBK',
+                'WINDOWS-31J', 'CSWINDOWS31J' => 'SJIS-win',
+                'WINDOWS-1252', 'CP1252' => 'Windows-1252',
+                'WINDOWS-1251', 'CP1251' => 'Windows-1251',
+                'ISO-8859-1', 'LATIN1' => 'ISO-8859-1',
+                default => $charset,
+            };
+
+            if ($charset !== 'UTF-8' && $charset !== 'ASCII') {
+                $converted = false;
+
+                if (function_exists('mb_convert_encoding')) {
+                    $converted = @mb_convert_encoding($value, 'UTF-8', $charset);
+                }
+
+                if ($converted === false && function_exists('iconv')) {
+                    $converted = @iconv($charset, 'UTF-8//IGNORE', $value);
+                }
+
+                if (is_string($converted)) {
+                    $value = $converted;
+                }
+            }
+        }
+
+        if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        if (function_exists('mb_scrub')) {
+            return mb_scrub($value, 'UTF-8');
+        }
+
+        if (function_exists('iconv')) {
+            $scrubbed = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+
+            if (is_string($scrubbed)) {
+                return $scrubbed;
+            }
+        }
+
+        if (function_exists('mb_convert_encoding')) {
+            $scrubbed = @mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+
+            if (is_string($scrubbed)) {
+                return $scrubbed;
+            }
+        }
+
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $value) ?? '';
     }
 
     protected function normalizeBody(string $body): string
     {
-        $body = trim($body);
+        $body = trim($this->ensureUtf8($body));
 
         return preg_replace("/\r\n?|\n/", "\n", $body) ?? $body;
     }
