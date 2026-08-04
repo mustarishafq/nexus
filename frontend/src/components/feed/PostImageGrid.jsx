@@ -1,9 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MediaLightbox from '@/components/media/MediaLightbox';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
+
+/** Known feed frames — pick nearest match from the image's natural ratio. */
+const FEED_ASPECT_FRAMES = [
+  { id: '19:6', ratio: 19 / 6, paddingBottom: `${(100 * 6) / 19}%` }, // ~31.58% — ultra-wide banners
+  { id: '16:9', ratio: 16 / 9, paddingBottom: '56.25%' }, // landscape
+  { id: '4:5', ratio: 4 / 5, paddingBottom: '125%' }, // portrait-ish
+  { id: '1:1', ratio: 1, paddingBottom: '100%' }, // square
+];
 
 function resolveImageUrls(item) {
   if (Array.isArray(item?.image_urls) && item.image_urls.length > 0) {
@@ -13,6 +21,26 @@ function resolveImageUrls(item) {
     return [item.image_url];
   }
   return [];
+}
+
+function pickFeedAspectFrame(naturalWidth, naturalHeight) {
+  if (!naturalWidth || !naturalHeight) {
+    return FEED_ASPECT_FRAMES.find((frame) => frame.id === '16:9');
+  }
+
+  const imageRatio = naturalWidth / naturalHeight;
+  let best = FEED_ASPECT_FRAMES[0];
+  let bestDistance = Math.abs(Math.log(imageRatio / best.ratio));
+
+  for (const frame of FEED_ASPECT_FRAMES) {
+    const distance = Math.abs(Math.log(imageRatio / frame.ratio));
+    if (distance < bestDistance) {
+      best = frame;
+      bestDistance = distance;
+    }
+  }
+
+  return best;
 }
 
 function GridCell({ src, alt, className, onClick, overlayLabel = null }) {
@@ -44,6 +72,45 @@ function SquareFrame({ children, className }) {
   return (
     <div className={cn('relative w-full', className)} style={{ paddingBottom: '100%' }}>
       <div className="absolute inset-0">{children}</div>
+    </div>
+  );
+}
+
+function FlushSingleFrame({ src, onOpen }) {
+  const [frame, setFrame] = useState(() => FEED_ASPECT_FRAMES.find((entry) => entry.id === '16:9'));
+
+  useEffect(() => {
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      setFrame(pickFeedAspectFrame(image.naturalWidth, image.naturalHeight));
+    };
+    image.onerror = () => {
+      if (cancelled) return;
+      setFrame(FEED_ASPECT_FRAMES.find((entry) => entry.id === '16:9'));
+    };
+    image.src = toAbsoluteUrl(src);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return (
+    <div
+      className="relative w-full"
+      style={{ paddingBottom: frame.paddingBottom }}
+      data-aspect={frame.id}
+    >
+      <div className="absolute inset-0">
+        <GridCell
+          src={src}
+          alt="Post attachment"
+          className="h-full"
+          onClick={onOpen}
+        />
+      </div>
     </div>
   );
 }
@@ -108,16 +175,7 @@ export default function PostImageGrid({ item, className, flush = false }) {
       >
         {count === 1 ? (
           flush ? (
-            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-              <div className="absolute inset-0">
-                <GridCell
-                  src={images[0]}
-                  alt="Post attachment"
-                  className="h-full"
-                  onClick={() => openAt(0)}
-                />
-              </div>
-            </div>
+            <FlushSingleFrame src={images[0]} onOpen={() => openAt(0)} />
           ) : (
             <SquareFrame>
               <GridCell
