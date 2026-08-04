@@ -13,6 +13,37 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { feedPostElementId, parseFeedFocusParams } from '@/lib/feedLinks';
 import { motion } from 'framer-motion';
 
+const XL_BREAKPOINT = 1280;
+
+function useIsXlUp() {
+  const [isXlUp, setIsXlUp] = useState(() => (
+    typeof window !== 'undefined'
+      ? window.matchMedia(`(min-width: ${XL_BREAKPOINT}px)`).matches
+      : false
+  ));
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${XL_BREAKPOINT}px)`);
+    const onChange = () => setIsXlUp(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  return isXlUp;
+}
+
+function findVisibleFeedPostElement(postId) {
+  const id = feedPostElementId(postId);
+  const nodes = document.querySelectorAll(`[id="${CSS.escape(id)}"]`);
+  for (const node of nodes) {
+    if (node.getClientRects().length > 0) {
+      return node;
+    }
+  }
+  return null;
+}
+
 function FeedMain({ items, isLoading, focusTarget }) {
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -56,6 +87,7 @@ export default function CompanyFeed() {
   const focusTarget = useMemo(() => parseFeedFocusParams(searchParams), [searchParams]);
   const lastFocusedKeyRef = useRef(null);
   const [mobileTab, setMobileTab] = useState('feed');
+  const isXlUp = useIsXlUp();
 
   useMetaTags({
     title: 'Company Feed - EMZI Nexus Brain',
@@ -89,7 +121,9 @@ export default function CompanyFeed() {
       return;
     }
 
-    const element = document.getElementById(feedPostElementId(focusTarget.postId));
+    // Wait until the visible layout has mounted the post (avoid focusing a
+    // display:none duplicate from the other breakpoint layout).
+    const element = findVisibleFeedPostElement(focusTarget.postId);
     if (!element) {
       return;
     }
@@ -110,9 +144,10 @@ export default function CompanyFeed() {
       next.delete('post');
       next.delete('comments');
       setSearchParams(next, { replace: true });
+      // Allow the same post deep-link to focus again on a later click.
       lastFocusedKeyRef.current = null;
     }
-  }, [focusTarget, isLoading, items, searchParams, setSearchParams]);
+  }, [focusTarget, isLoading, isXlUp, items, mobileTab, searchParams, setSearchParams]);
 
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -124,8 +159,22 @@ export default function CompanyFeed() {
         className="gap-2 sm:gap-4"
       />
 
-      {/* Mobile & tablet: tabbed sections */}
-      <div className="xl:hidden">
+      {/* Mount only one layout so feed post IDs stay unique and focusable. */}
+      {isXlUp ? (
+        <div className="grid grid-cols-12 items-start gap-6">
+          <aside className="col-span-3 sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 self-start overflow-y-auto">
+            <ActiveDiscussionsWidget />
+          </aside>
+
+          <div className="col-span-6">
+            <FeedMain items={items} isLoading={isLoading} focusTarget={focusTarget} />
+          </div>
+
+          <aside className="col-span-3 sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 self-start overflow-y-auto">
+            <TodaysCelebrationsWidget />
+          </aside>
+        </div>
+      ) : (
         <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
             <TabsTrigger value="feed" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
@@ -153,22 +202,7 @@ export default function CompanyFeed() {
             <TodaysCelebrationsWidget />
           </TabsContent>
         </Tabs>
-      </div>
-
-      {/* Desktop xl+: three-column rails */}
-      <div className="hidden gap-6 xl:grid xl:grid-cols-12 xl:items-start">
-        <aside className="xl:col-span-3 xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100dvh-6.5rem)] xl:flex-col xl:gap-6 xl:self-start xl:overflow-y-auto">
-          <ActiveDiscussionsWidget />
-        </aside>
-
-        <div className="xl:col-span-6">
-          <FeedMain items={items} isLoading={isLoading} focusTarget={focusTarget} />
-        </div>
-
-        <aside className="xl:col-span-3 xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100dvh-6.5rem)] xl:flex-col xl:gap-6 xl:self-start xl:overflow-y-auto">
-          <TodaysCelebrationsWidget />
-        </aside>
-      </div>
+      )}
     </div>
   );
 }
