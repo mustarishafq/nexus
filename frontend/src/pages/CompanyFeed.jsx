@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { feedPostElementId, parseFeedFocusParams } from '@/lib/feedLinks';
+import { feedPostElementId, parseFeedFocusParams, scrollFeedPostIntoView } from '@/lib/feedLinks';
 import { cn } from '@/lib/utils';
 
 const XL_BREAKPOINT = 1280;
@@ -96,6 +96,7 @@ export default function CompanyFeed() {
   const [searchParams, setSearchParams] = useSearchParams();
   const focusTarget = useMemo(() => parseFeedFocusParams(searchParams), [searchParams]);
   const lastFocusedKeyRef = useRef(null);
+  const settleScrollRef = useRef(null);
   const [mobileTab, setMobileTab] = useState('feed');
   const isXlUp = useIsXlUp();
   const showFeedColumn = isXlUp || mobileTab === 'feed';
@@ -125,40 +126,70 @@ export default function CompanyFeed() {
     }
   }, [focusTarget?.postId]);
 
+  useEffect(() => () => {
+    settleScrollRef.current?.();
+    settleScrollRef.current = null;
+  }, []);
+
   useEffect(() => {
     if (!focusTarget?.postId || isLoading || !showFeedColumn) {
-      return;
+      return undefined;
     }
 
     const focusKey = `${focusTarget.postId}:${focusTarget.expandComments ? '1' : '0'}`;
     if (lastFocusedKeyRef.current === focusKey) {
-      return;
+      return undefined;
     }
 
     const element = findVisibleFeedPostElement(focusTarget.postId);
     if (!element) {
-      return;
+      return undefined;
     }
 
     lastFocusedKeyRef.current = focusKey;
 
-    window.requestAnimationFrame(() => {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    settleScrollRef.current?.();
+    const rafId = window.requestAnimationFrame(() => {
+      settleScrollRef.current = scrollFeedPostIntoView(element, { behavior: 'smooth' });
       element.classList.add('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
-
-      window.setTimeout(() => {
-        element.classList.remove('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
-      }, 2400);
     });
 
-    if (searchParams.get('post') || searchParams.get('comments')) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('post');
-      next.delete('comments');
-      setSearchParams(next, { replace: true });
+    const highlightTimer = window.setTimeout(() => {
+      element.classList.remove('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
+    }, 2400);
+
+    // Clear deep-link params after scroll starts. Do not cancel settle on
+    // that re-render — lazy images above the target still shift layout.
+    const clearParamsTimer = window.setTimeout(() => {
+      setSearchParams((prev) => {
+        if (!prev.get('post') && !prev.get('comments')) {
+          return prev;
+        }
+        const next = new URLSearchParams(prev);
+        next.delete('post');
+        next.delete('comments');
+        return next;
+      }, { replace: true });
+      // Allow the same post deep-link to focus again on a later click.
       lastFocusedKeyRef.current = null;
-    }
-  }, [focusTarget, isLoading, isXlUp, items, mobileTab, searchParams, setSearchParams, showFeedColumn]);
+    }, 100);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearParamsTimer);
+      // Intentionally keep settleScrollRef running after URL clears.
+    };
+  }, [
+    focusTarget?.expandComments,
+    focusTarget?.postId,
+    isLoading,
+    isXlUp,
+    items,
+    mobileTab,
+    setSearchParams,
+    showFeedColumn,
+  ]);
 
   return (
     <div className="space-y-3 sm:space-y-6">

@@ -77,7 +77,7 @@ function SquareFrame({ children, className }) {
 }
 
 function FlushSingleFrame({ src, onOpen }) {
-  const [frame, setFrame] = useState(() => FEED_ASPECT_FRAMES.find((entry) => entry.id === '16:9'));
+  const [frame, setFrame] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +96,18 @@ function FlushSingleFrame({ src, onOpen }) {
       cancelled = true;
     };
   }, [src]);
+
+  // Hold a stable placeholder until the real ratio is known to avoid a
+  // 16:9 → 19:6 jump that throws off deep-link scrolling.
+  if (!frame) {
+    return (
+      <div
+        className="relative w-full animate-pulse bg-muted/25"
+        style={{ paddingBottom: '56.25%' }}
+        aria-hidden
+      />
+    );
+  }
 
   return (
     <div
