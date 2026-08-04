@@ -37,6 +37,7 @@ import {
   formatStreakCounts,
   isStreakAtRisk,
   levelProgress,
+  starsFromLevel,
 } from '@/lib/gamification';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { cn } from '@/lib/utils';
@@ -466,6 +467,7 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
 function ExpHero({
   expTotal,
   level,
+  stars,
   expIntoLevel,
   expForLevel,
   progress,
@@ -526,6 +528,7 @@ function ExpHero({
             <ExpLevelBar
               className="mt-3 max-w-xs"
               level={level}
+              stars={stars}
               expIntoLevel={expIntoLevel}
               expForLevel={expForLevel}
               progress={progress}
@@ -668,6 +671,7 @@ export default function Missions() {
         exp_into_level: Number(data.exp_into_level) || 0,
         exp_for_level: Number(data.exp_for_level) || 100,
         progress: Number(data.progress) || 0,
+        stars: data.stars != null ? Number(data.stars) : starsFromLevel(Number(data.level)),
       }
     : levelProgress(expTotal);
   const streaks = Array.isArray(data?.streaks) ? data.streaks : [];
@@ -777,6 +781,7 @@ export default function Missions() {
       <ExpHero
         expTotal={expTotal}
         level={progress.level}
+        stars={progress.stars}
         expIntoLevel={progress.exp_into_level}
         expForLevel={progress.exp_for_level}
         progress={progress.progress}

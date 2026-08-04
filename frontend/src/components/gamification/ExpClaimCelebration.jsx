@@ -183,7 +183,9 @@ function ExpClaimShow({ show, onDone }) {
             background:
               show.kind === 'rank'
                 ? 'radial-gradient(circle at center, rgba(148,163,184,0.18), transparent 55%)'
-                : 'radial-gradient(circle at center, rgba(245,158,11,0.22), transparent 55%)',
+                : show.kind === 'star'
+                  ? 'radial-gradient(circle at center, rgba(250,204,21,0.28), transparent 55%)'
+                  : 'radial-gradient(circle at center, rgba(245,158,11,0.22), transparent 55%)',
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 1, 0] }}
@@ -478,8 +480,8 @@ export function spawnExpClaimCelebration({
 }
 
 /**
- * Compact level / rank moment overlay.
- * @param {{ kind?: 'level'|'rank', title: string, subtitle?: string }} options
+ * Compact level / rank / star moment overlay.
+ * @param {{ kind?: 'level'|'rank'|'star', title: string, subtitle?: string }} options
  */
 export function spawnExpMoment({ kind = 'level', title, subtitle } = {}) {
   if (!title) return;

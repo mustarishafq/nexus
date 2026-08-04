@@ -359,12 +359,17 @@ class GamificationService
             ->values()
             ->all();
 
+        $previousStars = (int) ($previousLevel['stars'] ?? GamificationCatalog::starsFromLevel($previousLevel['level']));
+        $currentStars = (int) ($current['stars'] ?? GamificationCatalog::starsFromLevel($current['level']));
+
         return array_merge($current, [
             'exp_total' => (int) $user->exp_total,
             'rank' => $rank,
             'previous_level' => $previousLevel['level'],
             'previous_rank' => $previousRank,
+            'previous_stars' => $previousStars,
             'leveled_up' => $current['level'] > $previousLevel['level'],
+            'star_earned' => $currentStars > $previousStars,
             'rank_improved' => $previousRank !== null && $rank !== null && $rank < $previousRank,
             'streak_milestones' => $streakMilestones,
         ]);
@@ -377,7 +382,8 @@ class GamificationService
      *   level: int,
      *   exp_into_level: int,
      *   exp_for_level: int,
-     *   progress: float
+     *   progress: float,
+     *   stars: int
      * }
      */
     public function expProgressPayload(User $user): array

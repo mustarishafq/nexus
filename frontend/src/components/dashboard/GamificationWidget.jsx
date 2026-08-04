@@ -13,6 +13,7 @@ import {
   GAMIFICATION_ME_QUERY_KEY,
   isStreakAtRisk,
   levelProgress,
+  starsFromLevel,
   STREAK_LABELS,
 } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
@@ -60,6 +61,7 @@ export default function GamificationWidget() {
         exp_into_level: Number(data.exp_into_level) || 0,
         exp_for_level: Number(data.exp_for_level) || 100,
         progress: Number(data.progress) || 0,
+        stars: data.stars != null ? Number(data.stars) : starsFromLevel(Number(data.level)),
       }
     : levelProgress(expTotal);
 
@@ -132,6 +134,7 @@ export default function GamificationWidget() {
 
             <ExpLevelBar
               level={progress.level}
+              stars={progress.stars}
               expIntoLevel={progress.exp_into_level}
               expForLevel={progress.exp_for_level}
               progress={progress.progress}

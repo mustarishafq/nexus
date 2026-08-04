@@ -13,9 +13,10 @@ import {
 } from '@/lib/media';
 import { getDisplayName } from '@/lib/profile';
 import BadgesStrip from '@/components/gamification/BadgesStrip';
-import { GAMIFICATION_ME_QUERY_KEY, levelProgress } from '@/lib/gamification';
+import { GAMIFICATION_ME_QUERY_KEY, levelProgress, starsFromLevel } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { Star } from 'lucide-react';
 
 const DEFAULT_COVER = '/icons/cover-photo-new.png';
 
@@ -108,6 +109,11 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
     : (user?.level != null
       ? Number(user.level)
       : (expTotal != null ? levelProgress(expTotal).level : null));
+  const displayStars = !readOnly && gamificationMe?.stars != null
+    ? Number(gamificationMe.stars)
+    : (user?.stars != null
+      ? Number(user.stars)
+      : (displayLevel != null ? starsFromLevel(displayLevel) : 0));
   const displayRank = !readOnly
     ? (gamificationMe?.rank != null ? Number(gamificationMe.rank) : null)
     : (user?.rank != null ? Number(user.rank) : null);
@@ -172,8 +178,17 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
             {expTotal != null ? (
               <div className="mt-0.5 space-y-1">
                 <p className="text-[11px] sm:text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground tabular-nums">
+                  <span className="font-medium text-foreground tabular-nums inline-flex items-center gap-1">
                     Lv {displayLevel}
+                    {displayStars > 0 ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-300"
+                        title={`${displayStars} star${displayStars === 1 ? '' : 's'}`}
+                      >
+                        <Star className="h-3 w-3 fill-current" aria-hidden />
+                        <span className="tabular-nums">{displayStars}</span>
+                      </span>
+                    ) : null}
                   </span>
                   <span className="mx-1.5 text-border">·</span>
                   <span className="font-medium text-foreground tabular-nums">{expTotal.toLocaleString()}</span>

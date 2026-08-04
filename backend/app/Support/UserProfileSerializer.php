@@ -128,7 +128,7 @@ class UserProfileSerializer
     /**
      * Lightweight EXP fields for directory cards (no rank query).
      *
-     * @return array{exp_total: int, level: int}
+     * @return array{exp_total: int, level: int, stars: int}
      */
     public static function expDirectoryFields(User $user): array
     {
@@ -138,11 +138,12 @@ class UserProfileSerializer
         return [
             'exp_total' => $expTotal,
             'level' => $progress['level'],
+            'stars' => $progress['stars'],
         ];
     }
 
     /**
-     * @return array{exp_total: int, level: int, rank: int|null}
+     * @return array{exp_total: int, level: int, stars: int, rank: int|null}
      */
     private static function expPublicFields(User $user): array
     {

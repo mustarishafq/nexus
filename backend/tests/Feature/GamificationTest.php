@@ -325,6 +325,7 @@ class GamificationTest extends TestCase
         $this->assertSame(0, $payload['exp_into_level']);
         $this->assertSame(100, $payload['exp_for_level']);
         $this->assertSame(0, $payload['progress']);
+        $this->assertSame(0, $payload['stars']);
 
         $clockIn = collect($payload['missions'])->firstWhere('action_key', 'clock_in');
         $this->assertNotNull($clockIn);
@@ -335,11 +336,25 @@ class GamificationTest extends TestCase
 
     public function test_level_progress_boundaries_and_claim_level_up(): void
     {
-        $this->assertSame(1, \App\Support\GamificationCatalog::levelProgress(0)['level']);
-        $this->assertSame(1, \App\Support\GamificationCatalog::levelProgress(99)['level']);
-        $this->assertSame(99, \App\Support\GamificationCatalog::levelProgress(99)['exp_into_level']);
-        $this->assertSame(2, \App\Support\GamificationCatalog::levelProgress(100)['level']);
-        $this->assertSame(0, \App\Support\GamificationCatalog::levelProgress(100)['exp_into_level']);
+        $catalog = \App\Support\GamificationCatalog::class;
+
+        $this->assertSame(1, $catalog::levelProgress(0)['level']);
+        $this->assertSame(0, $catalog::levelProgress(0)['stars']);
+        $this->assertSame(1, $catalog::levelProgress(99)['level']);
+        $this->assertSame(99, $catalog::levelProgress(99)['exp_into_level']);
+        $this->assertSame(2, $catalog::levelProgress(100)['level']);
+        $this->assertSame(0, $catalog::levelProgress(100)['exp_into_level']);
+
+        // Flat through level 10, then quadratic (11 * L).
+        $this->assertSame(900, $catalog::totalExpToReach(10));
+        $this->assertSame(10, $catalog::levelProgress(900)['level']);
+        $this->assertSame(110, $catalog::expToAdvanceFrom(10));
+        $this->assertSame(11, $catalog::levelProgress(1010)['level']);
+        $this->assertSame(0, $catalog::levelProgress(1010)['exp_into_level']);
+        $this->assertSame(54855, $catalog::totalExpToReach(100));
+        $this->assertSame(100, $catalog::levelProgress(54855)['level']);
+        $this->assertSame(1, $catalog::levelProgress(54855)['stars']);
+        $this->assertSame(2, $catalog::starsFromLevel(200));
 
         $user = User::factory()->create(['is_approved' => true, 'exp_total' => 90]);
         $service = app(GamificationService::class);
@@ -353,6 +368,8 @@ class GamificationTest extends TestCase
             ->assertJsonPath('level', 2)
             ->assertJsonPath('previous_level', 1)
             ->assertJsonPath('leveled_up', true)
+            ->assertJsonPath('star_earned', false)
+            ->assertJsonPath('stars', 0)
             ->assertJsonPath('exp_into_level', 15);
 
         $me = $this->withToken($this->token($user))
@@ -363,6 +380,31 @@ class GamificationTest extends TestCase
         $this->assertSame(2, $me['level']);
         $this->assertSame(15, $me['exp_into_level']);
         $this->assertSame(100, $me['exp_for_level']);
+        $this->assertSame(0, $me['stars']);
+    }
+
+    public function test_claim_crossing_level_100_earns_a_star(): void
+    {
+        // totalExpToReach(100) = 54855; event_check_in awards 25.
+        $user = User::factory()->create(['is_approved' => true, 'exp_total' => 54830]);
+        $service = app(GamificationService::class);
+        $reward = $service->offer($user, 'event_check_in', 'calendar_event', 303);
+        $this->assertNotNull($reward);
+
+        $before = \App\Support\GamificationCatalog::levelProgress(54830);
+        $this->assertSame(99, $before['level']);
+        $this->assertSame(0, $before['stars']);
+
+        $this->withToken($this->token($user))
+            ->postJson("/api/gamification/rewards/{$reward->id}/claim")
+            ->assertOk()
+            ->assertJsonPath('exp_total', 54855)
+            ->assertJsonPath('level', 100)
+            ->assertJsonPath('previous_level', 99)
+            ->assertJsonPath('leveled_up', true)
+            ->assertJsonPath('stars', 1)
+            ->assertJsonPath('previous_stars', 0)
+            ->assertJsonPath('star_earned', true);
     }
 
     public function test_self_reaction_does_not_offer_exp(): void

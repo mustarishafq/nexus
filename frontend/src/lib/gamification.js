@@ -10,6 +10,14 @@ import { queryClientInstance } from '@/lib/query-client';
 export const GAMIFICATION_ME_QUERY_KEY = ['gamification-me'];
 export const GAMIFICATION_MISSIONS_QUERY_KEY = ['gamification-missions'];
 
+/** Levels below this use flat EXP; from this level onward use quadratic. */
+export const FLAT_UNTIL_LEVEL = 10;
+/** Flat EXP per level while below FLAT_UNTIL_LEVEL. */
+export const FLAT_EXP = 100;
+/** Cost from level L (L >= FLAT_UNTIL_LEVEL) is QUAD_FACTOR * L. */
+export const EXP_QUAD_FACTOR = 11;
+export const MAX_LEVEL = 500;
+/** @deprecated Use FLAT_EXP */
 export const EXP_PER_LEVEL = 100;
 
 export const STREAK_LABELS = {
@@ -49,18 +57,52 @@ export function formatStreakCounts(streak) {
   return `${current}d`;
 }
 
+/** EXP required to advance from level L to L+1. */
+export function expToAdvanceFrom(level) {
+  const L = Math.max(1, Math.floor(Number(level) || 1));
+  if (L < FLAT_UNTIL_LEVEL) return FLAT_EXP;
+  return EXP_QUAD_FACTOR * L;
+}
+
+/** Cumulative EXP required to be at the given level. */
+export function totalExpToReach(level) {
+  const L = Math.max(1, Math.floor(Number(level) || 1));
+  if (L <= 1) return 0;
+
+  const flatSteps = Math.min(L - 1, FLAT_UNTIL_LEVEL - 1);
+  let total = FLAT_EXP * flatSteps;
+
+  if (L > FLAT_UNTIL_LEVEL) {
+    const n = L - 1;
+    const quadSum = (n * (n + 1)) / 2 - ((FLAT_UNTIL_LEVEL - 1) * FLAT_UNTIL_LEVEL) / 2;
+    total += EXP_QUAD_FACTOR * quadSum;
+  }
+
+  return total;
+}
+
+export function starsFromLevel(level) {
+  return Math.floor(Math.max(0, Number(level) || 0) / 100);
+}
+
 /**
  * @param {number} expTotal
- * @returns {{ level: number, exp_into_level: number, exp_for_level: number, progress: number }}
+ * @returns {{ level: number, exp_into_level: number, exp_for_level: number, progress: number, stars: number }}
  */
 export function levelProgress(expTotal) {
   const exp = Math.max(0, Number(expTotal) || 0);
-  const into = exp % EXP_PER_LEVEL;
+  let level = 1;
+  while (level < MAX_LEVEL && totalExpToReach(level + 1) <= exp) {
+    level += 1;
+  }
+  const into = exp - totalExpToReach(level);
+  const need = expToAdvanceFrom(level);
   return {
-    level: Math.floor(exp / EXP_PER_LEVEL) + 1,
+    level,
     exp_into_level: into,
-    exp_for_level: EXP_PER_LEVEL,
-    progress: EXP_PER_LEVEL > 0 ? into / EXP_PER_LEVEL : 0,
+    exp_for_level: need,
+    progress: need > 0 ? into / need : 0,
+    stars: starsFromLevel(level),
   };
 }
 
@@ -88,7 +130,15 @@ export function celebrateExpClaim({ amount, count = 1, clientX, clientY, mode } 
 function celebrateClaimMoments(result) {
   if (!result || typeof result !== 'object') return;
 
-  if (result.leveled_up && result.level) {
+  if (result.star_earned && result.stars) {
+    window.setTimeout(() => {
+      spawnExpMoment({
+        kind: 'star',
+        title: result.stars === 1 ? '1 Star' : `${result.stars} Stars`,
+        subtitle: 'Prestige unlocked',
+      });
+    }, 700);
+  } else if (result.leveled_up && result.level) {
     window.setTimeout(() => {
       spawnExpMoment({
         kind: 'level',
@@ -136,6 +186,7 @@ function progressFromClaimResult(result) {
     exp_into_level: result.exp_into_level != null ? Number(result.exp_into_level) : fallback.exp_into_level,
     exp_for_level: result.exp_for_level != null ? Number(result.exp_for_level) : fallback.exp_for_level,
     progress: result.progress != null ? Number(result.progress) : fallback.progress,
+    stars: result.stars != null ? Number(result.stars) : fallback.stars,
     ...(result.rank != null ? { rank: Number(result.rank) } : {}),
   };
 }
@@ -144,7 +195,11 @@ function applyClaimResultToCaches(result, { clearPending = false, claimedRewardI
   const progress = progressFromClaimResult(result);
   if (!progress) return;
 
-  patchAuthUser({ exp_total: progress.exp_total });
+  patchAuthUser({
+    exp_total: progress.exp_total,
+    level: progress.level,
+    stars: progress.stars,
+  });
 
   const patchSummary = (current) => {
     if (!current || typeof current !== 'object') return current;

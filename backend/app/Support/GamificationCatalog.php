@@ -10,11 +10,65 @@ class GamificationCatalog
 
     public const MAX_STREAK_BONUS_DAYS = 14;
 
-    /** Flat EXP required to advance one level. */
+    /** Levels below this use flat EXP; from this level onward use quadratic. */
+    public const FLAT_UNTIL_LEVEL = 10;
+
+    /** Flat EXP required to advance one level while below FLAT_UNTIL_LEVEL. */
+    public const FLAT_EXP = 100;
+
+    /** Quadratic factor: cost from level L (L >= FLAT_UNTIL_LEVEL) is factor * L. */
+    public const EXP_QUAD_FACTOR = 11;
+
+    /** Safety cap when scanning level from EXP total. */
+    public const MAX_LEVEL = 500;
+
+    /** @deprecated Use FLAT_EXP; kept for any external references. */
     public const EXP_PER_LEVEL = 100;
 
     /** Streak day counts that trigger a milestone celebration. */
     public const STREAK_MILESTONES = [3, 7, 14];
+
+    /**
+     * EXP required to advance from level L to L+1.
+     */
+    public static function expToAdvanceFrom(int $level): int
+    {
+        $level = max(1, $level);
+
+        if ($level < self::FLAT_UNTIL_LEVEL) {
+            return self::FLAT_EXP;
+        }
+
+        return self::EXP_QUAD_FACTOR * $level;
+    }
+
+    /**
+     * Cumulative claimed EXP required to reach (be at) the given level.
+     */
+    public static function totalExpToReach(int $level): int
+    {
+        $level = max(1, $level);
+        if ($level <= 1) {
+            return 0;
+        }
+
+        $flatSteps = min($level - 1, self::FLAT_UNTIL_LEVEL - 1);
+        $total = self::FLAT_EXP * $flatSteps;
+
+        if ($level > self::FLAT_UNTIL_LEVEL) {
+            $n = $level - 1;
+            // sum_{i=10}^{n} i = n(n+1)/2 - 9*10/2
+            $quadSum = intdiv($n * ($n + 1), 2) - intdiv((self::FLAT_UNTIL_LEVEL - 1) * self::FLAT_UNTIL_LEVEL, 2);
+            $total += self::EXP_QUAD_FACTOR * $quadSum;
+        }
+
+        return $total;
+    }
+
+    public static function starsFromLevel(int $level): int
+    {
+        return intdiv(max(0, $level), 100);
+    }
 
     /**
      * Derive level progress from claimed EXP total.
@@ -23,21 +77,28 @@ class GamificationCatalog
      *   level: int,
      *   exp_into_level: int,
      *   exp_for_level: int,
-     *   progress: float
+     *   progress: float,
+     *   stars: int
      * }
      */
     public static function levelProgress(int $expTotal): array
     {
         $exp = max(0, $expTotal);
-        $perLevel = self::EXP_PER_LEVEL;
-        $level = intdiv($exp, $perLevel) + 1;
-        $into = $exp % $perLevel;
+        $level = 1;
+
+        while ($level < self::MAX_LEVEL && self::totalExpToReach($level + 1) <= $exp) {
+            $level++;
+        }
+
+        $into = $exp - self::totalExpToReach($level);
+        $need = self::expToAdvanceFrom($level);
 
         return [
             'level' => $level,
             'exp_into_level' => $into,
-            'exp_for_level' => $perLevel,
-            'progress' => $perLevel > 0 ? round($into / $perLevel, 4) : 0.0,
+            'exp_for_level' => $need,
+            'progress' => $need > 0 ? round($into / $need, 4) : 0.0,
+            'stars' => self::starsFromLevel($level),
         ];
     }
 
