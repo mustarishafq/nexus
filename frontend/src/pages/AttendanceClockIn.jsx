@@ -143,8 +143,24 @@ export default function AttendanceClockIn() {
     });
   }, [capture, clockMutation, lateClockInReason, needsLateReason, reasonReady]);
 
+  const activeSpecialRelease = policy?.active_special_release || null;
   const activeShift = policy ? findActiveShift(policy) : null;
-  const attendanceSites = useMemo(() => resolveAttendanceSites(policy), [policy]);
+  const attendanceSites = useMemo(() => {
+    if (activeSpecialRelease?.center_latitude != null && activeSpecialRelease?.center_longitude != null) {
+      const typeLabel = activeSpecialRelease.type === 'wfh'
+        ? 'WFH'
+        : activeSpecialRelease.type === 'outstation'
+          ? 'Outstation'
+          : 'Other';
+      return [{
+        name: `Special release (${typeLabel})`,
+        latitude: Number(activeSpecialRelease.center_latitude),
+        longitude: Number(activeSpecialRelease.center_longitude),
+      }];
+    }
+    return resolveAttendanceSites(policy);
+  }, [policy, activeSpecialRelease]);
+  const siteRadiusMeters = activeSpecialRelease?.radius_meters ?? policy?.radius_meters ?? 200;
   const liveLocation = capture?.location;
   const nearestSite = useMemo(() => (
     findNearestAttendanceSite(attendanceSites, liveLocation?.latitude, liveLocation?.longitude)
@@ -154,12 +170,19 @@ export default function AttendanceClockIn() {
       attendanceSites,
       liveLocation?.latitude,
       liveLocation?.longitude,
-      policy?.radius_meters ?? 200,
+      siteRadiusMeters,
     )
-  ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, policy?.radius_meters]);
+  ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, siteRadiusMeters]);
 
   const scheduleHint = status?.schedule_hint;
   const policyParts = useMemo(() => listAttendancePolicyParts(policy), [policy]);
+  const specialReleaseTypeLabel = activeSpecialRelease
+    ? (activeSpecialRelease.type === 'wfh'
+      ? 'WFH'
+      : activeSpecialRelease.type === 'outstation'
+        ? 'Outstation'
+        : 'Other')
+    : null;
 
   return (
     <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
@@ -168,6 +191,21 @@ export default function AttendanceClockIn() {
           <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
             <CardTitle className="text-base">Shift schedule</CardTitle>
             <CardDescription className="text-pretty">{scheduleHint.message}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      {activeSpecialRelease ? (
+        <Card className="min-w-0 rounded-2xl border-dashed border-primary/30 bg-primary/5">
+          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 shrink-0 text-primary" />
+              Special release active ({specialReleaseTypeLabel})
+            </CardTitle>
+            <CardDescription className="text-pretty">
+              Clock within {activeSpecialRelease.radius_meters}m of your approved pin
+              {allowOutsideRadius ? ' (outstation outside pin still allowed with warning)' : ''}.
+            </CardDescription>
           </CardHeader>
         </Card>
       ) : null}
@@ -195,6 +233,11 @@ export default function AttendanceClockIn() {
               ) : null}
               {allowOutsideRadius && !matchedSite && nearestSite ? (
                 <Badge variant="outline">Outstation allowed</Badge>
+              ) : null}
+              {activeSpecialRelease ? (
+                <Badge variant="secondary">
+                  Special release ({specialReleaseTypeLabel}) · {activeSpecialRelease.radius_meters}m pin
+                </Badge>
               ) : null}
             </div>
             {policyParts.length ? (
@@ -224,7 +267,7 @@ export default function AttendanceClockIn() {
               userName={user?.full_name || user?.name || user?.email}
               deviceInfo={deviceInfo}
               attendanceSites={attendanceSites}
-              siteRadiusMeters={policy?.radius_meters ?? 200}
+              siteRadiusMeters={siteRadiusMeters}
               requirePreciseLocation={Boolean(policy?.geofence_enabled)}
               actionType={nextType}
               submitting={clockMutation.isPending}

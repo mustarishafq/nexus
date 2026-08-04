@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AttendanceRecord;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
+use App\Services\ResourceSpecialReleaseClient;
 use App\Support\AttendanceLocationSettings;
 use Carbon\Carbon;
 
@@ -56,7 +57,10 @@ class AttendancePolicyValidator
             'department_id' => $setting->department_id,
         ];
 
-        self::validateGeofence($setting, $type, $latitude, $longitude, $errors, $warnings, $metadata);
+        $today = $capturedAt->copy()->timezone($setting->timezone)->toDateString();
+        $activeRelease = self::findActiveSpecialRelease($user, $today);
+
+        self::validateGeofence($setting, $type, $latitude, $longitude, $errors, $warnings, $metadata, $activeRelease);
         self::validateShiftHours($setting, $capturedAt, $errors, $warnings, $metadata);
 
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
@@ -88,6 +92,10 @@ class AttendancePolicyValidator
         $user->loadMissing('department');
         $location = $setting->attendanceLocation;
 
+        $timezone = $setting->timezone ?: config('app.timezone');
+        $today = now()->timezone($timezone)->toDateString();
+        $activeRelease = self::findActiveSpecialRelease($user, $today);
+
         return [
             'department_id' => $setting->department_id,
             'department_name' => $user->department?->name,
@@ -108,6 +116,7 @@ class AttendancePolicyValidator
             'overtime_enabled' => $setting->overtime_enabled,
             'standard_hours_per_day' => (float) $setting->standard_hours_per_day,
             'shifts' => $setting->shifts ?? [],
+            'active_special_release' => $activeRelease?->toSummary(),
         ];
     }
 
@@ -140,6 +149,12 @@ class AttendancePolicyValidator
         return null;
     }
 
+    private static function findActiveSpecialRelease(User $user, string $date): ?SpecialReleasePin
+    {
+        return app(ResourceSpecialReleaseClient::class)
+            ->findApprovedForUserOnDate($user->id, $date);
+    }
+
     /**
      * @param  array<string, mixed>  $errors
      * @param  array<string, mixed>  $warnings
@@ -153,6 +168,7 @@ class AttendancePolicyValidator
         array &$errors,
         array &$warnings,
         array &$metadata,
+        ?SpecialReleasePin $activeRelease = null,
     ): void {
         $location = $setting->attendanceLocation;
 
@@ -161,6 +177,20 @@ class AttendancePolicyValidator
         }
 
         $allowOutside = $location->allowsOutsideRadiusFor($type);
+
+        if ($activeRelease) {
+            self::validateSpecialReleaseGeofence(
+                $activeRelease,
+                $allowOutside,
+                $latitude,
+                $longitude,
+                $errors,
+                $warnings,
+                $metadata,
+            );
+
+            return;
+        }
 
         if ($latitude === null || $longitude === null) {
             if (! $allowOutside) {
@@ -224,6 +254,67 @@ class AttendancePolicyValidator
                 'Recorded outside allowed radius (nearest site: %s, ~%dm away).',
                 $closestSite['name'] ?? 'assigned location',
                 (int) round((float) $closestDistance),
+            );
+            $metadata['outside_radius'] = true;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $errors
+     * @param  array<string, mixed>  $warnings
+     * @param  array<string, mixed>  $metadata
+     */
+    private static function validateSpecialReleaseGeofence(
+        SpecialReleasePin $release,
+        bool $allowOutside,
+        ?float $latitude,
+        ?float $longitude,
+        array &$errors,
+        array &$warnings,
+        array &$metadata,
+    ): void {
+        $siteLabel = sprintf('Special release (%s)', $release->typeLabel());
+        $metadata['special_release_id'] = $release->id;
+        $metadata['special_release_type'] = $release->type;
+
+        if ($latitude === null || $longitude === null) {
+            if (! $allowOutside) {
+                $errors[] = 'Location is required for attendance in your department.';
+            } else {
+                $warnings[] = 'Location unavailable; recorded without geofence verification.';
+                $metadata['outside_radius'] = true;
+            }
+
+            return;
+        }
+
+        $distance = self::haversineMeters(
+            $release->centerLatitude,
+            $release->centerLongitude,
+            $latitude,
+            $longitude,
+        );
+        $metadata['distance_meters'] = round($distance, 1);
+        $metadata['nearest_site_name'] = $siteLabel;
+
+        if ($distance <= $release->radiusMeters) {
+            $metadata['matched_site_name'] = $siteLabel;
+
+            return;
+        }
+
+        if (! $allowOutside) {
+            $errors[] = sprintf(
+                'You must be within %dm of your special release pin (%s, ~%dm away).',
+                $release->radiusMeters,
+                $siteLabel,
+                (int) round($distance),
+            );
+        } else {
+            $warnings[] = sprintf(
+                'Recorded outside special release radius (%s, ~%dm away).',
+                $siteLabel,
+                (int) round($distance),
             );
             $metadata['outside_radius'] = true;
         }
