@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, Check, ImageIcon, ListChecks, Loader2, Megaphone, MessageCircle, Pencil, Plus, Send, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Camera, Check, Globe2, ImageIcon, ListChecks, Loader2, Megaphone, MoreHorizontal, Pencil, Plus, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -19,13 +19,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import FeedTextEditor from '@/components/feed/FeedTextEditor';
+import EmojiCollectionPicker from '@/components/feed/EmojiCollectionPicker';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostEditHistory from '@/components/feed/PostEditHistory';
 import PostInsights, { useMarkPostSeen } from '@/components/feed/PostInsights';
 import PostPoll from '@/components/feed/PostPoll';
-import PostReactions from '@/components/feed/PostReactions';
+import PostReactions, { FeedEngagementBar } from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { Expandable } from '@/components/ui/expandable';
 import { toast } from 'sonner';
@@ -250,35 +258,69 @@ function PollEditorPanel({
   );
 }
 
+function ExpandablePostBody({ text, className }) {
+  const [expanded, setExpanded] = useState(false);
+  const plain = stripHtml(text || '');
+  const needsClamp = plain.length > 220;
+
+  if (!text) return null;
+
+  return (
+    <div className={cn('relative', className)}>
+      <div
+        className={cn(
+          'text-sm leading-relaxed text-foreground/90 break-words',
+          needsClamp && !expanded && 'line-clamp-3'
+        )}
+      >
+        <MentionText text={text} />
+      </div>
+      {needsClamp && !expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-0.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
+        >
+          See more
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function BroadcastFeedItem({ item, compact = false }) {
   return (
     <article
       className={cn(
-        'border-b border-border/50 bg-primary/[0.03] last:border-b-0',
-        compact ? 'px-3 py-3 md:px-5 md:py-4' : 'px-3 py-4 md:px-5 md:py-4'
+        'overflow-hidden bg-card',
+        compact
+          ? 'rounded-none border-0 border-b border-border/30 last:border-b-0'
+          : 'rounded-lg border border-border/30'
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Megaphone className="h-4 w-4 text-primary" />
+      <div className={cn('flex items-start gap-2.5', compact ? 'px-3 py-2.5 md:px-4' : 'px-3 py-2.5 sm:px-4')}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Megaphone className="h-3.5 w-3.5 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold">{item.title}</p>
+            <p className="text-sm font-semibold leading-snug">{item.title}</p>
             <Badge variant="outline" className="h-5 text-[10px] capitalize">
               {item.priority || 'announcement'}
             </Badge>
           </div>
-          {item.message ? (
-            <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              <MentionText text={item.message} />
-            </div>
-          ) : null}
-          <p className="mt-2.5 text-[11px] text-muted-foreground">
-            {formatDistanceToNow(new Date(item.created_date), { addSuffix: true })}
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span>{formatDistanceToNow(new Date(item.created_date), { addSuffix: true })}</span>
+            <span aria-hidden>·</span>
+            <Globe2 className="h-3 w-3" />
           </p>
         </div>
       </div>
+      {item.message ? (
+        <div className="px-3 pb-3 text-sm leading-relaxed text-foreground/90 sm:px-4">
+          <MentionText text={item.message} />
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -287,6 +329,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
   const queryClient = useQueryClient();
   const [commentBody, setCommentBody] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const commentInputRef = useRef(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['post-comments', postId],
@@ -352,7 +395,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
           />
         </Link>
         <div className="min-w-0 flex-1">
-          <div className="rounded-2xl bg-background px-2.5 py-2 shadow-sm ring-1 ring-border/50 md:px-3">
+          <div className="rounded-2xl bg-muted/60 px-2.5 py-2 md:px-3">
             {/* Mobile: header row + body below for more horizontal room */}
             <div className="md:hidden">
               <div className="flex items-start justify-between gap-1.5">
@@ -442,10 +485,9 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
   return (
     <div
       className={cn(
-        'rounded-xl border border-border/60',
         compact
-          ? 'mt-2.5 bg-muted/20 p-2 md:mt-3 md:bg-muted/25 md:p-3'
-          : 'mt-2.5 bg-muted/20 p-2 md:mt-3 md:bg-muted/25 md:p-3',
+          ? 'mt-2.5'
+          : 'mt-2.5',
         className
       )}
     >
@@ -507,15 +549,26 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
           </div>
         ) : null}
         <div className="flex items-end gap-1.5 md:gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
             <MentionInput
+              ref={commentInputRef}
               value={commentBody}
               onChange={setCommentBody}
               placeholder={replyingTo ? 'Write a reply...' : 'Write a comment...'}
               rows={1}
               maxLength={1000}
-              className="min-h-9 overflow-x-hidden text-sm md:min-h-10"
+              className="min-h-9 overflow-x-hidden pr-10 text-sm shadow-none md:min-h-10 md:pr-11"
+              placeholderClassName="!right-10 md:!right-11"
             />
+            <div className="absolute inset-y-0 right-0.5 flex items-center">
+              <EmojiCollectionPicker
+                disabled={createComment.isPending}
+                triggerClassName="h-8 w-8 md:h-9 md:w-9"
+                onSelect={(emoji) => {
+                  commentInputRef.current?.insertText(emoji);
+                }}
+              />
+            </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             {!replyingTo ? <ExpActionHint actionKey="feed_comment" compact /> : null}
@@ -720,262 +773,269 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
       ref={articleRef}
       id={feedPostElementId(item.id)}
       className={cn(
-        'group scroll-mt-24 border-b border-border/50 transition-shadow last:border-b-0',
-        compact ? 'px-3 py-3 md:px-5 md:py-4' : 'px-3 py-4 md:px-5 md:py-5',
-        isPending && 'bg-amber-500/5'
+        'group scroll-mt-24 overflow-hidden bg-card',
+        compact
+          ? 'rounded-none border-0 border-b border-border/30 last:border-b-0'
+          : 'rounded-lg border border-border/30',
+        isPending && 'bg-amber-500/[0.03]'
       )}
     >
-      <div className="grid grid-cols-[auto_1fr] gap-x-2.5 md:gap-x-3">
-        <Link to={`/people/${item.author?.id}`} className="col-start-1 row-start-1 shrink-0 self-start">
-          <UserAvatar user={item.author} className="h-9 w-9 md:h-10 md:w-10" />
+      {/* Header */}
+      <div className={cn('flex items-start gap-2.5', compact ? 'px-3 pt-2.5 md:px-4' : 'px-3 pt-2.5 sm:px-4')}>
+        <Link to={`/people/${item.author?.id}`} className="shrink-0 self-start">
+          <UserAvatar user={item.author} className="h-9 w-9" />
         </Link>
 
-        <div className="col-start-2 row-start-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 md:gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={`/people/${item.author?.id}`}
-                  className="text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
-                >
-                  {getDisplayName(item.author)}
-                </Link>
-                {isPending ? (
-                  <Badge
-                    variant="outline"
-                    className="border-amber-500/40 bg-amber-500/15 text-[10px] font-medium text-amber-700 dark:text-amber-300"
-                  >
-                    Pending approval
-                  </Badge>
-                ) : null}
-              </div>
-              {item.author?.department ? (
-                <p className="mt-0.5 max-md:truncate text-xs text-muted-foreground">
-                  {item.author.department}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="whitespace-nowrap text-[10px] text-muted-foreground md:text-[11px]">
-                  {timeAgo}
-                </span>
-                {item.is_edited ? (
-                  <PostEditHistory postId={item.id} editedAt={item.edited_at} />
-                ) : null}
-              </div>
-              {item.can_edit && !compact && !editing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground opacity-100 hover:text-foreground md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-                  onClick={beginEditing}
-                  disabled={updatePost.isPending}
-                  title="Edit post"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              ) : null}
-              {item.can_delete && !compact && !editing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground opacity-100 hover:text-destructive md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={deletePost.isPending}
-                  title="Delete post"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              ) : null}
-            </div>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/people/${item.author?.id}`}
+              className="text-sm font-semibold leading-snug text-foreground transition-colors hover:underline"
+            >
+              {getDisplayName(item.author)}
+            </Link>
+            {isPending ? (
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 bg-amber-500/15 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+              >
+                Pending approval
+              </Badge>
+            ) : null}
           </div>
-
-          {editing ? (
-            <div className="mt-2 space-y-2">
-              <FeedTextEditor
-                value={draftBody}
-                onChange={setDraftBody}
-                placeholder="Update your post..."
-                minHeight="6.5rem"
-                maxLength={2000}
-                disabled={updatePost.isPending}
-              />
-              <div className="space-y-2">
-                {draftPolls.map((draft, index) => (
-                  <PollEditorPanel
-                    key={draft.key}
-                    title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
-                    options={draft.options}
-                    onOptionsChange={(options) => updateDraftPoll(index, { options })}
-                    allowMultiple={draft.allowMultiple}
-                    onAllowMultipleChange={(allowMultiple) => updateDraftPoll(index, { allowMultiple })}
-                    allowAddOptions={draft.allowAddOptions}
-                    onAllowAddOptionsChange={(allowAddOptions) => updateDraftPoll(index, { allowAddOptions })}
-                    disabled={updatePost.isPending}
-                    maxOptions={MAX_POLL_OPTIONS_EDIT}
-                    onRemove={() => {
-                      setDraftPolls((current) => current.filter((_, i) => i !== index));
-                      if (draft.id) {
-                        setRemovedPollIds((current) => (
-                          current.includes(draft.id) ? current : [...current, draft.id]
-                        ));
-                      }
-                    }}
-                  />
-                ))}
-                {draftPolls.length < MAX_POLLS_PER_POST ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 text-xs"
-                    disabled={updatePost.isPending}
-                    onClick={() => setDraftPolls((current) => [...current, emptyPollDraft()])}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    {draftPolls.length === 0 ? 'Add poll' : 'Add another poll'}
-                  </Button>
-                ) : null}
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <p className="mr-auto text-xs tabular-nums text-muted-foreground">
-                  {stripHtml(draftBody).length}/2000
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8"
-                  disabled={updatePost.isPending}
-                  onClick={cancelEditing}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8"
-                  disabled={updatePost.isPending || !canSaveEdit || draftUnchanged}
-                  onClick={handleSaveEdit}
-                >
-                  {updatePost.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-                </Button>
-              </div>
-            </div>
-          ) : item.body ? (
-            <div className="mt-2 text-sm leading-relaxed text-foreground/90 break-words md:break-normal">
-              <MentionText text={item.body} />
-            </div>
-          ) : null}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-muted-foreground">
+            {item.author?.department ? (
+              <>
+                <span className="max-w-[14rem] truncate">{item.author.department}</span>
+                <span aria-hidden>·</span>
+              </>
+            ) : null}
+            <span className="whitespace-nowrap">{timeAgo}</span>
+            <span aria-hidden>·</span>
+            <Globe2 className="h-3 w-3 shrink-0 opacity-70" aria-label="Visible to company" />
+            {item.is_edited ? (
+              <>
+                <span aria-hidden>·</span>
+                <PostEditHistory postId={item.id} editedAt={item.edited_at} />
+              </>
+            ) : null}
+          </div>
         </div>
 
-        {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
-          <div className="col-span-2 mt-2.5 min-w-0">
-            <PostImageGrid item={item} />
-          </div>
+        {!compact && (item.can_edit || item.can_delete) && !editing ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                title="Post options"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {item.can_edit ? (
+                <DropdownMenuItem
+                  onClick={beginEditing}
+                  disabled={updatePost.isPending}
+                  className="gap-2"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit post
+                </DropdownMenuItem>
+              ) : null}
+              {item.can_edit && item.can_delete ? <DropdownMenuSeparator /> : null}
+              {item.can_delete ? (
+                <DropdownMenuItem
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={deletePost.isPending}
+                  className="gap-2 text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete post
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
+      </div>
 
-        {!editing && itemPolls.length > 0 ? (
-          <div className="col-start-2 mt-2.5 min-w-0 space-y-2 mr-[calc(2.25rem+0.625rem)] md:mr-[calc(2.5rem+0.75rem)]">
-            {itemPolls.map((poll) => (
-              <PostPoll
-                key={poll.id}
-                postId={item.id}
-                poll={poll}
-                disabled={isPending}
-                isAuthor={isAuthor}
+      {/* Body / edit */}
+      {editing ? (
+        <div className="space-y-2 px-3 pt-2.5 sm:px-4">
+          <FeedTextEditor
+            value={draftBody}
+            onChange={setDraftBody}
+            placeholder="Update your post..."
+            minHeight="6.5rem"
+            maxLength={2000}
+            disabled={updatePost.isPending}
+          />
+          <div className="space-y-2">
+            {draftPolls.map((draft, index) => (
+              <PollEditorPanel
+                key={draft.key}
+                title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
+                options={draft.options}
+                onOptionsChange={(options) => updateDraftPoll(index, { options })}
+                allowMultiple={draft.allowMultiple}
+                onAllowMultipleChange={(allowMultiple) => updateDraftPoll(index, { allowMultiple })}
+                allowAddOptions={draft.allowAddOptions}
+                onAllowAddOptionsChange={(allowAddOptions) => updateDraftPoll(index, { allowAddOptions })}
+                disabled={updatePost.isPending}
+                maxOptions={MAX_POLL_OPTIONS_EDIT}
+                onRemove={() => {
+                  setDraftPolls((current) => current.filter((_, i) => i !== index));
+                  if (draft.id) {
+                    setRemovedPollIds((current) => (
+                      current.includes(draft.id) ? current : [...current, draft.id]
+                    ));
+                  }
+                }}
               />
             ))}
+            {draftPolls.length < MAX_POLLS_PER_POST ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={updatePost.isPending}
+                onClick={() => setDraftPolls((current) => [...current, emptyPollDraft()])}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {draftPolls.length === 0 ? 'Add poll' : 'Add another poll'}
+              </Button>
+            ) : null}
           </div>
-        ) : null}
-
-        {item.can_moderate ? (
-          <div className="col-span-2 mt-2.5 flex items-center justify-end gap-1.5">
+          <div className="flex items-center justify-end gap-2 pb-3">
+            <p className="mr-auto text-xs tabular-nums text-muted-foreground">
+              {stripHtml(draftBody).length}/2000
+            </p>
             <Button
               type="button"
+              variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2.5 text-xs bg-emerald-600 text-white hover:bg-emerald-600/90"
-              onClick={() => approvePost.mutate()}
-              disabled={moderationBusy}
+              className="h-8"
+              disabled={updatePost.isPending}
+              onClick={cancelEditing}
             >
-              {approvePost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-              Approve
+              Cancel
             </Button>
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="h-7 gap-1 px-2.5 text-xs border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive"
-              onClick={() => rejectPost.mutate()}
-              disabled={moderationBusy}
+              className="h-8"
+              disabled={updatePost.isPending || !canSaveEdit || draftUnchanged}
+              onClick={handleSaveEdit}
             >
-              {rejectPost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-              Reject
+              {updatePost.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
             </Button>
           </div>
-        ) : isPending ? (
-          <p className="col-span-2 mt-3 text-xs text-muted-foreground">
-            This post is hidden from the company feed until an admin or HR approves it.
-          </p>
-        ) : null}
+        </div>
+      ) : item.body ? (
+        <ExpandablePostBody
+          text={item.body}
+          className={cn('px-3 pt-1.5 sm:px-4', !(item.image_url || item.image_urls?.length) && 'pb-1')}
+        />
+      ) : null}
 
-        {!isPending && !editing ? (
-          <div
-            className={cn(
-              'col-start-2 mt-3 min-w-0 border-t border-border/40 pt-3',
-              !item.body && !(item.image_url || item.image_urls?.length) && 'mt-2 border-t-0 pt-0'
-            )}
+      {/* Full-bleed media */}
+      {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
+        <div className="mt-2">
+          <PostImageGrid item={item} flush={!compact} />
+        </div>
+      ) : null}
+
+      {!editing && itemPolls.length > 0 ? (
+        <div className="space-y-2 px-3 pt-2.5 sm:px-4">
+          {itemPolls.map((poll) => (
+            <PostPoll
+              key={poll.id}
+              postId={item.id}
+              poll={poll}
+              disabled={isPending}
+              isAuthor={isAuthor}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {item.can_moderate ? (
+        <div className="flex items-center justify-end gap-1.5 px-3 pt-2.5 sm:px-4">
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs bg-emerald-600 text-white hover:bg-emerald-600/90"
+            onClick={() => approvePost.mutate()}
+            disabled={moderationBusy}
           >
-            <PostReactions item={item} />
+            {approvePost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+            Approve
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 px-2.5 text-xs border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive"
+            onClick={() => rejectPost.mutate()}
+            disabled={moderationBusy}
+          >
+            {rejectPost.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+            Reject
+          </Button>
+        </div>
+      ) : isPending ? (
+        <p className="px-3 pt-2.5 text-xs text-muted-foreground sm:px-4">
+          This post is hidden from the company feed until an admin or HR approves it.
+        </p>
+      ) : null}
 
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <PostInsights item={item} />
-              {!expanded ? (
-                <button
-                  type="button"
-                  onClick={() => setExpanded(true)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  <span className="md:hidden">
-                    {(item.comments_count || 0) === 0
-                      ? 'Comment'
-                      : `${item.comments_count} ${item.comments_count === 1 ? 'comment' : 'comments'}`}
-                  </span>
-                  <span className="hidden md:inline">
-                    {item.comments_count || 0}{' '}
-                    {(item.comments_count || 0) === 1 ? 'comment' : 'comments'}
-                  </span>
-                </button>
-              ) : null}
-              {compact ? (
-                <Link
-                  to={feedPostPath(item.id, { expandComments: expanded })}
-                  className="text-[11px] font-medium text-primary/80 hover:text-primary hover:underline"
-                >
-                  Open in feed
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+      {!isPending && !editing ? (
+        <>
+          <FeedEngagementBar
+            item={item}
+            commentsCount={item.comments_count || 0}
+            commentsExpanded={expanded}
+            shareUrl={feedPostPath(item.id)}
+            onComment={() => setExpanded((current) => !current)}
+            insights={
+              item.can_view_insights || compact ? (
+                <>
+                  {item.can_view_insights ? <PostInsights item={item} /> : null}
+                  {item.can_view_insights && compact ? (
+                    <span className="text-[10px] leading-none text-muted-foreground/40" aria-hidden>·</span>
+                  ) : null}
+                  {compact ? (
+                    <Link
+                      to={feedPostPath(item.id, { expandComments: expanded })}
+                      className="text-xs font-medium text-primary/80 hover:text-primary hover:underline"
+                    >
+                      Open in feed
+                    </Link>
+                  ) : null}
+                </>
+              ) : null
+            }
+          />
+        </>
+      ) : (
+        <div className="h-2" />
+      )}
 
-        <Expandable
-          open={!isPending && !editing && expanded}
-          className="col-span-2 mt-2 md:col-span-1 md:col-start-2"
-        >
+      <Expandable open={!isPending && !editing && expanded}>
+        <div className="border-t border-border/25 px-3 pb-3 pt-1 sm:px-4">
           <PostComments
             postId={item.id}
             commentsCount={item.comments_count || 0}
             compact={compact}
             onCollapse={() => setExpanded(false)}
+            className="mt-2 border-0 bg-transparent p-0 md:mt-2 md:bg-transparent md:p-0"
           />
-        </Expandable>
-      </div>
+        </div>
+      </Expandable>
     </article>
 
     <AlertDialog open={confirmDelete} onOpenChange={(open) => !open && !deletePost.isPending && setConfirmDelete(false)}>
@@ -1016,7 +1076,7 @@ export function FeedItem({ item, compact = false, initialExpanded = false }) {
   return <PostFeedItem item={item} compact={compact} initialExpanded={initialExpanded} />;
 }
 
-export function FeedComposer({ className }) {
+export const FeedComposer = React.memo(function FeedComposer({ className }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -1166,11 +1226,11 @@ export function FeedComposer({ className }) {
   };
 
   return (
-    <div className={cn('overflow-hidden rounded-2xl border border-border bg-card', className)}>
-      <div className="flex items-start gap-3 p-3 sm:gap-3.5 sm:p-4">
+    <div className={cn('overflow-hidden rounded-lg border border-border/30 bg-card', className)}>
+      <div className="flex items-start gap-2.5 p-3 sm:p-3.5">
         <UserAvatar
           user={user}
-          className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+          className="h-9 w-9 shrink-0"
           showOnlineStatus={false}
         />
         <div className="min-w-0 flex-1">
@@ -1182,10 +1242,10 @@ export function FeedComposer({ className }) {
                 ? 'Share an update...'
                 : 'Share an update… Type @ to mention someone'
             }
-            minHeight={isMobile ? '4.25rem' : '5rem'}
+            minHeight={isMobile ? '3.5rem' : '4rem'}
             maxLength={2000}
             disabled={isSubmitting}
-            editorClassName="border-0 shadow-none rounded-xl bg-muted/25"
+            editorClassName="border-0 shadow-none rounded-lg bg-muted/20"
           />
 
           {requiresApproval ? (
@@ -1265,7 +1325,7 @@ export function FeedComposer({ className }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/10 px-2.5 py-2 sm:gap-2 sm:px-3">
+      <div className="flex items-center gap-1.5 border-t border-border/25 px-2.5 py-1.5 sm:gap-2 sm:px-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -1363,6 +1423,6 @@ export function FeedComposer({ className }) {
       </div>
     </div>
   );
-}
+});
 
 export default FeedItem;

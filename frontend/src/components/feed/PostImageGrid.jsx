@@ -48,7 +48,7 @@ function SquareFrame({ children, className }) {
   );
 }
 
-export default function PostImageGrid({ item, className }) {
+export default function PostImageGrid({ item, className, flush = false }) {
   const images = resolveImageUrls(item);
   const [viewerIndex, setViewerIndex] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -99,19 +99,35 @@ export default function PostImageGrid({ item, className }) {
     <>
       <div
         className={cn(
-          'w-full overflow-hidden rounded-xl border border-border/50 bg-muted/20',
+          'w-full overflow-hidden bg-muted/20',
+          flush
+            ? 'rounded-none border-0'
+            : 'rounded-lg border border-border/30',
           className
         )}
       >
         {count === 1 ? (
-          <SquareFrame>
-            <GridCell
-              src={images[0]}
-              alt="Post attachment"
-              className="h-full"
-              onClick={() => openAt(0)}
-            />
-          </SquareFrame>
+          flush ? (
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <div className="absolute inset-0">
+                <GridCell
+                  src={images[0]}
+                  alt="Post attachment"
+                  className="h-full"
+                  onClick={() => openAt(0)}
+                />
+              </div>
+            </div>
+          ) : (
+            <SquareFrame>
+              <GridCell
+                src={images[0]}
+                alt="Post attachment"
+                className="h-full"
+                onClick={() => openAt(0)}
+              />
+            </SquareFrame>
+          )
         ) : null}
 
         {count === 2 ? (

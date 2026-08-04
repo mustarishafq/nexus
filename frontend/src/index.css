@@ -107,6 +107,7 @@
   body {
     @apply bg-background text-foreground font-sans;
     font-family: var(--font-sans);
+    scrollbar-gutter: stable;
   }
 }
 

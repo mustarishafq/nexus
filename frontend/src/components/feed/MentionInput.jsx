@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,15 +26,16 @@ function useDebouncedValue(value, delay = 200) {
   return debounced;
 }
 
-export default function MentionInput({
+const MentionInput = forwardRef(function MentionInput({
   value,
   onChange,
   placeholder,
   rows = 3,
   maxLength = 2000,
   className,
+  placeholderClassName,
   onKeyDown,
-}) {
+}, ref) {
   const editorRef = useRef(null);
   const pendingCursorRef = useRef(null);
   const internalChangeRef = useRef(false);
@@ -168,6 +169,36 @@ export default function MentionInput({
     const cursor = getSerializedCursorOffset(editor);
     emitChange(serialized, cursor);
   };
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      editorRef.current?.focus();
+    },
+    insertText: (text) => {
+      const editor = editorRef.current;
+      if (!editor || !text) return;
+
+      editor.focus();
+
+      // Prefer native insert so cursor position is preserved.
+      const inserted = document.execCommand('insertText', false, text);
+      if (inserted) {
+        handleInput();
+        return;
+      }
+
+      const current = serializeMentionEditor(editor);
+      const cursor = getSerializedCursorOffset(editor);
+      const nextValue = `${current.slice(0, cursor)}${text}${current.slice(cursor)}`;
+      const nextCursor = cursor + text.length;
+      pendingCursorRef.current = nextCursor;
+      emitChange(nextValue, nextCursor, { rerender: true });
+      requestAnimationFrame(() => {
+        editor.focus();
+        setSerializedCursorOffset(editor, nextCursor);
+      });
+    },
+  }));
 
   const handleSelect = (user) => {
     if (!mentionState) return;
@@ -316,7 +347,8 @@ export default function MentionInput({
         <div
           className={cn(
             'pointer-events-none absolute inset-x-3 z-10 truncate text-sm text-muted-foreground md:text-sm',
-            rows <= 1 ? 'top-1/2 -translate-y-1/2' : 'top-2'
+            rows <= 1 ? 'top-1/2 -translate-y-1/2' : 'top-2',
+            placeholderClassName
           )}
           aria-hidden="true"
         >
@@ -354,4 +386,6 @@ export default function MentionInput({
       {dropdown}
     </div>
   );
-}
+});
+
+export default MentionInput;

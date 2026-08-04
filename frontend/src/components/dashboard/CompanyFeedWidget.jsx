@@ -89,8 +89,8 @@ export default function CompanyFeedWidget() {
   }, [latest]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border/50 px-3 py-3 md:px-5 md:py-4">
+    <div className="overflow-hidden rounded-lg border border-border/30 bg-card">
+      <div className="flex items-center justify-between border-b border-border/30 px-3 py-2.5 md:px-4">
         <div className="flex items-center gap-2">
           <Newspaper className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Company Feed</h3>

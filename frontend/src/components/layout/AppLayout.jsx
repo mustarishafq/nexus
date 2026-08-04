@@ -88,7 +88,7 @@ export default function AppLayout() {
         ) : null}
         <main
           className={cn(
-            'transition-all duration-200',
+            'transition-[padding] duration-200',
             isFullBleed ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'pt-16',
             isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
             !isFullBleed && !isViewportFillPage && 'min-h-screen',

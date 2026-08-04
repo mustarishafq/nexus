@@ -1,36 +1,29 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SmilePlus } from 'lucide-react';
+import { MessageCircle, Share2, SmilePlus, ThumbsUp } from 'lucide-react';
 import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
+const PRIMARY_REACTION = '👍';
 
-export default function PostReactions({
+function useReactMutation({
   item,
-  commentId = null,
-  postId = null,
-  compact = false,
-  reactFn = null,
-  invalidateKeys = null,
-  expHintActionKey = null,
+  commentId,
+  postId,
+  reactFn,
+  invalidateKeys,
 }) {
   const queryClient = useQueryClient();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [popReaction, setPopReaction] = useState(null);
   const isComment = Boolean(commentId);
-  const reactions = item.available_reactions || DEFAULT_REACTIONS;
-  const reactionCounts = item.reaction_counts || {};
-  const myReaction = item.my_reaction?.reaction || null;
-  const activeEntries = Object.entries(reactionCounts).filter(([, count]) => count > 0);
 
-  const reactMutation = useMutation({
+  return useMutation({
     mutationFn: (reaction) => {
       if (reactFn) {
         return reactFn(reaction);
@@ -60,6 +53,332 @@ export default function PostReactions({
       toast.error(error?.message || 'Failed to update reaction.');
     },
   });
+}
+
+function ReactionSummary({ reactionCounts, total }) {
+  const activeEntries = Object.entries(reactionCounts || {}).filter(([, count]) => count > 0);
+  if (total <= 0 || activeEntries.length === 0) {
+    return null;
+  }
+
+  const top = activeEntries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex items-center pl-0.5">
+        {top.map(([reaction], index) => (
+          <span
+            key={reaction}
+            className={cn(
+              'flex h-[18px] w-[18px] items-center justify-center rounded-full',
+              'bg-muted/80 text-[11px] leading-none ring-2 ring-card',
+              index > 0 && '-ml-1'
+            )}
+            style={{ zIndex: top.length - index }}
+          >
+            {reaction}
+          </span>
+        ))}
+      </div>
+      <span className="truncate text-xs tabular-nums text-muted-foreground">
+        {total.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+function StatDot() {
+  return <span className="text-[10px] leading-none text-muted-foreground/40" aria-hidden>·</span>;
+}
+
+export function FeedEngagementBar({
+  item,
+  commentsCount = 0,
+  onComment,
+  commentsExpanded = false,
+  shareUrl = null,
+  insights = null,
+  className,
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [popReaction, setPopReaction] = useState(null);
+  const hoverCloseTimer = React.useRef(null);
+  const hoverOpenTimer = React.useRef(null);
+  const longPressTimer = React.useRef(null);
+  const longPressTriggered = React.useRef(false);
+  const reactions = item.available_reactions || DEFAULT_REACTIONS;
+  const reactionCounts = item.reaction_counts || {};
+  const myReaction = item.my_reaction?.reaction || null;
+  const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  const reactMutation = useReactMutation({ item });
+  const hasReactions = totalReactions > 0;
+  const hasComments = commentsCount > 0;
+  const hasInsights = Boolean(insights);
+  const showSummary = hasReactions || hasComments || hasInsights;
+
+  const clearHoverTimers = () => {
+    if (hoverCloseTimer.current) {
+      window.clearTimeout(hoverCloseTimer.current);
+      hoverCloseTimer.current = null;
+    }
+    if (hoverOpenTimer.current) {
+      window.clearTimeout(hoverOpenTimer.current);
+      hoverOpenTimer.current = null;
+    }
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const openPicker = () => {
+    clearHoverTimers();
+    clearLongPressTimer();
+    setPickerOpen(true);
+  };
+
+  const scheduleOpenPicker = () => {
+    // Hover is desktop-only; touch devices use long-press instead.
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      clearHoverTimers();
+      hoverOpenTimer.current = window.setTimeout(() => setPickerOpen(true), 280);
+    }
+  };
+
+  const scheduleClosePicker = () => {
+    clearHoverTimers();
+    hoverCloseTimer.current = window.setTimeout(() => setPickerOpen(false), 180);
+  };
+
+  const applyReaction = (reaction, event) => {
+    if (myReaction !== reaction) {
+      spawnReactionBurst(reaction, event.clientX, event.clientY, { compact: false });
+      setPopReaction(reaction);
+    }
+    reactMutation.mutate(reaction);
+  };
+
+  const handleLikeClick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Long-press already opened the picker — don't also toggle Like.
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
+    setPickerOpen(false);
+    if (myReaction === PRIMARY_REACTION) {
+      reactMutation.mutate(PRIMARY_REACTION);
+      return;
+    }
+    applyReaction(PRIMARY_REACTION, event);
+  };
+
+  const handlePointerDown = (event) => {
+    if (event.pointerType === 'mouse') return;
+    longPressTriggered.current = false;
+    clearLongPressTimer();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      openPicker();
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(12);
+      }
+    }, 420);
+  };
+
+  const handlePointerEnd = () => {
+    clearLongPressTimer();
+  };
+
+  const handleShare = async () => {
+    if (!shareUrl) return;
+    try {
+      const absolute = new URL(shareUrl, window.location.origin).toString();
+      await navigator.clipboard.writeText(absolute);
+      toast.success('Link copied.');
+    } catch {
+      toast.error('Could not copy link.');
+    }
+  };
+
+  const likeActive = Boolean(myReaction);
+  const actionClass = cn(
+    'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md',
+    'text-[13px] font-medium transition-colors hover:bg-muted/50'
+  );
+
+  return (
+    <div className={cn('mt-1', className)}>
+      {showSummary ? (
+        <div className="flex items-center justify-between gap-3 px-3 pb-2 pt-1.5 sm:px-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <ReactionSummary reactionCounts={reactionCounts} total={totalReactions} />
+            {hasReactions && hasInsights ? <StatDot /> : null}
+            {insights}
+          </div>
+          {hasComments ? (
+            <button
+              type="button"
+              onClick={onComment}
+              className="shrink-0 text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground hover:underline"
+            >
+              {`${commentsCount.toLocaleString()} comment${commentsCount === 1 ? '' : 's'}`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          'grid grid-cols-3 border-t border-border/30 pb-0.5',
+          showSummary ? 'mx-3 sm:mx-4' : 'mx-3 mt-1 sm:mx-4'
+        )}
+      >
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen} modal={false}>
+          <PopoverAnchor asChild>
+            <div
+              className="relative border-r border-border/20"
+              onMouseEnter={scheduleOpenPicker}
+              onMouseLeave={scheduleClosePicker}
+            >
+              <motion.button
+                type="button"
+                disabled={reactMutation.isPending}
+                whileHover={reactionMotion.whileHover}
+                whileTap={reactionMotion.whileTap}
+                transition={popReaction ? reactionMotion.activePopTransition : reactionMotion.spring}
+                animate={popReaction ? { scale: reactionMotion.activePopScale } : { scale: 1 }}
+                onAnimationComplete={() => {
+                  if (popReaction) setPopReaction(null);
+                }}
+                onClick={handleLikeClick}
+                onPointerDown={handlePointerDown}
+                onPointerUp={handlePointerEnd}
+                onPointerCancel={handlePointerEnd}
+                onPointerLeave={handlePointerEnd}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  openPicker();
+                }}
+                className={cn(
+                  actionClass,
+                  'touch-manipulation select-none',
+                  likeActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+                title="Tap to like · long-press for more reactions"
+                aria-label="Like. Long-press for more reactions"
+              >
+                {myReaction && myReaction !== PRIMARY_REACTION ? (
+                  <span className="text-[15px] leading-none">{myReaction}</span>
+                ) : (
+                  <ThumbsUp
+                    className={cn('h-4 w-4', likeActive && 'fill-current')}
+                  />
+                )}
+                <span>Like</span>
+              </motion.button>
+            </div>
+          </PopoverAnchor>
+          <PopoverContent
+            align="center"
+            side="top"
+            sideOffset={8}
+            onMouseEnter={openPicker}
+            onMouseLeave={scheduleClosePicker}
+            className="z-[200] w-auto rounded-full border-border/50 p-1.5 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onPointerDownOutside={() => setPickerOpen(false)}
+          >
+            <div className="flex items-center gap-0.5">
+              {reactions.map((reaction) => {
+                const isActive = myReaction === reaction;
+                return (
+                  <motion.button
+                    key={reaction}
+                    type="button"
+                    whileHover={{ scale: 1.25, y: -4 }}
+                    whileTap={reactionMotion.whileTap}
+                    disabled={reactMutation.isPending}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setPickerOpen(false);
+                      applyReaction(reaction, event);
+                    }}
+                    className={cn(
+                      'inline-flex h-10 w-10 items-center justify-center rounded-full text-lg transition-colors sm:h-9 sm:w-9',
+                      isActive ? 'bg-primary/15' : 'hover:bg-muted/80'
+                    )}
+                    title={isActive ? 'Remove reaction' : 'React'}
+                  >
+                    {reaction}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <button
+          type="button"
+          onClick={onComment}
+          className={cn(
+            actionClass,
+            'border-r border-border/20',
+            commentsExpanded ? 'text-primary' : 'text-muted-foreground'
+          )}
+        >
+          <MessageCircle className="h-4 w-4" />
+          Comment
+        </button>
+
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={!shareUrl}
+          className={cn(
+            actionClass,
+            'text-muted-foreground disabled:pointer-events-none disabled:opacity-40'
+          )}
+        >
+          <Share2 className="h-4 w-4" />
+          Share
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function PostReactions({
+  item,
+  commentId = null,
+  postId = null,
+  compact = false,
+  reactFn = null,
+  invalidateKeys = null,
+  expHintActionKey = null,
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [popReaction, setPopReaction] = useState(null);
+  const isComment = Boolean(commentId);
+  const reactions = item.available_reactions || DEFAULT_REACTIONS;
+  const reactionCounts = item.reaction_counts || {};
+  const myReaction = item.my_reaction?.reaction || null;
+  const activeEntries = Object.entries(reactionCounts).filter(([, count]) => count > 0);
+  const reactMutation = useReactMutation({
+    item,
+    commentId,
+    postId,
+    reactFn,
+    invalidateKeys,
+  });
 
   const reactionButton = (reaction, { showCount = false, fromPicker = false } = {}) => {
     const count = reactionCounts[reaction] || 0;
@@ -87,7 +406,6 @@ export default function PostReactions({
           if (fromPicker) {
             setPickerOpen(false);
           }
-          // Burst + chip pop only on add/change — skip toggle-off.
           if (myReaction !== reaction) {
             spawnReactionBurst(reaction, event.clientX, event.clientY, { compact });
             setPopReaction(reaction);

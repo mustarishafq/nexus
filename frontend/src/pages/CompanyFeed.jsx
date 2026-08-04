@@ -8,26 +8,36 @@ import ActiveDiscussionsWidget from '@/components/feed/ActiveDiscussionsWidget';
 import { FeedComposer, FeedItem } from '@/components/feed/FeedItems';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { feedPostElementId, parseFeedFocusParams } from '@/lib/feedLinks';
-import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 const XL_BREAKPOINT = 1280;
+/** Hysteresis so scrollbar width can't flip desktop/mobile mid-scroll. */
+const XL_EXIT_BREAKPOINT = XL_BREAKPOINT - 32;
 
 function useIsXlUp() {
   const [isXlUp, setIsXlUp] = useState(() => (
     typeof window !== 'undefined'
-      ? window.matchMedia(`(min-width: ${XL_BREAKPOINT}px)`).matches
+      ? window.innerWidth >= XL_BREAKPOINT
       : false
   ));
 
   useEffect(() => {
-    const mql = window.matchMedia(`(min-width: ${XL_BREAKPOINT}px)`);
-    const onChange = () => setIsXlUp(mql.matches);
-    onChange();
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
+    const sync = () => {
+      const width = window.innerWidth;
+      setIsXlUp((current) => {
+        if (current) {
+          return width >= XL_EXIT_BREAKPOINT;
+        }
+        return width >= XL_BREAKPOINT;
+      });
+    };
+
+    sync();
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
   }, []);
 
   return isXlUp;
@@ -44,40 +54,40 @@ function findVisibleFeedPostElement(postId) {
   return null;
 }
 
-function FeedMain({ items, isLoading, focusTarget }) {
-  return (
-    <div className="space-y-3 sm:space-y-6">
-      <FeedComposer />
+function FeedList({ items, isLoading, focusTarget }) {
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[20vh] items-center justify-center rounded-lg border border-border/40 bg-card py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="overflow-hidden rounded-2xl border border-border bg-card"
-      >
-        {isLoading ? (
-          <div className="flex min-h-[20vh] items-center justify-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={Newspaper}
-            title="The feed is quiet right now"
-            description="Share the first update with your team using the composer above."
-          />
-        ) : (
-          items.map((item) => (
-            <FeedItem
-              key={`${item.type}-${item.id}`}
-              item={item}
-              initialExpanded={
-                item.type === 'post'
-                && focusTarget?.expandComments
-                && String(item.id) === String(focusTarget.postId)
-              }
-            />
-          ))
-        )}
-      </motion.div>
+  if (items.length === 0) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-border/40 bg-card">
+        <EmptyState
+          icon={Newspaper}
+          title="The feed is quiet right now"
+          description="Share the first update with your team using the composer above."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5 sm:space-y-3">
+      {items.map((item) => (
+        <FeedItem
+          key={`${item.type}-${item.id}`}
+          item={item}
+          initialExpanded={
+            item.type === 'post'
+            && focusTarget?.expandComments
+            && String(item.id) === String(focusTarget.postId)
+          }
+        />
+      ))}
     </div>
   );
 }
@@ -88,13 +98,14 @@ export default function CompanyFeed() {
   const lastFocusedKeyRef = useRef(null);
   const [mobileTab, setMobileTab] = useState('feed');
   const isXlUp = useIsXlUp();
+  const showFeedColumn = isXlUp || mobileTab === 'feed';
 
   useMetaTags({
     title: 'Company Feed - EMZI Nexus Brain',
     description: 'Announcements and team updates across your organization',
   });
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetched } = useQuery({
     queryKey: ['company-feed', focusTarget?.postId ?? null],
     queryFn: () => db.feed.list({
       limit: 30,
@@ -104,6 +115,9 @@ export default function CompanyFeed() {
   });
 
   const items = Array.isArray(data?.items) ? data.items : [];
+  const headerMeta = isLoading && !isFetched
+    ? 'Loading...'
+    : `${items.length} items`;
 
   useEffect(() => {
     if (focusTarget?.postId) {
@@ -112,7 +126,7 @@ export default function CompanyFeed() {
   }, [focusTarget?.postId]);
 
   useEffect(() => {
-    if (!focusTarget?.postId || isLoading) {
+    if (!focusTarget?.postId || isLoading || !showFeedColumn) {
       return;
     }
 
@@ -121,8 +135,6 @@ export default function CompanyFeed() {
       return;
     }
 
-    // Wait until the visible layout has mounted the post (avoid focusing a
-    // display:none duplicate from the other breakpoint layout).
     const element = findVisibleFeedPostElement(focusTarget.postId);
     if (!element) {
       return;
@@ -144,10 +156,9 @@ export default function CompanyFeed() {
       next.delete('post');
       next.delete('comments');
       setSearchParams(next, { replace: true });
-      // Allow the same post deep-link to focus again on a later click.
       lastFocusedKeyRef.current = null;
     }
-  }, [focusTarget, isLoading, isXlUp, items, mobileTab, searchParams, setSearchParams]);
+  }, [focusTarget, isLoading, isXlUp, items, mobileTab, searchParams, setSearchParams, showFeedColumn]);
 
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -155,26 +166,11 @@ export default function CompanyFeed() {
         icon={Newspaper}
         title="Company Feed"
         description="Announcements from leadership and updates shared by your colleagues."
-        meta={isFetching ? 'Refreshing...' : `${items.length} items`}
-        className="gap-2 sm:gap-4"
+        meta={headerMeta}
+        className="relative z-[1] gap-2 sm:gap-4"
       />
 
-      {/* Mount only one layout so feed post IDs stay unique and focusable. */}
-      {isXlUp ? (
-        <div className="grid grid-cols-12 items-start gap-6">
-          <aside className="col-span-3 sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 self-start overflow-y-auto">
-            <ActiveDiscussionsWidget />
-          </aside>
-
-          <div className="col-span-6">
-            <FeedMain items={items} isLoading={isLoading} focusTarget={focusTarget} />
-          </div>
-
-          <aside className="col-span-3 sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 self-start overflow-y-auto">
-            <TodaysCelebrationsWidget />
-          </aside>
-        </div>
-      ) : (
+      {!isXlUp ? (
         <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
             <TabsTrigger value="feed" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
@@ -191,18 +187,53 @@ export default function CompanyFeed() {
               Celebrations
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="feed" className="mt-4 focus-visible:ring-0">
-            <FeedMain items={items} isLoading={isLoading} focusTarget={focusTarget} />
-          </TabsContent>
-          <TabsContent value="discussions" className="mt-4 focus-visible:ring-0">
-            <ActiveDiscussionsWidget />
-          </TabsContent>
-          <TabsContent value="celebrations" className="mt-4 focus-visible:ring-0">
-            <TodaysCelebrationsWidget />
-          </TabsContent>
         </Tabs>
-      )}
+      ) : null}
+
+      {/*
+        One stable feed column tree (keyed) so the composer/editor never remounts
+        when the scrollbar toggles desktop ↔ mobile width.
+      */}
+      <div
+        className={cn(
+          showFeedColumn ? 'grid items-start gap-6' : 'hidden',
+          isXlUp ? 'grid-cols-12' : 'grid-cols-1'
+        )}
+      >
+        {isXlUp ? (
+          <aside className="col-span-3 self-start">
+            <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
+              <ActiveDiscussionsWidget />
+            </div>
+          </aside>
+        ) : null}
+
+        <div
+          key="feed-main-column"
+          className={cn(
+            'relative z-[1] min-w-0 space-y-2.5 sm:space-y-3',
+            isXlUp ? 'col-span-6' : 'col-span-1'
+          )}
+        >
+          <FeedComposer />
+          <FeedList items={items} isLoading={isLoading} focusTarget={focusTarget} />
+        </div>
+
+        {isXlUp ? (
+          <aside className="col-span-3 self-start">
+            <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
+              <TodaysCelebrationsWidget />
+            </div>
+          </aside>
+        ) : null}
+      </div>
+
+      {!isXlUp && mobileTab === 'discussions' ? (
+        <ActiveDiscussionsWidget />
+      ) : null}
+      {!isXlUp && mobileTab === 'celebrations' ? (
+        <TodaysCelebrationsWidget />
+      ) : null}
     </div>
   );
 }

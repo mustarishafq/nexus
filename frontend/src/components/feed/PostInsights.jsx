@@ -8,7 +8,6 @@ import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getDisplayName } from '@/lib/profile';
-import { queryClientInstance } from '@/lib/query-client';
 import { cn } from '@/lib/utils';
 
 function InsightUserList({ items, emptyLabel, timeKey, isLoading, isFetching, isError, onRetry }) {
@@ -92,10 +91,15 @@ function InsightPopover({
   });
 
   const items = Array.isArray(data?.[listKey]) ? data[listKey] : [];
-  const countLabel = `${label} ${count}`;
+  const countLabel = (
+    <>
+      <span>{label}</span>
+      <span className="tabular-nums">{Number(count).toLocaleString()}</span>
+    </>
+  );
 
   const triggerClassName = cn(
-    'inline-flex items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground md:text-[11px]',
+    'inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground',
     canViewInsights && 'transition-colors hover:text-foreground',
     className
   );
@@ -103,7 +107,7 @@ function InsightPopover({
   if (!canViewInsights) {
     return (
       <span className={triggerClassName} title={title}>
-        <Icon className="h-3 w-3" />
+        <Icon className="h-3.5 w-3.5 opacity-70" />
         {countLabel}
       </span>
     );
@@ -117,7 +121,7 @@ function InsightPopover({
     >
       <PopoverTrigger asChild>
         <button type="button" className={triggerClassName} title={title}>
-          <Icon className="h-3 w-3" />
+          <Icon className="h-3.5 w-3.5 opacity-70" />
           {countLabel}
         </button>
       </PopoverTrigger>
@@ -148,7 +152,7 @@ export function PostInsights({ item, className }) {
   const reachCount = Number(item?.reach_count) || 0;
 
   return (
-    <div className={cn('inline-flex flex-wrap items-center gap-x-2.5 gap-y-1', className)}>
+    <div className={cn('inline-flex flex-wrap items-center gap-x-2 gap-y-1', className)}>
       <InsightPopover
         postId={item.id}
         count={seenCount}
@@ -163,7 +167,7 @@ export function PostInsights({ item, className }) {
         timeKey="seen_at"
         canViewInsights={canViewInsights}
       />
-      <span className="text-[10px] text-muted-foreground/50">·</span>
+      <span className="text-[10px] leading-none text-muted-foreground/40" aria-hidden>·</span>
       <InsightPopover
         postId={item.id}
         count={reachCount}
@@ -192,16 +196,13 @@ function flushPendingSeen() {
   pendingSeenIds.clear();
   if (ids.length === 0) return;
 
-  ids.forEach((id) => markedSeenSession.add(id));
-
-  db.feed
-    .markPostsSeen(ids)
-    .then(() => {
-      queryClientInstance.invalidateQueries({ queryKey: ['company-feed'] });
-    })
-    .catch(() => {
-      ids.forEach((id) => markedSeenSession.delete(id));
-    });
+  // Keep mark-seen out of the React Query cache while scrolling.
+  // Updating every post forced the feed page to re-render and made the
+  // composer/title flash until layout settled. Session set is enough to
+  // avoid duplicate API calls; counts refresh on the next natural fetch.
+  db.feed.markPostsSeen(ids).catch(() => {
+    ids.forEach((id) => markedSeenSession.delete(id));
+  });
 }
 
 function queueMarkSeen(postId) {
