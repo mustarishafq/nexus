@@ -1167,10 +1167,10 @@ export function FeedComposer({ className }) {
 
   return (
     <div className={cn('overflow-hidden rounded-2xl border border-border bg-card', className)}>
-      <div className="flex gap-3 p-3 sm:gap-3.5 sm:p-4">
+      <div className="flex items-start gap-3 p-3 sm:gap-3.5 sm:p-4">
         <UserAvatar
           user={user}
-          className="mt-0.5 h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+          className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
           showOnlineStatus={false}
         />
         <div className="min-w-0 flex-1">

@@ -511,12 +511,15 @@ class GamificationService
         }
 
         $rivalExp = (int) $rival->exp_total;
+        $progress = GamificationCatalog::levelProgress($rivalExp);
 
         return [
             'user_id' => $rival->id,
             'name' => $rival->displayName(),
             'profile_picture' => $rival->profile_picture,
             'exp_total' => $rivalExp,
+            'level' => $progress['level'],
+            'stars' => $progress['stars'],
             'rank' => $this->resolveRank($rival),
             'exp_ahead' => max(0, $rivalExp - $expTotal),
         ];
@@ -616,6 +619,8 @@ class GamificationService
      */
     private function serializeLeaderboardRow(User $user, int $exp, int $rank): array
     {
+        $progress = GamificationCatalog::levelProgress((int) $user->exp_total);
+
         return [
             'rank' => $rank,
             'user_id' => $user->id,
@@ -627,6 +632,8 @@ class GamificationService
             'department_id' => $user->department_id,
             'exp' => $exp,
             'exp_total' => (int) $user->exp_total,
+            'level' => $progress['level'],
+            'stars' => $progress['stars'],
         ];
     }
 }

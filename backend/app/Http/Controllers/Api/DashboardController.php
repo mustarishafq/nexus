@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\GamificationService;
 use App\Services\PushNotificationService;
 use App\Support\ApiTokenAuth;
+use App\Support\UserProfileSerializer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -37,7 +38,7 @@ class DashboardController extends Controller
                 $this->applyMonthDayPairs($query, 'date_of_birth', $dayPairs);
             })
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'date_of_birth']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'date_of_birth', 'exp_total']);
 
         $serviceUsers = User::query()
             ->where('is_approved', true)
@@ -47,7 +48,7 @@ class DashboardController extends Controller
             })
             ->whereDate('joined_at', '<', $weekStartDate)
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'joined_at'])
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'joined_at', 'exp_total'])
             ->filter(function (User $user) use ($weekStart, $weekEnd) {
                 $celebrationDate = $this->matchDateInRange($weekStart, $weekEnd, $user->joined_at->month, $user->joined_at->day);
 
@@ -81,6 +82,7 @@ class DashboardController extends Controller
                     'date_of_birth' => $user->date_of_birth?->toDateString(),
                     'celebration_date' => $celebrationDateString,
                 ],
+                UserProfileSerializer::expDirectoryFields($user),
                 $this->wishSummary($user->id, 'birthday', $celebrationDateString, $currentUser, $wishesByKey)
             );
         })
@@ -113,6 +115,7 @@ class DashboardController extends Controller
                     'years_of_service' => $years,
                     'celebration_date' => $celebrationDateString,
                 ],
+                UserProfileSerializer::expDirectoryFields($user),
                 $this->wishSummary($user->id, 'service_anniversary', $celebrationDateString, $currentUser, $wishesByKey)
             );
         })

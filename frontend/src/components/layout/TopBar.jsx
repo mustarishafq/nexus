@@ -107,6 +107,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
                   className="h-8 w-8 rounded-lg"
                   fallbackClassName="rounded-lg bg-primary/10 text-sm font-semibold text-primary"
                   showOnlineStatus={false}
+                  showStars={false}
                 />
                 <div className="hidden text-left md:block">
                   <p className={cn('text-sm font-medium leading-none', glassDialogTitleText)}>

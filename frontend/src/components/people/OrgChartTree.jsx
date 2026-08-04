@@ -17,7 +17,7 @@ function PersonCard({ user, hasReports }) {
         'hover:border-primary/35 hover:shadow-md'
       )}
     >
-      <UserAvatar user={user} className="h-12 w-12" />
+      <UserAvatar user={user} className="h-12 w-12" showStars={false} />
       <p className="mt-2.5 text-sm font-semibold leading-snug group-hover:text-primary">
         {getDisplayName(user)}
       </p>

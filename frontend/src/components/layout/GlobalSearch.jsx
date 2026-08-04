@@ -121,13 +121,13 @@ export default function GlobalSearch({ open, onOpenChange }) {
         {results.length > 0 ? (
           <>
             <CommandSeparator />
-            <CommandGroup heading="People">
+            <CommandGroup heading="People" className="overflow-visible">
               {results.map((user) => (
                 <CommandItem
                   key={user.id}
                   value={`${getDisplayName(user, '')} ${user.email || ''} ${user.id}`}
                   onSelect={() => handleSelectUser(user.id)}
-                  className="gap-3"
+                  className="items-center gap-3 overflow-visible"
                 >
                   <UserAvatar user={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">

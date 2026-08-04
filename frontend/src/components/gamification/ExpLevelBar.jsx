@@ -28,11 +28,16 @@ export default function ExpLevelBar({
             Lv {level}
             {starCount > 0 ? (
               <span
-                className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-300"
+                className="inline-flex items-center -space-x-0.5 text-amber-500"
                 title={`${starCount} star${starCount === 1 ? '' : 's'}`}
               >
-                <Star className="h-3 w-3 fill-current" aria-hidden />
-                <span className="text-[10px] font-bold">{starCount}</span>
+                {Array.from({ length: starCount }, (_, index) => (
+                  <Star
+                    key={index}
+                    className="h-3 w-3 fill-amber-400 text-amber-500"
+                    aria-hidden
+                  />
+                ))}
               </span>
             ) : null}
           </span>

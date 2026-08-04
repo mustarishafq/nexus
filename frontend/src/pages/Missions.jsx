@@ -285,7 +285,14 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
             className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-2 transition-colors hover:border-amber-500/35 hover:bg-amber-500/5"
           >
             <UserAvatar
-              user={{ id: rival.user_id, name: rival.name, profile_picture: rival.profile_picture }}
+              user={{
+                id: rival.user_id,
+                name: rival.name,
+                profile_picture: rival.profile_picture,
+                exp_total: rival.exp_total,
+                level: rival.level,
+                stars: rival.stars,
+              }}
               className="h-9 w-9"
             />
             <div className="min-w-0 flex-1">
@@ -340,7 +347,14 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
                     {entry.rank}
                   </span>
                   <UserAvatar
-                    user={{ id: entry.user_id, name: entry.name, profile_picture: entry.profile_picture }}
+                    user={{
+                      id: entry.user_id,
+                      name: entry.name,
+                      profile_picture: entry.profile_picture,
+                      exp_total: entry.exp_total,
+                      level: entry.level,
+                      stars: entry.stars,
+                    }}
                     className="h-7 w-7"
                   />
                   <span className="min-w-0 flex-1 truncate text-xs font-medium">{entry.name}</span>
@@ -433,6 +447,9 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
                         name: entry.name,
                         full_name: entry.full_name,
                         profile_picture: entry.profile_picture,
+                        exp_total: entry.exp_total,
+                        level: entry.level,
+                        stars: entry.stars,
                       }}
                       className="h-9 w-9"
                     />

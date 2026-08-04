@@ -24,6 +24,7 @@ import {
   toAbsoluteUrl,
 } from '@/lib/media';
 import RoleAvatarRing from '@/components/users/RoleAvatarRing';
+import AvatarStarBadge from '@/components/gamification/AvatarStarBadge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -55,6 +56,7 @@ export default function ProfilePictureUploader({
   role,
   immersiveRing = false,
   onView,
+  stars = 0,
 }) {
   const fileInputRef = useRef(null);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
@@ -270,6 +272,7 @@ export default function ProfilePictureUploader({
       <>
         <div className={cn('relative w-fit shrink-0 group', className)}>
           {avatarNode}
+          <AvatarStarBadge stars={stars} size="lg" />
 
           {!readOnly ? (
             <>

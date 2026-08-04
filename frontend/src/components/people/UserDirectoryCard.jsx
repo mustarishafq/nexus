@@ -1,14 +1,13 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import db from '@/api/apiClient';
-import { Briefcase, MessageCircle, Sparkles, Star } from 'lucide-react';
+import { Briefcase, MessageCircle, Sparkles } from 'lucide-react';
 import UserAvatar from '@/components/users/UserAvatar';
 import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatTenure, getDisplayName } from '@/lib/profile';
-import { starsFromLevel } from '@/lib/gamification';
 
 export default function UserDirectoryCard({ user, className }) {
   const navigate = useNavigate();
@@ -18,9 +17,6 @@ export default function UserDirectoryCard({ user, className }) {
   const skills = Array.isArray(user?.skills) ? user.skills.filter(Boolean).slice(0, 4) : [];
   const groups = (user?.access_group_names || []).filter(Boolean).slice(0, 2);
   const tenure = formatTenure(user?.joined_at);
-  const stars = typeof user?.stars === 'number'
-    ? user.stars
-    : (typeof user?.level === 'number' ? starsFromLevel(user.level) : 0);
 
   return (
     <article
@@ -40,14 +36,8 @@ export default function UserDirectoryCard({ user, className }) {
               {displayName}
             </Link>
             {typeof user?.level === 'number' || typeof user?.exp_total === 'number' ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+              <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
                 Lv {user.level ?? 1}
-                {stars > 0 ? (
-                  <span className="inline-flex items-center gap-0.5" title={`${stars} star${stars === 1 ? '' : 's'}`}>
-                    <Star className="h-2.5 w-2.5 fill-current" aria-hidden />
-                    {stars}
-                  </span>
-                ) : null}
               </span>
             ) : null}
           </div>

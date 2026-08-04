@@ -406,7 +406,7 @@ class UserController extends Controller
      */
     private function publicUserSummary(User $user): array
     {
-        return app(UserPresenceService::class)->enrichPayload([
+        return app(UserPresenceService::class)->enrichPayload(array_merge([
             'id' => $user->id,
             'name' => $user->displayName(),
             'email' => $user->email,
@@ -416,7 +416,7 @@ class UserController extends Controller
             'department' => $user->department?->name,
             'job_title' => $user->job_title,
             'location' => $user->location,
-        ]);
+        ], UserProfileSerializer::expDirectoryFields($user)));
     }
 
     public function orgChart(Request $request): JsonResponse
@@ -536,7 +536,7 @@ class UserController extends Controller
             ->orderBy('name')
             ->orderBy('full_name')
             ->limit($limit)
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location', 'job_title']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'location', 'job_title', 'exp_total']);
 
         return response()->json(
             $users->map(fn (User $user) => $this->publicUserSummary($user))->values()
@@ -621,7 +621,7 @@ class UserController extends Controller
             ->where('is_approved', true)
             ->orderBy('full_name')
             ->orderBy('name')
-            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'job_title']);
+            ->get(['id', 'full_name', 'name', 'email', 'profile_picture', 'role', 'department_id', 'job_title', 'exp_total']);
 
         $payloads = $users
             ->map(fn (User $user) => $this->publicUserSummary($user))

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\User;
+use App\Support\UserProfileSerializer;
 
 trait SerializesFeedAuthors
 {
@@ -15,12 +16,12 @@ trait SerializesFeedAuthors
             return null;
         }
 
-        return [
+        return array_merge([
             'id' => $user->id,
             'name' => $user->displayName(),
             'profile_picture' => $user->profile_picture,
             'profile_picture_crop' => $user->profile_picture_crop,
             'department' => $user->department?->name,
-        ];
+        ], UserProfileSerializer::expDirectoryFields($user));
     }
 }

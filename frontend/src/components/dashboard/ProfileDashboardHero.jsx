@@ -16,7 +16,6 @@ import BadgesStrip from '@/components/gamification/BadgesStrip';
 import { GAMIFICATION_ME_QUERY_KEY, levelProgress, starsFromLevel } from '@/lib/gamification';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { Star } from 'lucide-react';
 
 const DEFAULT_COVER = '/icons/cover-photo-new.png';
 
@@ -156,6 +155,7 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
             readOnly={readOnly}
             role={user?.role}
             immersiveRing
+            stars={displayStars}
             onView={user?.profile_picture ? () => openViewer('avatar') : undefined}
             className="-mt-[5.5rem] sm:-mt-20 lg:-mt-[5.5rem] mx-auto sm:mx-0 self-center sm:self-start"
             avatarClassName="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
@@ -178,17 +178,8 @@ export default function ProfileDashboardHero({ user, onUserUpdated, readOnly = f
             {expTotal != null ? (
               <div className="mt-0.5 space-y-1">
                 <p className="text-[11px] sm:text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground tabular-nums inline-flex items-center gap-1">
+                  <span className="font-medium text-foreground tabular-nums">
                     Lv {displayLevel}
-                    {displayStars > 0 ? (
-                      <span
-                        className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-300"
-                        title={`${displayStars} star${displayStars === 1 ? '' : 's'}`}
-                      >
-                        <Star className="h-3 w-3 fill-current" aria-hidden />
-                        <span className="tabular-nums">{displayStars}</span>
-                      </span>
-                    ) : null}
                   </span>
                   <span className="mx-1.5 text-border">·</span>
                   <span className="font-medium text-foreground tabular-nums">{expTotal.toLocaleString()}</span>

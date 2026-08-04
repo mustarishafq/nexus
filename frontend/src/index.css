@@ -624,3 +624,73 @@
   margin: 0;
   min-height: 0;
 }
+
+/* Prestige avatar star — quiet ambient glow + slow gold shimmer */
+@keyframes avatar-star-glow {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.48;
+  }
+}
+
+@keyframes avatar-star-shimmer {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgba(251, 191, 36, 0.35))
+      drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px rgba(253, 224, 71, 0.55))
+      drop-shadow(0 0 10px rgba(251, 191, 36, 0.28))
+      drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+  }
+}
+
+.avatar-star-badge__glow {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  width: 110%;
+  height: 55%;
+  border-radius: 9999px;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(254, 243, 199, 0.45) 0%,
+    rgba(251, 191, 36, 0.18) 45%,
+    transparent 75%
+  );
+  animation: avatar-star-glow 4.5s ease-in-out infinite;
+}
+
+.avatar-star-badge__slot {
+  transform-origin: center center;
+}
+
+.avatar-star-badge__icon {
+  fill: #fbbf24;
+  color: #d97706;
+  stroke: #b45309;
+  stroke-width: 1.15;
+  paint-order: stroke fill;
+  animation: avatar-star-shimmer 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-star-badge__glow,
+  .avatar-star-badge__icon {
+    animation: none;
+  }
+
+  .avatar-star-badge__icon {
+    filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.45))
+      drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.4));
+  }
+
+  .avatar-star-badge__glow {
+    opacity: 0.35;
+  }
+}
