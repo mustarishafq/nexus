@@ -9,11 +9,9 @@
     --font-sans: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
-    /* Fixed TopBar height + iPhone notch / Dynamic Island / status bar */
-    --nexus-header-h: 4rem;
+    /* iPhone notch / Dynamic Island / status bar insets */
     --nexus-safe-top: env(safe-area-inset-top, 0px);
     --nexus-safe-bottom: env(safe-area-inset-bottom, 0px);
-    --nexus-header-offset: calc(var(--nexus-header-h) + var(--nexus-safe-top));
 
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;

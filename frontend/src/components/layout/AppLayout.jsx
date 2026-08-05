@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -30,12 +30,7 @@ export default function AppLayout() {
   const isMobile = useIsMobile();
   const location = useLocation();
   const standalone = isRunningStandalone();
-  const [topStripCount, setTopStripCount] = useState(0);
   const { isFullscreen: emailFullscreen } = useEmailFullscreen();
-
-  const handleTopStripLayout = useCallback(({ stripCount }) => {
-    setTopStripCount(stripCount);
-  }, []);
 
   const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
   const isEmailFullscreen = isEmailPage && emailFullscreen;
@@ -65,7 +60,7 @@ export default function AppLayout() {
 
   return (
     <UserPresenceGate>
-      <div className="min-h-screen min-w-0 max-w-full overflow-x-hidden bg-background">
+      <div className="flex min-h-screen min-w-0 max-w-full flex-col overflow-x-hidden bg-background">
         <CelebrationGateProvider>
           <BirthdayCelebrationGate />
           <BroadcastAnnouncementGate />
@@ -77,24 +72,16 @@ export default function AppLayout() {
         <MailNotificationGate />
         <NotificationAudioUnlock />
         {!isFullBleed ? (
-          <div className="fixed top-0 left-0 right-0 z-30 flex flex-col pt-[var(--nexus-safe-top)] transition-all duration-200">
+          <div className="relative z-30 flex shrink-0 flex-col pt-[var(--nexus-safe-top)]">
             <TopBar embedded sidebarWidth={0} isMobile={isMobile} />
-            <TopAlertStrips
-              embedded
-              isMobile={isMobile}
-              onLayoutChange={handleTopStripLayout}
-            />
+            <TopAlertStrips embedded isMobile={isMobile} />
           </div>
         ) : null}
         <main
           className={cn(
-            'min-w-0 max-w-full transition-[padding] duration-200',
-            isFullBleed ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'pt-[var(--nexus-header-offset)]',
-            isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
-            !isFullBleed && !isViewportFillPage && 'min-h-screen',
-            !isFullBleed && topStripCount === 1 && 'pt-[calc(var(--nexus-header-offset)+1.75rem)] sm:pt-[calc(var(--nexus-header-offset)+2rem)]',
-            !isFullBleed && topStripCount === 2 && 'pt-[calc(var(--nexus-header-offset)+3.5rem)] sm:pt-[calc(var(--nexus-header-offset)+4rem)]',
-            !isFullBleed && topStripCount >= 3 && 'pt-[calc(var(--nexus-header-offset)+5.25rem)] sm:pt-[calc(var(--nexus-header-offset)+6rem)]',
+            'min-w-0 max-w-full flex-1',
+            isFullBleed && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
+            isViewportFillPage && 'min-h-0 overflow-hidden',
             showBottomNav
               && (standalone
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'

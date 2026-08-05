@@ -39,7 +39,7 @@ export default function SettingsSectionNav({
       </div>
 
       <nav className={cn('hidden md:block', className)}>
-        <div className="sticky top-[calc(var(--nexus-header-offset)+0.5rem)] space-y-1 rounded-2xl border bg-card p-2 lg:top-24">
+        <div className="sticky top-[calc(var(--nexus-safe-top)+0.5rem)] space-y-1 rounded-2xl border bg-card p-2 lg:top-24">
           {items.map((item) => {
             const Icon = item.icon;
             const active = value === item.id;

@@ -34,7 +34,7 @@ export default function ImpersonationStrip({ embedded = false, onVisibilityChang
     <div
       className={cn(
         'border-b backdrop-blur-sm transition-all duration-200',
-        embedded ? 'w-full' : 'sticky top-[var(--nexus-header-offset)] z-20',
+        embedded ? 'w-full' : 'sticky top-[var(--nexus-safe-top)] z-20',
         'bg-gradient-to-r from-rose-900/95 via-rose-800/95 to-rose-900/95 text-rose-50 border-rose-950/30',
       )}
       role="status"

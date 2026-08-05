@@ -79,7 +79,7 @@ export default function AttendanceReminderStrip({ embedded = false, onVisibility
     <div
       className={cn(
         'border-b backdrop-blur-sm transition-all duration-200',
-        embedded ? 'w-full' : 'sticky top-[var(--nexus-header-offset)] z-20',
+        embedded ? 'w-full' : 'sticky top-[var(--nexus-safe-top)] z-20',
         stripStyles[urgency],
       )}
       role="status"

@@ -358,7 +358,7 @@ export default function CompanyFeed() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22 }}
-            className="sticky top-[var(--nexus-header-offset)] z-30 flex flex-col gap-3 rounded-xl border border-primary/25 bg-card/95 px-3 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-4"
+            className="sticky top-[var(--nexus-safe-top)] z-30 flex flex-col gap-3 rounded-xl border border-primary/25 bg-card/95 px-3 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-4"
           >
             <div className="min-w-0">
               <p className="text-sm font-medium">Viewing a linked post</p>
