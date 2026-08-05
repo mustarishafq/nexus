@@ -65,7 +65,7 @@ export default function AppLayout() {
 
   return (
     <UserPresenceGate>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen min-w-0 max-w-full overflow-x-hidden bg-background">
         <CelebrationGateProvider>
           <BirthdayCelebrationGate />
           <BroadcastAnnouncementGate />
@@ -77,7 +77,7 @@ export default function AppLayout() {
         <MailNotificationGate />
         <NotificationAudioUnlock />
         {!isFullBleed ? (
-          <div className="fixed top-0 left-0 right-0 z-30 flex flex-col transition-all duration-200">
+          <div className="fixed top-0 left-0 right-0 z-30 flex flex-col pt-[var(--nexus-safe-top)] transition-all duration-200">
             <TopBar embedded sidebarWidth={0} isMobile={isMobile} />
             <TopAlertStrips
               embedded
@@ -88,13 +88,13 @@ export default function AppLayout() {
         ) : null}
         <main
           className={cn(
-            'transition-[padding] duration-200',
-            isFullBleed ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'pt-16',
+            'min-w-0 max-w-full transition-[padding] duration-200',
+            isFullBleed ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'pt-[var(--nexus-header-offset)]',
             isViewportFillPage && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
             !isFullBleed && !isViewportFillPage && 'min-h-screen',
-            !isFullBleed && topStripCount === 1 && 'pt-[calc(4rem+1.75rem)] sm:pt-[calc(4rem+2rem)]',
-            !isFullBleed && topStripCount === 2 && 'pt-[calc(4rem+3.5rem)] sm:pt-[calc(4rem+4rem)]',
-            !isFullBleed && topStripCount >= 3 && 'pt-[calc(4rem+5.25rem)] sm:pt-[calc(4rem+6rem)]',
+            !isFullBleed && topStripCount === 1 && 'pt-[calc(var(--nexus-header-offset)+1.75rem)] sm:pt-[calc(var(--nexus-header-offset)+2rem)]',
+            !isFullBleed && topStripCount === 2 && 'pt-[calc(var(--nexus-header-offset)+3.5rem)] sm:pt-[calc(var(--nexus-header-offset)+4rem)]',
+            !isFullBleed && topStripCount >= 3 && 'pt-[calc(var(--nexus-header-offset)+5.25rem)] sm:pt-[calc(var(--nexus-header-offset)+6rem)]',
             showBottomNav
               && (standalone
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
@@ -108,11 +108,11 @@ export default function AppLayout() {
           ) : isFullBleed ? (
             <Outlet />
           ) : isViewportFillPage ? (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 pt-4 sm:pt-6 max-w-[1600px] mx-auto w-full">
+            <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden px-4 pt-4 sm:px-6 sm:pt-6">
               <Outlet />
             </div>
           ) : (
-            <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
+            <div className="mx-auto min-w-0 max-w-[1600px] p-4 sm:p-6">
               <Outlet />
             </div>
           )}

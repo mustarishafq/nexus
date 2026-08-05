@@ -9,6 +9,12 @@
     --font-sans: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
+    /* Fixed TopBar height + iPhone notch / Dynamic Island / status bar */
+    --nexus-header-h: 4rem;
+    --nexus-safe-top: env(safe-area-inset-top, 0px);
+    --nexus-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --nexus-header-offset: calc(var(--nexus-header-h) + var(--nexus-safe-top));
+
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
@@ -104,10 +110,36 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    /* Stop iOS from inflating text and allowing sideways rubber-band scroll */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100%;
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
     font-family: var(--font-sans);
     scrollbar-gutter: stable;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100%;
+    position: relative;
+  }
+
+  #root {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
   }
 }
 

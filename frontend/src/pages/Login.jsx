@@ -56,8 +56,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex relative">
-      <div className="absolute top-4 right-4 z-20 lg:top-6 lg:right-6">
+    <div className="relative flex min-h-screen min-w-0 max-w-full overflow-x-hidden">
+      <div className="absolute right-4 top-[calc(1rem+var(--nexus-safe-top))] z-20 lg:right-6 lg:top-6">
         <ThemeToggle className="text-white lg:text-foreground hover:bg-white/10 lg:hover:bg-muted" />
       </div>
       {/* Desktop: Left branding panel */}
@@ -109,7 +109,7 @@ export default function Login() {
       </div>
 
       {/* Desktop: Right form panel | Mobile/Tablet: Full screen with blue background */}
-      <div className="flex-1 flex flex-col items-center justify-between lg:justify-center lg:bg-background bg-[hsl(206,92%,15%)] px-6 py-8 lg:py-12 relative">
+      <div className="relative flex flex-1 flex-col items-center justify-between bg-[hsl(206,92%,15%)] px-6 pb-8 pt-[calc(2rem+var(--nexus-safe-top))] lg:justify-center lg:bg-background lg:py-12">
         {/* Mobile/Tablet: Gradient overlay for depth */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-br from-[hsl(206,92%,20%)] via-[hsl(206,92%,15%)] to-[hsl(206,92%,10%)]" />
 

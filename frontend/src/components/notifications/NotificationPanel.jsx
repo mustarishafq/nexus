@@ -200,7 +200,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className={cn(
               'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
-              'rounded-bl-2xl sm:rounded-none border-l',
+              'rounded-bl-2xl sm:rounded-none border-l pt-[var(--nexus-safe-top)]',
               glassPanelStyles
             )}
           >

@@ -32,7 +32,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="flex min-h-screen min-w-0 max-w-full overflow-x-hidden">
       {/* Desktop: Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[hsl(206,92%,15%)] flex-col justify-between p-12">
         <div className="absolute inset-0 bg-gradient-to-br from-[hsl(206,92%,25%)] via-[hsl(206,92%,20%)] to-[hsl(206,92%,10%)]" />
@@ -75,7 +75,7 @@ export default function ForgotPassword() {
       </div>
 
       {/* Desktop: Right form panel | Mobile/Tablet: Full screen with blue background */}
-      <div className="flex-1 flex flex-col items-center justify-between lg:justify-center lg:bg-background bg-[hsl(206,92%,15%)] px-6 py-8 lg:py-12 relative">
+      <div className="relative flex flex-1 flex-col items-center justify-between bg-[hsl(206,92%,15%)] px-6 pb-8 pt-[calc(2rem+var(--nexus-safe-top))] lg:justify-center lg:bg-background lg:py-12">
         {/* Mobile/Tablet: Gradient overlay for depth */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-br from-[hsl(206,92%,20%)] via-[hsl(206,92%,15%)] to-[hsl(206,92%,10%)]" />
 

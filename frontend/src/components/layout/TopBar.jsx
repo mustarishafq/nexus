@@ -51,10 +51,13 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
       <header
         className={cn(
           glassTopBarStyles,
-          'h-16 border-b flex items-center justify-between gap-3 px-6 transition-all duration-200',
-          embedded ? 'w-full' : 'fixed top-0 right-0 z-30'
+          'flex h-16 items-center justify-between gap-3 border-b px-4 transition-all duration-200 sm:px-6',
+          embedded ? 'w-full min-w-0' : 'fixed right-0 top-0 z-30 pt-[var(--nexus-safe-top)]'
         )}
-        style={embedded ? undefined : { left: sidebarWidth }}
+        style={embedded ? undefined : {
+          left: sidebarWidth,
+          height: 'calc(4rem + var(--nexus-safe-top))',
+        }}
       >
         {/* Search */}
         <div className="flex min-w-0 flex-1 items-center gap-3">
