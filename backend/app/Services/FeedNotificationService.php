@@ -30,7 +30,7 @@ class FeedNotificationService
             ->where('is_approved', true)
             ->find($authorId);
 
-        if (! $author) {
+        if (! $author || ! $author->wantsNotification('feed_comments')) {
             return;
         }
 
@@ -75,7 +75,7 @@ class FeedNotificationService
             ->where('is_approved', true)
             ->find($parentAuthorId);
 
-        if (! $parentAuthor) {
+        if (! $parentAuthor || ! $parentAuthor->wantsNotification('feed_comments')) {
             return;
         }
 
@@ -166,6 +166,20 @@ class FeedNotificationService
             ->distinct()
             ->pluck('users.id')
             ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if ($recipientIds === []) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->whereIn('id', $recipientIds)
+            ->get(['id', 'notification_settings']);
+
+        $recipientIds = $recipients
+            ->filter(fn (User $user) => $user->wantsNotification('feed_posts'))
+            ->map(fn (User $user) => (int) $user->id)
             ->values()
             ->all();
 

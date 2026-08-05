@@ -126,6 +126,26 @@ class User extends Authenticatable
         return $name !== '' ? $name : 'User';
     }
 
+    /**
+     * Whether the user wants a given notification preference key.
+     * Missing keys default to true (opt-out model).
+     */
+    public function wantsNotification(string $key): bool
+    {
+        $settings = $this->notification_settings ?? [];
+
+        if (is_string($settings)) {
+            $decoded = json_decode($settings, true);
+            $settings = is_array($decoded) ? $decoded : [];
+        }
+
+        if (! is_array($settings)) {
+            return true;
+        }
+
+        return ($settings[$key] ?? true) !== false;
+    }
+
     public function scopeMatchingSearch(Builder $query, string $term): Builder
     {
         $term = trim($term);

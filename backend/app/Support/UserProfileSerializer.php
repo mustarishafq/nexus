@@ -114,7 +114,6 @@ class UserProfileSerializer
         $array = $user->makeHidden([
             'password',
             'remember_token',
-            'notification_settings',
         ])->toArray();
 
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());

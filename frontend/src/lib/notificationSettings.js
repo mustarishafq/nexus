@@ -5,6 +5,9 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   email: true,
   mail_inbox: true,
   sound: true,
+  feed_posts: true,
+  feed_comments: true,
+  feed_mentions: true,
 };
 
 export function parseNotificationSettings(raw) {
@@ -30,6 +33,9 @@ export function parseNotificationSettings(raw) {
     email: parsed.email !== false,
     mail_inbox: parsed.mail_inbox !== false,
     sound: parsed.sound !== false,
+    feed_posts: parsed.feed_posts !== false,
+    feed_comments: parsed.feed_comments !== false,
+    feed_mentions: parsed.feed_mentions !== false,
   };
 }
 

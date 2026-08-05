@@ -2,7 +2,7 @@ import db from '@/api/apiClient';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Settings as SettingsIcon, Bell, Mail, Inbox, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Mail, Inbox, Volume2, VolumeX, Shield, ShieldCheck, BellRing, BellOff, Loader2, Download, Moon, Sun, Smartphone, MessageSquare, AtSign, Newspaper } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
 import { useWebPush } from '@/hooks/useWebPush';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
-import { syncNotificationSettingsCache } from '@/lib/notificationSettings';
+import { DEFAULT_NOTIFICATION_SETTINGS, parseNotificationSettings, syncNotificationSettingsCache } from '@/lib/notificationSettings';
 import { playNotificationSound, unlockNotificationAudio } from '@/lib/notificationSound';
 import {
   CHROMIUM_INSTALL_STEPS,
@@ -38,12 +38,7 @@ export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = userIsAdmin(user);
   const canAccessHrSettings = canManageAttendance(user);
-  const [settings, setSettings] = useState({
-    in_app: true,
-    email: true,
-    mail_inbox: true,
-    sound: true,
-  });
+  const [settings, setSettings] = useState({ ...DEFAULT_NOTIFICATION_SETTINGS });
   const [activeTab, setActiveTab] = useState('user');
   const { pushState, subscribe, unsubscribe } = useWebPush(appPublicSettings?.web_push_public_key);
   const pwaInstall = usePwaInstall();
@@ -53,11 +48,7 @@ export default function Settings() {
     db.auth.me().then((u) => {
       if (!u.notification_settings) return;
 
-      const loaded = typeof u.notification_settings === 'string'
-        ? JSON.parse(u.notification_settings || '{}')
-        : (u.notification_settings || {});
-
-      const next = { in_app: true, email: true, mail_inbox: true, sound: true, ...loaded };
+      const next = parseNotificationSettings(u.notification_settings);
       setSettings(next);
       syncNotificationSettingsCache(next);
     }).catch(() => {});
@@ -319,6 +310,79 @@ export default function Settings() {
                               void unlockNotificationAudio().then(() => playNotificationSound());
                             }
                           }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-2xl">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Newspaper className="w-4 h-4 text-primary" /> Feed notifications
+                      </CardTitle>
+                      <CardDescription>Choose which company feed events notify you. Off means no in-app alert and no push.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Newspaper className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <Label className="text-sm font-medium">New feed posts</Label>
+                            <p className="text-xs text-muted-foreground">Notify when someone publishes a new post</p>
+                          </div>
+                        </div>
+                        <Switch
+                          className="shrink-0 self-end sm:self-auto"
+                          checked={settings.feed_posts}
+                          onCheckedChange={(v) => setSettings((p) => {
+                            const next = { ...p, feed_posts: v };
+                            syncNotificationSettingsCache(next);
+                            return next;
+                          })}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+                            <MessageSquare className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <Label className="text-sm font-medium">Comments & replies</Label>
+                            <p className="text-xs text-muted-foreground">Notify when someone comments on your post or replies to you</p>
+                          </div>
+                        </div>
+                        <Switch
+                          className="shrink-0 self-end sm:self-auto"
+                          checked={settings.feed_comments}
+                          onCheckedChange={(v) => setSettings((p) => {
+                            const next = { ...p, feed_comments: v };
+                            syncNotificationSettingsCache(next);
+                            return next;
+                          })}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                            <AtSign className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <Label className="text-sm font-medium">Mentions</Label>
+                            <p className="text-xs text-muted-foreground">Notify when someone @mentions you in a post or comment</p>
+                          </div>
+                        </div>
+                        <Switch
+                          className="shrink-0 self-end sm:self-auto"
+                          checked={settings.feed_mentions}
+                          onCheckedChange={(v) => setSettings((p) => {
+                            const next = { ...p, feed_mentions: v };
+                            syncNotificationSettingsCache(next);
+                            return next;
+                          })}
                         />
                       </div>
                     </CardContent>

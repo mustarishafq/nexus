@@ -64,7 +64,7 @@ class MentionService
         $users = User::query()
             ->whereIn('id', $mentionedIds)
             ->where('is_approved', true)
-            ->get(['id', 'full_name', 'name']);
+            ->get(['id', 'full_name', 'name', 'notification_settings']);
 
         $authorName = $author->displayName();
             $preview = trim(preg_replace(self::TOKEN_PATTERN, '@$2', $body) ?? $body);
@@ -72,6 +72,10 @@ class MentionService
         $preview = mb_strlen($preview) > 120 ? mb_substr($preview, 0, 117).'...' : $preview;
 
         foreach ($users as $user) {
+            if (! $user->wantsNotification('feed_mentions')) {
+                continue;
+            }
+
             $notification = Notification::create([
                 'user_id' => (string) $user->id,
                 'type' => 'info',
