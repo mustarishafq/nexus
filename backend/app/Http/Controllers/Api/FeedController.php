@@ -166,12 +166,17 @@ class FeedController extends Controller
      */
     private function ensurePostInFeedItems($items, int $postId, User $viewer, ?int $authorUserId = null)
     {
-        $alreadyPresent = $items->contains(
-            fn (array $item) => ($item['type'] ?? null) === 'post' && (int) $item['id'] === $postId
-        );
+        $isFocusedPost = static fn (array $item): bool => ($item['type'] ?? null) === 'post'
+            && (int) ($item['id'] ?? 0) === $postId;
 
-        if ($alreadyPresent) {
-            return $items;
+        $existing = $items->first($isFocusedPost);
+
+        if ($existing) {
+            // Pin the deep-linked post to the top so clients don't scroll past
+            // a full page of newer items looking for an older post.
+            return collect([$existing])
+                ->merge($items->reject($isFocusedPost)->values())
+                ->values();
         }
 
         $postQuery = Post::query()->visibleTo($viewer);
@@ -190,9 +195,8 @@ class FeedController extends Controller
             return $items;
         }
 
-        return $items
-            ->push($this->serializePost($post, $viewer))
-            ->sortByDesc(fn (array $item) => $item['created_date'])
+        return collect([$this->serializePost($post, $viewer)])
+            ->merge($items->values())
             ->values();
     }
 

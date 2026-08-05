@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Cake, Loader2, MessagesSquare, Newspaper } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowUp, Cake, Loader2, MessagesSquare, Newspaper } from 'lucide-react';
+import { toast } from 'sonner';
 import db from '@/api/apiClient';
 import TodaysCelebrationsWidget from '@/components/dashboard/TodaysCelebrationsWidget';
 import ActiveDiscussionsWidget from '@/components/feed/ActiveDiscussionsWidget';
 import { FeedComposer, FeedItem } from '@/components/feed/FeedItems';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -54,7 +57,7 @@ function findVisibleFeedPostElement(postId) {
   return null;
 }
 
-function FeedList({ items, isLoading, focusTarget }) {
+function FeedList({ items, isLoading, focusTarget, reveal }) {
   if (isLoading) {
     return (
       <div className="flex min-h-[20vh] items-center justify-center rounded-lg border border-border/40 bg-card py-10">
@@ -76,41 +79,117 @@ function FeedList({ items, isLoading, focusTarget }) {
   }
 
   return (
-    <div className="space-y-2.5 sm:space-y-3">
+    <motion.div
+      className="space-y-2.5 sm:space-y-3"
+      initial={reveal ? 'hidden' : false}
+      animate="show"
+      variants={{
+        hidden: {},
+        show: {
+          transition: { staggerChildren: 0.045, delayChildren: 0.05 },
+        },
+      }}
+    >
       {items.map((item) => (
-        <FeedItem
+        <motion.div
           key={`${item.type}-${item.id}`}
-          item={item}
-          initialExpanded={
-            item.type === 'post'
-            && focusTarget?.expandComments
-            && String(item.id) === String(focusTarget.postId)
-          }
-        />
+          variants={{
+            hidden: { opacity: 0, y: 14 },
+            show: {
+              opacity: 1,
+              y: 0,
+              transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+            },
+          }}
+        >
+          <FeedItem
+            item={item}
+            initialExpanded={
+              item.type === 'post'
+              && focusTarget?.expandComments
+              && String(item.id) === String(focusTarget.postId)
+            }
+          />
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
+  );
+}
+
+function FocusLoadingOverlay({ show }) {
+  return (
+    <AnimatePresence>
+      {show ? (
+        <motion.div
+          key="focus-loading"
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-lg border border-border/40 bg-background/85 px-6 py-10 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22 }}
+        >
+          <motion.div
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/10"
+            initial={{ scale: 0.85 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </motion.div>
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, duration: 0.28 }}
+          >
+            <p className="text-sm font-medium">Opening post</p>
+            <p className="mt-1 text-xs text-muted-foreground">Finding it in the company feed…</p>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
 export default function CompanyFeed() {
   const [searchParams, setSearchParams] = useSearchParams();
   const focusTarget = useMemo(() => parseFeedFocusParams(searchParams), [searchParams]);
+  const [pinnedFocus, setPinnedFocus] = useState(null);
+  const [focusBootstrapping, setFocusBootstrapping] = useState(() => Boolean(focusTarget?.postId));
+  const [feedReveal, setFeedReveal] = useState(() => !focusTarget?.postId);
   const lastFocusedKeyRef = useRef(null);
   const settleScrollRef = useRef(null);
   const [mobileTab, setMobileTab] = useState('feed');
   const isXlUp = useIsXlUp();
   const showFeedColumn = isXlUp || mobileTab === 'feed';
 
+  // Keep the focused post pinned in the query even after ?post= is cleared from
+  // the URL, so the feed doesn't refetch/reshuffle and jump mid-scroll.
+  useEffect(() => {
+    if (focusTarget?.postId) {
+      lastFocusedKeyRef.current = null;
+      setFocusBootstrapping(true);
+      setFeedReveal(false);
+      setPinnedFocus({
+        postId: focusTarget.postId,
+        expandComments: focusTarget.expandComments,
+      });
+    }
+  }, [focusTarget?.expandComments, focusTarget?.postId]);
+
+  const activeFocus = focusTarget ?? pinnedFocus;
+  const isViewingFocusedPost = Boolean(pinnedFocus?.postId);
+
   useMetaTags({
     title: 'Company Feed - EMZI Nexus Brain',
-    description: 'Announcements and team updates across your organization',
+    description: 'Announcements from leadership and updates shared by your colleagues.',
   });
 
   const { data, isLoading, isFetched } = useQuery({
-    queryKey: ['company-feed', focusTarget?.postId ?? null],
+    queryKey: ['company-feed', activeFocus?.postId ?? null],
     queryFn: () => db.feed.list({
       limit: 30,
-      ...(focusTarget?.postId ? { focusPost: focusTarget.postId } : {}),
+      ...(activeFocus?.postId ? { focusPost: activeFocus.postId } : {}),
     }),
     staleTime: 20_000,
   });
@@ -120,11 +199,30 @@ export default function CompanyFeed() {
     ? 'Loading...'
     : `${items.length} items`;
 
+  const returnToLatestFeed = () => {
+    settleScrollRef.current?.();
+    settleScrollRef.current = null;
+    lastFocusedKeyRef.current = null;
+    setPinnedFocus(null);
+    setFocusBootstrapping(false);
+    setFeedReveal(true);
+    setSearchParams((prev) => {
+      if (!prev.get('post') && !prev.get('comments')) {
+        return prev;
+      }
+      const next = new URLSearchParams(prev);
+      next.delete('post');
+      next.delete('comments');
+      return next;
+    }, { replace: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    if (focusTarget?.postId) {
+    if (activeFocus?.postId) {
       setMobileTab('feed');
     }
-  }, [focusTarget?.postId]);
+  }, [activeFocus?.postId]);
 
   useEffect(() => () => {
     settleScrollRef.current?.();
@@ -132,35 +230,26 @@ export default function CompanyFeed() {
   }, []);
 
   useEffect(() => {
-    if (!focusTarget?.postId || isLoading || !showFeedColumn) {
+    if (!activeFocus?.postId || isLoading || !isFetched || !showFeedColumn) {
       return undefined;
     }
 
-    const focusKey = `${focusTarget.postId}:${focusTarget.expandComments ? '1' : '0'}`;
+    const focusKey = `${activeFocus.postId}:${activeFocus.expandComments ? '1' : '0'}`;
     if (lastFocusedKeyRef.current === focusKey) {
       return undefined;
     }
 
-    const element = findVisibleFeedPostElement(focusTarget.postId);
-    if (!element) {
-      return undefined;
-    }
+    const focusId = String(activeFocus.postId);
+    const focusedInItems = items.some(
+      (item) => item?.type === 'post' && String(item.id) === focusId
+    );
 
-    lastFocusedKeyRef.current = focusKey;
-
-    settleScrollRef.current?.();
-    const rafId = window.requestAnimationFrame(() => {
-      settleScrollRef.current = scrollFeedPostIntoView(element, { behavior: 'smooth' });
-      element.classList.add('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
-    });
-
-    const highlightTimer = window.setTimeout(() => {
-      element.classList.remove('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
-    }, 2400);
-
-    // Clear deep-link params after scroll starts. Do not cancel settle on
-    // that re-render — lazy images above the target still shift layout.
-    const clearParamsTimer = window.setTimeout(() => {
+    if (!focusedInItems) {
+      lastFocusedKeyRef.current = focusKey;
+      setFocusBootstrapping(false);
+      setFeedReveal(true);
+      toast.error('That post could not be found in the feed.');
+      setPinnedFocus(null);
       setSearchParams((prev) => {
         if (!prev.get('post') && !prev.get('comments')) {
           return prev;
@@ -170,19 +259,79 @@ export default function CompanyFeed() {
         next.delete('comments');
         return next;
       }, { replace: true });
-      // Allow the same post deep-link to focus again on a later click.
-      lastFocusedKeyRef.current = null;
-    }, 100);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let rafId = 0;
+    let retryTimer = 0;
+    let highlightTimer = 0;
+    let clearParamsTimer = 0;
+    let revealTimer = 0;
+
+    const clearFocusParams = () => {
+      setSearchParams((prev) => {
+        if (!prev.get('post') && !prev.get('comments')) {
+          return prev;
+        }
+        const next = new URLSearchParams(prev);
+        next.delete('post');
+        next.delete('comments');
+        return next;
+      }, { replace: true });
+    };
+
+    const tryFocus = () => {
+      if (cancelled) return;
+
+      const element = findVisibleFeedPostElement(activeFocus.postId);
+      if (!element) {
+        attempts += 1;
+        if (attempts < 40) {
+          retryTimer = window.setTimeout(() => {
+            rafId = window.requestAnimationFrame(tryFocus);
+          }, 50);
+        } else {
+          setFocusBootstrapping(false);
+          setFeedReveal(true);
+        }
+        return;
+      }
+
+      lastFocusedKeyRef.current = focusKey;
+      settleScrollRef.current?.();
+      settleScrollRef.current = scrollFeedPostIntoView(element, { behavior: 'auto' });
+
+      setFocusBootstrapping(false);
+      revealTimer = window.setTimeout(() => {
+        if (!cancelled) setFeedReveal(true);
+      }, 80);
+
+      element.classList.add('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
+
+      highlightTimer = window.setTimeout(() => {
+        element.classList.remove('ring-2', 'ring-primary/40', 'ring-offset-2', 'ring-offset-background');
+      }, 2400);
+
+      // Clear URL only — keep pinnedFocus so the feed query doesn't reshuffle.
+      clearParamsTimer = window.setTimeout(clearFocusParams, 300);
+    };
+
+    rafId = window.requestAnimationFrame(tryFocus);
 
     return () => {
+      cancelled = true;
       window.cancelAnimationFrame(rafId);
+      window.clearTimeout(retryTimer);
       window.clearTimeout(highlightTimer);
       window.clearTimeout(clearParamsTimer);
-      // Intentionally keep settleScrollRef running after URL clears.
+      window.clearTimeout(revealTimer);
     };
   }, [
-    focusTarget?.expandComments,
-    focusTarget?.postId,
+    activeFocus?.expandComments,
+    activeFocus?.postId,
+    isFetched,
     isLoading,
     isXlUp,
     items,
@@ -200,6 +349,35 @@ export default function CompanyFeed() {
         meta={headerMeta}
         className="relative z-[1] gap-2 sm:gap-4"
       />
+
+      <AnimatePresence>
+        {isViewingFocusedPost ? (
+          <motion.div
+            key="focused-banner"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            className="sticky top-16 z-30 flex flex-col gap-3 rounded-xl border border-primary/25 bg-card/95 px-3 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-4"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Viewing a linked post</p>
+              <p className="text-xs text-muted-foreground">
+                This older update was opened from a link.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 w-full shrink-0 gap-1.5 sm:w-auto"
+              onClick={returnToLatestFeed}
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+              Back to latest feed
+            </Button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {!isXlUp ? (
         <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
@@ -246,8 +424,25 @@ export default function CompanyFeed() {
             isXlUp ? 'col-span-6' : 'col-span-1'
           )}
         >
-          <FeedComposer />
-          <FeedList items={items} isLoading={isLoading} focusTarget={focusTarget} />
+          <FocusLoadingOverlay show={Boolean(activeFocus?.postId) && focusBootstrapping} />
+
+          <motion.div
+            initial={false}
+            animate={{
+              opacity: focusBootstrapping ? 0.35 : 1,
+              filter: focusBootstrapping ? 'blur(2px)' : 'blur(0px)',
+            }}
+            transition={{ duration: 0.25 }}
+            className="space-y-2.5 sm:space-y-3"
+          >
+            <FeedComposer />
+            <FeedList
+              items={items}
+              isLoading={isLoading}
+              focusTarget={activeFocus}
+              reveal={Boolean(activeFocus?.postId) && feedReveal}
+            />
+          </motion.div>
         </div>
 
         {isXlUp ? (
