@@ -344,6 +344,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
       setReplyingTo(null);
       queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       notifyGamificationOffers(data);
       toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
     },
@@ -357,6 +358,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
     },
     onError: (error) => {
       toast.error(error?.message || 'Failed to delete comment.');
@@ -642,6 +644,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     onSuccess: () => {
       setConfirmDelete(false);
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       toast.success('Post deleted.');
     },
@@ -686,8 +689,20 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             )),
           };
         });
+        queryClient.setQueriesData({ queryKey: ['user-feed'] }, (current) => {
+          if (!current || !Array.isArray(current.items)) return current;
+          return {
+            ...current,
+            items: current.items.map((entry) => (
+              entry?.type === 'post' && String(entry.id) === String(payload.item.id)
+                ? { ...entry, ...payload.item }
+                : entry
+            )),
+          };
+        });
       }
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       queryClient.invalidateQueries({ queryKey: ['post-edits', item.id] });
       toast.success('Post updated.');
@@ -701,6 +716,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     mutationFn: () => db.feed.approvePost(item.id),
     onSuccess: (payload) => {
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       notifyGamificationOffers(payload);
       toast.success('Post approved.');
     },
@@ -713,6 +729,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     mutationFn: () => db.feed.rejectPost(item.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       toast.success('Post rejected.');
     },
     onError: (error) => {
@@ -1165,6 +1182,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
       clearImages();
       setDraftPolls([]);
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       notifyGamificationOffers(payload);
       const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';

@@ -13,6 +13,7 @@ use App\Support\BroadcastAudience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class FeedController extends Controller
 {
@@ -28,14 +29,55 @@ class FeedController extends Controller
         }
 
         $validated = $request->validate([
-            'limit' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'author_user_id' => ['sometimes', 'integer', 'min:1', 'exists:users,id'],
             'focus_post' => ['sometimes', 'integer', 'min:1'],
+            'limit' => [
+                'sometimes',
+                'integer',
+                'min:1',
+                Rule::when(
+                    $request->filled('author_user_id'),
+                    ['max:100'],
+                    ['max:50']
+                ),
+            ],
         ]);
 
-        $limit = (int) ($validated['limit'] ?? 30);
+        $authorUserId = isset($validated['author_user_id']) ? (int) $validated['author_user_id'] : null;
+        $defaultLimit = $authorUserId ? 100 : 30;
+        $limit = (int) ($validated['limit'] ?? $defaultLimit);
         $focusPostId = isset($validated['focus_post']) ? (int) $validated['focus_post'] : null;
 
         $postsQuery = Post::query()->visibleTo($viewer);
+
+        if ($authorUserId) {
+            $postsQuery->where('author_user_id', $authorUserId);
+        }
+
+        // Profile / author filter: posts only (no broadcasts).
+        if ($authorUserId) {
+            $total = (int) (clone $postsQuery)->count();
+            $items = (clone $postsQuery)
+                ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
+                ->withCount(['comments', 'edits', 'views', 'reaches'])
+                ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])
+                ->latest()
+                ->limit($limit)
+                ->get()
+                ->map(fn (Post $post) => $this->serializePost($post, $viewer))
+                ->values();
+
+            if ($focusPostId) {
+                $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer, $authorUserId);
+            }
+
+            return response()->json([
+                'items' => $items,
+                'total' => $total,
+                'unseen_count' => 0,
+            ]);
+        }
+
         $broadcastsQuery = $this->activeBroadcastsQuery($viewer);
         $total = (int) $postsQuery->count() + (int) (clone $broadcastsQuery)->count();
         $unseenCount = (int) Post::query()
@@ -122,7 +164,7 @@ class FeedController extends Controller
      * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $items
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    private function ensurePostInFeedItems($items, int $postId, User $viewer)
+    private function ensurePostInFeedItems($items, int $postId, User $viewer, ?int $authorUserId = null)
     {
         $alreadyPresent = $items->contains(
             fn (array $item) => ($item['type'] ?? null) === 'post' && (int) $item['id'] === $postId
@@ -132,8 +174,13 @@ class FeedController extends Controller
             return $items;
         }
 
-        $post = Post::query()
-            ->visibleTo($viewer)
+        $postQuery = Post::query()->visibleTo($viewer);
+
+        if ($authorUserId) {
+            $postQuery->where('author_user_id', $authorUserId);
+        }
+
+        $post = $postQuery
             ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])

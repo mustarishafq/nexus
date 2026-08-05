@@ -1,6 +1,7 @@
 import * as React from "react"
 
 export const MOBILE_BREAKPOINT = 768
+export const XL_BREAKPOINT = 1280
 
 /** Sync viewport check for non-React launch helpers (matches useIsMobile). */
 export function isMobileViewport() {
@@ -22,4 +23,21 @@ export function useIsMobile() {
   }, [])
 
   return !!isMobile
+}
+
+/** True at the same xl breakpoint used by profile/feed multi-column layouts. */
+export function useIsXlUp() {
+  const [isXlUp, setIsXlUp] = React.useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth >= XL_BREAKPOINT : false
+  ))
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${XL_BREAKPOINT}px)`)
+    const onChange = () => setIsXlUp(window.innerWidth >= XL_BREAKPOINT)
+    onChange()
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+
+  return isXlUp
 }

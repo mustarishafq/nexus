@@ -15,6 +15,7 @@ import {
   Calendar,
   Bell,
   ArrowRight,
+  ArrowLeft,
   Settings,
   LogOut,
   Briefcase,
@@ -22,6 +23,8 @@ import {
   Phone,
   GraduationCap,
   HeartPulse,
+  Pencil,
+  Newspaper,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,6 +40,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { formatDateForInput } from '@/lib/utils';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { useIsXlUp } from '@/hooks/use-mobile';
 import {
   formatBirthdayLabel,
   formatTenure,
@@ -57,6 +61,9 @@ import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import TagInput from '@/components/profile/TagInput';
 import ProfileHistoryEditor from '@/components/profile/ProfileHistoryEditor';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
+import ProfileHrDetailsView from '@/components/profile/ProfileHrDetailsView';
+import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
+import ProfileUserPosts from '@/components/profile/ProfileUserPosts';
 import PhoneInput from '@/components/profile/PhoneInput';
 import { normalizePhoneNumber } from '@/lib/phone';
 
@@ -124,9 +131,13 @@ export default function Profile() {
   const { user: authUser, checkUserAuth, logout } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isXlUp = useIsXlUp();
+  const [mobileTab, setMobileTab] = useState('posts');
 
-  const activeTab = searchParams.get('tab') === 'security' ? 'security' : 'profile';
+  const tabParam = searchParams.get('tab');
   const sectionParam = searchParams.get('section');
+  const isEditMode = tabParam === 'profile' || tabParam === 'security' || PROFILE_SECTIONS.includes(sectionParam);
+  const activeTab = tabParam === 'security' ? 'security' : 'profile';
   const profileSection = PROFILE_SECTIONS.includes(sectionParam) ? sectionParam : 'about';
 
   const { data: user } = useQuery({
@@ -181,20 +192,34 @@ export default function Profile() {
     const next = new URLSearchParams(searchParams);
     if (value === 'security') {
       next.set('tab', 'security');
+      next.delete('section');
     } else {
-      next.delete('tab');
+      next.set('tab', 'profile');
     }
     setSearchParams(next, { replace: true });
   };
 
   const handleProfileSectionChange = (value) => {
     const next = new URLSearchParams(searchParams);
-    next.delete('tab');
+    next.set('tab', 'profile');
     if (value === 'about') {
       next.delete('section');
     } else {
       next.set('section', value);
     }
+    setSearchParams(next, { replace: true });
+  };
+
+  const enterEditMode = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'profile');
+    setSearchParams(next, { replace: true });
+  };
+
+  const exitEditMode = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    next.delete('section');
     setSearchParams(next, { replace: true });
   };
 
@@ -259,86 +284,137 @@ export default function Profile() {
     }
   };
 
+  const editProfileCard = (
+    <Card className="rounded-2xl">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          {isEditMode ? (
+            <ArrowLeft className="h-4 w-4 text-primary" />
+          ) : (
+            <Pencil className="h-4 w-4 text-primary" />
+          )}
+          {isEditMode ? 'Editing profile' : 'Profile'}
+        </CardTitle>
+        <CardDescription className="text-xs">
+          {isEditMode
+            ? 'Update your details, then return to your posts view.'
+            : 'Update your details and account security.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isEditMode ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-full justify-start text-xs"
+            onClick={exitEditMode}
+          >
+            <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+            Back to posts
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-full justify-between text-xs"
+            onClick={enterEditMode}
+          >
+            <span className="flex items-center gap-2">
+              <Pencil className="h-3.5 w-3.5" />
+              Edit profile
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const settingsCards = (
+    <>
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Settings className="h-4 w-4 text-primary" />
+            More settings
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Notification preferences and app settings
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Link to="/settings" className="block">
+            <Button variant="outline" size="sm" className="h-9 w-full justify-between text-xs">
+              <span className="flex items-center gap-2">
+                <Bell className="h-3.5 w-3.5" />
+                Notifications & preferences
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-destructive/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </CardTitle>
+          <CardDescription className="text-xs">
+            End your session on this device
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-full text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => logout()}
+          >
+            <LogOut className="mr-2 h-3.5 w-3.5" />
+            Sign out
+          </Button>
+        </CardContent>
+      </Card>
+    </>
+  );
+
+  const aboutDetails = (
+    <div className="space-y-4">
+      {editProfileCard}
+      <ProfileAboutCard user={user} showCompleteLink={false} showChecklist isOwnProfile />
+      <ProfileStaffDetails user={user} />
+      <ProfileHrDetailsView user={user} />
+      {settingsCards}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <ProfileDashboardHero user={user} onUserUpdated={refreshUser} />
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="max-xl:contents xl:col-span-4 xl:flex xl:flex-col xl:gap-6">
-          <div className="order-2 xl:order-none">
-            <ProfileAboutCard user={user} showCompleteLink={false} showChecklist isOwnProfile />
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 }}
-            className="order-3 xl:order-none"
-          >
-            <Card className="rounded-2xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-primary" />
-                  More settings
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Notification preferences and app settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Link to="/settings" className="block">
-                  <Button variant="outline" size="sm" className="w-full justify-between h-9 text-xs">
-                    <span className="flex items-center gap-2">
-                      <Bell className="w-3.5 h-3.5" />
-                      Notifications & preferences
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="order-4 xl:order-none"
-          >
-            <Card className="rounded-2xl border-destructive/20">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2 text-destructive">
-                  <LogOut className="w-4 h-4" />
-                  Sign out
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  End your session on this device
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => logout()}
-                >
-                  <LogOut className="w-3.5 h-3.5 mr-2" />
-                  Sign out
-                </Button>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        <div className="max-xl:contents xl:col-span-8">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="order-1 xl:order-none"
-          >
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
+      {isEditMode ? (
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+          <aside className="space-y-4 xl:col-span-3">
+            {editProfileCard}
+            {isXlUp ? (
+              <div className="space-y-4">
+                <ProfileAboutCard user={user} showCompleteLink={false} showChecklist isOwnProfile />
+                {settingsCards}
+              </div>
+            ) : null}
+          </aside>
+          <div className="min-w-0 xl:col-span-9">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+<Tabs value={activeTab} onValueChange={handleTabChange}>
               <TabsList className="h-10 w-full sm:w-auto">
                 <TabsTrigger value="profile" className="gap-2 flex-1 sm:flex-none">
                   <User className="w-4 h-4" />
@@ -770,9 +846,51 @@ export default function Profile() {
                 </Card>
               </TabsContent>
             </Tabs>
-          </motion.div>
+            </motion.div>
+          </div>
+          {!isXlUp ? (
+            <div className="space-y-4">
+              {settingsCards}
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : isXlUp ? (
+        <div className="grid grid-cols-12 items-start gap-6">
+          <aside className="col-span-3 space-y-4">
+            {editProfileCard}
+            <ProfileAboutCard user={user} showCompleteLink={false} showChecklist isOwnProfile />
+            {settingsCards}
+          </aside>
+          <div className="col-span-6 min-w-0">
+            <ProfileUserPosts userId={user?.id} showComposer />
+          </div>
+          <aside className="col-span-3 space-y-4">
+            <ProfileStaffDetails user={user} />
+            <ProfileHrDetailsView user={user} />
+          </aside>
+        </div>
+      ) : (
+        <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full space-y-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl p-1">
+            <TabsTrigger value="posts" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
+              <Newspaper className="h-3.5 w-3.5" />
+              Posts
+            </TabsTrigger>
+            <TabsTrigger value="about" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
+              <User className="h-3.5 w-3.5" />
+              About
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="posts" className="mt-0">
+            <ProfileUserPosts userId={user?.id} showComposer />
+          </TabsContent>
+
+          <TabsContent value="about" className="mt-0">
+            {aboutDetails}
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

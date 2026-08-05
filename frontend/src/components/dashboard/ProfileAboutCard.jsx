@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Cake, Mail, Calendar, Layers, Sparkles, ArrowRight, User, Check, Circle,
@@ -22,6 +22,23 @@ import { formatPhoneNumber, phoneTelHref } from '@/lib/phone';
 
 const COMPACT_VISIBLE_COUNT = 4;
 const MOBILE_COMPACT_VISIBLE_COUNT = 3;
+const XL_BREAKPOINT = 1280;
+
+function useIsBelowXl() {
+  const [isBelowXl, setIsBelowXl] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth < XL_BREAKPOINT : false
+  ));
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${XL_BREAKPOINT - 1}px)`);
+    const onChange = () => setIsBelowXl(window.innerWidth < XL_BREAKPOINT);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  return isBelowXl;
+}
 
 const ABOUT_PRIORITY = {
   bio: 10,
@@ -136,8 +153,9 @@ export default function ProfileAboutCard({
   isOwnProfile = false,
 }) {
   const isMobile = useIsMobile();
+  const isBelowXl = useIsBelowXl();
   const isMobileCompact = compact && isMobile;
-  const isCollapsible = defaultCollapsed && isMobile;
+  const isCollapsible = defaultCollapsed && isBelowXl;
   const [checklistExpanded, setChecklistExpanded] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);

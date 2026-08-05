@@ -47,6 +47,7 @@ function useReactMutation({
         queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+        queryClient.invalidateQueries({ queryKey: ['user-feed'] });
       }
     },
     onError: (error) => {

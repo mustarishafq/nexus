@@ -23,6 +23,18 @@ function patchFeedItem(queryClient, nextItem) {
     };
   });
 
+  queryClient.setQueriesData({ queryKey: ['user-feed'] }, (current) => {
+    if (!current || !Array.isArray(current.items)) return current;
+    return {
+      ...current,
+      items: current.items.map((entry) => (
+        entry?.type === 'post' && String(entry.id) === String(nextItem.id)
+          ? { ...entry, ...nextItem }
+          : entry
+      )),
+    };
+  });
+
   queryClient.setQueriesData({ queryKey: ['feed-active-discussions'] }, (current) => {
     if (!current || !Array.isArray(current.items)) return current;
     return {
