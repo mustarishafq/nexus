@@ -822,7 +822,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
           </div>
         </div>
 
-        {!compact && (item.can_edit || item.can_delete) && !editing ? (
+        {(item.can_edit || item.can_delete) && !editing ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -942,10 +942,10 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
         />
       ) : null}
 
-      {/* Full-bleed media */}
+      {/* Full-bleed media — same framing on dashboard (compact) and /feed */}
       {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
         <div className="mt-2">
-          <PostImageGrid item={item} flush={!compact} />
+          <PostImageGrid item={item} flush />
         </div>
       ) : null}
 
