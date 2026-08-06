@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, Share2, SmilePlus, ThumbsUp } from 'lucide-react';
+import { MessageCircle, Plus, Share2, SmilePlus, ThumbsUp } from 'lucide-react';
 import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
+import { EmojiCollectionPanel } from '@/components/feed/EmojiCollectionPicker';
+import { getReactionShortcuts, pinReactionShortcut } from '@/lib/reactionPreferences';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
 const PRIMARY_REACTION = '👍';
@@ -54,6 +56,30 @@ function useReactMutation({
       toast.error(error?.message || 'Failed to update reaction.');
     },
   });
+}
+
+function useShortcutReactions(defaults) {
+  const baseKey = (defaults || DEFAULT_REACTIONS).join('\0');
+  const base = React.useMemo(
+    () => (baseKey ? baseKey.split('\0') : DEFAULT_REACTIONS),
+    [baseKey]
+  );
+  const [reactions, setReactions] = useState(() => getReactionShortcuts(base));
+
+  React.useEffect(() => {
+    setReactions(getReactionShortcuts(base));
+  }, [base]);
+
+  const pinAndRefresh = React.useCallback(
+    (emoji) => {
+      const next = pinReactionShortcut(emoji, base);
+      setReactions(next);
+      return next;
+    },
+    [base]
+  );
+
+  return { reactions, pinAndRefresh };
 }
 
 function ReactionSummary({ reactionCounts, total }) {
@@ -104,12 +130,14 @@ export function FeedEngagementBar({
   className,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState('quick');
   const [popReaction, setPopReaction] = useState(null);
   const hoverCloseTimer = React.useRef(null);
   const hoverOpenTimer = React.useRef(null);
   const longPressTimer = React.useRef(null);
   const longPressTriggered = React.useRef(false);
-  const reactions = item.available_reactions || DEFAULT_REACTIONS;
+  const defaults = item.available_reactions || DEFAULT_REACTIONS;
+  const { reactions, pinAndRefresh } = useShortcutReactions(defaults);
   const reactionCounts = item.reaction_counts || {};
   const myReaction = item.my_reaction?.reaction || null;
   const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
@@ -137,23 +165,42 @@ export function FeedEngagementBar({
     }
   };
 
+  const closePicker = () => {
+    setPickerOpen(false);
+    setPickerMode('quick');
+  };
+
   const openPicker = () => {
     clearHoverTimers();
     clearLongPressTimer();
+    setPickerMode('quick');
     setPickerOpen(true);
+  };
+
+  const handlePickerOpenChange = (open) => {
+    setPickerOpen(open);
+    if (!open) {
+      setPickerMode('quick');
+    }
   };
 
   const scheduleOpenPicker = () => {
     // Hover is desktop-only; touch devices use long-press instead.
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
       clearHoverTimers();
-      hoverOpenTimer.current = window.setTimeout(() => setPickerOpen(true), 280);
+      hoverOpenTimer.current = window.setTimeout(() => {
+        setPickerMode('quick');
+        setPickerOpen(true);
+      }, 280);
     }
   };
 
   const scheduleClosePicker = () => {
     clearHoverTimers();
-    hoverCloseTimer.current = window.setTimeout(() => setPickerOpen(false), 180);
+    hoverCloseTimer.current = window.setTimeout(() => {
+      setPickerOpen(false);
+      setPickerMode('quick');
+    }, 180);
   };
 
   const applyReaction = (reaction, event) => {
@@ -172,7 +219,7 @@ export function FeedEngagementBar({
       longPressTriggered.current = false;
       return;
     }
-    setPickerOpen(false);
+    closePicker();
     if (myReaction === PRIMARY_REACTION) {
       reactMutation.mutate(PRIMARY_REACTION);
       return;
@@ -241,7 +288,7 @@ export function FeedEngagementBar({
           showSummary ? 'mx-3 sm:mx-4' : 'mx-3 mt-1 sm:mx-4'
         )}
       >
-        <Popover open={pickerOpen} onOpenChange={setPickerOpen} modal={false}>
+        <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
           <PopoverAnchor asChild>
             <div
               className="relative border-r border-border/20"
@@ -290,40 +337,73 @@ export function FeedEngagementBar({
             align="center"
             side="top"
             sideOffset={8}
-            onMouseEnter={openPicker}
+            onMouseEnter={() => {
+              clearHoverTimers();
+              setPickerOpen(true);
+            }}
             onMouseLeave={scheduleClosePicker}
-            className="z-[200] w-auto rounded-full border-border/50 p-1.5 shadow-lg"
+            className={cn(
+              'z-[200] border-border/50 shadow-lg',
+              pickerMode === 'collection'
+                ? 'w-auto rounded-2xl p-0'
+                : 'w-auto rounded-full p-1.5'
+            )}
             onClick={(event) => event.stopPropagation()}
             onOpenAutoFocus={(event) => event.preventDefault()}
-            onPointerDownOutside={() => setPickerOpen(false)}
+            onPointerDownOutside={() => closePicker()}
           >
-            <div className="flex items-center gap-0.5">
-              {reactions.map((reaction) => {
-                const isActive = myReaction === reaction;
-                return (
-                  <motion.button
-                    key={reaction}
-                    type="button"
-                    whileHover={{ scale: 1.25, y: -4 }}
-                    whileTap={reactionMotion.whileTap}
-                    disabled={reactMutation.isPending}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setPickerOpen(false);
-                      applyReaction(reaction, event);
-                    }}
-                    className={cn(
-                      'inline-flex h-10 w-10 items-center justify-center rounded-full text-lg transition-colors sm:h-9 sm:w-9',
-                      isActive ? 'bg-primary/15' : 'hover:bg-muted/80'
-                    )}
-                    title={isActive ? 'Remove reaction' : 'React'}
-                  >
-                    {reaction}
-                  </motion.button>
-                );
-              })}
-            </div>
+            {pickerMode === 'collection' ? (
+              <EmojiCollectionPanel
+                onSelect={(emoji, event) => {
+                  pinAndRefresh(emoji);
+                  closePicker();
+                  applyReaction(emoji, event);
+                }}
+              />
+            ) : (
+              <div className="flex items-center gap-0.5">
+                {reactions.map((reaction) => {
+                  const isActive = myReaction === reaction;
+                  return (
+                    <motion.button
+                      key={reaction}
+                      type="button"
+                      whileHover={{ scale: 1.25, y: -4 }}
+                      whileTap={reactionMotion.whileTap}
+                      disabled={reactMutation.isPending}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        closePicker();
+                        applyReaction(reaction, event);
+                      }}
+                      className={cn(
+                        'inline-flex h-10 w-10 items-center justify-center rounded-full text-lg transition-colors sm:h-9 sm:w-9',
+                        isActive ? 'bg-primary/15' : 'hover:bg-muted/80'
+                      )}
+                      title={isActive ? 'Remove reaction' : 'React'}
+                    >
+                      {reaction}
+                    </motion.button>
+                  );
+                })}
+                <button
+                  type="button"
+                  disabled={reactMutation.isPending}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    clearHoverTimers();
+                    setPickerMode('collection');
+                  }}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground sm:h-9 sm:w-9"
+                  title="More reactions"
+                  aria-label="Open emoji collection"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
 
@@ -367,9 +447,11 @@ export default function PostReactions({
   expHintActionKey = null,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState('quick');
   const [popReaction, setPopReaction] = useState(null);
   const isComment = Boolean(commentId);
-  const reactions = item.available_reactions || DEFAULT_REACTIONS;
+  const defaults = item.available_reactions || DEFAULT_REACTIONS;
+  const { reactions, pinAndRefresh } = useShortcutReactions(defaults);
   const reactionCounts = item.reaction_counts || {};
   const myReaction = item.my_reaction?.reaction || null;
   const activeEntries = Object.entries(reactionCounts).filter(([, count]) => count > 0);
@@ -380,6 +462,20 @@ export default function PostReactions({
     reactFn,
     invalidateKeys,
   });
+
+  const closePicker = () => {
+    setPickerOpen(false);
+    setPickerMode('quick');
+  };
+
+  const handlePickerOpenChange = (open) => {
+    setPickerOpen(open);
+    if (!open) {
+      setPickerMode('quick');
+    } else {
+      setPickerMode('quick');
+    }
+  };
 
   const reactionButton = (reaction, { showCount = false, fromPicker = false } = {}) => {
     const count = reactionCounts[reaction] || 0;
@@ -405,7 +501,7 @@ export default function PostReactions({
           event.preventDefault();
           event.stopPropagation();
           if (fromPicker) {
-            setPickerOpen(false);
+            closePicker();
           }
           if (myReaction !== reaction) {
             spawnReactionBurst(reaction, event.clientX, event.clientY, { compact });
@@ -453,7 +549,7 @@ export default function PostReactions({
           </motion.div>
         ))}
       </AnimatePresence>
-      <Popover open={pickerOpen} onOpenChange={setPickerOpen} modal={false}>
+      <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
         <PopoverTrigger asChild>
           <motion.button
             type="button"
@@ -475,10 +571,49 @@ export default function PostReactions({
             )}
           </motion.button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="z-[200] w-auto p-2" onClick={(event) => event.stopPropagation()}>
-          <div className="flex flex-wrap gap-1.5">
-            {reactions.map((reaction) => reactionButton(reaction, { fromPicker: true }))}
-          </div>
+        <PopoverContent
+          align="start"
+          className={cn(
+            'z-[200]',
+            pickerMode === 'collection' ? 'w-auto p-0' : 'w-auto p-2'
+          )}
+          onClick={(event) => event.stopPropagation()}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          {pickerMode === 'collection' ? (
+            <EmojiCollectionPanel
+              onSelect={(emoji, event) => {
+                pinAndRefresh(emoji);
+                closePicker();
+                if (myReaction !== emoji) {
+                  spawnReactionBurst(emoji, event?.clientX, event?.clientY, { compact });
+                  setPopReaction(emoji);
+                }
+                reactMutation.mutate(emoji);
+              }}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {reactions.map((reaction) => reactionButton(reaction, { fromPicker: true }))}
+              <button
+                type="button"
+                disabled={reactMutation.isPending}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setPickerMode('collection');
+                }}
+                className={cn(
+                  'inline-flex items-center justify-center rounded-full border border-dashed border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted/60 hover:text-primary',
+                  compact ? 'h-6 min-w-6 px-1.5' : 'h-8 min-w-8 px-2'
+                )}
+                title="More reactions"
+                aria-label="Open emoji collection"
+              >
+                <Plus className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+              </button>
+            </div>
+          )}
         </PopoverContent>
       </Popover>
       {hintKey ? <ExpActionHint actionKey={hintKey} compact /> : null}

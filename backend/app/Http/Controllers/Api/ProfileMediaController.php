@@ -58,7 +58,7 @@ class ProfileMediaController extends Controller
         }
 
         $validated = $request->validate([
-            'reaction' => ['required', 'string', Rule::in(self::PROFILE_MEDIA_REACTIONS)],
+            'reaction' => ['required', 'string', 'max:16', Rule::in(self::PROFILE_MEDIA_ALLOWED_REACTIONS)],
         ]);
 
         $existing = ProfileMediaReaction::query()
@@ -260,7 +260,7 @@ class ProfileMediaController extends Controller
         }
 
         $validated = $request->validate([
-            'reaction' => ['required', 'string', Rule::in(self::PROFILE_MEDIA_REACTIONS)],
+            'reaction' => ['required', 'string', 'max:16', Rule::in(self::PROFILE_MEDIA_ALLOWED_REACTIONS)],
         ]);
 
         $existing = ProfileMediaCommentReaction::query()

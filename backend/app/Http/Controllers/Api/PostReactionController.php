@@ -32,7 +32,7 @@ class PostReactionController extends Controller
         }
 
         $validated = $request->validate([
-            'reaction' => ['required', 'string', Rule::in(self::POST_REACTIONS)],
+            'reaction' => ['required', 'string', 'max:16', Rule::in(self::POST_ALLOWED_REACTIONS)],
         ]);
 
         $existing = PostReaction::query()

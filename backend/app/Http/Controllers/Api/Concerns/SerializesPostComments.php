@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\PostComment;
 use App\Models\User;
+use App\Support\ReactionEmojis;
 
 trait SerializesPostComments
 {
@@ -36,7 +37,7 @@ trait SerializesPostComments
             'can_delete' => $viewer->id === $comment->author_user_id || $viewer->role === 'admin',
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
-            'available_reactions' => self::POST_REACTIONS,
+            'available_reactions' => ReactionEmojis::QUICK,
         ];
 
         if ($includeReplies) {

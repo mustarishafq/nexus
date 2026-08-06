@@ -5,11 +5,16 @@ namespace App\Http\Controllers\Api\Concerns;
 use App\Models\Post;
 use App\Models\PostPoll;
 use App\Models\User;
+use App\Support\ReactionEmojis;
 use App\Support\UserRoles;
 
 trait SerializesPosts
 {
-    public const POST_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
+    /** @deprecated Use ReactionEmojis::QUICK — kept for callers that reference POST_REACTIONS. */
+    public const POST_REACTIONS = ReactionEmojis::QUICK;
+
+    /** Full allowlist for reaction validation. */
+    public const POST_ALLOWED_REACTIONS = ReactionEmojis::ALLOWED;
 
     /**
      * @return array<string, mixed>
@@ -58,7 +63,7 @@ trait SerializesPosts
             'reactions_count' => $reactionsCount,
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
-            'available_reactions' => self::POST_REACTIONS,
+            'available_reactions' => ReactionEmojis::QUICK,
             'seen_count' => $seenCount,
             'reach_count' => $reachCount,
             'viewer_has_seen' => $viewerHasSeen,

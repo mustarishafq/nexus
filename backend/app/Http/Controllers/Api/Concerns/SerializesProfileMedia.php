@@ -5,13 +5,18 @@ namespace App\Http\Controllers\Api\Concerns;
 use App\Models\ProfileMediaComment;
 use App\Models\ProfileMediaReaction;
 use App\Models\User;
+use App\Support\ReactionEmojis;
 use Illuminate\Support\Collection;
 
 trait SerializesProfileMedia
 {
     public const PROFILE_MEDIA_TYPES = ['avatar', 'cover'];
 
-    public const PROFILE_MEDIA_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
+    /** @deprecated Use ReactionEmojis::QUICK */
+    public const PROFILE_MEDIA_REACTIONS = ReactionEmojis::QUICK;
+
+    /** Full allowlist for reaction validation. */
+    public const PROFILE_MEDIA_ALLOWED_REACTIONS = ReactionEmojis::ALLOWED;
 
     /**
      * @return array<string, mixed>
@@ -52,7 +57,7 @@ trait SerializesProfileMedia
             'reactions_count' => array_sum($reactionCounts),
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
-            'available_reactions' => self::PROFILE_MEDIA_REACTIONS,
+            'available_reactions' => ReactionEmojis::QUICK,
         ];
     }
 
@@ -86,7 +91,7 @@ trait SerializesProfileMedia
             'can_delete' => $viewer->id === $comment->author_user_id || $viewer->role === 'admin',
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
-            'available_reactions' => self::PROFILE_MEDIA_REACTIONS,
+            'available_reactions' => ReactionEmojis::QUICK,
         ];
 
         if ($includeReplies) {
