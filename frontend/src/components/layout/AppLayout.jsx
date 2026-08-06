@@ -58,9 +58,20 @@ export default function AppLayout() {
   const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage) && !isFullBleed;
   const showBottomNav = !isFullBleed;
 
+  const lockToViewport = isFullBleed || isViewportFillPage;
+
   return (
     <UserPresenceGate>
-      <div className="flex min-h-screen min-w-0 max-w-full flex-col overflow-x-hidden bg-background">
+      <div
+        className={cn(
+          'flex min-w-0 max-w-full flex-col overflow-x-hidden bg-background',
+          // Viewport-fill pages (email, messages, analytics) must not grow with
+          // list content — otherwise panes expand and action bars scroll away.
+          lockToViewport
+            ? 'h-[100dvh] max-h-[100dvh] overflow-hidden'
+            : 'min-h-screen',
+        )}
+      >
         <CelebrationGateProvider>
           <BirthdayCelebrationGate />
           <BroadcastAnnouncementGate />
@@ -80,8 +91,7 @@ export default function AppLayout() {
         <main
           className={cn(
             'min-w-0 max-w-full flex-1',
-            isFullBleed && 'h-[100dvh] max-h-[100dvh] overflow-hidden',
-            isViewportFillPage && 'min-h-0 overflow-hidden',
+            lockToViewport && 'min-h-0 overflow-hidden',
             showBottomNav
               && (standalone
                 ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'

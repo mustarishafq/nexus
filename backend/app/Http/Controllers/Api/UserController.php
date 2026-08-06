@@ -44,7 +44,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
-            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
+            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days', 'older_than_14_days', 'older_than_30_days'])],
             'profile' => ['nullable', 'string', Rule::in(['incomplete', 'complete'])],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
@@ -140,6 +140,12 @@ class UserController extends Controller
             $query->where('last_login_at', '>=', now()->subDays(7));
         } elseif (($filters['login'] ?? null) === 'last_30_days') {
             $query->where('last_login_at', '>=', now()->subDays(30));
+        } elseif (($filters['login'] ?? null) === 'older_than_14_days') {
+            $query->whereNotNull('last_login_at')
+                ->where('last_login_at', '<=', now()->subDays(14));
+        } elseif (($filters['login'] ?? null) === 'older_than_30_days') {
+            $query->whereNotNull('last_login_at')
+                ->where('last_login_at', '<=', now()->subDays(30));
         }
 
         if (! empty($filters['q'])) {
@@ -251,7 +257,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
-            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days'])],
+            'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days', 'older_than_14_days', 'older_than_30_days'])],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'access_group_id' => ['nullable', 'integer', 'exists:access_groups,id'],
             'q' => ['nullable', 'string', 'max:255'],

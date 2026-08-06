@@ -79,7 +79,7 @@ export function formatRichTextWithMentions(value = '') {
 
   const source = looksLikeHtml(value) ? sanitizeRichText(value) : String(value);
   const mentionChipClass =
-    'mx-0.5 inline-flex max-w-full items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-baseline text-xs font-medium text-primary';
+    'mx-0.5 inline-flex max-w-full items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-middle text-xs font-medium text-primary';
 
   return source.replace(MENTION_TOKEN_REGEX, (_match, userId, label) => {
     const safeLabel = String(label)

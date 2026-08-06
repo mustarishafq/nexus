@@ -274,6 +274,45 @@ class UserHrRoleTest extends TestCase
         $this->assertStringNotContainsString('admin.never.filter@example.com', $csv);
     }
 
+    public function test_admin_can_filter_users_by_last_login_older_than_14_days(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'email' => 'admin.old.login@example.com',
+            'last_login_at' => now()->subDays(3),
+        ]);
+        $stale = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'email' => 'stale.login@example.com',
+            'last_login_at' => now()->subDays(16),
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'email' => 'recent.login@example.com',
+            'last_login_at' => now()->subDays(5),
+        ]);
+        User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'email' => 'never.for.old.filter@example.com',
+            'last_login_at' => null,
+        ]);
+        $token = $this->issueToken($admin);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/users?login=older_than_14_days&page=1&per_page=50')
+            ->assertOk();
+
+        $emails = collect($response->json('data'))->pluck('email')->all();
+        $this->assertContains($stale->email, $emails);
+        $this->assertNotContains('recent.login@example.com', $emails);
+        $this->assertNotContains('never.for.old.filter@example.com', $emails);
+        $this->assertNotContains($admin->email, $emails);
+    }
+
     public function test_hr_can_export_users_csv(): void
     {
         $hr = User::factory()->create([

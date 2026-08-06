@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserMailCredential;
 use App\Support\AppSettings;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
@@ -209,7 +210,7 @@ class MailMailboxService
             throw new RuntimeException('PHP IMAP extension is not installed on the server.');
         }
 
-        $password = Crypt::decryptString($credential->password);
+        $password = $this->decryptMailboxPassword($credential);
         $config = $this->serverConfig($user, $credential->email);
         $logicalFolder = $this->normalizeLogicalFolder($folder);
 
@@ -592,7 +593,7 @@ class MailMailboxService
     public function sendMessage(User $user, array $payload, ?int $accountId = null): void
     {
         $credential = $this->resolveAccount($user, $accountId);
-        $password = Crypt::decryptString($credential->password);
+        $password = $this->decryptMailboxPassword($credential);
         $config = $this->serverConfig($user, $credential->email);
         $fromName = $credential->label
             ?: ($user->full_name ?? $user->name ?? $credential->email);
@@ -876,6 +877,32 @@ class MailMailboxService
         }
 
         return array_map('intval', $uids);
+    }
+
+    /**
+     * Saved mailbox passwords are encrypted with APP_KEY. A DB dump from another
+     * environment (or a rotated key) makes decrypt fail with a cryptic MAC error.
+     */
+    public function credentialsAreReadable(UserMailCredential $credential): bool
+    {
+        try {
+            $this->decryptMailboxPassword($credential);
+
+            return true;
+        } catch (RuntimeException) {
+            return false;
+        }
+    }
+
+    protected function decryptMailboxPassword(UserMailCredential $credential): string
+    {
+        try {
+            return Crypt::decryptString($credential->password);
+        } catch (DecryptException) {
+            throw new RuntimeException(
+                'Saved mailbox password could not be read (encryption key mismatch). Reconnect this mailbox.'
+            );
+        }
     }
 
     protected function escapeImapSearchString(string $query): string

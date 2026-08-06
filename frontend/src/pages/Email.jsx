@@ -250,16 +250,30 @@ function ConnectMailbox({ status, onConnect, connecting }) {
     );
   }
 
+  const needsReconnect = Boolean(status?.needs_reconnect);
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-border bg-card p-6">
       <div className="space-y-1 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
           <Inbox className="h-6 w-6 text-primary" />
         </div>
-        <h2 className="text-lg font-semibold">Connect mailbox</h2>
+        <h2 className="text-lg font-semibold">
+          {needsReconnect ? 'Reconnect mailbox' : 'Connect mailbox'}
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Sign in with your cPanel mailbox password for{' '}
-          <span className="font-medium text-foreground">{status.email}</span>.
+          {needsReconnect ? (
+            <>
+              Saved mailbox credentials could not be read on this environment.
+              Enter your cPanel mailbox password again for{' '}
+              <span className="font-medium text-foreground">{status.email}</span>.
+            </>
+          ) : (
+            <>
+              Sign in with your cPanel mailbox password for{' '}
+              <span className="font-medium text-foreground">{status.email}</span>.
+            </>
+          )}
         </p>
       </div>
       <form
@@ -283,7 +297,7 @@ function ConnectMailbox({ status, onConnect, connecting }) {
         </div>
         <Button type="submit" className="w-full gap-2" disabled={connecting || !password}>
           {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-          Connect email
+          {needsReconnect ? 'Reconnect email' : 'Connect email'}
         </Button>
       </form>
     </div>
@@ -392,17 +406,19 @@ function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
           />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-        <Textarea
-          id="compose-body"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="Write your message..."
-          className="min-h-[min(280px,36vh)] w-full resize-y"
-          required
-        />
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
+        <div className="relative min-h-0 flex-1">
+          <Textarea
+            id="compose-body"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="Write your message..."
+            className="absolute inset-0 h-full min-h-0 w-full resize-none"
+            required
+          />
+        </div>
         {attachments.length > 0 ? (
-          <ul className="mt-3 space-y-2">
+          <ul className="max-h-28 shrink-0 space-y-2 overflow-y-auto">
             {attachments.map((file, index) => (
               <li
                 key={`${file.name}-${file.size}-${index}`}
@@ -688,7 +704,10 @@ export default function Email() {
         <ConnectMailbox
           status={status}
           connecting={connectMailbox.isPending}
-          onConnect={(payload) => connectMailbox.mutate(payload)}
+          onConnect={(payload) => connectMailbox.mutate({
+            ...payload,
+            ...(status?.needs_reconnect && status?.email ? { email: status.email } : {}),
+          })}
         />
       </div>
     );
@@ -817,7 +836,7 @@ export default function Email() {
         isFullscreen && 'rounded-none border-0 sm:rounded-xl sm:border sm:border-border',
       )}>
         <div className={cn(
-          'flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r',
+          'flex min-h-0 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r',
           showPanel && 'hidden lg:flex',
         )}>
           <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4 sm:py-3">
@@ -850,7 +869,10 @@ export default function Email() {
           </nav>
         </div>
 
-        <div className={cn('flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r', showPanel && 'hidden lg:flex')}>
+        <div className={cn(
+          'flex min-h-0 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r',
+          showPanel && 'hidden lg:flex',
+        )}>
           <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4 sm:py-3">
             <p className="text-sm font-semibold">{activeFolder.label}</p>
             <p className="text-xs text-muted-foreground">
@@ -891,7 +913,7 @@ export default function Email() {
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
             {inboxLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

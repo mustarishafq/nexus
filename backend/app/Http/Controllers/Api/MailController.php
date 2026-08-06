@@ -27,27 +27,38 @@ class MailController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $accounts = $this->mail->accountsFor($user)
+        $credentialAccounts = $this->mail->accountsFor($user);
+        $accounts = $credentialAccounts
             ->map(fn ($account) => $account->toMailboxArray())
             ->values()
             ->all();
 
-        $connected = $accounts !== [];
         $activeId = $request->integer('account_id') ?: null;
+        $activeCredential = null;
         $active = null;
+        $credentialsReadable = false;
 
-        if ($connected) {
+        if ($credentialAccounts->isNotEmpty()) {
             try {
-                $active = $this->mail->resolveAccount($user, $activeId ?: null)->toMailboxArray();
+                $activeCredential = $this->mail->resolveAccount($user, $activeId ?: null);
+                $active = $activeCredential->toMailboxArray();
+                $credentialsReadable = $this->mail->credentialsAreReadable($activeCredential);
             } catch (RuntimeException) {
-                $active = $accounts[0] ?? null;
+                $activeCredential = $credentialAccounts->first();
+                $active = $activeCredential?->toMailboxArray();
+                $credentialsReadable = $activeCredential
+                    ? $this->mail->credentialsAreReadable($activeCredential)
+                    : false;
             }
         }
+
+        $connected = $accounts !== [] && $credentialsReadable;
 
         return response()->json([
             'configured' => $this->mail->isServerConfigured(),
             'reachable' => $this->mail->isServerReachableForUser($user),
             'connected' => $connected,
+            'needs_reconnect' => $accounts !== [] && ! $credentialsReadable,
             'email' => $active['email'] ?? $user->email,
             'account' => $active,
             'accounts' => $accounts,

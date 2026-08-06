@@ -1703,6 +1703,8 @@ export default function UserManagement() {
                   <SelectItem value="has_logged_in">Has logged in</SelectItem>
                   <SelectItem value="last_7_days">Last 7 days</SelectItem>
                   <SelectItem value="last_30_days">Last 30 days</SelectItem>
+                  <SelectItem value="older_than_14_days">2+ weeks ago</SelectItem>
+                  <SelectItem value="older_than_30_days">30+ days ago</SelectItem>
                 </SelectContent>
               </Select>
 
