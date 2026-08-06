@@ -943,6 +943,35 @@ export const db = {
 			})}`, { method: 'PATCH' });
 		},
 
+		async recipientSuggestions({ q, limit = 8 } = {}) {
+			return request(`/mail/recipient-suggestions${buildQuery({
+				q,
+				limit,
+			})}`);
+		},
+
+		async saveDraft(payload = {}) {
+			return request('/mail/drafts', {
+				method: 'PUT',
+				body: {
+					to: payload.to || '',
+					cc: payload.cc || undefined,
+					subject: payload.subject || '',
+					body: payload.body || '',
+					in_reply_to: payload.in_reply_to || undefined,
+					references: payload.references || undefined,
+					account_id: payload.accountId || payload.account_id || undefined,
+					uid: payload.uid || undefined,
+				},
+			});
+		},
+
+		async deleteDraft(uid, { accountId } = {}) {
+			return request(`/mail/drafts/${uid}${buildQuery({
+				account_id: accountId || undefined,
+			})}`, { method: 'DELETE' });
+		},
+
 		async send(payload) {
 			const { attachments = [], ...fields } = payload || {};
 

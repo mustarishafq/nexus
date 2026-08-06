@@ -145,6 +145,7 @@ Route::post('/post-comments/{postComment}/reactions', [PostCommentReactionContro
 Route::delete('/post-comments/{postComment}/reactions', [PostCommentReactionController::class, 'destroy']);
 Route::get('/mail/status', [MailController::class, 'status']);
 Route::get('/mail/unread-count', [MailController::class, 'unreadCount']);
+Route::get('/mail/recipient-suggestions', [MailController::class, 'recipientSuggestions']);
 Route::post('/mail/connect', [MailController::class, 'connect']);
 Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
 Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);
@@ -154,6 +155,8 @@ Route::get('/mail/messages/{uid}/attachments/{part}', [MailController::class, 'd
     ->where('part', '[0-9.]+');
 Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);
 Route::patch('/mail/messages/{uid}/unread', [MailController::class, 'markUnread']);
+Route::put('/mail/drafts', [MailController::class, 'saveDraft']);
+Route::delete('/mail/drafts/{uid}', [MailController::class, 'deleteDraft']);
 Route::post('/mail/send', [MailController::class, 'send']);
 
 Route::get('/conversations', [ConversationController::class, 'index']);

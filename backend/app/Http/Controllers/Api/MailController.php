@@ -348,12 +348,14 @@ class MailController extends Controller
             'in_reply_to' => ['sometimes', 'nullable', 'string', 'max:500'],
             'references' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'draft_uid' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'attachments' => ['sometimes', 'array', 'max:5'],
             'attachments.*' => ['file', 'max:10240'],
         ]);
 
         $accountId = isset($validated['account_id']) ? (int) $validated['account_id'] : null;
-        unset($validated['account_id']);
+        $draftUid = isset($validated['draft_uid']) ? (int) $validated['draft_uid'] : null;
+        unset($validated['account_id'], $validated['draft_uid']);
         $validated['attachments'] = $request->file('attachments', []);
 
         try {
@@ -364,7 +366,106 @@ class MailController extends Controller
             return response()->json(['message' => 'Unable to send email.'], 500);
         }
 
+        if ($draftUid) {
+            try {
+                $this->mail->deleteDraft($user, $draftUid, $accountId);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
+
         return response()->json(['sent' => true]);
+    }
+
+    public function recipientSuggestions(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:1', 'max:200'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $suggestions = $this->mail->suggestRecipients(
+            $user,
+            $validated['q'],
+            (int) ($validated['limit'] ?? 8),
+        );
+
+        return response()->json(['suggestions' => $suggestions]);
+    }
+
+    public function saveDraft(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'to' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'cc' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'subject' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'body' => ['sometimes', 'nullable', 'string', 'max:50000'],
+            'in_reply_to' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'references' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'uid' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]);
+
+        try {
+            $payload = $this->mail->saveDraft(
+                $user,
+                [
+                    'to' => $validated['to'] ?? '',
+                    'cc' => $validated['cc'] ?? null,
+                    'subject' => $validated['subject'] ?? '',
+                    'body' => $validated['body'] ?? '',
+                    'in_reply_to' => $validated['in_reply_to'] ?? null,
+                    'references' => $validated['references'] ?? null,
+                ],
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                isset($validated['uid']) ? (int) $validated['uid'] : null,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to save draft.'], 500);
+        }
+
+        return response()->json($payload);
+    }
+
+    public function deleteDraft(Request $request, int $uid): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]);
+
+        try {
+            $this->mail->deleteDraft(
+                $user,
+                $uid,
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to delete draft.'], 500);
+        }
+
+        return response()->json(['deleted' => true]);
     }
 
     public function destroy(Request $request, int $uid): JsonResponse

@@ -35,10 +35,42 @@ import { UnreadBadge } from '@/components/ui/unread-badge';
 import { Expandable } from '@/components/ui/expandable';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
 import EmailAttachments from '@/components/email/EmailAttachments';
+import RecipientSuggestInput from '@/components/email/RecipientSuggestInput';
 
 const MAIL_STATUS_QUERY_KEY = ['mail-status'];
 const MAIL_ACCOUNT_STORAGE_KEY = 'nexus-mail-account-id';
+const COMPOSE_SESSION_KEY_PREFIX = 'nexus-mail-compose-draft:';
 
+function composeSessionKey(accountId) {
+  return `${COMPOSE_SESSION_KEY_PREFIX}${accountId || 'default'}`;
+}
+
+function readComposeSession(accountId) {
+  try {
+    const raw = window.sessionStorage.getItem(composeSessionKey(accountId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeComposeSession(accountId, payload) {
+  try {
+    window.sessionStorage.setItem(composeSessionKey(accountId), JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
+function clearComposeSession(accountId) {
+  try {
+    window.sessionStorage.removeItem(composeSessionKey(accountId));
+  } catch {
+    // ignore
+  }
+}
 const FOLDERS = [
   { id: 'inbox', label: 'Inbox', icon: Inbox },
   { id: 'drafts', label: 'Drafts', icon: FileEdit },
@@ -313,21 +345,95 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
+function ComposeForm({
+  initialDraft,
+  initialDraftUid = null,
+  accountId = null,
+  onSend,
+  sending,
+  onCancel,
+}) {
   const fileInputRef = useRef(null);
+  const draftUidRef = useRef(initialDraftUid || null);
+  const skipNextAutosaveRef = useRef(true);
   const [to, setTo] = useState(initialDraft?.to || '');
   const [cc, setCc] = useState(initialDraft?.cc || '');
   const [subject, setSubject] = useState(initialDraft?.subject || '');
   const [body, setBody] = useState(initialDraft?.body || '');
   const [attachments, setAttachments] = useState([]);
+  const [draftUid, setDraftUid] = useState(initialDraftUid || null);
+  const [draftStatus, setDraftStatus] = useState('idle');
 
   useEffect(() => {
-    setTo(initialDraft?.to || '');
-    setCc(initialDraft?.cc || '');
-    setSubject(initialDraft?.subject || '');
-    setBody(initialDraft?.body || '');
+    draftUidRef.current = draftUid;
+  }, [draftUid]);
+
+  useEffect(() => {
+    const session = !initialDraft ? readComposeSession(accountId) : null;
+    const seed = initialDraft || session || {};
+    setTo(seed.to || '');
+    setCc(seed.cc || '');
+    setSubject(seed.subject || '');
+    setBody(seed.body || '');
     setAttachments([]);
-  }, [initialDraft]);
+    setDraftUid(initialDraftUid || session?.uid || null);
+    setDraftStatus(session && !initialDraft ? 'saved' : 'idle');
+    skipNextAutosaveRef.current = true;
+  }, [initialDraft, initialDraftUid, accountId]);
+
+  useEffect(() => {
+    writeComposeSession(accountId, {
+      to,
+      cc,
+      subject,
+      body,
+      uid: draftUid,
+      in_reply_to: initialDraft?.in_reply_to || null,
+      references: initialDraft?.references || null,
+    });
+  }, [accountId, to, cc, subject, body, draftUid, initialDraft]);
+
+  useEffect(() => {
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return undefined;
+    }
+
+    const isEmpty = !to.trim() && !cc.trim() && !subject.trim() && !body.trim();
+    if (isEmpty && !draftUidRef.current) {
+      setDraftStatus('idle');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setDraftStatus('saving');
+      try {
+        const result = await db.mail.saveDraft({
+          to,
+          cc: cc || undefined,
+          subject,
+          body,
+          accountId: accountId || undefined,
+          uid: draftUidRef.current || undefined,
+          in_reply_to: initialDraft?.in_reply_to || undefined,
+          references: initialDraft?.references || undefined,
+        });
+        if (cancelled) return;
+        const nextUid = result?.uid ?? null;
+        setDraftUid(nextUid);
+        draftUidRef.current = nextUid;
+        setDraftStatus(result?.cleared ? 'idle' : 'saved');
+      } catch {
+        if (!cancelled) setDraftStatus('error');
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [to, cc, subject, body, accountId, initialDraft]);
 
   const addAttachments = (fileList) => {
     const files = Array.from(fileList || []);
@@ -359,16 +465,44 @@ function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
     setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const clearLocalDraft = () => {
+    clearComposeSession(accountId);
+  };
+
+  const handleCancel = async () => {
+    const uid = draftUidRef.current;
+    clearLocalDraft();
+    if (uid) {
+      try {
+        await db.mail.deleteDraft(uid, { accountId: accountId || undefined });
+      } catch {
+        // best-effort
+      }
+    }
+    onCancel?.();
+  };
+
+  const draftStatusLabel = (() => {
+    if (draftStatus === 'saving') return 'Saving draft…';
+    if (draftStatus === 'saved') {
+      return attachments.length > 0 ? 'Draft saved (without attachments)' : 'Draft saved';
+    }
+    if (draftStatus === 'error') return 'Could not save draft';
+    return null;
+  })();
+
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
+        clearLocalDraft();
         onSend({
           to,
           cc: cc || undefined,
           subject,
           body,
           attachments,
+          draft_uid: draftUid || undefined,
           in_reply_to: initialDraft?.in_reply_to || undefined,
           references: initialDraft?.references || undefined,
         });
@@ -378,20 +512,20 @@ function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
       <div className="shrink-0 space-y-3 border-b border-border/60 p-3 sm:p-4">
         <div className="space-y-2">
           <Label htmlFor="compose-to">To</Label>
-          <Input
+          <RecipientSuggestInput
             id="compose-to"
             value={to}
-            onChange={(event) => setTo(event.target.value)}
+            onChange={setTo}
             placeholder="name@company.com"
             required
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="compose-cc">Cc</Label>
-          <Input
+          <RecipientSuggestInput
             id="compose-cc"
             value={cc}
-            onChange={(event) => setCc(event.target.value)}
+            onChange={setCc}
             placeholder="Optional"
           />
         </div>
@@ -405,6 +539,14 @@ function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
             required
           />
         </div>
+        {draftStatusLabel ? (
+          <p className={cn(
+            'text-[11px]',
+            draftStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
+          )}>
+            {draftStatusLabel}
+          </p>
+        ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
         <div className="relative min-h-0 flex-1">
@@ -467,7 +609,7 @@ function ComposeForm({ initialDraft, onSend, sending, onCancel }) {
           Attach
         </Button>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button type="submit" className="gap-2" disabled={sending}>
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Send
@@ -489,6 +631,7 @@ export default function Email() {
 
   const isCompose = location.pathname.endsWith('/compose');
   const composeDraft = location.state?.composeDraft || null;
+  const composeDraftUid = location.state?.draftUid || null;
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -641,6 +784,7 @@ export default function Email() {
       account_id: activeAccountId || undefined,
     }),
     onSuccess: () => {
+      clearComposeSession(activeAccountId);
       toast.success('Email sent.');
       invalidateMail();
       navigate('/email', { state: { folder: 'sent' } });
@@ -680,8 +824,25 @@ export default function Email() {
   const activeFolder = FOLDERS.find((item) => item.id === folder) || FOLDERS[0];
   const ActiveFolderIcon = activeFolder.icon;
 
-  const openCompose = (draft = null) => {
-    navigate('/email/compose', { state: draft ? { composeDraft: draft } : undefined });
+  const openCompose = (draft = null, options = {}) => {
+    navigate('/email/compose', {
+      state: {
+        ...(draft ? { composeDraft: draft } : {}),
+        ...(options.draftUid ? { draftUid: options.draftUid } : {}),
+      },
+    });
+  };
+
+  const editDraftMessage = (message) => {
+    if (!message) return;
+    openCompose({
+      to: message.to || '',
+      cc: message.cc || '',
+      subject: message.subject === '(No subject)' ? '' : (message.subject || ''),
+      body: message.body_text || message.body || '',
+      in_reply_to: message.in_reply_to || null,
+      references: message.references || null,
+    }, { draftUid: message.uid });
   };
 
   const switchFolder = (nextFolder) => {
@@ -963,6 +1124,8 @@ export default function Email() {
               </div>
               <ComposeForm
                 initialDraft={composeDraft}
+                initialDraftUid={composeDraftUid}
+                accountId={activeAccountId}
                 sending={sendEmail.isPending}
                 onCancel={() => navigate('/email')}
                 onSend={(payload) => sendEmail.mutate(payload)}
@@ -1038,37 +1201,64 @@ export default function Email() {
                     ) : null}
                   </button>
                   <div className="flex shrink-0 items-center gap-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 md:hidden"
-                      onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
-                      aria-label="Reply"
-                    >
-                      <Reply className="h-4 w-4" />
-                    </Button>
-                    <div className="md:hidden">
-                      <EmailMessageActions
-                        compact
-                        markUnreadPending={markUnread.isPending}
-                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
-                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
-                        onForward={() => openCompose(buildForwardDraft(messageData))}
-                        onMarkUnread={() => markUnread.mutate(uid)}
-                        onDelete={() => setDeleteTarget(messageData)}
-                      />
-                    </div>
-                    <div className="hidden md:block">
-                      <EmailMessageActions
-                        markUnreadPending={markUnread.isPending}
-                        onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
-                        onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
-                        onForward={() => openCompose(buildForwardDraft(messageData))}
-                        onMarkUnread={() => markUnread.mutate(uid)}
-                        onDelete={() => setDeleteTarget(messageData)}
-                      />
-                    </div>
+                    {folder === 'drafts' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="mr-1 gap-1.5"
+                        onClick={() => editDraftMessage(messageData)}
+                      >
+                        <FileEdit className="h-4 w-4" />
+                        Edit draft
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 md:hidden"
+                        onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                        aria-label="Reply"
+                      >
+                        <Reply className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {folder !== 'drafts' ? (
+                      <>
+                        <div className="md:hidden">
+                          <EmailMessageActions
+                            compact
+                            markUnreadPending={markUnread.isPending}
+                            onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                            onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
+                            onForward={() => openCompose(buildForwardDraft(messageData))}
+                            onMarkUnread={() => markUnread.mutate(uid)}
+                            onDelete={() => setDeleteTarget(messageData)}
+                          />
+                        </div>
+                        <div className="hidden md:block">
+                          <EmailMessageActions
+                            markUnreadPending={markUnread.isPending}
+                            onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                            onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
+                            onForward={() => openCompose(buildForwardDraft(messageData))}
+                            onMarkUnread={() => markUnread.mutate(uid)}
+                            onDelete={() => setDeleteTarget(messageData)}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => setDeleteTarget(messageData)}
+                        aria-label="Delete draft"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"

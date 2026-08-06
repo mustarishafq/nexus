@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserMailCredential;
+use App\Models\UserMailRecipientSuggestion;
 use App\Support\AppSettings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -650,6 +651,258 @@ class MailMailboxService
 
         // Most IMAP hosts do not auto-file SMTP traffic into Sent — copy it ourselves.
         $this->appendSentCopy($user, $credential, $password, $config, $payload, $fromName);
+        $this->rememberRecipients(
+            $user,
+            (string) ($payload['to'] ?? ''),
+            isset($payload['cc']) ? (string) $payload['cc'] : null,
+            $credential->email,
+        );
+    }
+
+    /**
+     * Persist To/Cc addresses for future compose suggestions.
+     */
+    public function rememberRecipients(
+        User $user,
+        string $to,
+        ?string $cc = null,
+        ?string $excludeEmail = null,
+    ): void {
+        $exclude = strtolower(trim((string) $excludeEmail));
+        $now = now();
+
+        foreach ([$to, (string) $cc] as $field) {
+            foreach ($this->parseAddresses($field) as $email) {
+                $normalized = strtolower($email);
+
+                if ($normalized === '' || ($exclude !== '' && $normalized === $exclude)) {
+                    continue;
+                }
+
+                $existing = UserMailRecipientSuggestion::query()
+                    ->where('user_id', $user->id)
+                    ->where('email', $normalized)
+                    ->first();
+
+                if ($existing) {
+                    $existing->forceFill([
+                        'use_count' => (int) $existing->use_count + 1,
+                        'last_used_at' => $now,
+                    ])->save();
+
+                    continue;
+                }
+
+                UserMailRecipientSuggestion::query()->create([
+                    'user_id' => $user->id,
+                    'email' => $normalized,
+                    'display_name' => null,
+                    'use_count' => 1,
+                    'last_used_at' => $now,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @return array<int, array{email: string, display_name: string|null, source: string, use_count: int}>
+     */
+    public function suggestRecipients(User $user, string $query, int $limit = 8): array
+    {
+        $query = trim($query);
+        $limit = max(1, min(20, $limit));
+
+        if ($query === '') {
+            return [];
+        }
+
+        $like = '%'.$query.'%';
+        $seen = [];
+        $suggestions = [];
+
+        $history = UserMailRecipientSuggestion::query()
+            ->where('user_id', $user->id)
+            ->where(function ($builder) use ($like) {
+                $builder->where('email', 'like', $like)
+                    ->orWhere('display_name', 'like', $like);
+            })
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('use_count')
+            ->limit($limit)
+            ->get();
+
+        foreach ($history as $row) {
+            $email = strtolower((string) $row->email);
+            if ($email === '' || isset($seen[$email])) {
+                continue;
+            }
+            $seen[$email] = true;
+            $suggestions[] = $row->toSuggestionArray();
+        }
+
+        if (count($suggestions) >= $limit) {
+            return array_slice($suggestions, 0, $limit);
+        }
+
+        $directory = User::query()
+            ->where('is_approved', true)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->where('id', '!=', $user->id)
+            ->matchingSearch($query)
+            ->orderBy('name')
+            ->orderBy('full_name')
+            ->limit($limit)
+            ->get(['id', 'full_name', 'name', 'email']);
+
+        foreach ($directory as $colleague) {
+            $email = strtolower(trim((string) $colleague->email));
+            if ($email === '' || isset($seen[$email]) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $seen[$email] = true;
+            $suggestions[] = [
+                'email' => $email,
+                'display_name' => $colleague->displayName(),
+                'source' => 'directory',
+                'use_count' => 0,
+            ];
+
+            if (count($suggestions) >= $limit) {
+                break;
+            }
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * @param  array{to?: string, cc?: string, subject?: string, body?: string, in_reply_to?: string|null, references?: string|null}  $payload
+     * @return array{uid: int|null, folder: string, account_id: int, cleared?: bool}
+     */
+    public function saveDraft(
+        User $user,
+        array $payload,
+        ?int $accountId = null,
+        ?int $existingUid = null,
+    ): array {
+        $credential = $this->resolveAccount($user, $accountId);
+        $to = trim((string) ($payload['to'] ?? ''));
+        $cc = trim((string) ($payload['cc'] ?? ''));
+        $subject = trim((string) ($payload['subject'] ?? ''));
+        $body = trim((string) ($payload['body'] ?? ''));
+        $isEmpty = $to === '' && $cc === '' && $subject === '' && $body === '';
+
+        if ($isEmpty) {
+            if ($existingUid) {
+                try {
+                    $this->deleteMessage($user, $existingUid, $credential->id, self::FOLDER_DRAFTS);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            }
+
+            return [
+                'uid' => null,
+                'folder' => self::FOLDER_DRAFTS,
+                'account_id' => $credential->id,
+                'cleared' => true,
+            ];
+        }
+
+        if (! function_exists('imap_open') || ! function_exists('imap_append')) {
+            throw new RuntimeException('PHP IMAP extension is not installed on the server.');
+        }
+
+        $password = $this->decryptMailboxPassword($credential);
+        $config = $this->serverConfig($user, $credential->email);
+        $fromName = $credential->label
+            ?: ($user->full_name ?? $user->name ?? $credential->email);
+
+        $draftPayload = [
+            ...$payload,
+            'to' => $to,
+            'cc' => $cc !== '' ? $cc : null,
+            'subject' => $subject !== '' ? $subject : '(No subject)',
+            'body' => $body,
+            'attachments' => [],
+        ];
+
+        $raw = $this->buildSentMimeMessage($credential->email, $fromName, $draftPayload);
+        $connection = $this->openMailbox(
+            $this->mailboxString($config, 'INBOX'),
+            $credential->email,
+            $password,
+        );
+
+        try {
+            $map = $this->discoverFolderMapFromConnection($connection, $config);
+            $this->folderMapCache[$credential->id] = $map;
+            $imapFolder = $map[self::FOLDER_DRAFTS] ?? $this->defaultImapFolder(self::FOLDER_DRAFTS);
+            $mailbox = $this->mailboxString($config, $imapFolder);
+
+            if (! @imap_reopen($connection, $mailbox)) {
+                @imap_createmailbox($connection, $mailbox);
+                if (! @imap_reopen($connection, $mailbox)) {
+                    throw new RuntimeException(imap_last_error() ?: 'Could not open Drafts folder.');
+                }
+            }
+
+            if ($existingUid) {
+                @imap_delete($connection, (string) $existingUid, FT_UID);
+                @imap_expunge($connection);
+                if (! @imap_reopen($connection, $mailbox)) {
+                    throw new RuntimeException(imap_last_error() ?: 'Could not reopen Drafts folder.');
+                }
+            }
+
+            $status = @imap_status($connection, $mailbox, SA_UIDNEXT);
+            $expectedUid = $status ? (int) $status->uidnext : 0;
+
+            if (! @imap_append($connection, $mailbox, $raw, '\\Draft')) {
+                @imap_createmailbox($connection, $mailbox);
+                if (! @imap_reopen($connection, $mailbox)) {
+                    throw new RuntimeException(imap_last_error() ?: 'Could not open Drafts folder.');
+                }
+                $status = @imap_status($connection, $mailbox, SA_UIDNEXT);
+                $expectedUid = $status ? (int) $status->uidnext : 0;
+                if (! @imap_append($connection, $mailbox, $raw, '\\Draft')) {
+                    throw new RuntimeException(imap_last_error() ?: 'Could not save draft.');
+                }
+            }
+
+            $uid = $expectedUid > 0 ? $expectedUid : $this->latestUidInMailbox($connection);
+
+            $this->forgetUnreadCountCache($user, $credential->id, self::FOLDER_DRAFTS);
+
+            return [
+                'uid' => $uid > 0 ? $uid : null,
+                'folder' => self::FOLDER_DRAFTS,
+                'account_id' => $credential->id,
+            ];
+        } finally {
+            imap_close($connection);
+        }
+    }
+
+    public function deleteDraft(User $user, int $uid, ?int $accountId = null): void
+    {
+        $this->deleteMessage($user, $uid, $accountId, self::FOLDER_DRAFTS);
+        $this->forgetUnreadCountCache($user, $accountId, self::FOLDER_DRAFTS);
+    }
+
+    /**
+     * @param  resource|Connection  $connection
+     */
+    protected function latestUidInMailbox($connection): int
+    {
+        $uids = imap_search($connection, 'ALL', SE_UID);
+
+        if (! is_array($uids) || $uids === []) {
+            return 0;
+        }
+
+        return (int) max($uids);
     }
 
     /**
@@ -1578,8 +1831,22 @@ class MailMailboxService
     protected function parseAddresses(string $value): array
     {
         return collect(preg_split('/\s*,\s*/', trim($value)) ?: [])
-            ->map(fn ($email) => trim($email))
+            ->map(function ($token) {
+                $token = trim((string) $token);
+                if ($token === '') {
+                    return null;
+                }
+
+                if (preg_match('/<([^>]+)>/', $token, $matches)) {
+                    $token = trim($matches[1]);
+                }
+
+                $token = strtolower($token);
+
+                return filter_var($token, FILTER_VALIDATE_EMAIL) ? $token : null;
+            })
             ->filter()
+            ->unique()
             ->values()
             ->all();
     }
