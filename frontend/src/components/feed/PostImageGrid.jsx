@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MediaLightbox from '@/components/media/MediaLightbox';
+import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/media';
 
@@ -258,7 +259,8 @@ export default function PostImageGrid({ item, className, flush = false }) {
         onClose={close}
         ariaLabel="Post photo preview"
         onKeyDown={onKeyDown}
-        contentClassName="flex-col"
+        className="p-0 sm:p-0"
+        contentClassName="absolute inset-0 max-h-none max-w-none"
         controls={
           count > 1 ? (
             <>
@@ -299,26 +301,25 @@ export default function PostImageGrid({ item, className, flush = false }) {
         }
       >
         {loading ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-white/80">
+          <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 text-white/80">
             <Loader2 className="h-8 w-8 animate-spin" />
             <span className="text-sm">Loading photo…</span>
           </div>
         ) : null}
 
-        <img
+        <LightboxZoomableImage
           key={images[viewerIndex]}
           src={toAbsoluteUrl(images[viewerIndex])}
           alt={`Post attachment ${viewerIndex + 1}`}
-          className={cn(
-            'max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-2xl object-contain shadow-2xl',
-            loading && 'hidden'
-          )}
+          className={cn(loading && 'invisible')}
+          imgClassName="max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-2xl shadow-2xl"
+          onDismiss={close}
           onLoad={() => setLoading(false)}
           onError={() => setLoading(false)}
         />
 
         {count > 1 && !loading ? (
-          <p className="mt-4 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90">
+          <p className="pointer-events-none absolute bottom-6 left-1/2 z-[1] -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90">
             {viewerIndex + 1} / {count}
           </p>
         ) : null}

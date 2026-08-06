@@ -3,6 +3,7 @@ import React, { useCallback, useState } from 'react';
 import { Eye, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MediaLightbox from '@/components/media/MediaLightbox';
+import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
 import { toAbsoluteUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 
@@ -44,27 +45,30 @@ export default function AttendancePhotoViewer({ record, className, buttonClassNa
         open={open}
         onClose={close}
         ariaLabel="Attendance photo preview"
+        className="p-0 sm:p-0"
+        contentClassName="absolute inset-0 max-h-none max-w-none"
       >
         {loading && !error ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-white/80">
+          <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 text-white/80">
             <Loader2 className="h-8 w-8 animate-spin" />
             <span className="text-sm">Loading photo…</span>
           </div>
         ) : null}
 
         {error ? (
-          <div className="rounded-2xl bg-white/10 px-6 py-16 text-center text-sm text-white/80">
-            {error}
+          <div className="absolute inset-0 z-[1] flex items-center justify-center p-6">
+            <div className="rounded-2xl bg-white/10 px-6 py-16 text-center text-sm text-white/80">
+              {error}
+            </div>
           </div>
         ) : null}
 
-        <img
+        <LightboxZoomableImage
           src={photoUrl}
           alt="Attendance photo"
-          className={cn(
-            'max-h-[min(72vh,540px)] max-w-[min(90vw,440px)] sm:max-w-[min(78vw,520px)] rounded-2xl object-contain shadow-2xl',
-            (loading || error) && 'hidden',
-          )}
+          className={cn((loading || error) && 'invisible')}
+          imgClassName="max-h-[min(72vh,540px)] max-w-[min(90vw,440px)] rounded-2xl shadow-2xl sm:max-w-[min(78vw,520px)]"
+          onDismiss={close}
           onLoad={() => setLoading(false)}
           onError={() => {
             setLoading(false);

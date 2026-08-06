@@ -9,6 +9,7 @@ import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostReactions from '@/components/feed/PostReactions';
 import MediaLightbox from '@/components/media/MediaLightbox';
+import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { flattenCommentReplies } from '@/lib/comments';
@@ -306,13 +307,13 @@ export default function ProfileMediaViewer({
         ) : null}
 
         {imageUrl ? (
-          <img
+          <LightboxZoomableImage
             src={imageUrl}
             alt={`${label} for ${ownerName}`}
             className={cn(
-              'max-h-full max-w-full object-contain',
-              (imageLoading || imageError) && 'hidden'
+              (imageLoading || imageError) && 'invisible'
             )}
+            imgClassName="max-h-full max-w-full"
             onLoad={() => setImageLoading(false)}
             onError={() => {
               setImageLoading(false);

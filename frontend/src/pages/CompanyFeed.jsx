@@ -86,7 +86,7 @@ function FeedList({ items, isLoading, focusTarget, reveal }) {
       variants={{
         hidden: {},
         show: {
-          transition: { staggerChildren: 0.045, delayChildren: 0.05 },
+          transition: { staggerChildren: 0.045, delayChildren: 0.06 },
         },
       }}
     >
@@ -342,13 +342,19 @@ export default function CompanyFeed() {
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      <PageHeader
-        icon={Newspaper}
-        title="Company Feed"
-        description="Announcements from leadership and updates shared by your colleagues."
-        meta={headerMeta}
-        className="relative z-[1] gap-2 sm:gap-4"
-      />
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <PageHeader
+          icon={Newspaper}
+          title="Company Feed"
+          description="Announcements from leadership and updates shared by your colleagues."
+          meta={headerMeta}
+          className="relative z-[1] gap-2 sm:gap-4"
+        />
+      </motion.div>
 
       <AnimatePresence>
         {isViewingFocusedPost ? (
@@ -379,87 +385,106 @@ export default function CompanyFeed() {
         ) : null}
       </AnimatePresence>
 
-      {!isXlUp ? (
-        <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
-            <TabsTrigger value="feed" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
-              <Newspaper className="hidden h-3.5 w-3.5 sm:block" />
-              Feed
-            </TabsTrigger>
-            <TabsTrigger value="discussions" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
-              <MessagesSquare className="hidden h-3.5 w-3.5 sm:block" />
-              <span className="sm:hidden">Discussions</span>
-              <span className="hidden sm:inline">Active discussions</span>
-            </TabsTrigger>
-            <TabsTrigger value="celebrations" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
-              <Cake className="hidden h-3.5 w-3.5 sm:block" />
-              Celebrations
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      ) : null}
-
-      {/*
-        One stable feed column tree (keyed) so the composer/editor never remounts
-        when the scrollbar toggles desktop ↔ mobile width.
-      */}
-      <div
-        className={cn(
-          showFeedColumn ? 'grid items-start gap-6' : 'hidden',
-          isXlUp ? 'grid-cols-12' : 'grid-cols-1'
-        )}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05, duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        className="space-y-3 sm:space-y-6"
       >
-        {isXlUp ? (
-          <aside className="col-span-3 self-start">
-            <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
-              <ActiveDiscussionsWidget />
-            </div>
-          </aside>
+        {!isXlUp ? (
+          <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
+              <TabsTrigger value="feed" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
+                <Newspaper className="hidden h-3.5 w-3.5 sm:block" />
+                Feed
+              </TabsTrigger>
+              <TabsTrigger value="discussions" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
+                <MessagesSquare className="hidden h-3.5 w-3.5 sm:block" />
+                <span className="sm:hidden">Discussions</span>
+                <span className="hidden sm:inline">Active discussions</span>
+              </TabsTrigger>
+              <TabsTrigger value="celebrations" className="gap-1.5 px-2 py-2 text-xs sm:text-sm">
+                <Cake className="hidden h-3.5 w-3.5 sm:block" />
+                Celebrations
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         ) : null}
 
+        {/*
+          One stable feed column tree (keyed) so the composer/editor never remounts
+          when the scrollbar toggles desktop ↔ mobile width.
+        */}
         <div
-          key="feed-main-column"
           className={cn(
-            'relative z-[1] min-w-0 space-y-2.5 sm:space-y-3',
-            isXlUp ? 'col-span-6' : 'col-span-1'
+            showFeedColumn ? 'grid items-start gap-6' : 'hidden',
+            isXlUp ? 'grid-cols-12' : 'grid-cols-1'
           )}
         >
-          <FocusLoadingOverlay show={Boolean(activeFocus?.postId) && focusBootstrapping} />
+          {isXlUp ? (
+            <aside className="col-span-3 self-start">
+              <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <ActiveDiscussionsWidget />
+                </motion.div>
+              </div>
+            </aside>
+          ) : null}
 
-          <motion.div
-            initial={false}
-            animate={{
-              opacity: focusBootstrapping ? 0.35 : 1,
-              filter: focusBootstrapping ? 'blur(2px)' : 'blur(0px)',
-            }}
-            transition={{ duration: 0.25 }}
-            className="space-y-2.5 sm:space-y-3"
+          <div
+            key="feed-main-column"
+            className={cn(
+              'relative z-[1] min-w-0 space-y-2.5 sm:space-y-3',
+              isXlUp ? 'col-span-6' : 'col-span-1'
+            )}
           >
-            <FeedComposer />
-            <FeedList
-              items={items}
-              isLoading={isLoading}
-              focusTarget={activeFocus}
-              reveal={Boolean(activeFocus?.postId) && feedReveal}
-            />
-          </motion.div>
+            <FocusLoadingOverlay show={Boolean(activeFocus?.postId) && focusBootstrapping} />
+
+            <motion.div
+              initial={false}
+              animate={{
+                opacity: focusBootstrapping ? 0.35 : 1,
+                filter: focusBootstrapping ? 'blur(2px)' : 'blur(0px)',
+              }}
+              transition={{ duration: 0.25 }}
+              className="space-y-2.5 sm:space-y-3"
+            >
+              <FeedComposer />
+              <FeedList
+                items={items}
+                isLoading={isLoading}
+                focusTarget={activeFocus}
+                reveal={feedReveal}
+              />
+            </motion.div>
+          </div>
+
+          {isXlUp ? (
+            <aside className="col-span-3 self-start">
+              <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.12, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <TodaysCelebrationsWidget />
+                </motion.div>
+              </div>
+            </aside>
+          ) : null}
         </div>
 
-        {isXlUp ? (
-          <aside className="col-span-3 self-start">
-            <div className="sticky top-24 flex max-h-[calc(100dvh-6.5rem)] flex-col gap-6 overflow-y-auto overscroll-contain">
-              <TodaysCelebrationsWidget />
-            </div>
-          </aside>
+        {!isXlUp && mobileTab === 'discussions' ? (
+          <ActiveDiscussionsWidget />
         ) : null}
-      </div>
-
-      {!isXlUp && mobileTab === 'discussions' ? (
-        <ActiveDiscussionsWidget />
-      ) : null}
-      {!isXlUp && mobileTab === 'celebrations' ? (
-        <TodaysCelebrationsWidget />
-      ) : null}
+        {!isXlUp && mobileTab === 'celebrations' ? (
+          <TodaysCelebrationsWidget />
+        ) : null}
+      </motion.div>
     </div>
   );
 }

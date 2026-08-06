@@ -7,6 +7,7 @@ Portable spec for **full-size photo / media preview** in EMZI Nexus Brain. Light
 | File | Purpose |
 |------|---------|
 | `frontend/src/components/media/MediaLightbox.jsx` | Shared portal shell (backdrop, close, Escape, scroll lock) |
+| `frontend/src/components/media/LightboxZoomableImage.jsx` | Pinch / double-tap / wheel zoom (blocks system page-zoom) |
 | `frontend/src/components/media/LightboxStackContext.jsx` | Open-count context so Dialog/Sheet ignore dismiss while lightbox is open |
 | `frontend/src/components/feed/PostImageGrid.jsx` | Feed multi-image gallery lightbox |
 | `frontend/src/components/attendance/AttendancePhotoViewer.jsx` | Attendance photo lightbox |
@@ -88,6 +89,7 @@ Closing the lightbox (X, backdrop, Escape) must restore focus to a sensible plac
 | Backdrop click | Close lightbox only. |
 | Close button | Close lightbox; `stopPropagation` on the click. |
 | ArrowLeft / ArrowRight | Previous / next image when the viewer is a multi-image gallery (`PostImageGrid`). |
+| Pinch / double-tap / wheel | Zoom the image via `LightboxZoomableImage` (not the browser viewport). |
 
 Body scroll: lock `document.body.style.overflow` to `hidden` while open; restore the **previous** value on close (do not force `''` if a Dialog already locked scroll).
 
@@ -115,6 +117,7 @@ Crop dialogs and composer thumbnails are **not** lightboxes unless explicitly wi
 - [ ] Body overflow restored to previous value
 - [ ] `aria-label` on shell and close button
 - [ ] Image uses full URL via `toAbsoluteUrl` when needed (`lib/media.js`)
+- [ ] Pinch / double-tap zooms the image (not the browser page) via `LightboxZoomableImage`
 
 ---
 

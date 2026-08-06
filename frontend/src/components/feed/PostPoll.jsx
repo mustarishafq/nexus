@@ -6,47 +6,17 @@ import db from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { notifyGamificationOffers } from '@/lib/gamification';
+import {
+  applyPollVoteOptimistic,
+  cancelQueryMatches,
+  patchFeedItem,
+  restoreQueryMatches,
+  snapshotQueryMatches,
+  updateFeedItem,
+} from '@/lib/feedCache';
 import { cn } from '@/lib/utils';
 
-function patchFeedItem(queryClient, nextItem) {
-  if (!nextItem?.id) return;
-
-  queryClient.setQueriesData({ queryKey: ['company-feed'] }, (current) => {
-    if (!current || !Array.isArray(current.items)) return current;
-    return {
-      ...current,
-      items: current.items.map((entry) => (
-        entry?.type === 'post' && String(entry.id) === String(nextItem.id)
-          ? { ...entry, ...nextItem }
-          : entry
-      )),
-    };
-  });
-
-  queryClient.setQueriesData({ queryKey: ['user-feed'] }, (current) => {
-    if (!current || !Array.isArray(current.items)) return current;
-    return {
-      ...current,
-      items: current.items.map((entry) => (
-        entry?.type === 'post' && String(entry.id) === String(nextItem.id)
-          ? { ...entry, ...nextItem }
-          : entry
-      )),
-    };
-  });
-
-  queryClient.setQueriesData({ queryKey: ['feed-active-discussions'] }, (current) => {
-    if (!current || !Array.isArray(current.items)) return current;
-    return {
-      ...current,
-      items: current.items.map((entry) => (
-        String(entry?.id) === String(nextItem.id)
-          ? { ...entry, ...nextItem }
-          : entry
-      )),
-    };
-  });
-}
+const FEED_KEYS = [['company-feed'], ['user-feed'], ['feed-active-discussions']];
 
 export default function PostPoll({ postId, poll, disabled = false, isAuthor = false }) {
   const queryClient = useQueryClient();
@@ -54,14 +24,30 @@ export default function PostPoll({ postId, poll, disabled = false, isAuthor = fa
 
   const voteMutation = useMutation({
     mutationFn: (optionId) => db.feed.voteOnPoll(postId, poll.id, optionId),
+    onMutate: async (optionId) => {
+      await cancelQueryMatches(queryClient, FEED_KEYS);
+      const snapshots = snapshotQueryMatches(queryClient, FEED_KEYS);
+      updateFeedItem(queryClient, postId, (item) => (
+        applyPollVoteOptimistic(item, poll.id, optionId)
+      ));
+      return { snapshots };
+    },
     onSuccess: (payload) => {
       notifyGamificationOffers(payload);
       if (payload?.item) {
         patchFeedItem(queryClient, payload.item);
       }
     },
-    onError: (error) => {
+    onError: (error, _optionId, context) => {
+      if (context?.snapshots) {
+        restoreQueryMatches(queryClient, context.snapshots);
+      }
       toast.error(error?.message || 'Could not save your vote.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
     },
   });
 

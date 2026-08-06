@@ -47,6 +47,19 @@ import { useAuth } from '@/lib/AuthContext';
 import { isEmptyRichText, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
+import {
+  bumpFeedCommentsCount,
+  cancelQueryMatches,
+  insertOptimisticComment,
+  patchFeedItem,
+  prependFeedItem,
+  removeCommentFromTree,
+  removeFeedItem,
+  replaceCommentInTree,
+  replaceFeedItem,
+  restoreQueryMatches,
+  snapshotQueryMatches,
+} from '@/lib/feedCache';
 
 const MAX_POST_IMAGES = 10;
 const MAX_POLL_OPTIONS = 6;
@@ -327,6 +340,7 @@ function BroadcastFeedItem({ item, compact = false }) {
 
 function PostComments({ postId, commentsCount, onCollapse, compact = false, className }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [commentBody, setCommentBody] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const commentInputRef = useRef(null);
@@ -339,29 +353,96 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
   const createComment = useMutation({
     mutationFn: ({ body, parentCommentId }) => db.feed.createComment(postId, body, parentCommentId),
-    onSuccess: (data, variables) => {
+    onMutate: async ({ body, parentCommentId }) => {
+      const queryKeys = [['post-comments', postId], ['company-feed'], ['user-feed'], ['feed-active-discussions']];
+      await cancelQueryMatches(queryClient, queryKeys);
+      const snapshots = snapshotQueryMatches(queryClient, queryKeys);
+
+      const tempId = `temp-comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticComment = {
+        id: tempId,
+        post_id: postId,
+        parent_comment_id: parentCommentId || null,
+        body,
+        author: {
+          id: user?.id,
+          name: getDisplayName(user),
+          profile_picture: user?.profile_picture,
+          profile_picture_crop: user?.profile_picture_crop,
+          department: user?.department?.name || user?.department || null,
+        },
+        created_date: new Date().toISOString(),
+        can_delete: true,
+        reaction_counts: {},
+        my_reaction: null,
+        available_reactions: ['👍', '❤️', '👏', '🎉', '😂', '🔥'],
+        replies: [],
+      };
+
+      const draftBody = commentBody;
+      const draftReply = replyingTo;
       setCommentBody('');
       setReplyingTo(null);
+
+      insertOptimisticComment(queryClient, postId, optimisticComment, parentCommentId || null);
+      bumpFeedCommentsCount(queryClient, postId, 1);
+
+      return { snapshots, tempId, draftBody, draftReply, parentCommentId };
+    },
+    onSuccess: (payload, variables, context) => {
+      if (payload?.comment && context?.tempId) {
+        if (variables?.parentCommentId) {
+          // Replace temp reply under parent
+          replaceCommentInTree(queryClient, postId, context.tempId, payload.comment);
+        } else {
+          replaceCommentInTree(queryClient, postId, context.tempId, {
+            ...payload.comment,
+            replies: [],
+          });
+        }
+      }
+      notifyGamificationOffers(payload);
+      toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
+    },
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQueryMatches(queryClient, context.snapshots);
+      }
+      if (context?.draftBody != null) {
+        setCommentBody(context.draftBody);
+      }
+      if (context?.draftReply !== undefined) {
+        setReplyingTo(context.draftReply);
+      }
+      toast.error(error?.message || 'Failed to add comment.');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
       queryClient.invalidateQueries({ queryKey: ['user-feed'] });
-      notifyGamificationOffers(data);
-      toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Failed to add comment.');
     },
   });
 
   const deleteComment = useMutation({
     mutationFn: (commentId) => db.feed.deleteComment(commentId),
-    onSuccess: () => {
+    onMutate: async (commentId) => {
+      const queryKeys = [['post-comments', postId], ['company-feed'], ['user-feed'], ['feed-active-discussions']];
+      await cancelQueryMatches(queryClient, queryKeys);
+      const snapshots = snapshotQueryMatches(queryClient, queryKeys);
+      removeCommentFromTree(queryClient, postId, commentId);
+      bumpFeedCommentsCount(queryClient, postId, -1);
+      return { snapshots };
+    },
+    onError: (error, _commentId, context) => {
+      if (context?.snapshots) {
+        restoreQueryMatches(queryClient, context.snapshots);
+      }
+      toast.error(error?.message || 'Failed to delete comment.');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
       queryClient.invalidateQueries({ queryKey: ['user-feed'] });
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Failed to delete comment.');
     },
   });
 
@@ -419,7 +500,6 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                     size="icon"
                     className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => deleteComment.mutate(comment.id)}
-                    disabled={deleteComment.isPending}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -455,7 +535,6 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                   size="icon"
                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={() => deleteComment.mutate(comment.id)}
-                  disabled={deleteComment.isPending}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -678,28 +757,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     onSuccess: (payload) => {
       setEditing(false);
       if (payload?.item) {
-        queryClient.setQueriesData({ queryKey: ['company-feed'] }, (current) => {
-          if (!current || !Array.isArray(current.items)) return current;
-          return {
-            ...current,
-            items: current.items.map((entry) => (
-              entry?.type === 'post' && String(entry.id) === String(payload.item.id)
-                ? { ...entry, ...payload.item }
-                : entry
-            )),
-          };
-        });
-        queryClient.setQueriesData({ queryKey: ['user-feed'] }, (current) => {
-          if (!current || !Array.isArray(current.items)) return current;
-          return {
-            ...current,
-            items: current.items.map((entry) => (
-              entry?.type === 'post' && String(entry.id) === String(payload.item.id)
-                ? { ...entry, ...payload.item }
-                : entry
-            )),
-          };
-        });
+        patchFeedItem(queryClient, payload.item);
       }
       queryClient.invalidateQueries({ queryKey: ['company-feed'] });
       queryClient.invalidateQueries({ queryKey: ['user-feed'] });
@@ -1105,15 +1163,6 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
   const [draftPolls, setDraftPolls] = useState([]);
   const requiresApproval = Boolean(user?.feed_post_requires_approval);
 
-  const clearImages = () => {
-    setImageItems((current) => {
-      current.forEach((item) => {
-        if (item.preview) URL.revokeObjectURL(item.preview);
-      });
-      return [];
-    });
-  };
-
   const addImageFiles = (files) => {
     const incoming = Array.isArray(files) ? files.filter(Boolean) : Array.from(files || []).filter(Boolean);
     if (incoming.length === 0) return;
@@ -1177,22 +1226,118 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
 
       return db.feed.createPost({ body: text, image_urls, polls });
     },
-    onSuccess: (payload) => {
+    onMutate: async ({ text, files, polls, imagePreviews, tempId }) => {
+      const queryKeys = [['company-feed'], ['user-feed'], ['feed-active-discussions']];
+      await cancelQueryMatches(queryClient, queryKeys);
+      const snapshots = snapshotQueryMatches(queryClient, queryKeys);
+
+      const optimisticItem = {
+        type: 'post',
+        id: tempId,
+        body: text,
+        image_url: imagePreviews?.[0] || null,
+        image_urls: imagePreviews || [],
+        polls: Array.isArray(polls)
+          ? polls.map((poll, index) => ({
+              id: `temp-poll-${index}`,
+              allow_multiple: Boolean(poll.allow_multiple),
+              allow_add_options: Boolean(poll.allow_add_options),
+              can_add_options: false,
+              total_votes: 0,
+              has_voted: false,
+              my_option_id: null,
+              my_option_ids: [],
+              options: (poll.options || []).map((option, optionIndex) => ({
+                id: `temp-opt-${index}-${optionIndex}`,
+                label: option.label || option,
+                votes_count: 0,
+                percent: 0,
+                voted: false,
+              })),
+            }))
+          : [],
+        poll: null,
+        approval_status: requiresApproval ? 'pending' : 'approved',
+        author: {
+          id: user?.id,
+          name: getDisplayName(user),
+          profile_picture: user?.profile_picture,
+          profile_picture_crop: user?.profile_picture_crop,
+          department: user?.department?.name || user?.department || null,
+        },
+        comments_count: 0,
+        reactions_count: 0,
+        reaction_counts: {},
+        my_reaction: null,
+        available_reactions: ['👍', '❤️', '👏', '🎉', '😂', '🔥'],
+        created_date: new Date().toISOString(),
+        can_edit: true,
+        can_delete: true,
+        can_moderate: false,
+        is_pending: requiresApproval,
+        is_optimistic: true,
+      };
+      if (optimisticItem.polls.length > 0) {
+        optimisticItem.poll = optimisticItem.polls[0];
+      }
+
+      const draft = {
+        body: text,
+        imageItems: files.map((file, index) => ({
+          file,
+          preview: imagePreviews?.[index] || null,
+        })),
+        draftPollsSnapshot: draftPolls,
+        imagePreviews: imagePreviews || [],
+      };
+
+      // Clear composer without revoking blob URLs — optimistic card still uses them.
       setBody('');
-      clearImages();
+      setImageItems([]);
       setDraftPolls([]);
-      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
-      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
-      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
+      prependFeedItem(queryClient, optimisticItem);
+
+      return { snapshots, tempId, draft };
+    },
+    onSuccess: (payload, _variables, context) => {
+      if (payload?.item && context?.tempId) {
+        replaceFeedItem(queryClient, context.tempId, payload.item);
+      }
+      (context?.draft?.imagePreviews || []).forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
       notifyGamificationOffers(payload);
       const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';
       toast.success(pending ? 'Post submitted for approval.' : 'Post shared.');
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQueryMatches(queryClient, context.snapshots);
+      } else if (context?.tempId) {
+        removeFeedItem(queryClient, context.tempId);
+      }
+      if (context?.draft) {
+        setBody(context.draft.body || '');
+        if (Array.isArray(context.draft.draftPollsSnapshot)) {
+          setDraftPolls(context.draft.draftPollsSnapshot);
+        }
+        if (Array.isArray(context.draft.imageItems) && context.draft.imageItems.length > 0) {
+          setImageItems(
+            context.draft.imageItems.map((entry, index) => ({
+              id: `restore-${Date.now()}-${index}`,
+              file: entry.file,
+              preview: entry.preview || (entry.file ? URL.createObjectURL(entry.file) : null),
+            }))
+          );
+        }
+      }
       toast.error(error?.message || 'Failed to share post.');
     },
     onSettled: () => {
       submitLockRef.current = false;
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
     },
   });
 
@@ -1236,10 +1381,13 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
     }
 
     submitLockRef.current = true;
+    const imagePreviews = imageItems.map((item) => item.preview).filter(Boolean);
     createPost.mutate({
       text: body,
       files: imageItems.map((item) => item.file),
+      imagePreviews,
       polls: hasValidPolls ? validPolls : null,
+      tempId: `temp-post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     });
   };
 

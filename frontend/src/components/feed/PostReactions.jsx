@@ -11,6 +11,18 @@ import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 import { EmojiCollectionPanel } from '@/components/feed/EmojiCollectionPicker';
 import { getReactionShortcuts, pinReactionShortcut } from '@/lib/reactionPreferences';
+import {
+  applyPostReactionChange,
+  applyReactionToQueryCaches,
+  cancelQueryMatches,
+  feedReactionQueryKeys,
+  patchFeedItem,
+  replaceCommentInTree,
+  restoreQueryMatches,
+  snapshotQueryMatches,
+  updateCommentReaction,
+  updateFeedItem,
+} from '@/lib/feedCache';
 
 const DEFAULT_REACTIONS = ['👍', '❤️', '👏', '🎉', '😂', '🔥'];
 const PRIMARY_REACTION = '👍';
@@ -35,9 +47,42 @@ function useReactMutation({
         ? db.feed.reactToComment(commentId, reaction)
         : db.feed.reactToPost(item.id, reaction);
     },
+    onMutate: async (reaction) => {
+      const queryKeys = feedReactionQueryKeys({ isComment, postId, invalidateKeys });
+      await cancelQueryMatches(queryClient, queryKeys);
+      const snapshots = snapshotQueryMatches(queryClient, queryKeys);
+
+      if (Array.isArray(invalidateKeys) && invalidateKeys.length > 0) {
+        applyReactionToQueryCaches(queryClient, invalidateKeys, {
+          itemId: item?.id,
+          commentId: isComment ? commentId : null,
+          reaction,
+        });
+      } else if (isComment) {
+        updateCommentReaction(queryClient, postId, commentId, reaction);
+      } else {
+        updateFeedItem(queryClient, item.id, (entry) => applyPostReactionChange(entry, reaction));
+      }
+
+      return { snapshots };
+    },
     onSuccess: (payload) => {
       notifyGamificationOffers(payload);
 
+      if (payload?.item) {
+        patchFeedItem(queryClient, payload.item);
+      }
+      if (payload?.comment && postId) {
+        replaceCommentInTree(queryClient, postId, payload.comment.id, payload.comment);
+      }
+    },
+    onError: (error, _reaction, context) => {
+      if (context?.snapshots) {
+        restoreQueryMatches(queryClient, context.snapshots);
+      }
+      toast.error(error?.message || 'Failed to update reaction.');
+    },
+    onSettled: () => {
       if (Array.isArray(invalidateKeys) && invalidateKeys.length > 0) {
         invalidateKeys.forEach((queryKey) => {
           queryClient.invalidateQueries({ queryKey });
@@ -50,10 +95,8 @@ function useReactMutation({
       } else {
         queryClient.invalidateQueries({ queryKey: ['company-feed'] });
         queryClient.invalidateQueries({ queryKey: ['user-feed'] });
+        queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
       }
-    },
-    onError: (error) => {
-      toast.error(error?.message || 'Failed to update reaction.');
     },
   });
 }
@@ -136,6 +179,8 @@ export function FeedEngagementBar({
   const hoverOpenTimer = React.useRef(null);
   const longPressTimer = React.useRef(null);
   const longPressTriggered = React.useRef(false);
+  const pickerModeRef = React.useRef(pickerMode);
+  pickerModeRef.current = pickerMode;
   const defaults = item.available_reactions || DEFAULT_REACTIONS;
   const { reactions, pinAndRefresh } = useShortcutReactions(defaults);
   const reactionCounts = item.reaction_counts || {};
@@ -166,6 +211,7 @@ export function FeedEngagementBar({
   };
 
   const closePicker = () => {
+    clearHoverTimers();
     setPickerOpen(false);
     setPickerMode('quick');
   };
@@ -187,20 +233,33 @@ export function FeedEngagementBar({
   const scheduleOpenPicker = () => {
     // Hover is desktop-only; touch devices use long-press instead.
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      if (pickerModeRef.current === 'collection') return;
       clearHoverTimers();
       hoverOpenTimer.current = window.setTimeout(() => {
         setPickerMode('quick');
         setPickerOpen(true);
-      }, 280);
+      }, 120);
     }
   };
 
   const scheduleClosePicker = () => {
+    // Collection mode is click-to-dismiss — hover leave must not close it
+    // (mode switch remount/resize fires a spurious mouseleave).
+    if (pickerModeRef.current === 'collection') return;
     clearHoverTimers();
     hoverCloseTimer.current = window.setTimeout(() => {
+      if (pickerModeRef.current === 'collection') return;
       setPickerOpen(false);
       setPickerMode('quick');
     }, 180);
+  };
+
+  const openCollection = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearHoverTimers();
+    setPickerMode('collection');
+    setPickerOpen(true);
   };
 
   const applyReaction = (reaction, event) => {
@@ -297,7 +356,6 @@ export function FeedEngagementBar({
             >
               <motion.button
                 type="button"
-                disabled={reactMutation.isPending}
                 whileHover={reactionMotion.whileHover}
                 whileTap={reactionMotion.whileTap}
                 transition={popReaction ? reactionMotion.activePopTransition : reactionMotion.spring}
@@ -370,7 +428,6 @@ export function FeedEngagementBar({
                       type="button"
                       whileHover={{ scale: 1.25, y: -4 }}
                       whileTap={reactionMotion.whileTap}
-                      disabled={reactMutation.isPending}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -389,13 +446,8 @@ export function FeedEngagementBar({
                 })}
                 <button
                   type="button"
-                  disabled={reactMutation.isPending}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    clearHoverTimers();
-                    setPickerMode('collection');
-                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={openCollection}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground sm:h-9 sm:w-9"
                   title="More reactions"
                   aria-label="Open emoji collection"
@@ -472,8 +524,6 @@ export default function PostReactions({
     setPickerOpen(open);
     if (!open) {
       setPickerMode('quick');
-    } else {
-      setPickerMode('quick');
     }
   };
 
@@ -487,7 +537,6 @@ export default function PostReactions({
         key={reaction}
         type="button"
         layout
-        disabled={reactMutation.isPending}
         whileHover={reactionMotion.whileHover}
         whileTap={reactionMotion.whileTap}
         transition={shouldPop ? reactionMotion.activePopTransition : reactionMotion.spring}
@@ -597,7 +646,7 @@ export default function PostReactions({
               {reactions.map((reaction) => reactionButton(reaction, { fromPicker: true }))}
               <button
                 type="button"
-                disabled={reactMutation.isPending}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();

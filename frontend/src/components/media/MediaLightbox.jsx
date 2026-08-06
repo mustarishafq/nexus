@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
  * Portals above Dialog/Sheet (z-[110]) and registers with LightboxStackContext
  * so parent overlays stay open. See docs/LIGHTBOX_DESIGN.md.
  *
+ * While open, cancels Safari gesture* events so pinch zooms the image
+ * (via LightboxZoomableImage) instead of the browser page.
+ *
  * @param {React.ReactNode} [controls] - Optional chrome (e.g. gallery arrows) rendered
  *   on the full overlay, outside the content click-stop region.
  */
@@ -46,12 +49,24 @@ export default function MediaLightbox({
       onKeyDown?.(event);
     };
 
+    // iOS Safari can still page-zoom on pinch despite maximum-scale=1.
+    // Cancel legacy gesture events while any lightbox is open.
+    const preventGesture = (event) => {
+      event.preventDefault();
+    };
+
     window.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('gesturestart', preventGesture, { passive: false });
+    document.addEventListener('gesturechange', preventGesture, { passive: false });
+    document.addEventListener('gestureend', preventGesture, { passive: false });
 
     return () => {
       unregisterLightbox();
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('gesturestart', preventGesture);
+      document.removeEventListener('gesturechange', preventGesture);
+      document.removeEventListener('gestureend', preventGesture);
     };
   }, [open, onClose, onKeyDown, registerLightbox, unregisterLightbox]);
 
@@ -62,7 +77,7 @@ export default function MediaLightbox({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-8',
+        'fixed inset-0 z-[110] flex items-center justify-center overflow-hidden p-4 sm:p-8',
         'bg-black/80 backdrop-blur-md',
         'animate-in fade-in-0 duration-200',
         className
@@ -93,7 +108,11 @@ export default function MediaLightbox({
       {controls}
 
       <div
-        className={cn('relative flex max-h-full max-w-full items-center justify-center', contentClassName)}
+        className={cn(
+          'relative flex max-h-full max-w-full items-center justify-center',
+          // Full-viewport stage for zoomable images (absolute inset-0 children).
+          contentClassName
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         {children}
