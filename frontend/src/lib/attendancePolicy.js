@@ -128,7 +128,9 @@ export function findActiveShift(policy, date = new Date()) {
 }
 
 /**
- * Mirror backend AttendanceLateEvaluator: late if after shift start + grace.
+ * Mirror backend AttendanceLateEvaluator: late only while still inside the
+ * shift window (start−grace … end+grace) and after start + grace.
+ * After the shift ends, clock-in is outside hours — not a late arrival.
  * @returns {{ is_late: boolean, late_minutes: number, scheduled_start: Date|null, shift_name: string|null }}
  */
 export function evaluateLateClockIn(policy, date = new Date()) {
@@ -144,18 +146,26 @@ export function evaluateLateClockIn(policy, date = new Date()) {
   }
 
   const grace = Number(policy.grace_period_minutes ?? 0);
-  const isoDay = date.getDay() === 0 ? 7 : date.getDay();
+  const current = (date.getHours() * 60) + date.getMinutes();
 
   for (const shift of policy.shifts) {
-    const days = shift?.days_of_week || [];
-    if (days.length && !days.includes(isoDay)) {
+    if (!isWithinShift(shift, date, grace)) {
       continue;
     }
 
     const start = parseTimeToMinutes(shift.start_time || '09:00');
+    const end = parseTimeToMinutes(shift.end_time || '17:00');
+    const crosses = Boolean(shift.crosses_midnight);
+    const endBound = Math.min((24 * 60) - 1, end + grace);
+
+    // Overnight morning leg is still the previous calendar day's start.
+    const onMorningLeg = crosses && current <= endBound;
     const scheduledStart = new Date(date);
     scheduledStart.setHours(0, 0, 0, 0);
     scheduledStart.setMinutes(start);
+    if (onMorningLeg) {
+      scheduledStart.setDate(scheduledStart.getDate() - 1);
+    }
 
     result.scheduled_start = scheduledStart;
     result.shift_name = shift.name || null;

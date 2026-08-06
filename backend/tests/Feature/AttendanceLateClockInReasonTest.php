@@ -112,4 +112,27 @@ class AttendanceLateClockInReasonTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('metadata.policy.is_late', false);
     }
+
+    public function test_clock_in_after_shift_end_is_not_treated_as_late(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true);
+        // Day Shift ends 18:00; grace 15 → window closes 18:15. 18:52 is outside.
+        $inAt = Carbon::parse('2026-07-29 18:52:00', 'Asia/Kuala_Lumpur');
+
+        $response = $this->clockIn($user, $inAt);
+
+        $response->assertCreated()
+            ->assertJsonPath('metadata.policy.is_late', false);
+    }
+
+    public function test_late_clock_in_during_shift_still_requires_reason(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true);
+        $inAt = Carbon::parse('2026-07-29 14:00:00', 'Asia/Kuala_Lumpur');
+
+        $response = $this->clockIn($user, $inAt);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'A late clock-in reason is required when arriving after your shift start.');
+    }
 }
