@@ -40,7 +40,7 @@ import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
-import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
+import { useIsUserOnline, useUserLastSeenAt } from '@/components/presence/UserPresenceGate';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
@@ -107,15 +107,43 @@ function ProfileStrengthCell({ user, compact = false }) {
   );
 }
 
+function newerTimestamp(a, b) {
+  const aTime = a ? new Date(a).getTime() : 0;
+  const bTime = b ? new Date(b).getTime() : 0;
+  if (!aTime && !bTime) return null;
+  return aTime >= bTime ? a : b;
+}
+
 function LastLoginCell({ user, className }) {
   const presenceOnline = useIsUserOnline(user?.id);
+  const presenceLastSeen = useUserLastSeenAt(user?.id);
   const isOnline = user?.is_online ?? presenceOnline;
-  const label = isOnline ? 'Online' : (user?.last_login_at ? formatRelativeDate(user.last_login_at) : 'Never');
+  const [observedLastSeen, setObservedLastSeen] = useState(null);
+
+  useEffect(() => {
+    if (!isOnline && !presenceLastSeen) {
+      return;
+    }
+    const candidate = newerTimestamp(
+      presenceLastSeen,
+      isOnline ? new Date().toISOString() : null
+    );
+    setObservedLastSeen((prev) => newerTimestamp(prev, candidate));
+  }, [isOnline, presenceLastSeen]);
+
+  const effectiveLastLogin = newerTimestamp(
+    user?.last_login_at,
+    newerTimestamp(presenceLastSeen, observedLastSeen)
+  );
+
+  const label = isOnline
+    ? 'Online'
+    : (effectiveLastLogin ? formatRelativeDate(effectiveLastLogin) : 'Never');
 
   return (
     <span
       className={cn(isOnline && 'text-success font-medium', className)}
-      title={user?.last_login_at || undefined}
+      title={effectiveLastLogin || undefined}
     >
       {label}
     </span>

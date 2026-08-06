@@ -94,6 +94,36 @@ class UserPresenceService
     }
 
     /**
+     * @param  array<int, int|string>  $userIds
+     * @return array<string, string> keyed by user id, ISO-8601 last seen
+     */
+    public function lastSeenMapFor(array $userIds): array
+    {
+        $ids = collect($userIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $keys = $ids->mapWithKeys(fn (int $id) => [$this->presenceKey($id) => $id])->all();
+        $cached = Cache::many(array_keys($keys));
+
+        $map = [];
+        foreach ($keys as $cacheKey => $id) {
+            $value = $cached[$cacheKey] ?? null;
+            if (is_string($value) && $value !== '') {
+                $map[(string) $id] = $value;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */

@@ -38,6 +38,22 @@ class UserPresenceTest extends TestCase
         $this->assertTrue(app(UserPresenceService::class)->isOnline($user->id));
     }
 
+    public function test_online_endpoint_includes_last_seen_timestamps(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true]);
+        $onlineUser = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($viewer);
+
+        app(UserPresenceService::class)->touch($onlineUser->id);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/presence/online')
+            ->assertOk();
+
+        $this->assertContains($onlineUser->id, $response->json('user_ids'));
+        $this->assertArrayHasKey((string) $onlineUser->id, $response->json('last_seen'));
+    }
+
     public function test_online_endpoint_returns_active_user_ids(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);

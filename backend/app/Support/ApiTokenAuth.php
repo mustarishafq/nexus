@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class ApiTokenAuth
 {
     /** How often authenticated session activity may refresh users.last_login_at. */
-    private const LAST_LOGIN_REFRESH_SECONDS = 900;
+    private const LAST_LOGIN_REFRESH_SECONDS = 60;
 
     /**
      * @param  array{label?: string|null, expires_at?: \DateTimeInterface|null}  $options
@@ -72,6 +72,18 @@ class ApiTokenAuth
         return self::userFromToken($token);
     }
 
+    public static function authTokenFromRequest(Request $request): ?AuthToken
+    {
+        $token = $request->bearerToken();
+        if (! $token) {
+            return null;
+        }
+
+        return AuthToken::query()
+            ->where('token_hash', hash('sha256', $token))
+            ->first();
+    }
+
     public static function userFromToken(string $token): ?User
     {
         $hash = hash('sha256', $token);
@@ -113,8 +125,13 @@ class ApiTokenAuth
      * Session tokens are browser logins (no label / OAuth client).
      * Personal API tokens, MCP tokens, and impersonation previews are excluded.
      */
-    private static function isSessionToken(AuthToken $authToken): bool
+    public static function isSessionToken(?AuthToken $authToken): bool
     {
+        if (! $authToken) {
+            // Legacy remember_token sessions are treated as browser sessions.
+            return true;
+        }
+
         return $authToken->label === null && $authToken->oauth_client_id === null;
     }
 
@@ -122,7 +139,7 @@ class ApiTokenAuth
      * Keep last_login_at aligned with active sessions so long-lived tokens
      * do not leave the admin table stuck on an old credential login time.
      */
-    private static function refreshLastLoginIfNeeded(User $user): void
+    public static function refreshLastLoginIfNeeded(User $user): void
     {
         $throttleKey = 'user_last_login_refresh:'.$user->id;
         if (Cache::has($throttleKey)) {

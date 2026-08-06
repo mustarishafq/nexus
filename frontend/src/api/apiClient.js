@@ -1311,9 +1311,17 @@ export const db = {
 		return request('/presence/heartbeat', { method: 'POST' });
 	},
 
-	async getOnlineUserIds() {
+	async getOnlinePresence() {
 		const payload = await request('/presence/online');
-		return Array.isArray(payload?.user_ids) ? payload.user_ids : [];
+		return {
+			userIds: Array.isArray(payload?.user_ids) ? payload.user_ids : [],
+			lastSeen: payload?.last_seen && typeof payload.last_seen === 'object' ? payload.last_seen : {},
+		};
+	},
+
+	async getOnlineUserIds() {
+		const payload = await this.getOnlinePresence();
+		return payload.userIds;
 	},
 
 	async sendProfileNudge(userId, options = {}) {

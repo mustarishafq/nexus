@@ -1312,10 +1312,10 @@ class UserController extends Controller
 
     private function adminUserPayload(User $user): array
     {
-        return array_merge($user->toArray(), [
+        return app(UserPresenceService::class)->enrichPayload(array_merge($user->toArray(), [
             'profile_completeness' => ProfileCompleteness::forUser($user),
             'has_push_subscription' => (bool) $user->push_subscriptions_exists,
-        ]);
+        ]));
     }
 
 }

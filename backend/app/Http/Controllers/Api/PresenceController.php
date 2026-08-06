@@ -20,7 +20,15 @@ class PresenceController extends Controller
 
         app(UserPresenceService::class)->touch($user->id);
 
-        return response()->json(['ok' => true]);
+        $authToken = ApiTokenAuth::authTokenFromRequest($request);
+        if (ApiTokenAuth::isSessionToken($authToken)) {
+            ApiTokenAuth::refreshLastLoginIfNeeded($user);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'last_login_at' => $user->last_login_at?->toISOString(),
+        ]);
     }
 
     public function online(Request $request): JsonResponse
@@ -31,8 +39,12 @@ class PresenceController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $presence = app(UserPresenceService::class);
+        $userIds = $presence->onlineUserIds();
+
         return response()->json([
-            'user_ids' => app(UserPresenceService::class)->onlineUserIds(),
+            'user_ids' => $userIds,
+            'last_seen' => $presence->lastSeenMapFor($userIds),
         ]);
     }
 }

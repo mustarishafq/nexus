@@ -61,6 +61,24 @@ class AuthSessionTest extends TestCase
         $this->assertTrue($user->fresh()->last_login_at->equalTo($staleLogin));
     }
 
+    public function test_heartbeat_refreshes_stale_last_login_for_session_token(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'last_login_at' => now()->subDays(20),
+        ]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $this->withToken($token)
+            ->postJson('/api/presence/heartbeat')
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $this->assertTrue(
+            $user->fresh()->last_login_at->greaterThan(now()->subMinute())
+        );
+    }
+
     public function test_logout_only_revokes_current_token(): void
     {
         $user = User::factory()->create(['is_approved' => true]);
