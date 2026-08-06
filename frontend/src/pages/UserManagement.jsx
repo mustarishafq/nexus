@@ -40,6 +40,7 @@ import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
+import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
@@ -103,6 +104,21 @@ function ProfileStrengthCell({ user, compact = false }) {
       </div>
       <Progress value={percent} className={compact ? 'h-1.5' : 'h-2'} />
     </div>
+  );
+}
+
+function LastLoginCell({ user, className }) {
+  const presenceOnline = useIsUserOnline(user?.id);
+  const isOnline = user?.is_online ?? presenceOnline;
+  const label = isOnline ? 'Online' : (user?.last_login_at ? formatRelativeDate(user.last_login_at) : 'Never');
+
+  return (
+    <span
+      className={cn(isOnline && 'text-success font-medium', className)}
+      title={user?.last_login_at || undefined}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -459,11 +475,6 @@ export default function UserManagement() {
       setPage(totalPages);
     }
   }, [page, totalPages]);
-
-  const formatLastLogin = (value) => {
-    if (!value) return 'Never';
-    return formatRelativeDate(value);
-  };
 
   const getGroupById = (groupId) => accessGroups.find((group) => String(group.id) === String(groupId));
 
@@ -1785,9 +1796,9 @@ export default function UserManagement() {
                       <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete</p>
                       <p><span className="font-medium text-foreground/80">Groups:</span> {getUserAccessLabel(user)}</p>
                       <p><span className="font-medium text-foreground/80">Analytics:</span> {getUserAnalyticsLabel(user)}</p>
-                      <p title={user.last_login_at || undefined}>
+                      <p>
                         <span className="font-medium text-foreground/80">Last login:</span>{' '}
-                        {formatLastLogin(user.last_login_at)}
+                        <LastLoginCell user={user} />
                       </p>
                     </div>
                     <ProfileStrengthCell user={user} compact />
@@ -1854,9 +1865,7 @@ export default function UserManagement() {
                         ) : null}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-muted-foreground whitespace-nowrap">
-                        <span title={user.last_login_at || undefined}>
-                          {formatLastLogin(user.last_login_at)}
-                        </span>
+                        <LastLoginCell user={user} />
                       </TableCell>
                       <TableCell className="pr-6">
                         <div className="flex justify-end">

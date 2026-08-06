@@ -28,6 +28,39 @@ class AuthSessionTest extends TestCase
             ->assertOk();
     }
 
+    public function test_authenticated_session_activity_refreshes_stale_last_login(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'last_login_at' => now()->subDays(20),
+        ]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $this->withToken($token)
+            ->getJson('/api/me')
+            ->assertOk();
+
+        $this->assertTrue(
+            $user->fresh()->last_login_at->greaterThan(now()->subMinute())
+        );
+    }
+
+    public function test_labeled_api_token_activity_does_not_refresh_last_login(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'last_login_at' => now()->subDays(20),
+        ]);
+        $staleLogin = $user->last_login_at->copy();
+        $token = ApiTokenAuth::issueToken($user, ['label' => 'MCP token']);
+
+        $this->withToken($token)
+            ->getJson('/api/me')
+            ->assertOk();
+
+        $this->assertTrue($user->fresh()->last_login_at->equalTo($staleLogin));
+    }
+
     public function test_logout_only_revokes_current_token(): void
     {
         $user = User::factory()->create(['is_approved' => true]);

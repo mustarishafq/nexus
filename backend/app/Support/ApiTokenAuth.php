@@ -6,10 +6,14 @@ use App\Models\AuthToken;
 use App\Models\User;
 use App\Services\UserPresenceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ApiTokenAuth
 {
+    /** How often authenticated session activity may refresh users.last_login_at. */
+    private const LAST_LOGIN_REFRESH_SECONDS = 900;
+
     /**
      * @param  array{label?: string|null, expires_at?: \DateTimeInterface|null}  $options
      */
@@ -85,6 +89,9 @@ class ApiTokenAuth
             $user = User::query()->find($authToken->user_id);
             if ($user) {
                 app(UserPresenceService::class)->touchIfNeeded($user->id);
+                if (self::isSessionToken($authToken)) {
+                    self::refreshLastLoginIfNeeded($user);
+                }
             }
 
             return $user;
@@ -96,9 +103,39 @@ class ApiTokenAuth
 
         if ($user) {
             app(UserPresenceService::class)->touchIfNeeded($user->id);
+            self::refreshLastLoginIfNeeded($user);
         }
 
         return $user;
+    }
+
+    /**
+     * Session tokens are browser logins (no label / OAuth client).
+     * Personal API tokens, MCP tokens, and impersonation previews are excluded.
+     */
+    private static function isSessionToken(AuthToken $authToken): bool
+    {
+        return $authToken->label === null && $authToken->oauth_client_id === null;
+    }
+
+    /**
+     * Keep last_login_at aligned with active sessions so long-lived tokens
+     * do not leave the admin table stuck on an old credential login time.
+     */
+    private static function refreshLastLoginIfNeeded(User $user): void
+    {
+        $throttleKey = 'user_last_login_refresh:'.$user->id;
+        if (Cache::has($throttleKey)) {
+            return;
+        }
+
+        Cache::put($throttleKey, true, self::LAST_LOGIN_REFRESH_SECONDS);
+
+        User::query()
+            ->whereKey($user->id)
+            ->update(['last_login_at' => now()]);
+
+        $user->last_login_at = now();
     }
 
     public static function revoke(User $user, ?string $plainToken = null): void

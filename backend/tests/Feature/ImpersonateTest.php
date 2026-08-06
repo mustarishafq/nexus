@@ -42,6 +42,33 @@ class ImpersonateTest extends TestCase
         $this->assertNotNull($authToken->expires_at);
     }
 
+    public function test_preview_session_activity_does_not_refresh_target_last_login(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $target = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'last_login_at' => now()->subDays(20),
+        ]);
+        $staleLogin = $target->last_login_at->copy();
+        $adminToken = ApiTokenAuth::issueToken($admin);
+
+        $previewToken = $this->withToken($adminToken)
+            ->postJson('/api/admin/impersonate/'.$target->id)
+            ->assertOk()
+            ->json('token');
+
+        $this->withToken($previewToken)
+            ->getJson('/api/me')
+            ->assertOk();
+
+        $this->withToken($previewToken)
+            ->postJson('/api/presence/heartbeat')
+            ->assertOk();
+
+        $this->assertTrue($target->fresh()->last_login_at->equalTo($staleLogin));
+    }
+
     public function test_non_admin_cannot_start_preview(): void
     {
         $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
