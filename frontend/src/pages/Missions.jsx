@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/AuthContext';
 import BadgesStrip from '@/components/gamification/BadgesStrip';
+import ScrollingName from '@/components/ui/ScrollingName';
 import ExpLevelBar from '@/components/gamification/ExpLevelBar';
 import {
   GAMIFICATION_MISSIONS_QUERY_KEY,
@@ -296,17 +297,14 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
               className="h-9 w-9"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{rival.name}</p>
+              <ScrollingName name={rival.name} textClassName="text-sm font-semibold" />
               <p className="text-[11px] text-muted-foreground tabular-nums">
                 #{rival.rank} · {Number(rival.exp_total).toLocaleString()} EXP
               </p>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                {Number(rival.exp_ahead).toLocaleString()}
-              </p>
-              <p className="text-[10px] text-muted-foreground">EXP ahead</p>
-            </div>
+            <p className="shrink-0 text-right text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
+              {Number(rival.exp_ahead).toLocaleString()} EXP ahead
+            </p>
           </Link>
         ) : viewerRank === 1 ? (
           <p className="text-sm text-muted-foreground">You’re on top of the board.</p>
@@ -357,7 +355,12 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
                     }}
                     className="h-7 w-7"
                   />
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{entry.name}</span>
+                  <ScrollingName
+                    name={entry.name}
+                    className="min-w-0 flex-1"
+                    as="span"
+                    textClassName="text-xs font-medium"
+                  />
                   <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
                     {Number(entry.exp).toLocaleString()}
                   </span>
@@ -454,14 +457,20 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
                       className="h-9 w-9"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <ScrollingName
+                        name={entry.name}
+                        textClassName="text-sm font-medium"
+                      >
                         {entry.name}
                         {isViewer ? (
                           <span className="ml-1.5 text-xs text-amber-700 dark:text-amber-300">(you)</span>
                         ) : null}
-                      </p>
+                      </ScrollingName>
                       {entry.job_title ? (
-                        <p className="truncate text-xs text-muted-foreground">{entry.job_title}</p>
+                        <ScrollingName
+                          name={entry.job_title}
+                          textClassName="text-xs text-muted-foreground"
+                        />
                       ) : null}
                     </div>
                     <span className="shrink-0 text-sm font-bold tabular-nums">
@@ -512,48 +521,41 @@ function ExpHero({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.16),transparent_55%)]" />
       <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-amber-500/10 blur-2xl" />
 
-      <div className="relative grid gap-4 p-4 sm:p-5 lg:grid-cols-[1.2fr_1fr] lg:items-center">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              <Zap className="h-3.5 w-3.5" />
-              Experience
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
-              Lv {level}
-            </span>
+      <div className="relative grid gap-3 p-3.5 sm:gap-4 sm:p-5 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+        <div className="space-y-2.5 sm:space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p data-exp-sink="missions" className="text-3xl font-bold tracking-tight sm:text-5xl">
+                <AnimatedNumber value={expTotal} />
+                <span className="ml-1.5 text-sm font-semibold text-muted-foreground sm:ml-2 sm:text-lg">EXP</span>
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:mt-1 sm:text-sm">
+                {pendingCount > 0
+                  ? `${pendingCount} reward${pendingCount === 1 ? '' : 's'} waiting · +${pendingAmount} unclaimed`
+                  : availableCount > 0
+                    ? `${availableCount} mission${availableCount === 1 ? '' : 's'} ready to earn more EXP`
+                    : 'All capped missions done for today — come back tomorrow'}
+              </p>
+            </div>
             {viewerRank ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-medium tabular-nums">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-medium tabular-nums">
                 <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                Rank #{viewerRank}
+                #{viewerRank}
               </span>
             ) : null}
           </div>
 
-          <div>
-            <p data-exp-sink="missions" className="text-4xl font-bold tracking-tight sm:text-5xl">
-              <AnimatedNumber value={expTotal} />
-              <span className="ml-2 text-base font-semibold text-muted-foreground sm:text-lg">EXP</span>
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {pendingCount > 0
-                ? `${pendingCount} reward${pendingCount === 1 ? '' : 's'} waiting · +${pendingAmount} unclaimed`
-                : availableCount > 0
-                  ? `${availableCount} mission${availableCount === 1 ? '' : 's'} ready to earn more EXP`
-                  : 'All capped missions done for today — come back tomorrow'}
-            </p>
-            <ExpLevelBar
-              className="mt-3 max-w-xs"
-              level={level}
-              stars={stars}
-              expIntoLevel={expIntoLevel}
-              expForLevel={expForLevel}
-              progress={progress}
-            />
-          </div>
+          <ExpLevelBar
+            className="w-full"
+            level={level}
+            stars={stars}
+            expIntoLevel={expIntoLevel}
+            expForLevel={expForLevel}
+            progress={progress}
+          />
 
           {activeStreaks.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {activeStreaks.map((streak) => {
                 const atRisk = isStreakAtRisk(streak);
                 return (
@@ -561,24 +563,20 @@ function ExpHero({
                     key={streak.streak_key}
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
+                    title={atRisk ? 'Don’t break your streak' : undefined}
                     className={cn(
-                      'inline-flex flex-col gap-0.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+                      'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold sm:text-xs',
                       atRisk
-                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                        : 'bg-orange-500/10 text-orange-600 dark:text-orange-300'
+                        ? 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                        : 'border-orange-500/35 bg-orange-500/10 text-orange-600 dark:text-orange-300'
                     )}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      <Flame className="h-3.5 w-3.5" />
+                    <Flame className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
                       {STREAK_LABELS[streak.streak_key] || streak.streak_key}
                       {' '}
                       {formatStreakCounts(streak)}
                     </span>
-                    {atRisk ? (
-                      <span className="pl-5 text-[10px] font-medium opacity-80">
-                        Don’t break your streak
-                      </span>
-                    ) : null}
                   </motion.span>
                 );
               })}
@@ -586,14 +584,14 @@ function ExpHero({
           ) : null}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-border/80 bg-background/50 p-3 backdrop-blur-sm">
+        <div className="space-y-2.5 rounded-xl border border-border/80 bg-background/50 p-3 backdrop-blur-sm sm:space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Today’s mission progress</span>
             <span className="font-semibold tabular-nums">
               {completedCount}/{availableCount + completedCount || 0}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted sm:h-2">
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
               initial={{ width: 0 }}
@@ -788,11 +786,12 @@ export default function Missions() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Missions"
         description="Complete actions to earn EXP and climb the company leaderboard"
         icon={Target}
+        hideDescriptionOnMobile
       />
 
       <ExpHero

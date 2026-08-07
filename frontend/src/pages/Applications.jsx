@@ -53,6 +53,7 @@ import ApplicationHealthConfigEditor from '@/components/applications/Application
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
 import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationReleaseNotes';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import {
   DEFAULT_BRAND_COLOR,
@@ -176,6 +177,7 @@ function matchesApplicationStatusFilter(system, statusFilter) {
 
 export default function Applications() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -183,6 +185,7 @@ export default function Applications() {
     if (typeof window === 'undefined') return 'grid';
     return window.localStorage.getItem('applications-view-mode') === 'list' ? 'list' : 'grid';
   });
+  const catalogViewMode = isMobile ? 'grid' : viewMode;
   const [editSystem, setEditSystem] = useState(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -534,7 +537,7 @@ export default function Applications() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <Dialog open={reorderDialogOpen} onOpenChange={(open) => { if (!open) closeReorderDialog(); }}>
         <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
@@ -564,33 +567,36 @@ export default function Applications() {
           </div>
         </DialogContent>
       </Dialog>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 sm:space-y-4">
         <PageHeader
           icon={Monitor}
           title="Applications"
           description="Launch your systems, check status, and manage integrations."
           meta={`${systems.length} app${systems.length === 1 ? '' : 's'}${onlineCount ? ` · ${onlineCount} online` : ''}`}
-          actions={
-            <div className="flex items-center gap-2">
-              {isAdmin && systems.length > 1 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
-                  title="Reorder"
-                  onClick={openReorderDialog}
-                >
-                  <ArrowUpDown className="w-4 h-4" />
-                  <span className="hidden sm:inline">Reorder</span>
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          <ApplicationsNav showUsage={showUsage} />
+          <div className="flex shrink-0 items-center gap-2">
+            {isAdmin && systems.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5"
+                title="Reorder"
+                onClick={openReorderDialog}
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                <span className="hidden sm:inline">Reorder</span>
+              </Button>
+            )}
+            <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialogState(); else setDialogOpen(true); }}>
+              <DialogTrigger asChild>
+                <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Add</span>
                 </Button>
-              )}
-              <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialogState(); else setDialogOpen(true); }}>
-                <DialogTrigger asChild>
-                  <Button className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-1.5" size="sm" title="Add" onClick={() => openDialog()}>
-                    <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Add</span>
-                  </Button>
-                </DialogTrigger>
+              </DialogTrigger>
           <DialogContent className="sm:max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
@@ -916,12 +922,9 @@ export default function Applications() {
               </div>
             </form>
           </DialogContent>
-              </Dialog>
-            </div>
-          }
-        />
-
-        <ApplicationsNav showUsage={showUsage} />
+            </Dialog>
+          </div>
+        </div>
 
         {(systems.length > 0 || hasCatalogFilters) && !isLoading ? (
           <ApplicationsCatalogToolbar
@@ -929,8 +932,9 @@ export default function Applications() {
             onSearchChange={setSearch}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
-            viewMode={viewMode}
+            viewMode={catalogViewMode}
             onViewModeChange={handleViewModeChange}
+            showViewToggle={!isMobile}
             resultCount={filteredSystems.length}
             totalCount={systems.length}
             onlineCount={onlineCount}
@@ -942,7 +946,7 @@ export default function Applications() {
       <ApplicationsCatalogGrid
         systems={filteredSystems}
         isLoading={isLoading}
-        viewMode={viewMode}
+        viewMode={catalogViewMode}
         hasFilters={hasCatalogFilters}
         onClearFilters={() => {
           setSearch('');

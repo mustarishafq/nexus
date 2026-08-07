@@ -201,7 +201,7 @@ export default function BottomNav() {
           'pointer-events-auto flex items-stretch px-1',
           glassDockStyles,
           isMobile
-            ? 'h-[4.25rem] w-full max-w-lg overflow-visible'
+            ? 'h-[3.75rem] w-full max-w-lg overflow-visible'
             : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
         )}
       >

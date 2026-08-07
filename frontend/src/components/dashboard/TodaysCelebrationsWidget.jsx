@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO, startOfWeek, endOfWeek } from 'date-fns';
@@ -17,62 +17,9 @@ import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/users/UserAvatar';
+import ScrollingName from '@/components/ui/ScrollingName';
 
 const DEFAULT_REACTIONS = ['🎉', '🎂', '👏', '🎈', '❤️', '🥳', '🙌'];
-
-function ScrollingName({ name, className }) {
-  const containerRef = useRef(null);
-  const textRef = useRef(null);
-  const [overflowPx, setOverflowPx] = useState(0);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const text = textRef.current;
-    if (!container || !text) return undefined;
-
-    const measure = () => {
-      setOverflowPx(Math.max(0, Math.ceil(text.scrollWidth - container.clientWidth)));
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [name]);
-
-  const shouldScroll = overflowPx > 4;
-  const durationSec = Math.min(22, Math.max(10, overflowPx / 8));
-
-  return (
-    <div
-      ref={containerRef}
-      className={cn(
-        'min-w-0 overflow-hidden',
-        shouldScroll && 'celebration-name-viewport',
-        className
-      )}
-      title={name}
-    >
-      <p
-        ref={textRef}
-        className={cn(
-          'whitespace-nowrap text-sm font-semibold leading-tight',
-          shouldScroll && 'celebration-name-track'
-        )}
-        style={
-          shouldScroll
-            ? {
-                '--celebration-name-shift': `-${overflowPx}px`,
-                animationDuration: `${durationSec}s`,
-              }
-            : undefined
-        }
-      >
-        {name}
-      </p>
-    </div>
-  );
-}
 
 function celebrationsQueryKey(localDate) {
   return ['dashboard-celebrations', localDate];
@@ -270,7 +217,7 @@ function CelebrationFeedCard({
       />
 
       <div className="min-w-0 flex-1">
-        <ScrollingName name={displayName} />
+        <ScrollingName name={displayName} textClassName="text-sm font-semibold" />
         {hasMeta ? (
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
             {subtitle ? <span className="min-w-0 truncate">{subtitle}</span> : null}
@@ -677,7 +624,7 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
         {activeChat ? (
           <div
             className="pointer-events-none fixed right-3 z-30 hidden md:block"
-            style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom))' }}
+            style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
             data-mini-chat
           >
             <MiniChatPanel

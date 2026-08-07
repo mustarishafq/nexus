@@ -24,7 +24,7 @@ export default function ApplicationsNav({ showUsage }) {
   ];
 
   return (
-    <div className="flex w-fit items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
+    <div className="flex w-fit items-center gap-1 rounded-xl border border-border bg-muted/30 p-0.5 sm:p-1">
       {tabs.map((tab) => {
         const isActive = tab.match(location.pathname);
         const Icon = tab.icon;
@@ -33,7 +33,7 @@ export default function ApplicationsNav({ showUsage }) {
             key={tab.path}
             to={tab.path}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
+              'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all sm:px-3 sm:py-1.5 sm:text-sm',
               isActive
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'

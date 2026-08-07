@@ -446,7 +446,7 @@ export default function Settings() {
                     </CardContent>
                   </Card>
 
-                  <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 -mx-1 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none sm:z-auto">
+                  <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 -mx-1 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none sm:z-auto">
                     <Button onClick={save} className="w-full sm:w-auto">
                       Save notification settings
                     </Button>

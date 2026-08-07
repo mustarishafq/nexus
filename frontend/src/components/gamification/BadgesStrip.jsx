@@ -40,10 +40,10 @@ export default function BadgesStrip({
             key={badge.badge_key}
             title={badge.description}
             className={cn(
-              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium backdrop-blur-md',
               badge.unlocked
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                : 'border-border/70 bg-muted/30 text-muted-foreground/70'
+                ? 'border-amber-500/35 bg-amber-500/15 text-amber-700 shadow-[0_0_0_1px_rgba(245,158,11,0.08)] dark:text-amber-300'
+                : 'border-border/60 bg-muted/25 text-muted-foreground/70'
             )}
           >
             <Award className={cn('h-3 w-3', !badge.unlocked && 'opacity-40')} />

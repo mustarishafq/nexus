@@ -94,8 +94,8 @@ export default function AppLayout() {
             lockToViewport && 'min-h-0 overflow-hidden',
             showBottomNav
               && (standalone
-                ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
-                : 'pb-[5.25rem]')
+                ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
+                : 'pb-[4.5rem]')
           )}
         >
           {isEmailFullscreen ? (

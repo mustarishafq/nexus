@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
+import { glassDockStyles } from '@/components/layout/glassStyles';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { reactionMotion, spawnReactionBurst } from '@/components/feed/ReactionBurst';
 import { EmojiCollectionPanel } from '@/components/feed/EmojiCollectionPicker';
@@ -343,8 +344,8 @@ export function FeedEngagementBar({
 
       <div
         className={cn(
-          'grid grid-cols-3 border-t border-border/30 pb-0.5',
-          showSummary ? 'mx-3 sm:mx-4' : 'mx-3 mt-1 sm:mx-4'
+          'mx-3 grid grid-cols-3 rounded-xl border border-border/40 bg-muted/25 pb-0.5 backdrop-blur-sm sm:mx-4',
+          !showSummary && 'mt-1'
         )}
       >
         <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
@@ -401,10 +402,11 @@ export function FeedEngagementBar({
             }}
             onMouseLeave={scheduleClosePicker}
             className={cn(
-              'z-[200] border-border/50 shadow-lg',
+              'z-[200] overflow-hidden p-0 shadow-lg',
+              glassDockStyles,
               pickerMode === 'collection'
-                ? 'w-auto rounded-2xl p-0'
-                : 'w-auto rounded-full p-1.5'
+                ? 'w-auto rounded-2xl'
+                : 'w-auto max-w-[calc(100vw-1.5rem)] rounded-full px-1 py-1'
             )}
             onClick={(event) => event.stopPropagation()}
             onOpenAutoFocus={(event) => event.preventDefault()}
@@ -419,14 +421,14 @@ export function FeedEngagementBar({
                 }}
               />
             ) : (
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0 overflow-x-auto px-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {reactions.map((reaction) => {
                   const isActive = myReaction === reaction;
                   return (
                     <motion.button
                       key={reaction}
                       type="button"
-                      whileHover={{ scale: 1.25, y: -4 }}
+                      whileHover={{ scale: 1.2, y: -3 }}
                       whileTap={reactionMotion.whileTap}
                       onClick={(event) => {
                         event.preventDefault();
@@ -435,8 +437,8 @@ export function FeedEngagementBar({
                         applyReaction(reaction, event);
                       }}
                       className={cn(
-                        'inline-flex h-10 w-10 items-center justify-center rounded-full text-lg transition-colors sm:h-9 sm:w-9',
-                        isActive ? 'bg-primary/15' : 'hover:bg-muted/80'
+                        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base leading-none transition-colors sm:h-9 sm:w-9 sm:text-lg',
+                        isActive ? 'bg-primary/20' : 'hover:bg-muted/60'
                       )}
                       title={isActive ? 'Remove reaction' : 'React'}
                     >
@@ -448,7 +450,7 @@ export function FeedEngagementBar({
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={openCollection}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground sm:h-9 sm:w-9"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:h-9 sm:w-9"
                   title="More reactions"
                   aria-label="Open emoji collection"
                 >
@@ -622,9 +624,14 @@ export default function PostReactions({
         </PopoverTrigger>
         <PopoverContent
           align="start"
+          side="top"
+          sideOffset={8}
           className={cn(
-            'z-[200]',
-            pickerMode === 'collection' ? 'w-auto p-0' : 'w-auto p-2'
+            'z-[200] overflow-hidden p-0 shadow-lg',
+            glassDockStyles,
+            pickerMode === 'collection'
+              ? 'w-auto rounded-2xl'
+              : 'w-auto max-w-[calc(100vw-1.5rem)] rounded-full px-1.5 py-1.5'
           )}
           onClick={(event) => event.stopPropagation()}
           onOpenAutoFocus={(event) => event.preventDefault()}

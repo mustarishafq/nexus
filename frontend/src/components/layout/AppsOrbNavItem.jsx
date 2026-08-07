@@ -9,11 +9,11 @@ export default function AppsOrbNavItem({ isActive, to = '/applications', label =
     <Link
       to={to}
       aria-current={isActive ? 'page' : undefined}
-      className="relative flex flex-1 flex-col items-center justify-end gap-2 pb-1"
+      className="relative flex flex-1 flex-col items-center justify-end gap-1 pb-0.5"
     >
       <span
         className={cn(
-          'apps-orb-nav relative -mt-6 flex h-[3rem] w-[3rem] items-center justify-center pointer-events-none',
+          'apps-orb-nav relative -mt-5 flex h-[2.75rem] w-[2.75rem] items-center justify-center pointer-events-none',
           isActive && 'apps-orb-nav--active'
         )}
       >
