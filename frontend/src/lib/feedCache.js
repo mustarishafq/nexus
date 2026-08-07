@@ -2,8 +2,24 @@
  * Shared React Query cache helpers for company/user feed items and comments.
  */
 
+function isInfiniteFeedData(current) {
+  return Boolean(current && Array.isArray(current.pages));
+}
+
 function mapFeedItems(current, mapper) {
-  if (!current || !Array.isArray(current.items)) return current;
+  if (!current) return current;
+
+  if (isInfiniteFeedData(current)) {
+    return {
+      ...current,
+      pages: current.pages.map((page) => {
+        if (!page || !Array.isArray(page.items)) return page;
+        return { ...page, items: page.items.map(mapper) };
+      }),
+    };
+  }
+
+  if (!Array.isArray(current.items)) return current;
   return {
     ...current,
     items: current.items.map(mapper),
@@ -75,8 +91,39 @@ export function prependFeedItem(queryClient, item) {
   if (!item?.id) return;
 
   const prepend = (current) => {
-    if (!current || !Array.isArray(current.items)) {
-      return current ?? { items: [item] };
+    if (!current) {
+      return { items: [item] };
+    }
+
+    if (isInfiniteFeedData(current)) {
+      const alreadyPresent = current.pages.some((page) => (
+        Array.isArray(page?.items)
+        && page.items.some((entry) => String(entry?.id) === String(item.id))
+      ));
+      if (alreadyPresent) return current;
+
+      if (current.pages.length === 0) {
+        return {
+          ...current,
+          pages: [{ items: [item], has_more: false, next_before: null }],
+        };
+      }
+
+      const [first, ...rest] = current.pages;
+      return {
+        ...current,
+        pages: [
+          {
+            ...first,
+            items: [item, ...(Array.isArray(first?.items) ? first.items : [])],
+          },
+          ...rest,
+        ],
+      };
+    }
+
+    if (!Array.isArray(current.items)) {
+      return current;
     }
     if (current.items.some((entry) => String(entry?.id) === String(item.id))) {
       return current;
@@ -95,7 +142,22 @@ export function removeFeedItem(queryClient, postId) {
   if (postId == null) return;
 
   const strip = (current) => {
-    if (!current || !Array.isArray(current.items)) return current;
+    if (!current) return current;
+
+    if (isInfiniteFeedData(current)) {
+      return {
+        ...current,
+        pages: current.pages.map((page) => {
+          if (!page || !Array.isArray(page.items)) return page;
+          return {
+            ...page,
+            items: page.items.filter((entry) => String(entry?.id) !== String(postId)),
+          };
+        }),
+      };
+    }
+
+    if (!Array.isArray(current.items)) return current;
     return {
       ...current,
       items: current.items.filter((entry) => String(entry?.id) !== String(postId)),
@@ -114,7 +176,24 @@ export function replaceFeedItem(queryClient, tempId, nextItem) {
   if (tempId == null || !nextItem?.id) return;
 
   const replace = (current) => {
-    if (!current || !Array.isArray(current.items)) return current;
+    if (!current) return current;
+
+    if (isInfiniteFeedData(current)) {
+      return {
+        ...current,
+        pages: current.pages.map((page) => {
+          if (!page || !Array.isArray(page.items)) return page;
+          return {
+            ...page,
+            items: page.items.map((entry) => (
+              String(entry?.id) === String(tempId) ? { ...entry, ...nextItem } : entry
+            )),
+          };
+        }),
+      };
+    }
+
+    if (!Array.isArray(current.items)) return current;
     return {
       ...current,
       items: current.items.map((entry) => (

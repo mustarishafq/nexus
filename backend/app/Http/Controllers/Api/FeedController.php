@@ -10,10 +10,13 @@ use App\Models\Post;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\BroadcastAudience;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class FeedController extends Controller
 {
@@ -31,6 +34,7 @@ class FeedController extends Controller
         $validated = $request->validate([
             'author_user_id' => ['sometimes', 'integer', 'min:1', 'exists:users,id'],
             'focus_post' => ['sometimes', 'integer', 'min:1'],
+            'before' => ['sometimes', 'string', 'max:120'],
             'limit' => [
                 'sometimes',
                 'integer',
@@ -47,6 +51,7 @@ class FeedController extends Controller
         $defaultLimit = $authorUserId ? 100 : 30;
         $limit = (int) ($validated['limit'] ?? $defaultLimit);
         $focusPostId = isset($validated['focus_post']) ? (int) $validated['focus_post'] : null;
+        $cursor = $this->parseFeedCursor($validated['before'] ?? null);
 
         $postsQuery = Post::query()->visibleTo($viewer);
 
@@ -57,17 +62,24 @@ class FeedController extends Controller
         // Profile / author filter: posts only (no broadcasts).
         if ($authorUserId) {
             $total = (int) (clone $postsQuery)->count();
-            $items = (clone $postsQuery)
+            $fetchLimit = $limit + 1;
+            $pageQuery = $this->applyFeedCursor(clone $postsQuery, $cursor, 'post');
+            $pageItems = $pageQuery
                 ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
                 ->withCount(['comments', 'edits', 'views', 'reaches'])
                 ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])
-                ->latest()
-                ->limit($limit)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit($fetchLimit)
                 ->get()
                 ->map(fn (Post $post) => $this->serializePost($post, $viewer))
                 ->values();
 
-            if ($focusPostId) {
+            $hasMore = $pageItems->count() > $limit;
+            $items = $pageItems->take($limit)->values();
+
+            // Deep-link pin only on the first page.
+            if ($focusPostId && ! $cursor) {
                 $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer, $authorUserId);
             }
 
@@ -75,6 +87,10 @@ class FeedController extends Controller
                 'items' => $items,
                 'total' => $total,
                 'unseen_count' => 0,
+                'has_more' => $hasMore,
+                'next_before' => $hasMore && $items->isNotEmpty()
+                    ? $this->encodeFeedCursor($items->last())
+                    : null,
             ]);
         }
 
@@ -87,36 +103,49 @@ class FeedController extends Controller
             ->whereDoesntHave('views', fn (Builder $views) => $views->where('user_id', $viewer->id))
             ->count();
 
-        $posts = (clone $postsQuery)
+        $fetchLimit = $limit + 1;
+
+        $posts = $this->applyFeedCursor(clone $postsQuery, $cursor, 'post')
             ->with(['author.department', 'reactions', 'polls.options', 'polls.votes'])
             ->withCount(['comments', 'edits', 'views', 'reaches'])
             ->withExists(['views as viewer_has_seen' => fn (Builder $views) => $views->where('user_id', $viewer->id)])
-            ->latest()
-            ->limit($limit)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($fetchLimit)
             ->get()
             ->map(fn (Post $post) => $this->serializePost($post, $viewer));
 
-        $broadcasts = (clone $broadcastsQuery)
-            ->latest()
-            ->limit($limit)
+        $broadcasts = $this->applyFeedCursor(clone $broadcastsQuery, $cursor, 'broadcast')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($fetchLimit)
             ->get()
             ->map(fn (Broadcast $broadcast) => $this->serializeBroadcast($broadcast));
 
-        $items = $posts
-            ->merge($broadcasts)
-            ->sortByDesc(fn (array $item) => $item['created_date'])
-            ->values()
-            ->take($limit)
-            ->values();
+        $merged = $this->sortFeedItems($posts->merge($broadcasts));
+        $hasMore = $merged->count() > $limit;
+        $items = $merged->take($limit)->values();
 
-        if ($focusPostId) {
+        // Deep-link pin only on the first page.
+        if ($focusPostId && ! $cursor) {
             $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer);
+        }
+
+        $nextBefore = null;
+        if ($hasMore) {
+            // Cursor must track the chronological page, not a pinned deep-link post.
+            $cursorSource = $merged->take($limit)->values();
+            if ($cursorSource->isNotEmpty()) {
+                $nextBefore = $this->encodeFeedCursor($cursorSource->last());
+            }
         }
 
         return response()->json([
             'items' => $items,
             'total' => $total,
             'unseen_count' => $unseenCount,
+            'has_more' => $hasMore,
+            'next_before' => $nextBefore,
         ]);
     }
 
@@ -161,8 +190,8 @@ class FeedController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $items
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @param  Collection<int, array<string, mixed>>  $items
+     * @return Collection<int, array<string, mixed>>
      */
     private function ensurePostInFeedItems($items, int $postId, User $viewer, ?int $authorUserId = null)
     {
@@ -231,6 +260,106 @@ class FeedController extends Controller
             });
 
         return BroadcastAudience::scopeVisibleToUser($query, $viewer);
+    }
+
+    /**
+     * Stable feed order: newest created_at, then broadcasts before posts, then higher id.
+     *
+     * @param  Collection<int, array<string, mixed>>  $items
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function sortFeedItems(Collection $items): Collection
+    {
+        return $items
+            ->sort(function (array $a, array $b): int {
+                $cmp = strcmp((string) ($b['created_date'] ?? ''), (string) ($a['created_date'] ?? ''));
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+
+                $rankA = ($a['type'] ?? '') === 'broadcast' ? 0 : 1;
+                $rankB = ($b['type'] ?? '') === 'broadcast' ? 0 : 1;
+                if ($rankA !== $rankB) {
+                    return $rankA <=> $rankB;
+                }
+
+                return ((int) ($b['id'] ?? 0)) <=> ((int) ($a['id'] ?? 0));
+            })
+            ->values();
+    }
+
+    /**
+     * @return array{created_at: Carbon, type: string, id: int, type_rank: int}|null
+     */
+    private function parseFeedCursor(?string $before): ?array
+    {
+        if ($before === null || $before === '') {
+            return null;
+        }
+
+        $parts = explode('|', $before, 3);
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        [$createdDate, $type, $id] = $parts;
+        if (! in_array($type, ['post', 'broadcast'], true)) {
+            return null;
+        }
+        if (! ctype_digit((string) $id)) {
+            return null;
+        }
+
+        try {
+            // created_date is ISO-8601 UTC; DB created_at is stored in app timezone.
+            $createdAt = Carbon::parse($createdDate)->timezone(config('app.timezone'));
+        } catch (Throwable) {
+            return null;
+        }
+
+        return [
+            'created_at' => $createdAt,
+            'type' => $type,
+            'id' => (int) $id,
+            'type_rank' => $type === 'broadcast' ? 0 : 1,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     */
+    private function encodeFeedCursor(array $item): string
+    {
+        return ($item['created_date'] ?? '').'|'.($item['type'] ?? '').'|'.($item['id'] ?? '');
+    }
+
+    /**
+     * Restrict a posts/broadcasts query to items older than the cursor in feed order.
+     */
+    private function applyFeedCursor(Builder $query, ?array $cursor, string $itemType): Builder
+    {
+        if (! $cursor) {
+            return $query;
+        }
+
+        $typeRank = $itemType === 'broadcast' ? 0 : 1;
+        $cursorAt = $cursor['created_at'];
+        $cursorRank = $cursor['type_rank'];
+        $cursorId = $cursor['id'];
+
+        return $query->where(function (Builder $outer) use ($cursorAt, $typeRank, $cursorRank, $cursorId) {
+            $outer->where('created_at', '<', $cursorAt);
+
+            if ($typeRank > $cursorRank) {
+                // Same timestamp, but this type sorts after the cursor type.
+                $outer->orWhere('created_at', '=', $cursorAt);
+            } elseif ($typeRank === $cursorRank) {
+                $outer->orWhere(function (Builder $tie) use ($cursorAt, $cursorId) {
+                    $tie->where('created_at', '=', $cursorAt)
+                        ->where('id', '<', $cursorId);
+                });
+            }
+        });
     }
 
     private function authenticatedUser(Request $request): ?User

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUp, Cake, Loader2, MessagesSquare, Newspaper } from 'lucide-react';
@@ -16,6 +16,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { feedPostElementId, parseFeedFocusParams, scrollFeedPostIntoView } from '@/lib/feedLinks';
 import { cn } from '@/lib/utils';
 
+const FEED_PAGE_SIZE = 30;
 const XL_BREAKPOINT = 1280;
 /** Hysteresis so scrollbar width can't flip desktop/mobile mid-scroll. */
 const XL_EXIT_BREAKPOINT = XL_BREAKPOINT - 32;
@@ -57,7 +58,55 @@ function findVisibleFeedPostElement(postId) {
   return null;
 }
 
-function FeedList({ items, isLoading, focusTarget, reveal }) {
+function FeedLoadMoreSentinel({ enabled, onVisible, isLoading }) {
+  const sentinelRef = useRef(null);
+  const onVisibleRef = useRef(onVisible);
+
+  useEffect(() => {
+    onVisibleRef.current = onVisible;
+  }, [onVisible]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    const node = sentinelRef.current;
+    if (!node) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onVisibleRef.current?.();
+        }
+      },
+      { root: null, rootMargin: '240px 0px', threshold: 0 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [enabled]);
+
+  return (
+    <div
+      ref={sentinelRef}
+      className="flex min-h-10 items-center justify-center py-3"
+      aria-hidden={!isLoading}
+    >
+      {isLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      ) : null}
+    </div>
+  );
+}
+
+function FeedList({
+  items,
+  isLoading,
+  focusTarget,
+  reveal,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+}) {
   if (isLoading) {
     return (
       <div className="flex min-h-[20vh] items-center justify-center rounded-lg border border-border/40 bg-card py-10">
@@ -79,40 +128,48 @@ function FeedList({ items, isLoading, focusTarget, reveal }) {
   }
 
   return (
-    <motion.div
-      className="space-y-2.5 sm:space-y-3"
-      initial={reveal ? 'hidden' : false}
-      animate="show"
-      variants={{
-        hidden: {},
-        show: {
-          transition: { staggerChildren: 0.045, delayChildren: 0.06 },
-        },
-      }}
-    >
-      {items.map((item) => (
-        <motion.div
-          key={`${item.type}-${item.id}`}
-          variants={{
-            hidden: { opacity: 0, y: 14 },
-            show: {
-              opacity: 1,
-              y: 0,
-              transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-            },
-          }}
-        >
-          <FeedItem
-            item={item}
-            initialExpanded={
-              item.type === 'post'
-              && focusTarget?.expandComments
-              && String(item.id) === String(focusTarget.postId)
-            }
-          />
-        </motion.div>
-      ))}
-    </motion.div>
+    <div className="space-y-2.5 sm:space-y-3">
+      <motion.div
+        className="space-y-2.5 sm:space-y-3"
+        initial={reveal ? 'hidden' : false}
+        animate="show"
+        variants={{
+          hidden: {},
+          show: {
+            transition: { staggerChildren: 0.045, delayChildren: 0.06 },
+          },
+        }}
+      >
+        {items.map((item) => (
+          <motion.div
+            key={`${item.type}-${item.id}`}
+            variants={{
+              hidden: { opacity: 0, y: 14 },
+              show: {
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+              },
+            }}
+          >
+            <FeedItem
+              item={item}
+              initialExpanded={
+                item.type === 'post'
+                && focusTarget?.expandComments
+                && String(item.id) === String(focusTarget.postId)
+              }
+            />
+          </motion.div>
+        ))}
+      </motion.div>
+
+      <FeedLoadMoreSentinel
+        enabled={Boolean(hasNextPage) && !isFetchingNextPage}
+        onVisible={onLoadMore}
+        isLoading={isFetchingNextPage}
+      />
+    </div>
   );
 }
 
@@ -185,19 +242,45 @@ export default function CompanyFeed() {
     description: 'Announcements from leadership and updates shared by your colleagues.',
   });
 
-  const { data, isLoading, isFetched } = useQuery({
+  const {
+    data,
+    isLoading,
+    isFetched,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['company-feed', activeFocus?.postId ?? null],
-    queryFn: () => db.feed.list({
-      limit: 30,
-      ...(activeFocus?.postId ? { focusPost: activeFocus.postId } : {}),
+    queryFn: ({ pageParam }) => db.feed.list({
+      limit: FEED_PAGE_SIZE,
+      ...(pageParam ? { before: pageParam } : {}),
+      ...(activeFocus?.postId && !pageParam ? { focusPost: activeFocus.postId } : {}),
     }),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage?.has_more || !lastPage?.next_before) return undefined;
+      return lastPage.next_before;
+    },
     staleTime: 20_000,
   });
 
-  const items = Array.isArray(data?.items) ? data.items : [];
+  const items = useMemo(
+    () => (data?.pages ?? []).flatMap((page) => (
+      Array.isArray(page?.items) ? page.items : []
+    )),
+    [data?.pages]
+  );
+  const total = Number(data?.pages?.[0]?.total);
   const headerMeta = isLoading && !isFetched
     ? 'Loading...'
-    : `${items.length} items`;
+    : Number.isFinite(total) && total > 0
+      ? `${items.length} of ${total}`
+      : `${items.length} items`;
+
+  const loadMore = () => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage();
+  };
 
   const returnToLatestFeed = () => {
     settleScrollRef.current?.();
@@ -459,6 +542,9 @@ export default function CompanyFeed() {
                 isLoading={isLoading}
                 focusTarget={activeFocus}
                 reveal={feedReveal}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={loadMore}
               />
             </motion.div>
           </div>

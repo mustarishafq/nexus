@@ -566,11 +566,12 @@ export const db = {
 	},
 
 	feed: {
-		async list({ limit, focusPost, authorUserId } = {}) {
+		async list({ limit, focusPost, authorUserId, before } = {}) {
 			const queryString = buildQuery({
 				limit,
 				focus_post: focusPost,
 				author_user_id: authorUserId,
+				before,
 			});
 			return request(`/feed${queryString}`);
 		},
