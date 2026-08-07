@@ -278,12 +278,19 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <div className="rounded-2xl border border-border bg-card p-3.5 space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rival</p>
+      <div className="rounded-2xl border border-border bg-card p-3 space-y-2.5 sm:p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rival</p>
+          {rival ? (
+            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold tabular-nums text-amber-700 dark:text-amber-300">
+              {Number(rival.exp_ahead).toLocaleString()} EXP ahead
+            </span>
+          ) : null}
+        </div>
         {rival ? (
           <Link
             to={`/people/${rival.user_id}`}
-            className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-2 transition-colors hover:border-amber-500/35 hover:bg-amber-500/5"
+            className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2.5 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-2 transition-colors hover:border-amber-500/35 hover:bg-amber-500/5"
           >
             <UserAvatar
               user={{
@@ -294,17 +301,18 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
                 level: rival.level,
                 stars: rival.stars,
               }}
-              className="h-9 w-9"
+              className="h-10 w-10"
             />
-            <div className="min-w-0 flex-1">
-              <ScrollingName name={rival.name} textClassName="text-sm font-semibold" />
-              <p className="text-[11px] text-muted-foreground tabular-nums">
+            <div className="min-w-0 overflow-hidden">
+              <ScrollingName
+                name={rival.name}
+                className="w-full"
+                textClassName="text-sm font-semibold"
+              />
+              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                 #{rival.rank} · {Number(rival.exp_total).toLocaleString()} EXP
               </p>
             </div>
-            <p className="shrink-0 text-right text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
-              {Number(rival.exp_ahead).toLocaleString()} EXP ahead
-            </p>
           </Link>
         ) : viewerRank === 1 ? (
           <p className="text-sm text-muted-foreground">You’re on top of the board.</p>
@@ -315,10 +323,10 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
         )}
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-3.5 space-y-2">
+      <div className="rounded-2xl border border-border bg-card p-3 space-y-2.5 sm:p-3.5">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">This week</p>
-          <p className="text-[11px] tabular-nums text-muted-foreground">
+          <p className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {weekRank != null ? `#${weekRank}` : 'Unranked'}
             {' · '}
             {weekExp.toLocaleString()} EXP
@@ -327,12 +335,12 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
         {podium.length === 0 ? (
           <p className="text-sm text-muted-foreground">No weekly climbers yet.</p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {podium.map((entry) => (
               <li key={entry.user_id}>
                 <Link
                   to={`/people/${entry.user_id}`}
-                  className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-muted/40"
+                  className="grid grid-cols-[1.5rem_1.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-muted/40"
                 >
                   <span
                     className={cn(
@@ -357,11 +365,11 @@ function CompetitionCards({ rival, weekSpotlight, viewerRank, expTotal }) {
                   />
                   <ScrollingName
                     name={entry.name}
-                    className="min-w-0 flex-1"
+                    className="w-full min-w-0"
                     as="span"
-                    textClassName="text-xs font-medium"
+                    textClassName="block text-xs font-medium"
                   />
-                  <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+                  <span className="w-11 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
                     {Number(entry.exp).toLocaleString()}
                   </span>
                 </Link>
@@ -432,7 +440,7 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
                   <Link
                     to={`/people/${entry.user_id}`}
                     className={cn(
-                      'flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-muted/40',
+                      'grid grid-cols-[1.75rem_2.25rem_minmax(0,1fr)_auto] items-center gap-2.5 px-3.5 py-3 transition-colors hover:bg-muted/40 sm:gap-3',
                       isViewer && 'bg-amber-500/5 ring-1 ring-inset ring-amber-500/20'
                     )}
                   >
@@ -456,9 +464,10 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
                       }}
                       className="h-9 w-9"
                     />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 overflow-hidden">
                       <ScrollingName
                         name={entry.name}
+                        className="w-full"
                         textClassName="text-sm font-medium"
                       >
                         {entry.name}
@@ -469,6 +478,7 @@ function LeaderboardPanel({ period, onPeriodChange, className, viewerRank }) {
                       {entry.job_title ? (
                         <ScrollingName
                           name={entry.job_title}
+                          className="w-full"
                           textClassName="text-xs text-muted-foreground"
                         />
                       ) : null}
@@ -791,7 +801,6 @@ export default function Missions() {
         title="Missions"
         description="Complete actions to earn EXP and climb the company leaderboard"
         icon={Target}
-        hideDescriptionOnMobile
       />
 
       <ExpHero

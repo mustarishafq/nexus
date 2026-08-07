@@ -39,7 +39,7 @@ export default function ScrollingName({
     <div
       ref={containerRef}
       className={cn(
-        'min-w-0 overflow-hidden',
+        'min-w-0 max-w-full overflow-hidden',
         shouldScroll && 'celebration-name-viewport',
         className
       )}
@@ -48,7 +48,7 @@ export default function ScrollingName({
       <Tag
         ref={textRef}
         className={cn(
-          'whitespace-nowrap leading-tight',
+          'inline-block max-w-none whitespace-nowrap leading-tight',
           shouldScroll && 'celebration-name-track',
           textClassName
         )}
