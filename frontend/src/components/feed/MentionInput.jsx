@@ -371,9 +371,33 @@ const MentionInput = forwardRef(function MentionInput({
           event.preventDefault();
           preferPlainTextBreaks();
           // Keep pasted text format (line breaks / spacing) as plain text.
-          const text = event.clipboardData.getData('text/plain');
-          document.execCommand('insertText', false, text);
-          handleInput();
+          const text = event.clipboardData?.getData('text/plain') ?? '';
+          if (!text) return;
+
+          const editor = editorRef.current;
+          if (!editor) return;
+
+          editor.focus();
+
+          // Prefer native insert so cursor position is preserved.
+          const inserted = document.execCommand('insertText', false, text);
+          if (inserted) {
+            handleInput();
+            return;
+          }
+
+          // execCommand can fail (or return false) in some browsers after
+          // preventDefault — fall back to manual serialization insert.
+          const current = serializeMentionEditor(editor);
+          const cursor = getSerializedCursorOffset(editor);
+          const nextValue = `${current.slice(0, cursor)}${text}${current.slice(cursor)}`;
+          const nextCursor = cursor + text.length;
+          pendingCursorRef.current = nextCursor;
+          emitChange(nextValue, nextCursor, { rerender: true });
+          requestAnimationFrame(() => {
+            editor.focus();
+            setSerializedCursorOffset(editor, nextCursor);
+          });
         }}
         className={cn(
           'w-full overflow-x-hidden overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm',

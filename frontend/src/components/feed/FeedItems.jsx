@@ -344,6 +344,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
   const [commentBody, setCommentBody] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const commentInputRef = useRef(null);
+  const replyComposerRef = useRef(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['post-comments', postId],
@@ -448,6 +449,24 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
   const comments = Array.isArray(data?.comments) ? data.comments : [];
 
+  useEffect(() => {
+    if (!replyingTo) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      replyComposerRef.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+      commentInputRef.current?.focus?.();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [replyingTo]);
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
   const startReply = (comment, { isReply = false } = {}) => {
     setReplyingTo({
       id: comment.id,
@@ -465,8 +484,84 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
     }
   };
 
+  const submitComment = (event) => {
+    event.preventDefault();
+    const body = commentBody.trim();
+    if (!body) return;
+    createComment.mutate({
+      body,
+      parentCommentId: replyingTo?.id || null,
+    });
+  };
+
+  const renderComposer = ({ inline = false } = {}) => (
+    <form
+      ref={inline ? replyComposerRef : undefined}
+      className={cn(
+        inline
+          ? 'mt-2 rounded-xl bg-background/70 p-2 ring-1 ring-border/50'
+          : 'mt-2.5 border-t border-border/50 pt-2.5 md:mt-3 md:pt-3'
+      )}
+      onSubmit={submitComment}
+    >
+      {replyingTo ? (
+        <div className="mb-2 flex items-center gap-2 px-0.5 text-[11px] text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate">
+            Replying to{' '}
+            <span className="font-medium text-foreground" title={replyingTo.name}>
+              {replyingTo.name}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={cancelReply}
+            className="shrink-0 font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      <div className="flex items-end gap-1.5 md:gap-2">
+        <div className="relative min-w-0 flex-1">
+          <MentionInput
+            ref={commentInputRef}
+            value={commentBody}
+            onChange={setCommentBody}
+            placeholder={replyingTo ? 'Write a reply...' : 'Write a comment...'}
+            rows={1}
+            maxLength={1000}
+            className="min-h-9 overflow-x-hidden pr-10 text-sm shadow-none md:min-h-10 md:pr-11"
+            placeholderClassName="!right-10 md:!right-11"
+          />
+          <div className="absolute inset-y-0 right-0.5 flex items-center">
+            <EmojiCollectionPicker
+              disabled={createComment.isPending}
+              triggerClassName="h-8 w-8 md:h-9 md:w-9"
+              onSelect={(emoji) => {
+                commentInputRef.current?.insertText(emoji);
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {!replyingTo ? <ExpActionHint actionKey="feed_comment" compact /> : null}
+          <Button
+            type="submit"
+            size="icon"
+            className="h-9 w-9 shrink-0 md:h-10 md:w-10"
+            disabled={createComment.isPending || !commentBody.trim()}
+            title={replyingTo ? 'Post reply' : 'Post comment'}
+          >
+            {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+
   const renderComment = (comment, { isReply = false } = {}) => {
     const nestedReplies = !isReply ? flattenCommentReplies(comment.replies) : [];
+    const isActiveReply = replyingTo?.id === comment.id;
 
     return (
       <div key={comment.id} className="flex gap-2 md:gap-2.5">
@@ -547,11 +642,18 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
             <button
               type="button"
               onClick={() => startReply(comment, { isReply })}
-              className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className={cn(
+                'text-[11px] font-medium transition-colors',
+                isActiveReply
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
             >
               Reply
             </button>
           </div>
+
+          {isActiveReply ? renderComposer({ inline: true }) : null}
 
           {nestedReplies.length > 0 ? (
             <div className="mt-2.5 ml-5 space-y-2.5 border-l border-border/40 pl-2.5 md:ml-7 md:space-y-3 md:pl-3">
@@ -600,71 +702,8 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
         )}
       </div>
 
-      <form
-        className="mt-2.5 border-t border-border/50 pt-2.5 md:mt-3 md:pt-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const body = commentBody.trim();
-          if (!body) return;
-          createComment.mutate({
-            body,
-            parentCommentId: replyingTo?.id || null,
-          });
-        }}
-      >
-        {replyingTo ? (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-background/80 px-2.5 py-1.5 text-[11px] text-muted-foreground ring-1 ring-border/50">
-            <span className="min-w-0 flex-1 truncate">
-              Replying to{' '}
-              <span className="font-medium text-foreground" title={replyingTo.name}>
-                {replyingTo.name}
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setReplyingTo(null)}
-              className="shrink-0 font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : null}
-        <div className="flex items-end gap-1.5 md:gap-2">
-          <div className="relative min-w-0 flex-1">
-            <MentionInput
-              ref={commentInputRef}
-              value={commentBody}
-              onChange={setCommentBody}
-              placeholder={replyingTo ? 'Write a reply...' : 'Write a comment...'}
-              rows={1}
-              maxLength={1000}
-              className="min-h-9 overflow-x-hidden pr-10 text-sm shadow-none md:min-h-10 md:pr-11"
-              placeholderClassName="!right-10 md:!right-11"
-            />
-            <div className="absolute inset-y-0 right-0.5 flex items-center">
-              <EmojiCollectionPicker
-                disabled={createComment.isPending}
-                triggerClassName="h-8 w-8 md:h-9 md:w-9"
-                onSelect={(emoji) => {
-                  commentInputRef.current?.insertText(emoji);
-                }}
-              />
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            {!replyingTo ? <ExpActionHint actionKey="feed_comment" compact /> : null}
-            <Button
-              type="submit"
-              size="icon"
-              className="h-9 w-9 shrink-0 md:h-10 md:w-10"
-              disabled={createComment.isPending || !commentBody.trim()}
-              title={replyingTo ? 'Post reply' : 'Post comment'}
-            >
-              {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </div>
-        </div>
-      </form>
+      {/* Keep the bottom composer for new top-level comments only */}
+      {!replyingTo ? renderComposer() : null}
     </div>
   );
 }

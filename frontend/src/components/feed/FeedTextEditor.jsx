@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Users } from 'lucide-react';
 import TextEditor from '@/components/ui/text-editor';
@@ -9,6 +9,7 @@ import {
   buildMentionToken,
   matchesAllMentionQuery,
 } from '@/lib/mentions';
+import { stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 
 function useDebouncedValue(value, delay = 200) {
@@ -52,7 +53,12 @@ export default function FeedTextEditor({
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState(null);
+  const valueRef = useRef(value);
   const debouncedQuery = useDebouncedValue(mentionState?.query || '');
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   const handleEditorReady = useCallback((instance) => {
     setEditor(instance);
@@ -145,8 +151,11 @@ export default function FeedTextEditor({
   }, [mentionState, editor, results.length, loading]);
 
   const handleChange = (html) => {
-    if (html.length > maxLength) {
-      editor?.commands.setContent(value || '', { emitUpdate: false });
+    // Enforce the same plain-text limit the UI counter shows. Checking raw HTML
+    // length rejects multi-line / lightly formatted pastes that are still under
+    // the character budget, which looks like paste is broken.
+    if (stripHtml(html).length > maxLength) {
+      editor?.commands.setContent(valueRef.current || '', { emitUpdate: false });
       return;
     }
     onChange(html);

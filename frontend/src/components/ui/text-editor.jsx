@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -42,6 +42,8 @@ export default function TextEditor({
   editable = true,
   onEditorReady,
 }) {
+  const lastEmittedRef = useRef(value || '');
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -70,7 +72,9 @@ export default function TextEditor({
     },
     onUpdate: ({ editor: current }) => {
       const html = preserveBlankLines(current.getHTML());
-      onChange?.(isEmptyRichText(html) ? '' : html);
+      const next = isEmptyRichText(html) ? '' : html;
+      lastEmittedRef.current = next;
+      onChange?.(next);
     },
   });
 
@@ -89,10 +93,18 @@ export default function TextEditor({
     if (!editor) return;
 
     const next = value || '';
-    const current = editor.getHTML();
-    if (next === current) return;
-    if (!next && isEmptyRichText(current)) return;
+    // Skip sync when parent is echoing the HTML we just emitted (including
+    // preserveBlankLines normalization), so paste/typing isn't clobbered.
+    if (next === lastEmittedRef.current) return;
 
+    const current = preserveBlankLines(editor.getHTML());
+    const currentNormalized = isEmptyRichText(current) ? '' : current;
+    if (next === currentNormalized) {
+      lastEmittedRef.current = next;
+      return;
+    }
+
+    lastEmittedRef.current = next;
     editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);
 
