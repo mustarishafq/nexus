@@ -280,10 +280,15 @@ function ExpandablePostBody({ text, className }) {
 
   return (
     <div className={cn('relative', className)}>
+      {/*
+        Avoid line-clamp (-webkit-box): it collapses empty TipTap <p>/<br>
+        blank lines so editor spacing disappears in the feed. max-height keeps
+        block layout (and blank lines) intact while truncated.
+      */}
       <div
         className={cn(
           'text-sm leading-relaxed text-foreground/90 break-words',
-          needsClamp && !expanded && 'line-clamp-3'
+          needsClamp && !expanded && 'max-h-[4.5rem] overflow-hidden'
         )}
       >
         <MentionText text={text} />

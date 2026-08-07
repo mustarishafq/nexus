@@ -656,6 +656,16 @@
   min-height: 0;
 }
 
+/*
+ * Feed/display rich text: empty TipTap paragraphs (<p></p>) collapse in
+ * normal HTML. Force one line of height so blank Enter presses match the editor.
+ * Paragraphs already normalized to <p><br></p> keep height from the <br>.
+ */
+.rich-text-content p:empty::before {
+  content: '\00a0';
+  white-space: pre;
+}
+
 /* Prestige avatar star — quiet ambient glow + slow gold shimmer */
 @keyframes avatar-star-glow {
   0%,

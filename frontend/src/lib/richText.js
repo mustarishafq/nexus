@@ -20,7 +20,7 @@ const ALLOWED_TAGS = [
 const ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-mention-id', 'data-mention-label'];
 
 export const RICH_TEXT_CONTENT_CLASS =
-  'break-words text-sm leading-relaxed ' +
+  'rich-text-content break-words text-sm leading-relaxed ' +
   '[&_p]:my-0 [&_p]:min-h-[1.5em] [&_p+p]:mt-0 ' +
   '[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:marker:text-foreground ' +
   '[&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:marker:text-foreground ' +
@@ -35,10 +35,20 @@ export function looksLikeHtml(value = '') {
 /**
  * TipTap stores blank Enter presses as empty <p></p>, which collapse in HTML.
  * Keep a <br> so blank lines render with the same height as in the editor.
+ * Also covers ZWSP / NBSP / attribute variants TipTap sometimes emits.
  */
 export function preserveBlankLines(html = '') {
-  return String(html)
-    .replace(/<p>(?:\s|&nbsp;|&#160;|<br\b[^>]*>)*<\/p>/gi, '<p><br></p>');
+  return String(html).replace(
+    /<p\b[^>]*>((?:\s|&nbsp;|&#160;|&#x[0A]0;|\u00a0|\u200b|\ufeff|<br\b[^>]*>)*)<\/p>/gi,
+    (match, inner) => {
+      // Keep paragraphs that still have real content after stripping fillers.
+      const residual = String(inner)
+        .replace(/<br\b[^>]*>/gi, '')
+        .replace(/&nbsp;|&#160;|&#x0*a0;/gi, '')
+        .replace(/[\s\u00a0\u200b\ufeff]/g, '');
+      return residual ? match : '<p><br></p>';
+    }
+  );
 }
 
 export function stripHtml(value = '') {
