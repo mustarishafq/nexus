@@ -9,7 +9,7 @@ import {
   buildMentionToken,
   matchesAllMentionQuery,
 } from '@/lib/mentions';
-import { stripHtml } from '@/lib/richText';
+import { prepareRichTextForEditor, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 
 function useDebouncedValue(value, delay = 200) {
@@ -155,7 +155,9 @@ export default function FeedTextEditor({
     // length rejects multi-line / lightly formatted pastes that are still under
     // the character budget, which looks like paste is broken.
     if (stripHtml(html).length > maxLength) {
-      editor?.commands.setContent(valueRef.current || '', { emitUpdate: false });
+      editor?.commands.setContent(prepareRichTextForEditor(valueRef.current || ''), {
+        emitUpdate: false,
+      });
       return;
     }
     onChange(html);

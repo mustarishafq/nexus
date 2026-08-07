@@ -32,23 +32,34 @@ export function looksLikeHtml(value = '') {
   return /<\/?[a-z][\s\S]*>/i.test(String(value));
 }
 
+const BLANK_PARAGRAPH_INNER =
+  /^(?:\s|&nbsp;|&#160;|&#x0*a0;|\u00a0|\u200b|\ufeff|<br\b[^>]*>)*$/i;
+
+function isBlankParagraphInner(inner = '') {
+  return BLANK_PARAGRAPH_INNER.test(String(inner));
+}
+
 /**
  * TipTap stores blank Enter presses as empty <p></p>, which collapse in HTML.
  * Keep a <br> so blank lines render with the same height as in the editor.
  * Also covers ZWSP / NBSP / attribute variants TipTap sometimes emits.
  */
 export function preserveBlankLines(html = '') {
-  return String(html).replace(
-    /<p\b[^>]*>((?:\s|&nbsp;|&#160;|&#x[0A]0;|\u00a0|\u200b|\ufeff|<br\b[^>]*>)*)<\/p>/gi,
-    (match, inner) => {
-      // Keep paragraphs that still have real content after stripping fillers.
-      const residual = String(inner)
-        .replace(/<br\b[^>]*>/gi, '')
-        .replace(/&nbsp;|&#160;|&#x0*a0;/gi, '')
-        .replace(/[\s\u00a0\u200b\ufeff]/g, '');
-      return residual ? match : '<p><br></p>';
-    }
-  );
+  return String(html).replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (match, inner) => {
+    return isBlankParagraphInner(inner) ? '<p><br></p>' : match;
+  });
+}
+
+/**
+ * Inverse of preserveBlankLines for TipTap setContent.
+ * Saved <p><br></p> blank lines parse as HardBreak nodes; ProseMirror then adds
+ * its trailing break on top, so the editor shows two blank lines. Load them as
+ * empty <p></p> instead — TipTap paints one trailing break while editing.
+ */
+export function prepareRichTextForEditor(html = '') {
+  return String(html).replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (match, inner) => {
+    return isBlankParagraphInner(inner) ? '<p></p>' : match;
+  });
 }
 
 export function stripHtml(value = '') {

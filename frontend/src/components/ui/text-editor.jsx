@@ -11,7 +11,12 @@ import {
   Strikethrough,
   Underline as UnderlineIcon,
 } from 'lucide-react';
-import { RICH_TEXT_CONTENT_CLASS, isEmptyRichText, preserveBlankLines } from '@/lib/richText';
+import {
+  RICH_TEXT_CONTENT_CLASS,
+  isEmptyRichText,
+  prepareRichTextForEditor,
+  preserveBlankLines,
+} from '@/lib/richText';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +35,11 @@ function ToolbarButton({ pressed, onPressedChange, title, children, disabled }) 
       {children}
     </Toggle>
   );
+}
+
+function normalizeEditorValue(value = '') {
+  const html = prepareRichTextForEditor(value || '');
+  return isEmptyRichText(html) ? '' : html;
 }
 
 export default function TextEditor({
@@ -59,7 +69,8 @@ export default function TextEditor({
         placeholder,
       }),
     ],
-    content: value || '',
+    // Strip display-only <br> blank markers so TipTap doesn't double them.
+    content: normalizeEditorValue(value),
     editable,
     editorProps: {
       attributes: {
@@ -105,7 +116,7 @@ export default function TextEditor({
     }
 
     lastEmittedRef.current = next;
-    editor.commands.setContent(next, { emitUpdate: false });
+    editor.commands.setContent(normalizeEditorValue(next), { emitUpdate: false });
   }, [editor, value]);
 
   if (!editor) {
