@@ -53,7 +53,7 @@ export default function ProfileRecentApplicationsWidget({
       <div className="flex items-center justify-between p-5 pb-3">
         <div className="flex items-center gap-2">
           <Monitor className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold text-sm">Recent Applications</h3>
+          <h3 className="font-semibold text-sm">Recent Open Applications</h3>
         </div>
         {applications.length > 0 && !readOnly ? (
           <Link to="/applications">
@@ -85,6 +85,7 @@ export default function ProfileRecentApplicationsWidget({
                 footerSubtitle={getFooterSubtitle(app, readOnly)}
                 readOnly={readOnly}
                 footerOutside
+                hideOverlays
               />
             </div>
           ))}

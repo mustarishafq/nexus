@@ -34,6 +34,7 @@ export default function ApplicationCard({
   readOnly = false,
   footerAlwaysVisible = false,
   footerOutside = false,
+  hideOverlays = false,
 }) {
   const logoUrl = system.icon_url ? toAbsoluteUrl(system.icon_url) : null;
   const brandColor = system.color || DEFAULT_BRAND_COLOR;
@@ -110,7 +111,7 @@ export default function ApplicationCard({
         </div>
       )}
 
-      {isInteractive && (
+      {isInteractive && !hideOverlays && (
         <div className={cn('pointer-events-none absolute inset-0 z-[3] hidden lg:block', hoverRevealClass)}>
           <TooltipProvider delayDuration={200}>
             <div className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 scale-95 items-center gap-0.5 rounded-lg border border-white/20 bg-black/55 p-0.5 shadow-lg transition-transform duration-300 group-hover:scale-100">
@@ -153,13 +154,14 @@ export default function ApplicationCard({
         </div>
       )}
 
-      {environmentBadge && (
+      {!hideOverlays && environmentBadge && (
         <CornerRibbon
           label={environmentBadge.label}
           ribbonClassName={environmentBadge.ribbonClassName}
         />
       )}
 
+      {!hideOverlays ? (
       <div
         className={cn(
           'absolute inset-x-0 top-0 z-[4] pointer-events-none',
@@ -246,8 +248,9 @@ export default function ApplicationCard({
           )}
         </div>
       </div>
+      ) : null}
 
-      {unreadReleaseNotes > 0 && !onWhatsNew && (
+      {!hideOverlays && unreadReleaseNotes > 0 && !onWhatsNew && (
         <span
           className="pointer-events-none absolute top-2 left-2 z-[5] flex h-5 min-w-5 items-center justify-center rounded-full border border-white/25 bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
           title={`${unreadReleaseNotes} new release note${unreadReleaseNotes === 1 ? '' : 's'}`}
@@ -257,7 +260,7 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {notificationsEnabled && (
+      {!hideOverlays && notificationsEnabled && (
         <span
           className="pointer-events-none absolute bottom-2 left-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
           title="Notifications enabled"
@@ -267,7 +270,7 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {calendarSyncEnabled && (
+      {!hideOverlays && calendarSyncEnabled && (
         <span
           className={cn(
             'pointer-events-none absolute bottom-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]',
@@ -280,7 +283,7 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {mcpEnabled && (
+      {!hideOverlays && mcpEnabled && (
         <span
           className={cn(
             'pointer-events-none absolute bottom-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]',
@@ -293,7 +296,7 @@ export default function ApplicationCard({
         </span>
       )}
 
-      {isOnline && system.is_enabled && (
+      {!hideOverlays && isOnline && system.is_enabled && (
         <span
           className="pointer-events-none absolute bottom-2 right-2 z-[1] flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/55 shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
           title="Active"
