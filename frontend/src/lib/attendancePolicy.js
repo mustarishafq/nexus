@@ -97,7 +97,7 @@ function parseTimeToMinutes(time) {
   return (hour * 60) + minute;
 }
 
-export function isWithinShift(shift, date, graceMinutes = 0) {
+export function isWithinShift(shift, date, graceMinutes = 0, earlyWindowMinutes = 60) {
   const days = shift?.days_of_week || [];
   if (!days.length) return true;
 
@@ -106,9 +106,12 @@ export function isWithinShift(shift, date, graceMinutes = 0) {
   const start = parseTimeToMinutes(shift.start_time);
   const end = parseTimeToMinutes(shift.end_time);
   const crosses = Boolean(shift.crosses_midnight);
+  const earlyWindow = Number.isFinite(Number(earlyWindowMinutes))
+    ? Math.max(0, Number(earlyWindowMinutes))
+    : 60;
 
   if (crosses) {
-    const startBound = Math.max(0, start - graceMinutes);
+    const startBound = Math.max(0, start - earlyWindow);
     const endBound = Math.min((24 * 60) - 1, end + graceMinutes);
     if (current >= startBound && days.includes(isoDay)) return true;
     const previousDay = isoDay === 1 ? 7 : isoDay - 1;
@@ -116,7 +119,7 @@ export function isWithinShift(shift, date, graceMinutes = 0) {
   }
 
   if (!days.includes(isoDay)) return false;
-  const startBound = Math.max(0, start - graceMinutes);
+  const startBound = Math.max(0, start - earlyWindow);
   const endBound = Math.min((24 * 60) - 1, end + graceMinutes);
   return current >= startBound && current <= endBound;
 }
@@ -124,12 +127,13 @@ export function isWithinShift(shift, date, graceMinutes = 0) {
 export function findActiveShift(policy, date = new Date()) {
   if (!policy?.shifts?.length) return null;
   const grace = policy.grace_period_minutes ?? 0;
-  return policy.shifts.find((shift) => isWithinShift(shift, date, grace)) || null;
+  const earlyWindow = policy.early_clock_in_window_minutes ?? 60;
+  return policy.shifts.find((shift) => isWithinShift(shift, date, grace, earlyWindow)) || null;
 }
 
 /**
  * Mirror backend AttendanceLateEvaluator: late only while still inside the
- * shift window (start−grace … end+grace) and after start + grace.
+ * shift window (start−earlyWindow … end+grace) and after start + grace.
  * After the shift ends, clock-in is outside hours — not a late arrival.
  * @returns {{ is_late: boolean, late_minutes: number, scheduled_start: Date|null, shift_name: string|null }}
  */
@@ -146,10 +150,11 @@ export function evaluateLateClockIn(policy, date = new Date()) {
   }
 
   const grace = Number(policy.grace_period_minutes ?? 0);
+  const earlyWindow = Number(policy.early_clock_in_window_minutes ?? 60);
   const current = (date.getHours() * 60) + date.getMinutes();
 
   for (const shift of policy.shifts) {
-    if (!isWithinShift(shift, date, grace)) {
+    if (!isWithinShift(shift, date, grace, earlyWindow)) {
       continue;
     }
 

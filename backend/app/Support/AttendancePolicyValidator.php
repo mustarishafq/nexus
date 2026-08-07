@@ -110,6 +110,8 @@ class AttendancePolicyValidator
             'allow_clock_out_outside_radius' => (bool) $location?->allow_clock_out_outside_radius,
             'timezone' => $setting->timezone,
             'grace_period_minutes' => $setting->grace_period_minutes,
+            'early_clock_in_window_minutes' => GamificationSettings::earlyClockInWindowMinutes(),
+            'early_clock_in_cutoff_minutes' => GamificationSettings::earlyClockInCutoffMinutes(),
             'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
             'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
@@ -138,10 +140,16 @@ class AttendancePolicyValidator
      * @param  array<int, array<string, mixed>>  $shifts
      * @return array<string, mixed>|null
      */
-    public static function findActiveShift(array $shifts, Carbon $at, int $graceMinutes): ?array
-    {
+    public static function findActiveShift(
+        array $shifts,
+        Carbon $at,
+        int $graceMinutes,
+        ?int $earlyWindowMinutes = null,
+    ): ?array {
+        $earlyWindow = $earlyWindowMinutes ?? GamificationSettings::earlyClockInWindowMinutes();
+
         foreach ($shifts as $shift) {
-            if (self::isWithinShift($shift, $at, $graceMinutes)) {
+            if (self::isWithinShift($shift, $at, $graceMinutes, $earlyWindow)) {
                 return $shift;
             }
         }
@@ -339,7 +347,12 @@ class AttendancePolicyValidator
         }
 
         $at = $capturedAt->copy()->timezone($setting->timezone);
-        $activeShift = self::findActiveShift($shifts, $at, $setting->grace_period_minutes);
+        $activeShift = self::findActiveShift(
+            $shifts,
+            $at,
+            $setting->grace_period_minutes,
+            GamificationSettings::earlyClockInWindowMinutes(),
+        );
 
         if ($activeShift) {
             $metadata['shift_name'] = $activeShift['name'];
@@ -358,8 +371,12 @@ class AttendancePolicyValidator
     /**
      * @param  array<string, mixed>  $shift
      */
-    private static function isWithinShift(array $shift, Carbon $at, int $graceMinutes): bool
-    {
+    private static function isWithinShift(
+        array $shift,
+        Carbon $at,
+        int $graceMinutes,
+        int $earlyWindowMinutes,
+    ): bool {
         $days = $shift['days_of_week'] ?? [];
 
         if ($days === []) {
@@ -373,7 +390,7 @@ class AttendancePolicyValidator
         $crosses = (bool) ($shift['crosses_midnight'] ?? false);
 
         if ($crosses) {
-            $startBound = max(0, $start - $graceMinutes);
+            $startBound = max(0, $start - $earlyWindowMinutes);
             $endBound = min((24 * 60) - 1, $end + $graceMinutes);
 
             if ($current >= $startBound && in_array($isoDay, $days, true)) {
@@ -389,7 +406,7 @@ class AttendancePolicyValidator
             return false;
         }
 
-        $startBound = max(0, $start - $graceMinutes);
+        $startBound = max(0, $start - $earlyWindowMinutes);
         $endBound = min((24 * 60) - 1, $end + $graceMinutes);
 
         return $current >= $startBound && $current <= $endBound;

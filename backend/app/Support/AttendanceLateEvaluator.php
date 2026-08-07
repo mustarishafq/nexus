@@ -9,8 +9,9 @@ use Carbon\Carbon;
 class AttendanceLateEvaluator
 {
     /**
-     * Late only while still inside the scheduled shift window (start−grace … end+grace).
-     * After the shift ends, a clock-in is outside hours — not a late arrival for that start.
+     * Late only while still inside the scheduled shift window
+     * (start−earlyWindow … end+grace). After the shift ends, a clock-in is
+     * outside hours — not a late arrival for that start.
      *
      * @return array{
      *     is_late: bool,
@@ -18,17 +19,24 @@ class AttendanceLateEvaluator
      *     scheduled_start: ?string,
      *     shift_name: ?string,
      *     grace_period_minutes: int,
+     *     early_clock_in_window_minutes: int,
+     *     early_clock_in_cutoff_minutes: int,
      *     require_late_clock_in_reason: bool
      * }
      */
     public static function evaluate(User $user, Carbon $capturedAt): array
     {
+        $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
+        $earlyCutoff = GamificationSettings::earlyClockInCutoffMinutes();
+
         $result = [
             'is_late' => false,
             'late_minutes' => 0,
             'scheduled_start' => null,
             'shift_name' => null,
             'grace_period_minutes' => 0,
+            'early_clock_in_window_minutes' => $earlyWindow,
+            'early_clock_in_cutoff_minutes' => $earlyCutoff,
             'require_late_clock_in_reason' => false,
         ];
 
@@ -52,7 +60,7 @@ class AttendanceLateEvaluator
         $result['grace_period_minutes'] = $grace;
 
         foreach ($setting->shifts as $shift) {
-            if (! self::isWithinShift($shift, $at, $grace)) {
+            if (! self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
                 continue;
             }
 
@@ -87,8 +95,12 @@ class AttendanceLateEvaluator
     /**
      * @param  array<string, mixed>  $shift
      */
-    private static function isWithinShift(array $shift, Carbon $at, int $graceMinutes): bool
-    {
+    private static function isWithinShift(
+        array $shift,
+        Carbon $at,
+        int $graceMinutes,
+        int $earlyWindowMinutes,
+    ): bool {
         $days = $shift['days_of_week'] ?? [];
 
         if ($days === []) {
@@ -102,7 +114,7 @@ class AttendanceLateEvaluator
         $crosses = (bool) ($shift['crosses_midnight'] ?? false);
 
         if ($crosses) {
-            $startBound = max(0, $start - $graceMinutes);
+            $startBound = max(0, $start - $earlyWindowMinutes);
             $endBound = min((24 * 60) - 1, $end + $graceMinutes);
 
             if ($current >= $startBound && in_array($isoDay, $days, true)) {
@@ -118,7 +130,7 @@ class AttendanceLateEvaluator
             return false;
         }
 
-        $startBound = max(0, $start - $graceMinutes);
+        $startBound = max(0, $start - $earlyWindowMinutes);
         $endBound = min((24 * 60) - 1, $end + $graceMinutes);
 
         return $current >= $startBound && $current <= $endBound;

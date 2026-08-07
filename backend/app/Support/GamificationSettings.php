@@ -4,8 +4,16 @@ namespace App\Support;
 
 class GamificationSettings
 {
+    public const DEFAULT_EARLY_CLOCK_IN_WINDOW_MINUTES = 60;
+
+    public const DEFAULT_EARLY_CLOCK_IN_CUTOFF_MINUTES = 0;
+
     /**
-     * @return array{actions: array<string, array{base?: int, daily_cap?: int|null}>}
+     * @return array{
+     *     actions: array<string, array{base?: int, daily_cap?: int|null}>,
+     *     early_clock_in_window_minutes: int,
+     *     early_clock_in_cutoff_minutes: int
+     * }
      */
     public static function overrides(?object $settings = null): array
     {
@@ -21,9 +29,33 @@ class GamificationSettings
             $raw = [];
         }
 
+        $window = self::normalizeMinutes(
+            $raw['early_clock_in_window_minutes'] ?? null,
+            self::DEFAULT_EARLY_CLOCK_IN_WINDOW_MINUTES,
+        );
+        $cutoff = self::normalizeMinutes(
+            $raw['early_clock_in_cutoff_minutes'] ?? null,
+            self::DEFAULT_EARLY_CLOCK_IN_CUTOFF_MINUTES,
+        );
+
+        // Cutoff cannot exceed the early window or the eligible range is empty.
+        $cutoff = min($cutoff, $window);
+
         return [
             'actions' => self::normalizeActionOverrides($raw['actions'] ?? []),
+            'early_clock_in_window_minutes' => $window,
+            'early_clock_in_cutoff_minutes' => $cutoff,
         ];
+    }
+
+    public static function earlyClockInWindowMinutes(?object $settings = null): int
+    {
+        return self::overrides($settings)['early_clock_in_window_minutes'];
+    }
+
+    public static function earlyClockInCutoffMinutes(?object $settings = null): int
+    {
+        return self::overrides($settings)['early_clock_in_cutoff_minutes'];
     }
 
     /**
@@ -55,7 +87,13 @@ class GamificationSettings
     /**
      * Admin editor payload with defaults + effective values.
      *
-     * @return array{actions: list<array<string, mixed>>}
+     * @return array{
+     *     actions: list<array<string, mixed>>,
+     *     early_clock_in_window_minutes: int,
+     *     default_early_clock_in_window_minutes: int,
+     *     early_clock_in_cutoff_minutes: int,
+     *     default_early_clock_in_cutoff_minutes: int
+     * }
      */
     public static function adminPayload(?object $settings = null): array
     {
@@ -75,7 +113,13 @@ class GamificationSettings
             ];
         }
 
-        return ['actions' => $rows];
+        return [
+            'actions' => $rows,
+            'early_clock_in_window_minutes' => self::earlyClockInWindowMinutes($settings),
+            'default_early_clock_in_window_minutes' => self::DEFAULT_EARLY_CLOCK_IN_WINDOW_MINUTES,
+            'early_clock_in_cutoff_minutes' => self::earlyClockInCutoffMinutes($settings),
+            'default_early_clock_in_cutoff_minutes' => self::DEFAULT_EARLY_CLOCK_IN_CUTOFF_MINUTES,
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -87,6 +131,8 @@ class GamificationSettings
             'gamification_overrides.actions.*' => ['array'],
             'gamification_overrides.actions.*.base' => ['nullable', 'integer', 'min:0', 'max:10000'],
             'gamification_overrides.actions.*.daily_cap' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'gamification_overrides.early_clock_in_window_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
+            'gamification_overrides.early_clock_in_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
         ];
     }
 
@@ -96,8 +142,19 @@ class GamificationSettings
      */
     public static function toDatabaseColumns(array $overrides): array
     {
+        $window = self::normalizeMinutes(
+            $overrides['early_clock_in_window_minutes'] ?? null,
+            self::DEFAULT_EARLY_CLOCK_IN_WINDOW_MINUTES,
+        );
+        $cutoff = self::normalizeMinutes(
+            $overrides['early_clock_in_cutoff_minutes'] ?? null,
+            self::DEFAULT_EARLY_CLOCK_IN_CUTOFF_MINUTES,
+        );
+
         $normalized = [
             'actions' => self::normalizeActionOverrides($overrides['actions'] ?? []),
+            'early_clock_in_window_minutes' => $window,
+            'early_clock_in_cutoff_minutes' => min($cutoff, $window),
         ];
 
         return [
@@ -137,5 +194,14 @@ class GamificationSettings
         }
 
         return $normalized;
+    }
+
+    private static function normalizeMinutes(mixed $value, int $default): int
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        return max(0, min(240, (int) $value));
     }
 }

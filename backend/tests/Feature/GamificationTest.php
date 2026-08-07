@@ -101,7 +101,7 @@ class GamificationTest extends TestCase
             'department_id' => $department->id,
         ]);
 
-        $inAt = Carbon::parse('2026-07-29 08:50:00', 'Asia/Kuala_Lumpur');
+        $inAt = Carbon::parse('2026-07-29 08:30:00', 'Asia/Kuala_Lumpur');
 
         $response = $this->withToken($this->token($user))
             ->postJson('/api/attendance/clock', [
@@ -127,6 +127,142 @@ class GamificationTest extends TestCase
 
         $this->assertNotNull($streak);
         $this->assertSame(1, (int) $streak->current_count);
+    }
+
+    public function test_clock_in_before_early_window_does_not_offer_early_bonus(): void
+    {
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'gamification_overrides' => json_encode([
+                'early_clock_in_window_minutes' => 30,
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AppSettings::forget();
+
+        $department = Department::query()->create(['name' => 'Ops']);
+        DepartmentAttendanceSetting::query()->create([
+            'department_id' => $department->id,
+            'enabled' => true,
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'grace_period_minutes' => 15,
+            'require_early_clock_out_reason' => false,
+            'require_late_clock_in_reason' => false,
+            'allow_outside_shift_hours' => true,
+            'overtime_enabled' => false,
+            'standard_hours_per_day' => 8,
+            'overtime_threshold_minutes' => 0,
+            'shifts' => [[
+                'name' => 'Day Shift',
+                'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
+                'start_time' => '09:00',
+                'end_time' => '18:00',
+                'crosses_midnight' => false,
+            ]],
+        ]);
+
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'department_id' => $department->id,
+        ]);
+
+        // 30-min early window → eligible from 08:30; 08:20 is too early.
+        $inAt = Carbon::parse('2026-07-29 08:20:00', 'Asia/Kuala_Lumpur');
+
+        $response = $this->withToken($this->token($user))
+            ->postJson('/api/attendance/clock', [
+                'type' => 'clock_in',
+                'photo_url' => 'https://example.com/in.jpg',
+                'captured_at' => $inAt->toIso8601String(),
+                'timezone' => 'Asia/Kuala_Lumpur',
+            ])
+            ->assertCreated();
+
+        $offers = $response->json('gamification_offers') ?? [$response->json('gamification_offer')];
+        $actionKeys = collect($offers)->filter()->pluck('action_key')->all();
+        $this->assertContains('clock_in', $actionKeys);
+        $this->assertNotContains('clock_in_early', $actionKeys);
+        $this->assertSame(0, UserStreak::query()->where('user_id', $user->id)->count());
+    }
+
+    public function test_early_clock_in_cutoff_stops_offer_before_shift(): void
+    {
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'gamification_overrides' => json_encode([
+                'early_clock_in_window_minutes' => 60,
+                'early_clock_in_cutoff_minutes' => 10,
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AppSettings::forget();
+
+        $department = Department::query()->create(['name' => 'Ops']);
+        DepartmentAttendanceSetting::query()->create([
+            'department_id' => $department->id,
+            'enabled' => true,
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'grace_period_minutes' => 15,
+            'require_early_clock_out_reason' => false,
+            'require_late_clock_in_reason' => false,
+            'allow_outside_shift_hours' => true,
+            'overtime_enabled' => false,
+            'standard_hours_per_day' => 8,
+            'overtime_threshold_minutes' => 0,
+            'shifts' => [[
+                'name' => 'Day Shift',
+                'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
+                'start_time' => '09:00',
+                'end_time' => '18:00',
+                'crosses_midnight' => false,
+            ]],
+        ]);
+
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'department_id' => $department->id,
+        ]);
+
+        // Cutoff 10 → eligible until 08:50; 08:55 is too close to start.
+        $inAt = Carbon::parse('2026-07-29 08:55:00', 'Asia/Kuala_Lumpur');
+
+        $response = $this->withToken($this->token($user))
+            ->postJson('/api/attendance/clock', [
+                'type' => 'clock_in',
+                'photo_url' => 'https://example.com/in.jpg',
+                'captured_at' => $inAt->toIso8601String(),
+                'timezone' => 'Asia/Kuala_Lumpur',
+            ])
+            ->assertCreated();
+
+        $offers = $response->json('gamification_offers') ?? [$response->json('gamification_offer')];
+        $actionKeys = collect($offers)->filter()->pluck('action_key')->all();
+        $this->assertContains('clock_in', $actionKeys);
+        $this->assertNotContains('clock_in_early', $actionKeys);
+
+        // Still within cutoff at 08:50.
+        $user2 = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'department_id' => $department->id,
+            'email' => 'early-cutoff-ok@example.com',
+        ]);
+        $okAt = Carbon::parse('2026-07-29 08:50:00', 'Asia/Kuala_Lumpur');
+        $okResponse = $this->withToken($this->token($user2))
+            ->postJson('/api/attendance/clock', [
+                'type' => 'clock_in',
+                'photo_url' => 'https://example.com/in2.jpg',
+                'captured_at' => $okAt->toIso8601String(),
+                'timezone' => 'Asia/Kuala_Lumpur',
+            ])
+            ->assertCreated();
+
+        $okKeys = collect($okResponse->json('gamification_offers'))->pluck('action_key')->all();
+        $this->assertContains('clock_in_early', $okKeys);
     }
 
     public function test_late_clock_in_does_not_offer_early_bonus(): void
@@ -496,7 +632,13 @@ class GamificationTest extends TestCase
         $this->withToken($this->token($admin))
             ->getJson('/api/admin/app-settings')
             ->assertOk()
-            ->assertJsonPath('gamification_overrides.actions.event_check_in.base', 40);
+            ->assertJsonPath('gamification_overrides.actions.event_check_in.base', 40)
+            ->assertJsonPath('gamification.early_clock_in_window_minutes', 60)
+            ->assertJsonPath('gamification.default_early_clock_in_window_minutes', 60)
+            ->assertJsonPath('gamification_overrides.early_clock_in_window_minutes', 60)
+            ->assertJsonPath('gamification.early_clock_in_cutoff_minutes', 0)
+            ->assertJsonPath('gamification.default_early_clock_in_cutoff_minutes', 0)
+            ->assertJsonPath('gamification_overrides.early_clock_in_cutoff_minutes', 0);
     }
 
     public function test_public_profile_includes_level_and_rank(): void
