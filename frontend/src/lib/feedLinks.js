@@ -11,12 +11,11 @@ export function feedPostPath(postId, { expandComments = false } = {}) {
 }
 
 /**
- * Frontend same-origin share URL for clipboard / WhatsApp OG previews.
- * Uses `/api/share/posts/{id}` so the existing frontend→API `/api` proxy
- * serves Laravel OG HTML (no extra Apache config).
+ * Frontend share URL for clipboard / WhatsApp OG previews.
+ * Requires nginx (or similar) to proxy `/share/` to Laravel.
  */
 export function feedPostShareUrl(postId) {
-  const path = `/api/share/posts/${encodeURIComponent(String(postId))}`;
+  const path = `/share/posts/${encodeURIComponent(String(postId))}`;
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}${path}`;
   }

@@ -57,6 +57,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/share': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       // MCP + OAuth paths when using the frontend origin as the public connector URL
       '/mcp': { target: 'http://localhost:8000', changeOrigin: true },
       '/register': { target: 'http://localhost:8000', changeOrigin: true },

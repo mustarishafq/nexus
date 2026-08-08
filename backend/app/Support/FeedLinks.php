@@ -22,14 +22,13 @@ class FeedLinks
 
     public static function absoluteShare(int $postId): string
     {
-        // Use the frontend origin + /api path so existing same-origin /api
-        // reverse-proxy serves OG HTML (no extra Apache SetEnv needed).
-        return rtrim((string) config('app.frontend_url'), '/')."/api/share/posts/{$postId}";
+        // Frontend origin path; nginx/Cloudflare must proxy /share to Laravel.
+        return rtrim((string) config('app.frontend_url'), '/')."/share/posts/{$postId}";
     }
 
     public static function absoluteShareImage(int $postId): string
     {
-        return self::absoluteShare($postId).'/og-image';
+        return FeedShareOgImage::publicUrl('share-og/'.$postId.'.jpg');
     }
 
     public static function brandFallbackImage(): string

@@ -254,8 +254,23 @@ ships one at `frontend/public/.htaccess` (copied into `dist` on build):
 
 Without this, direct URLs like `/email/123` return **404**.
 
-Feed share previews use `https://yoursite.com/api/share/posts/{id}` so they ride
-the existing `/api` reverse-proxy to Laravel — no extra Apache SetEnv needed.
+Feed share previews use `https://yoursite.com/share/posts/{id}`. Proxy that
+path to Laravel (same idea as `/api` and `/storage`):
+
+```nginx
+# Inside the frontend (emzinexus.com) server block — before SPA try_files
+location /share/ {
+    proxy_pass https://brainapi.emzinexus.com;
+    proxy_http_version 1.1;
+    proxy_set_header Host brainapi.emzinexus.com;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_ssl_server_name on;
+}
+```
+
+Laravel serves `GET /share/posts/{id}` and `GET /share/posts/{id}/og-image`
+from `backend/routes/web.php` (also available under `/api/share/...`).
 
 ### Laravel API
 
@@ -266,7 +281,7 @@ Ensure `/api/*` routes reach Laravel. If frontend and API share a domain, revers
 ### Verify after deploy
 
 - `https://yoursite.com/sw.js` — service worker loads (200)
-- `https://yoursite.com/api/share/posts/{id}` — HTML with `og:title` / `og:image` (WhatsApp preview)
+- `https://yoursite.com/share/posts/{id}` — HTML with `og:title` / `og:image` (WhatsApp preview)
 - `https://yourapi.com/api/pwa/manifest` — PWA manifest JSON
 - `https://yourapi.com/api/health` or login page works
 

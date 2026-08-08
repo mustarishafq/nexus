@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Post;
 use App\Services\MentionService;
 use App\Support\FeedLinks;
+use App\Support\FeedShareOgImage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -67,10 +68,7 @@ class PostSharePreviewController extends Controller
                 : 'Shared a post in the company feed.';
         }
 
-        $image = $fallbackImage;
-        if ($post->resolvedImageUrls() !== []) {
-            $image = FeedLinks::absoluteShareImage((int) $post->id);
-        }
+        $image = FeedShareOgImage::absoluteUrlFor($post) ?: $fallbackImage;
 
         return [
             'title' => "{$authorName} on ".self::SITE_NAME,
