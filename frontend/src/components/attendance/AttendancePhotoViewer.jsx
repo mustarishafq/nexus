@@ -45,7 +45,6 @@ export default function AttendancePhotoViewer({ record, className, buttonClassNa
         open={open}
         onClose={close}
         ariaLabel="Attendance photo preview"
-        className="p-0 sm:p-0"
         contentClassName="absolute inset-0 max-h-none max-w-none"
       >
         {loading && !error ? (

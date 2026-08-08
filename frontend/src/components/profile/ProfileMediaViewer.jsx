@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Loader2, MessageCircle, Send, Trash2 } from 'lucide-react';
+import { Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import MentionInput from '@/components/feed/MentionInput';
@@ -283,7 +283,7 @@ export default function ProfileMediaViewer({
       onClose={close}
       ariaLabel={`${label} for ${ownerName}`}
       closeLabel="Close photo viewer"
-      className="p-3 sm:p-6"
+      hideCloseButton
       contentClassName={cn(
         'h-full max-h-[min(92vh,900px)] w-full max-w-5xl items-stretch overflow-hidden rounded-2xl bg-card shadow-2xl',
         'flex-col lg:flex-row'
@@ -292,9 +292,24 @@ export default function ProfileMediaViewer({
       <div
         className={cn(
           'relative flex min-h-0 items-center justify-center bg-black/95',
-          'h-[42vh] shrink-0 lg:h-auto lg:flex-1'
+          'h-[38vh] shrink-0 sm:h-[42vh] lg:h-auto lg:flex-1'
         )}
       >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'absolute right-2.5 top-2.5 z-20 h-9 w-9 rounded-full sm:right-3 sm:top-3 sm:h-10 sm:w-10',
+            'bg-black/55 text-white shadow-md backdrop-blur-md',
+            'hover:bg-black/70 hover:text-white',
+          )}
+          aria-label="Close photo viewer"
+          onClick={close}
+        >
+          <X className="h-5 w-5" />
+        </Button>
+
         {imageLoading && !imageError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
             <Loader2 className="h-8 w-8 animate-spin" />

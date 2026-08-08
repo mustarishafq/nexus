@@ -259,7 +259,6 @@ export default function PostImageGrid({ item, className, flush = false }) {
         onClose={close}
         ariaLabel="Post photo preview"
         onKeyDown={onKeyDown}
-        className="p-0 sm:p-0"
         contentClassName="absolute inset-0 max-h-none max-w-none"
         controls={
           count > 1 ? (
@@ -269,8 +268,9 @@ export default function PostImageGrid({ item, className, flush = false }) {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  'absolute left-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:left-5',
-                  'text-white/90 hover:bg-white/10 hover:text-white'
+                  'absolute left-[max(0.75rem,env(safe-area-inset-left,0px))] top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full',
+                  'bg-black/40 text-white/90 backdrop-blur-sm hover:bg-black/55 hover:text-white',
+                  'sm:left-[max(1.25rem,env(safe-area-inset-left,0px))]'
                 )}
                 aria-label="Previous photo"
                 onClick={(event) => {
@@ -285,8 +285,9 @@ export default function PostImageGrid({ item, className, flush = false }) {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  'absolute right-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full sm:right-5',
-                  'text-white/90 hover:bg-white/10 hover:text-white'
+                  'absolute right-[max(0.75rem,env(safe-area-inset-right,0px))] top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full',
+                  'bg-black/40 text-white/90 backdrop-blur-sm hover:bg-black/55 hover:text-white',
+                  'sm:right-[max(1.25rem,env(safe-area-inset-right,0px))]'
                 )}
                 aria-label="Next photo"
                 onClick={(event) => {
