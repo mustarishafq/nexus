@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\OAuthController;
 use App\Http\Controllers\OAuthAuthorizeRedirectController;
 use App\Http\Controllers\OAuthDiscoveryController;
+use App\Http\Controllers\PostSharePreviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -31,3 +32,7 @@ Route::get('/privacy-policy', function () {
 
     return redirect()->away("{$frontendUrl}/privacy-policy");
 });
+
+Route::get('/share/posts/{post}', PostSharePreviewController::class)
+    ->whereNumber('post');
+

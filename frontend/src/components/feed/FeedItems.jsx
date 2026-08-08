@@ -46,7 +46,7 @@ import { getDisplayName } from '@/lib/profile';
 import { useAuth } from '@/lib/AuthContext';
 import { isEmptyRichText, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
-import { feedPostElementId, feedPostPath } from '@/lib/feedLinks';
+import { feedPostElementId, feedPostPath, feedPostShareUrl } from '@/lib/feedLinks';
 import {
   bumpFeedCommentsCount,
   cancelQueryMatches,
@@ -1118,7 +1118,7 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             item={item}
             commentsCount={item.comments_count || 0}
             commentsExpanded={expanded}
-            shareUrl={feedPostPath(item.id)}
+            shareUrl={feedPostShareUrl(item.id)}
             onComment={() => setExpanded((current) => !current)}
             insights={
               item.can_view_insights || compact ? (

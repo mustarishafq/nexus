@@ -10,6 +10,17 @@ export function feedPostPath(postId, { expandComments = false } = {}) {
   return `/feed?${params.toString()}`;
 }
 
+/**
+ * Absolute API share URL used for clipboard / WhatsApp OG previews.
+ * Opens via Laravel `/share/posts/{id}` which serves OG HTML to crawlers
+ * and redirects browsers into the SPA feed deep-link.
+ */
+export function feedPostShareUrl(postId) {
+  const origin = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
+  const path = `/share/posts/${encodeURIComponent(String(postId))}`;
+  return origin ? `${origin}${path}` : path;
+}
+
 export function parseFeedFocusParams(searchParams) {
   const postId = searchParams.get('post');
   if (!postId) {

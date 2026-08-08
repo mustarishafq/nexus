@@ -317,7 +317,7 @@ export function FeedEngagementBar({
 
   const likeActive = Boolean(myReaction);
   const actionClass = cn(
-    'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md',
+    'inline-flex h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-md',
     'text-[13px] font-medium transition-colors hover:bg-muted/50'
   );
 
@@ -344,14 +344,14 @@ export function FeedEngagementBar({
 
       <div
         className={cn(
-          'mx-3 grid grid-cols-3 rounded-xl border border-border/40 bg-muted/25 pb-0.5 backdrop-blur-sm sm:mx-4',
+          'grid w-full grid-cols-3 border-t border-border/30',
           !showSummary && 'mt-1'
         )}
       >
         <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
           <PopoverAnchor asChild>
             <div
-              className="relative border-r border-border/20"
+              className="relative w-full min-w-0"
               onMouseEnter={scheduleOpenPicker}
               onMouseLeave={scheduleClosePicker}
             >
@@ -466,7 +466,6 @@ export function FeedEngagementBar({
           onClick={onComment}
           className={cn(
             actionClass,
-            'border-r border-border/20',
             commentsExpanded ? 'text-primary' : 'text-muted-foreground'
           )}
         >
