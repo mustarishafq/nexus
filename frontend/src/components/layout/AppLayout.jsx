@@ -94,7 +94,7 @@ export default function AppLayout() {
             lockToViewport && 'min-h-0 overflow-hidden',
             showBottomNav
               && (standalone
-                ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
+                ? 'pb-[var(--nexus-dock-clearance)]'
                 : 'pb-[4.5rem]')
           )}
         >

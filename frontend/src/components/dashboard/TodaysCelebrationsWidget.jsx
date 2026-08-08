@@ -624,7 +624,7 @@ export default function TodaysCelebrationsWidget({ embedded = false }) {
         {activeChat ? (
           <div
             className="pointer-events-none fixed right-3 z-30 hidden md:block"
-            style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
+            style={{ bottom: 'var(--nexus-dock-clearance)' }}
             data-mini-chat
           >
             <MiniChatPanel

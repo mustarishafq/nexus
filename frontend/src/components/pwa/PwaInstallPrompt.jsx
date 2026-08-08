@@ -90,9 +90,9 @@ export default function PwaInstallPrompt() {
           style={
             isMobile
               ? {
-                  bottom: `calc(4.5rem + ${viewportBottomOffset}px${
-                    standalone ? ' + env(safe-area-inset-bottom)' : ''
-                  })`,
+                  bottom: standalone
+                    ? `calc(var(--nexus-dock-clearance) + ${viewportBottomOffset}px)`
+                    : `calc(4.5rem + ${viewportBottomOffset}px)`,
                 }
               : undefined
           }

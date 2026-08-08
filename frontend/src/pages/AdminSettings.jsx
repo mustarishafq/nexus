@@ -230,8 +230,8 @@ export default function AdminSettings({ embedded = false }) {
           <div
             className={`min-w-0 flex-1 space-y-4 md:pb-4 ${
               activeSection === 'attendance' || (activeSection === 'feed' && !isAdmin)
-                ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
-                : 'pb-[calc(10rem+env(safe-area-inset-bottom))]'
+                ? 'pb-[var(--nexus-dock-clearance)]'
+                : 'pb-[calc(10rem+var(--nexus-safe-bottom))]'
             }`}
           >
             {activeSection === 'branding' ? (
@@ -461,7 +461,7 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection !== 'attendance' && !(activeSection === 'feed' && !isAdmin) ? (
-              <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 -mx-1 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 md:bottom-4 md:z-20">
+              <div className="sticky bottom-[var(--nexus-dock-clearance)] z-30 -mx-1 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 md:bottom-4 md:z-20">
                 <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
                   <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save admin settings'}
                 </Button>

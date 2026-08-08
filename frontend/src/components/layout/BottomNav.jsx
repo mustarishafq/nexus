@@ -188,9 +188,10 @@ export default function BottomNav() {
         // Full-width only for centering — must not steal clicks beside the dock.
         'pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
         // In Safari (browser tab), chrome already clears the home indicator — adding
-        // safe-area on top creates the large bottom gap. Keep safe-area for PWA only.
+        // safe-area on top of the float margin creates a large gap. Use the larger of
+        // the two in PWA/standalone instead of stacking them.
         standalone
-          ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
+          ? 'pb-[var(--nexus-dock-pad-bottom)]'
           : 'pb-3'
       )}
       style={{ bottom: viewportBottomOffset }}
@@ -201,7 +202,7 @@ export default function BottomNav() {
           'pointer-events-auto flex items-stretch px-1',
           glassDockStyles,
           isMobile
-            ? 'h-[3.75rem] w-full max-w-lg overflow-visible'
+            ? 'h-[var(--nexus-dock-height)] w-full max-w-lg overflow-visible'
             : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
         )}
       >
