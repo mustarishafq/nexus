@@ -116,7 +116,7 @@ export default function EventCheckInPublic() {
   if (eventQuery.isError) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
-        <div className="absolute top-4 right-4">
+        <div className="absolute right-4 top-[calc(1rem+var(--nexus-safe-top))]">
           <ThemeToggle />
         </div>
         <div className="w-full max-w-md rounded-2xl border bg-background p-8 text-center space-y-3">
@@ -146,7 +146,7 @@ export default function EventCheckInPublic() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30 relative">
-      <div className="absolute top-4 right-4">
+      <div className="absolute right-4 top-[calc(1rem+var(--nexus-safe-top))]">
         <ThemeToggle />
       </div>
 

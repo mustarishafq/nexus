@@ -67,6 +67,11 @@ const SheetContent = React.forwardRef(({
     handler?.(event)
   }
 
+  // Left/right/top sheets flush to the screen top — clear the iOS status bar / notch.
+  // Bottom sheets sit mid-screen; their close stays relative to the panel only.
+  // Use a spacer (not padding) so consumer `p-0` / `p-6` classes are preserved.
+  const needsTopSafeArea = side === "left" || side === "right" || side === "top"
+
   return (
     <SheetPortal>
       <SheetOverlay className={overlayClassName} />
@@ -79,9 +84,20 @@ const SheetContent = React.forwardRef(({
         onEscapeKeyDown={guardWhileLightbox(onEscapeKeyDown)}
         {...props}
       >
+        {needsTopSafeArea ? (
+          <div
+            className="pointer-events-none h-[var(--nexus-safe-top)] shrink-0"
+            aria-hidden
+          />
+        ) : null}
         {!hideCloseButton ? (
           <SheetPrimitive.Close
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+            className={cn(
+              "absolute right-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary",
+              needsTopSafeArea
+                ? "top-[calc(1rem+var(--nexus-safe-top))]"
+                : "top-4",
+            )}>
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
