@@ -30,7 +30,7 @@ class PostSharePreviewController extends Controller
 
         // Always return 200 HTML with OG tags. Instant 302/meta-refresh causes
         // WhatsApp to follow into the SPA and drop the rich preview.
-        $response = response()
+        return response()
             ->view('share.post', [
                 'title' => $meta['title'],
                 'description' => $meta['description'],
@@ -41,11 +41,6 @@ class PostSharePreviewController extends Controller
             ])
             ->header('Content-Type', 'text/html; charset=UTF-8')
             ->header('Cache-Control', 'public, max-age=300');
-
-        // Crawlers (esp. WhatsApp Web) are happier without session cookies.
-        $response->headers->remove('Set-Cookie');
-
-        return $response;
     }
 
     /**

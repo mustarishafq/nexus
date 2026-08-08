@@ -13,10 +13,9 @@ export function feedPostPath(postId, { expandComments = false } = {}) {
 /**
  * Frontend share URL for clipboard / WhatsApp OG previews.
  * Requires nginx (or similar) to proxy `/share/` to Laravel.
- * `og` query busts WhatsApp Web's aggressive preview cache after OG fixes.
  */
 export function feedPostShareUrl(postId) {
-  const path = `/share/posts/${encodeURIComponent(String(postId))}?og=4`;
+  const path = `/share/posts/${encodeURIComponent(String(postId))}`;
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}${path}`;
   }

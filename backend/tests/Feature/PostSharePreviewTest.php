@@ -53,23 +53,18 @@ class PostSharePreviewTest extends TestCase
         $this->assertStringContainsString('property="og:title" content="Nas Ali on EMZI Nexus Brain"', $html);
         $this->assertStringContainsString('property="og:description" content="Hello @Team — mop tip with vinegar."', $html);
         $this->assertStringContainsString(
-            'property="og:image" content="https://app.test/storage/share-og/'.$post->id.'-wa.jpg"',
+            'property="og:image" content="https://app.test/storage/share-og/'.$post->id.'.jpg"',
             $html
         );
         $this->assertStringContainsString(
             'property="og:url" content="'.FeedLinks::absoluteShare($post->id).'"',
             $html
         );
-        $this->assertTrue(Storage::disk('public')->exists('share-og/'.$post->id.'-wa.jpg'));
-        $this->assertLessThanOrEqual(300_000, strlen(Storage::disk('public')->get('share-og/'.$post->id.'-wa.jpg')));
-        $info = getimagesizefromstring(Storage::disk('public')->get('share-og/'.$post->id.'-wa.jpg'));
-        $this->assertNotFalse($info);
-        $this->assertSame(1200, $info[0]);
-        $this->assertSame(630, $info[1]);
+        $this->assertTrue(Storage::disk('public')->exists('share-og/'.$post->id.'.jpg'));
+        $this->assertLessThanOrEqual(500_000, strlen(Storage::disk('public')->get('share-og/'.$post->id.'.jpg')));
         $this->assertStringContainsString('https://app.test/feed?post='.$post->id, $html);
         $this->assertStringNotContainsString('http-equiv="refresh"', $html);
         $this->assertStringNotContainsString('/og-image', $html);
-        $this->assertFalse($response->headers->has('Set-Cookie'));
     }
 
     public function test_share_returns_generic_og_for_pending_post(): void
@@ -155,7 +150,7 @@ class PostSharePreviewTest extends TestCase
             FeedLinks::absoluteShare(42)
         );
         $this->assertSame(
-            'https://app.test/storage/share-og/42-wa.jpg',
+            'https://app.test/storage/share-og/42.jpg',
             FeedLinks::absoluteShareImage(42)
         );
     }
@@ -207,9 +202,9 @@ class PostSharePreviewTest extends TestCase
         ]);
 
         $this->get('/share/posts/'.$post->id.'/og-image')
-            ->assertRedirect('https://app.test/storage/share-og/'.$post->id.'-wa.jpg');
+            ->assertRedirect('https://app.test/storage/share-og/'.$post->id.'.jpg');
 
-        $this->assertTrue(Storage::disk('public')->exists('share-og/'.$post->id.'-wa.jpg'));
-        $this->assertLessThanOrEqual(300_000, strlen(Storage::disk('public')->get('share-og/'.$post->id.'-wa.jpg')));
+        $this->assertTrue(Storage::disk('public')->exists('share-og/'.$post->id.'.jpg'));
+        $this->assertLessThanOrEqual(500_000, strlen(Storage::disk('public')->get('share-og/'.$post->id.'.jpg')));
     }
 }

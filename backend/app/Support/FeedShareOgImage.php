@@ -7,13 +7,9 @@ use Illuminate\Support\Facades\Storage;
 
 class FeedShareOgImage
 {
-    /** WhatsApp Web is stricter than mobile — keep under ~300KB. */
-    private const MAX_BYTES = 300_000;
+    private const MAX_BYTES = 500_000;
 
-    /** Landscape OG size WhatsApp/Facebook handle reliably. */
-    private const OUT_WIDTH = 1200;
-
-    private const OUT_HEIGHT = 630;
+    private const MAX_WIDTH = 1200;
 
     /**
      * Ensure a WhatsApp-safe JPEG exists on the public disk and return its absolute URL.
@@ -29,8 +25,7 @@ class FeedShareOgImage
             return null;
         }
 
-        // Versioned filename so tall v1 thumbnails are regenerated.
-        $cacheRelative = 'share-og/'.$post->id.'-wa.jpg';
+        $cacheRelative = 'share-og/'.$post->id.'.jpg';
         $disk = Storage::disk('public');
 
         if (! $disk->exists($cacheRelative)) {
@@ -63,6 +58,11 @@ class FeedShareOgImage
             return null;
         }
 
+        // Already small enough and JPEG — store as-is when under the WhatsApp limit.
+        if (strlen($raw) <= self::MAX_BYTES && self::isJpeg($raw)) {
+            return $raw;
+        }
+
         if (! function_exists('imagecreatefromstring')) {
             return null;
         }
@@ -80,17 +80,25 @@ class FeedShareOgImage
             return null;
         }
 
-        $cropped = self::centerCropResize($image, $width, $height, self::OUT_WIDTH, self::OUT_HEIGHT);
-        imagedestroy($image);
-        if ($cropped === null) {
-            return null;
+        if ($width > self::MAX_WIDTH) {
+            $newWidth = self::MAX_WIDTH;
+            $newHeight = (int) max(1, round($height * ($newWidth / $width)));
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+            if ($resized === false) {
+                imagedestroy($image);
+
+                return null;
+            }
+            imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+            imagedestroy($image);
+            $image = $resized;
         }
 
-        $quality = 80;
+        $quality = 82;
         $binary = null;
         while ($quality >= 40) {
             ob_start();
-            imagejpeg($cropped, null, $quality);
+            imagejpeg($image, null, $quality);
             $binary = ob_get_clean() ?: '';
             if (strlen($binary) <= self::MAX_BYTES) {
                 break;
@@ -98,7 +106,7 @@ class FeedShareOgImage
             $quality -= 8;
         }
 
-        imagedestroy($cropped);
+        imagedestroy($image);
 
         if (! is_string($binary) || $binary === '' || strlen($binary) > self::MAX_BYTES) {
             return null;
@@ -107,37 +115,9 @@ class FeedShareOgImage
         return $binary;
     }
 
-    /**
-     * @param  \GdImage  $image
-     * @return \GdImage|null
-     */
-    private static function centerCropResize($image, int $width, int $height, int $outW, int $outH)
+    private static function isJpeg(string $raw): bool
     {
-        $targetRatio = $outW / $outH;
-        $srcRatio = $width / $height;
-
-        if ($srcRatio > $targetRatio) {
-            // Source too wide — crop sides.
-            $cropH = $height;
-            $cropW = (int) max(1, round($height * $targetRatio));
-            $srcX = (int) max(0, round(($width - $cropW) / 2));
-            $srcY = 0;
-        } else {
-            // Source too tall — crop top/bottom (common phone photos).
-            $cropW = $width;
-            $cropH = (int) max(1, round($width / $targetRatio));
-            $srcX = 0;
-            $srcY = (int) max(0, round(($height - $cropH) / 2));
-        }
-
-        $out = imagecreatetruecolor($outW, $outH);
-        if ($out === false) {
-            return null;
-        }
-
-        imagecopyresampled($out, $image, 0, 0, $srcX, $srcY, $outW, $outH, $cropW, $cropH);
-
-        return $out;
+        return str_starts_with($raw, "\xFF\xD8\xFF");
     }
 
     private static function readSourceBytes(string $sourceUrl): ?string

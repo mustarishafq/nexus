@@ -272,17 +272,6 @@ location /share/ {
 Laravel serves `GET /share/posts/{id}` and `GET /share/posts/{id}/og-image`
 from `backend/routes/web.php` (also available under `/api/share/...`).
 
-**Cloudflare (required for WhatsApp Web):** Managed robots currently blocks
-`meta-externalagent` (Meta’s crawler used by WhatsApp Web). In Cloudflare:
-
-1. **AI Crawl Control / Bot Fight** — allow or skip `meta-externalagent`,
-   `facebookexternalhit`, and `WhatsApp`
-2. Or add a WAF **Skip** rule for URI Path starts with `/share` or `/storage/share-og`
-3. Redeploy `frontend/public/robots.txt` (allows those bots explicitly)
-
-Without this, **mobile previews work** (phone fetches as WhatsApp UA) but
-**WhatsApp Web shows only the domain** (server-side Meta crawler is blocked).
-
 ### Laravel API
 
 Point the API vhost to `backend/public/`.
