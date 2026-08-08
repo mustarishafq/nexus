@@ -18,14 +18,15 @@
     <meta name="twitter:description" content="{{ $description }}">
     <meta name="twitter:image" content="{{ $image }}">
 
-    <meta http-equiv="refresh" content="0;url={{ $redirectUrl }}">
+    {{-- No instant meta-refresh: WhatsApp follows it and loses the OG preview. --}}
     <link rel="canonical" href="{{ $url }}">
 </head>
 <body>
     <p>
-        <a href="{{ $redirectUrl }}">Open post</a>
+        <a id="open-post" href="{{ $redirectUrl }}">Open post</a>
     </p>
     <script>
+        // Humans get redirected into the SPA; crawlers typically skip JS.
         window.location.replace(@json($redirectUrl));
     </script>
 </body>

@@ -238,7 +238,8 @@ Point the **public site** document root to **`frontend/dist`**.
 
 ### Apache — SPA fallback (required)
 
-Add `.htaccess` inside `frontend/dist` (or your deployed dist folder):
+Add `.htaccess` inside `frontend/dist` (or your deployed dist folder). The repo
+ships one at `frontend/public/.htaccess` (copied into `dist` on build):
 
 ```apache
 <IfModule mod_rewrite.c>
@@ -253,6 +254,9 @@ Add `.htaccess` inside `frontend/dist` (or your deployed dist folder):
 
 Without this, direct URLs like `/email/123` return **404**.
 
+Feed share previews use `https://yoursite.com/api/share/posts/{id}` so they ride
+the existing `/api` reverse-proxy to Laravel — no extra Apache SetEnv needed.
+
 ### Laravel API
 
 Point the API vhost to `backend/public/`.
@@ -262,6 +266,7 @@ Ensure `/api/*` routes reach Laravel. If frontend and API share a domain, revers
 ### Verify after deploy
 
 - `https://yoursite.com/sw.js` — service worker loads (200)
+- `https://yoursite.com/api/share/posts/{id}` — HTML with `og:title` / `og:image` (WhatsApp preview)
 - `https://yourapi.com/api/pwa/manifest` — PWA manifest JSON
 - `https://yourapi.com/api/health` or login page works
 

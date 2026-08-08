@@ -11,14 +11,16 @@ export function feedPostPath(postId, { expandComments = false } = {}) {
 }
 
 /**
- * Absolute API share URL used for clipboard / WhatsApp OG previews.
- * Opens via Laravel `/share/posts/{id}` which serves OG HTML to crawlers
- * and redirects browsers into the SPA feed deep-link.
+ * Frontend same-origin share URL for clipboard / WhatsApp OG previews.
+ * Uses `/api/share/posts/{id}` so the existing frontend→API `/api` proxy
+ * serves Laravel OG HTML (no extra Apache config).
  */
 export function feedPostShareUrl(postId) {
-  const origin = `${import.meta.env.VITE_API_BASE_URL || ''}`.replace(/\/$/, '');
-  const path = `/share/posts/${encodeURIComponent(String(postId))}`;
-  return origin ? `${origin}${path}` : path;
+  const path = `/api/share/posts/${encodeURIComponent(String(postId))}`;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
 }
 
 export function parseFeedFocusParams(searchParams) {

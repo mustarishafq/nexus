@@ -5,10 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Post;
 use App\Services\MentionService;
 use App\Support\FeedLinks;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\View\View;
 
 class PostSharePreviewController extends Controller
 {
@@ -16,42 +14,21 @@ class PostSharePreviewController extends Controller
 
     private const DESCRIPTION_MAX = 160;
 
-    /** @var list<string> */
-    private const CRAWLER_USER_AGENTS = [
-        'whatsapp',
-        'facebookexternalhit',
-        'facebot',
-        'twitterbot',
-        'linkedinbot',
-        'slackbot',
-        'discordbot',
-        'telegrambot',
-        'skypeuripreview',
-        'applebot',
-        'googlebot',
-        'bingbot',
-        'embedly',
-        'quora link preview',
-        'pinterest',
-        'redditbot',
-        'vkshare',
-        'baiduspider',
-        'duckduckbot',
-    ];
-
-    public function __invoke(Request $request, int $post): RedirectResponse|Response|View
+    public function __invoke(Request $request, int $post): Response
     {
         $model = Post::query()->with('author')->find($post);
         $frontendFeed = rtrim((string) config('app.frontend_url'), '/').'/feed';
-        $canonicalUrl = $model ? FeedLinks::absolutePost($post) : $frontendFeed;
-        $redirectUrl = $canonicalUrl;
+        $shareUrl = $model
+            ? FeedLinks::absoluteShare($post)
+            : $frontendFeed;
+        $redirectUrl = $model
+            ? FeedLinks::absolutePost($post)
+            : $frontendFeed;
 
-        $meta = $this->buildMeta($model, $canonicalUrl);
+        $meta = $this->buildMeta($model, $shareUrl);
 
-        if (! $this->isLinkPreviewCrawler($request)) {
-            return redirect()->away($redirectUrl);
-        }
-
+        // Always return 200 HTML with OG tags. Instant 302/meta-refresh causes
+        // WhatsApp to follow into the SPA and drop the rich preview.
         return response()
             ->view('share.post', [
                 'title' => $meta['title'],
@@ -61,20 +38,21 @@ class PostSharePreviewController extends Controller
                 'siteName' => self::SITE_NAME,
                 'redirectUrl' => $redirectUrl,
             ])
-            ->header('Content-Type', 'text/html; charset=UTF-8');
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            ->header('Cache-Control', 'public, max-age=300');
     }
 
     /**
      * @return array{title: string, description: string, image: string, url: string}
      */
-    private function buildMeta(?Post $post, string $canonicalUrl): array
+    private function buildMeta(?Post $post, string $shareUrl): array
     {
         $fallbackImage = FeedLinks::brandFallbackImage();
         $generic = [
             'title' => self::SITE_NAME,
             'description' => 'Shared from the company feed — sign in to view.',
             'image' => $fallbackImage,
-            'url' => $canonicalUrl,
+            'url' => $shareUrl,
         ];
 
         if (! $post || ! $post->isApproved()) {
@@ -95,7 +73,7 @@ class PostSharePreviewController extends Controller
             'title' => "{$authorName} on ".self::SITE_NAME,
             'description' => $description,
             'image' => $image,
-            'url' => $canonicalUrl,
+            'url' => $shareUrl,
         ];
     }
 
@@ -132,22 +110,5 @@ class PostSharePreviewController extends Controller
         $origin = rtrim((string) config('app.url'), '/');
 
         return str_starts_with($url, '/') ? $origin.$url : $origin.'/'.$url;
-    }
-
-    private function isLinkPreviewCrawler(Request $request): bool
-    {
-        $ua = strtolower((string) $request->userAgent());
-        if ($ua === '') {
-            // Empty UA: serve HTML so scrapers without a UA still get OG tags.
-            return true;
-        }
-
-        foreach (self::CRAWLER_USER_AGENTS as $needle) {
-            if (str_contains($ua, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

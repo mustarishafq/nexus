@@ -22,7 +22,9 @@ class FeedLinks
 
     public static function absoluteShare(int $postId): string
     {
-        return rtrim((string) config('app.url'), '/')."/share/posts/{$postId}";
+        // Use the frontend origin + /api path so existing same-origin /api
+        // reverse-proxy serves OG HTML (no extra Apache SetEnv needed).
+        return rtrim((string) config('app.frontend_url'), '/')."/api/share/posts/{$postId}";
     }
 
     public static function brandFallbackImage(): string

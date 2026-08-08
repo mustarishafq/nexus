@@ -83,6 +83,8 @@ Route::post('/oauth/token', [OAuthController::class, 'token']);
 
 Route::get('/app-settings', [AppSettingController::class, 'publicShow']);
 Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
+Route::get('/share/posts/{post}', \App\Http\Controllers\PostSharePreviewController::class)
+    ->whereNumber('post');
 
 Route::get('/me', [MeController::class, 'show']);
 Route::patch('/me', [MeController::class, 'update']);

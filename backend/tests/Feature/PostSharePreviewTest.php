@@ -12,7 +12,7 @@ class PostSharePreviewTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_crawler_gets_rich_og_html_for_approved_post(): void
+    public function test_share_returns_rich_og_html_for_approved_post(): void
     {
         config([
             'app.url' => 'https://brainapi.test',
@@ -33,8 +33,8 @@ class PostSharePreviewTest extends TestCase
         ]);
 
         $response = $this->withHeaders([
-            'User-Agent' => 'WhatsApp/2.0',
-        ])->get('/share/posts/'.$post->id);
+            'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        ])->get('/api/share/posts/'.$post->id);
 
         $response->assertOk();
         $html = $response->getContent();
@@ -46,13 +46,15 @@ class PostSharePreviewTest extends TestCase
             $html
         );
         $this->assertStringContainsString(
-            'property="og:url" content="'.FeedLinks::absolutePost($post->id).'"',
+            'property="og:url" content="'.FeedLinks::absoluteShare($post->id).'"',
             $html
         );
+        $this->assertStringContainsString('https://app.test/api/share/posts/'.$post->id, $html);
         $this->assertStringContainsString('https://app.test/feed?post='.$post->id, $html);
+        $this->assertStringNotContainsString('http-equiv="refresh"', $html);
     }
 
-    public function test_crawler_gets_generic_og_for_pending_post(): void
+    public function test_share_returns_generic_og_for_pending_post(): void
     {
         config([
             'app.url' => 'https://brainapi.test',
@@ -74,7 +76,7 @@ class PostSharePreviewTest extends TestCase
 
         $response = $this->withHeaders([
             'User-Agent' => 'facebookexternalhit/1.1',
-        ])->get('/share/posts/'.$post->id);
+        ])->get('/api/share/posts/'.$post->id);
 
         $response->assertOk();
         $html = $response->getContent();
@@ -90,7 +92,7 @@ class PostSharePreviewTest extends TestCase
         );
     }
 
-    public function test_crawler_gets_generic_og_for_missing_post(): void
+    public function test_share_returns_generic_og_for_missing_post(): void
     {
         config([
             'app.url' => 'https://brainapi.test',
@@ -99,7 +101,7 @@ class PostSharePreviewTest extends TestCase
 
         $response = $this->withHeaders([
             'User-Agent' => 'TelegramBot',
-        ])->get('/share/posts/999999');
+        ])->get('/api/share/posts/999999');
 
         $response->assertOk();
         $html = $response->getContent();
@@ -107,27 +109,7 @@ class PostSharePreviewTest extends TestCase
         $this->assertStringContainsString('property="og:title" content="EMZI Nexus Brain"', $html);
         $this->assertStringContainsString('https://app.test/feed', $html);
         $this->assertStringNotContainsString('/feed?post=999999', $html);
-    }
-
-    public function test_browser_is_redirected_to_frontend_feed_post(): void
-    {
-        config([
-            'app.url' => 'https://brainapi.test',
-            'app.frontend_url' => 'https://app.test',
-        ]);
-
-        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
-        $post = Post::query()->create([
-            'author_user_id' => $author->id,
-            'body' => 'Visible post',
-            'approval_status' => Post::APPROVAL_APPROVED,
-        ]);
-
-        $this->withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        ])
-            ->get('/share/posts/'.$post->id)
-            ->assertRedirect('https://app.test/feed?post='.$post->id);
+        $this->assertStringNotContainsString('/api/share/posts/999999', $html);
     }
 
     public function test_share_preview_is_public_without_auth(): void
@@ -144,8 +126,38 @@ class PostSharePreviewTest extends TestCase
             'approval_status' => Post::APPROVAL_APPROVED,
         ]);
 
-        $this->withHeaders(['User-Agent' => 'Slackbot-LinkExpanding 1.0'])
-            ->get('/share/posts/'.$post->id)
-            ->assertOk();
+        $this->get('/api/share/posts/'.$post->id)->assertOk();
+    }
+
+    public function test_absolute_share_url_uses_frontend_api_path(): void
+    {
+        config([
+            'app.url' => 'https://brainapi.test',
+            'app.frontend_url' => 'https://app.test',
+        ]);
+
+        $this->assertSame(
+            'https://app.test/api/share/posts/42',
+            FeedLinks::absoluteShare(42)
+        );
+    }
+
+    public function test_legacy_web_share_path_still_works(): void
+    {
+        config([
+            'app.url' => 'https://brainapi.test',
+            'app.frontend_url' => 'https://app.test',
+        ]);
+
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user', 'name' => 'Legacy']);
+        $post = Post::query()->create([
+            'author_user_id' => $author->id,
+            'body' => 'Legacy path',
+            'approval_status' => Post::APPROVAL_APPROVED,
+        ]);
+
+        $this->get('/share/posts/'.$post->id)
+            ->assertOk()
+            ->assertSee('Legacy on EMZI Nexus Brain', false);
     }
 }
