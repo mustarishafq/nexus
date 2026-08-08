@@ -28,7 +28,7 @@ class FeedLinks
 
     public static function absoluteShareImage(int $postId): string
     {
-        return FeedShareOgImage::publicUrl('share-og/'.$postId.'.jpg');
+        return FeedShareOgImage::publicUrl('share-og/'.$postId.'-wa.jpg');
     }
 
     public static function brandFallbackImage(): string
