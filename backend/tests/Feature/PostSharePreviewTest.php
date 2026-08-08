@@ -42,7 +42,7 @@ class PostSharePreviewTest extends TestCase
         $this->assertStringContainsString('property="og:title" content="Nas Ali on EMZI Nexus Brain"', $html);
         $this->assertStringContainsString('property="og:description" content="Hello @Team — mop tip with vinegar."', $html);
         $this->assertStringContainsString(
-            'property="og:image" content="https://brainapi.test/storage/post-images/spill.jpg"',
+            'property="og:image" content="'.FeedLinks::absoluteShareImage($post->id).'"',
             $html
         );
         $this->assertStringContainsString(
@@ -159,5 +159,37 @@ class PostSharePreviewTest extends TestCase
         $this->get('/share/posts/'.$post->id)
             ->assertOk()
             ->assertSee('Legacy on EMZI Nexus Brain', false);
+    }
+
+    public function test_og_image_endpoint_returns_compressed_jpeg(): void
+    {
+        config([
+            'app.url' => 'https://brainapi.test',
+            'app.frontend_url' => 'https://app.test',
+        ]);
+
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $post = Post::query()->create([
+            'author_user_id' => $author->id,
+            'body' => 'Has image',
+            'image_urls' => ['/storage/post-images/big.jpg'],
+            'approval_status' => Post::APPROVAL_APPROVED,
+        ]);
+
+        $image = imagecreatetruecolor(2000, 1200);
+        $this->assertNotFalse($image);
+        $bg = imagecolorallocate($image, 20, 80, 160);
+        imagefilledrectangle($image, 0, 0, 1999, 1199, $bg);
+        ob_start();
+        imagejpeg($image, null, 95);
+        $raw = ob_get_clean();
+        imagedestroy($image);
+        $this->assertNotFalse($raw);
+        \Illuminate\Support\Facades\Storage::disk('public')->put('post-images/big.jpg', $raw);
+
+        $response = $this->get('/api/share/posts/'.$post->id.'/og-image');
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/jpeg');
+        $this->assertLessThanOrEqual(500_000, strlen($response->getContent()));
     }
 }

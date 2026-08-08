@@ -67,7 +67,10 @@ class PostSharePreviewController extends Controller
                 : 'Shared a post in the company feed.';
         }
 
-        $image = $this->absoluteImageUrl($post->resolvedImageUrls()[0] ?? null) ?: $fallbackImage;
+        $image = $fallbackImage;
+        if ($post->resolvedImageUrls() !== []) {
+            $image = FeedLinks::absoluteShareImage((int) $post->id);
+        }
 
         return [
             'title' => "{$authorName} on ".self::SITE_NAME,
@@ -90,25 +93,5 @@ class PostSharePreviewController extends Controller
         }
 
         return $preview;
-    }
-
-    private function absoluteImageUrl(?string $url): ?string
-    {
-        if ($url === null) {
-            return null;
-        }
-
-        $url = trim($url);
-        if ($url === '') {
-            return null;
-        }
-
-        if (preg_match('#^https?://#i', $url) === 1) {
-            return $url;
-        }
-
-        $origin = rtrim((string) config('app.url'), '/');
-
-        return str_starts_with($url, '/') ? $origin.$url : $origin.'/'.$url;
     }
 }

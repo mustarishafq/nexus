@@ -27,6 +27,11 @@ class FeedLinks
         return rtrim((string) config('app.frontend_url'), '/')."/api/share/posts/{$postId}";
     }
 
+    public static function absoluteShareImage(int $postId): string
+    {
+        return self::absoluteShare($postId).'/og-image';
+    }
+
     public static function brandFallbackImage(): string
     {
         return rtrim((string) config('app.frontend_url'), '/').'/icons/pwa-icon-512.png';

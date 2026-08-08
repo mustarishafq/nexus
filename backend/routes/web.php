@@ -35,4 +35,6 @@ Route::get('/privacy-policy', function () {
 
 Route::get('/share/posts/{post}', PostSharePreviewController::class)
     ->whereNumber('post');
+Route::get('/share/posts/{post}/og-image', \App\Http\Controllers\PostShareOgImageController::class)
+    ->whereNumber('post');
 
