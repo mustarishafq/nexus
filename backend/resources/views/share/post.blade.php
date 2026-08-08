@@ -21,16 +21,18 @@
     <meta name="twitter:description" content="{{ $description }}">
     <meta name="twitter:image" content="{{ $image }}">
 
-    {{-- No instant meta-refresh: WhatsApp follows it and loses the OG preview. --}}
     <link rel="canonical" href="{{ $url }}">
 </head>
 <body>
     <p>
-        <a id="open-post" href="{{ $redirectUrl }}">Open post</a>
+        <a id="open-post" href="{{ $redirectUrl }}">Open post in EMZI Nexus Brain</a>
     </p>
+    {{-- Delayed redirect only — immediate JS replace can make headless
+         WhatsApp Web scrapers follow into the SPA and lose the preview. --}}
     <script>
-        // Humans get redirected into the SPA; crawlers typically skip JS.
-        window.location.replace(@json($redirectUrl));
+        setTimeout(function () {
+            window.location.replace(@json($redirectUrl));
+        }, 2500);
     </script>
 </body>
 </html>
