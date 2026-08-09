@@ -12,17 +12,10 @@
     /* iPhone notch / Dynamic Island / status bar insets */
     --nexus-safe-top: env(safe-area-inset-top, 0px);
     --nexus-safe-bottom: env(safe-area-inset-bottom, 0px);
-    /*
-     * Floating bottom dock clearance (content / sticky footers).
-     * In standalone the home-indicator inset is painted *inside* the glass pill
-     * so the dock sits lower; only a small float gap remains under the pill.
-     */
+    /* Floating bottom dock: use the larger of float margin OR home-indicator inset (don't stack). */
     --nexus-dock-height: 3.75rem;
-    --nexus-dock-float: 0.5rem;
-    /* Icon row + home-indicator (inside pill) + small float under the glass */
-    --nexus-dock-clearance: calc(
-      var(--nexus-dock-height) + var(--nexus-dock-float) + var(--nexus-safe-bottom)
-    );
+    --nexus-dock-pad-bottom: max(0.75rem, var(--nexus-safe-bottom));
+    --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
 
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
@@ -393,19 +386,12 @@
   }
 }
 
-.apps-orb-nav {
-  aspect-ratio: 1 / 1;
-  flex-shrink: 0;
-}
-
 .apps-orb-nav__core {
   position: relative;
   z-index: 2;
   display: flex;
-  aspect-ratio: 1 / 1;
   height: 3rem;
   width: 3rem;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -753,5 +739,3 @@
     opacity: 0.35;
   }
 }
-
-/* Bottom dock positioning is controlled inline in BottomNav.jsx */

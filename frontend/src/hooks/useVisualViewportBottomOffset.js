@@ -5,19 +5,11 @@ import { useEffect, useState } from 'react';
  * iOS Safari's collapsing URL/toolbars change the visual viewport while the
  * layout viewport stays tall — without this offset the dock floats mid-screen
  * or leaves a large gap above the browser chrome.
- *
- * Disable in installed PWAs (`standalone`): there is no browser chrome, and a
- * non-zero offset incorrectly pushes the dock up.
  */
-export function useVisualViewportBottomOffset({ enabled = true } = {}) {
+export function useVisualViewportBottomOffset() {
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
-    if (!enabled) {
-      setOffset(0);
-      return undefined;
-    }
-
     const vv = window.visualViewport;
     if (!vv) return undefined;
 
@@ -42,7 +34,7 @@ export function useVisualViewportBottomOffset({ enabled = true } = {}) {
       vv.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };
-  }, [enabled]);
+  }, []);
 
-  return enabled ? offset : 0;
+  return offset;
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v8.0.13';
+const CACHE_NAME = 'nexus-shell-v8.0.11';
 // Client ids reported as running in standalone/installed-PWA display mode.
 // Notification clicks must only reuse these, never a plain browser tab,
 // otherwise Android opens the click target in Chrome instead of the app.
