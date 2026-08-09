@@ -9,11 +9,12 @@ export default function AppsOrbNavItem({ isActive, to = '/applications', label =
     <Link
       to={to}
       aria-current={isActive ? 'page' : undefined}
-      className="relative flex flex-1 flex-col items-center justify-end gap-1 pb-0.5"
+      className="relative flex min-w-[3.5rem] flex-1 flex-col items-center justify-end gap-1 overflow-visible pb-0.5"
     >
       <span
         className={cn(
-          'apps-orb-nav relative -mt-5 flex h-[2.75rem] w-[2.75rem] items-center justify-center pointer-events-none',
+          // Lock a perfect circle — flex stretch/shrink in the dock was turning this into an oval.
+          'apps-orb-nav pointer-events-none relative -mt-5 flex aspect-square h-11 w-11 shrink-0 grow-0 items-center justify-center',
           isActive && 'apps-orb-nav--active'
         )}
       >

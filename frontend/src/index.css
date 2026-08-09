@@ -19,6 +19,7 @@
      */
     --nexus-dock-height: 3.75rem;
     --nexus-dock-float: 0.5rem;
+    /* Icon row + home-indicator (inside pill) + small float under the glass */
     --nexus-dock-clearance: calc(
       var(--nexus-dock-height) + var(--nexus-dock-float) + var(--nexus-safe-bottom)
     );
@@ -392,12 +393,19 @@
   }
 }
 
+.apps-orb-nav {
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+}
+
 .apps-orb-nav__core {
   position: relative;
   z-index: 2;
   display: flex;
+  aspect-ratio: 1 / 1;
   height: 3rem;
   width: 3rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -746,35 +754,4 @@
   }
 }
 
-/* ── Bottom dock (iOS PWA safe-area) ─────────────────────────────────────────
- * Home-indicator inset is painted *inside* the glass pill so the dock sits low.
- * Do not put that inset as empty margin under the pill — it looks "broken/high".
- */
-.nexus-bottom-dock {
-  bottom: 0;
-  padding-bottom: 0.75rem;
-}
-
-.nexus-bottom-dock__pill {
-  padding-bottom: 0;
-}
-
-@media (display-mode: standalone),
-       (display-mode: fullscreen),
-       (display-mode: minimal-ui) {
-  .nexus-bottom-dock {
-    padding-bottom: 0.5rem;
-  }
-
-  .nexus-bottom-dock__pill {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-}
-
-html.nexus-standalone .nexus-bottom-dock {
-  padding-bottom: 0.5rem;
-}
-
-html.nexus-standalone .nexus-bottom-dock__pill {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* Bottom dock positioning is controlled inline in BottomNav.jsx */

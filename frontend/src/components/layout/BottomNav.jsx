@@ -12,7 +12,7 @@ import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOf
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { cn } from '@/lib/utils';
-import { isIosDevice, isRunningStandalone } from '@/lib/pwa';
+import { isIosDevice } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
@@ -23,12 +23,11 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const standalone = isRunningStandalone();
   const isIos = isIosDevice();
-  // Safari/Chrome on iOS report flaky visualViewport gaps that float the dock
-  // mid-screen. Only use this offset for non-iOS browser tabs.
+  // Never offset the dock from visualViewport on iOS (PWA or Safari) — that
+  // value is unreliable and leaves a large empty band under the pill.
   const viewportBottomOffset = useVisualViewportBottomOffset({
-    enabled: !standalone && !isIos,
+    enabled: !isIos,
   });
   const [badgeCounts, setBadgeCounts] = useState({
     notifications: 0,
@@ -162,8 +161,8 @@ export default function BottomNav() {
         title={item.label}
         data-exp-sink={item.path === '/missions' ? 'nav' : undefined}
         className={cn(
-          'relative flex flex-col items-center justify-center gap-0.5 px-1 transition-colors',
-          isMobile ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',
+          'relative flex min-w-0 flex-1 flex-col items-center justify-end gap-0.5 overflow-visible px-1 transition-colors',
+          !isMobile && 'min-w-[4.5rem] shrink-0 px-2',
           isActive ? 'text-primary' : glassDockNavItemInactive
         )}
       >
@@ -189,25 +188,30 @@ export default function BottomNav() {
 
   return (
     <nav
-      className={cn(
-        // Full-width only for centering — must not steal clicks beside the dock.
-        'nexus-bottom-dock pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
-      )}
-      style={viewportBottomOffset ? { bottom: viewportBottomOffset } : undefined}
+      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3 sm:px-4"
+      // Pin to layout bottom. visualViewport offset is disabled on iOS (see hook).
+      style={{ bottom: viewportBottomOffset || 0 }}
       aria-label="Main navigation"
     >
       <div
         className={cn(
-          'nexus-bottom-dock__pill pointer-events-auto flex flex-col px-1',
+          'pointer-events-auto flex w-full max-w-lg flex-col overflow-visible px-1',
           glassDockStyles,
           isMobile
-            ? 'w-full max-w-lg overflow-visible'
+            ? null
             : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
         )}
+        style={{
+          // Always paint home-indicator inset inside the glass (0 on desktop).
+          // This must not be empty margin under the pill — that is the “high dock” bug.
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          marginBottom: isMobile ? 8 : 0,
+        }}
       >
         <div
           className={cn(
-            'flex w-full items-stretch',
+            // items-end (not stretch) keeps the Apps orb from being vertically squashed.
+            'flex w-full items-end overflow-visible',
             isMobile ? 'h-[var(--nexus-dock-height)]' : 'h-full'
           )}
         >
