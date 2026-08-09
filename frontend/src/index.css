@@ -12,10 +12,16 @@
     /* iPhone notch / Dynamic Island / status bar insets */
     --nexus-safe-top: env(safe-area-inset-top, 0px);
     --nexus-safe-bottom: env(safe-area-inset-bottom, 0px);
-    /* Floating bottom dock: use the larger of float margin OR home-indicator inset (don't stack). */
+    /*
+     * Floating bottom dock clearance (content / sticky footers).
+     * In standalone the home-indicator inset is painted *inside* the glass pill
+     * so the dock sits lower; only a small float gap remains under the pill.
+     */
     --nexus-dock-height: 3.75rem;
-    --nexus-dock-pad-bottom: max(0.75rem, var(--nexus-safe-bottom));
-    --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
+    --nexus-dock-float: 0.5rem;
+    --nexus-dock-clearance: calc(
+      var(--nexus-dock-height) + var(--nexus-dock-float) + var(--nexus-safe-bottom)
+    );
 
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;

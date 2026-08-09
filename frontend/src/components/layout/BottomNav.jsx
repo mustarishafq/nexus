@@ -23,8 +23,10 @@ export default function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const viewportBottomOffset = useVisualViewportBottomOffset();
   const standalone = isRunningStandalone();
+  // Only needed in Safari browser tabs (collapsing chrome). Standalone PWA has no
+  // URL bar — applying this offset there falsely lifts the dock.
+  const viewportBottomOffset = useVisualViewportBottomOffset({ enabled: !standalone });
   const [badgeCounts, setBadgeCounts] = useState({
     notifications: 0,
     messages: 0,
@@ -187,26 +189,37 @@ export default function BottomNav() {
       className={cn(
         // Full-width only for centering — must not steal clicks beside the dock.
         'pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
-        // In Safari (browser tab), chrome already clears the home indicator — adding
-        // safe-area on top of the float margin creates a large gap. Use the larger of
-        // the two in PWA/standalone instead of stacking them.
-        standalone
-          ? 'pb-[var(--nexus-dock-pad-bottom)]'
-          : 'pb-3'
+        // Small float under the pill. Home-indicator inset is inside the glass in PWA
+        // so the dock reads as flush/low instead of hovering above empty space.
+        standalone ? 'pb-[var(--nexus-dock-float)]' : 'pb-3'
       )}
       style={{ bottom: viewportBottomOffset }}
       aria-label="Main navigation"
     >
       <div
         className={cn(
-          'pointer-events-auto flex items-stretch px-1',
+          'pointer-events-auto flex flex-col px-1',
           glassDockStyles,
           isMobile
-            ? 'h-[var(--nexus-dock-height)] w-full max-w-lg overflow-visible'
+            ? 'w-full max-w-lg overflow-visible'
             : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
         )}
       >
-        {navItems.map(renderNavItem)}
+        <div
+          className={cn(
+            'flex w-full items-stretch',
+            isMobile ? 'h-[var(--nexus-dock-height)]' : 'h-full'
+          )}
+        >
+          {navItems.map(renderNavItem)}
+        </div>
+        {standalone && isMobile ? (
+          <div
+            className="shrink-0"
+            style={{ height: 'var(--nexus-safe-bottom)' }}
+            aria-hidden
+          />
+        ) : null}
       </div>
     </nav>
   );

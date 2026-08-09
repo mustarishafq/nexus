@@ -20,8 +20,8 @@ export default function PwaInstallPrompt() {
   const isMobile = useIsMobile();
   const pwaInstall = usePwaInstall();
   const { isOffline: networkOffline } = useOnlineStatus();
-  const viewportBottomOffset = useVisualViewportBottomOffset();
   const standalone = isRunningStandalone();
+  const viewportBottomOffset = useVisualViewportBottomOffset({ enabled: !standalone });
   const [showPrompt, setShowPrompt] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [manualInstallPlatform, setManualInstallPlatform] = useState(null);
