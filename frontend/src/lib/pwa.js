@@ -16,6 +16,15 @@ export function isRunningStandalone() {
   );
 }
 
+/** Keep <html class="nexus-standalone"> in sync for CSS safe-area dock rules. */
+export function syncStandaloneDocumentClass() {
+  if (typeof document === 'undefined') return isRunningStandalone();
+
+  const standalone = isRunningStandalone();
+  document.documentElement.classList.toggle('nexus-standalone', standalone);
+  return standalone;
+}
+
 export function isIosDevice() {
   if (typeof navigator === 'undefined') return false;
 

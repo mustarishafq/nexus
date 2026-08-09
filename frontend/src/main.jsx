@@ -11,12 +11,20 @@ import {
   captureNotificationOpenFromUrl,
   dispatchNotificationOpen,
 } from '@/lib/pendingNotificationOpen'
-import { initPwaInstallListeners } from '@/lib/pwa'
+import { initPwaInstallListeners, syncStandaloneDocumentClass } from '@/lib/pwa'
 import { queryClientInstance } from '@/lib/query-client'
 
 if (typeof window !== 'undefined') {
   initPwaInstallListeners();
+  syncStandaloneDocumentClass();
   captureNotificationOpenFromUrl();
+
+  const syncStandalone = () => {
+    syncStandaloneDocumentClass();
+  };
+  window.matchMedia('(display-mode: standalone)').addEventListener('change', syncStandalone);
+  window.matchMedia('(display-mode: fullscreen)').addEventListener('change', syncStandalone);
+  window.matchMedia('(display-mode: minimal-ui)').addEventListener('change', syncStandalone);
 }
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

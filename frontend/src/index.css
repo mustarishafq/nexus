@@ -745,3 +745,36 @@
     opacity: 0.35;
   }
 }
+
+/* ── Bottom dock (iOS PWA safe-area) ─────────────────────────────────────────
+ * Home-indicator inset is painted *inside* the glass pill so the dock sits low.
+ * Do not put that inset as empty margin under the pill — it looks "broken/high".
+ */
+.nexus-bottom-dock {
+  bottom: 0;
+  padding-bottom: 0.75rem;
+}
+
+.nexus-bottom-dock__pill {
+  padding-bottom: 0;
+}
+
+@media (display-mode: standalone),
+       (display-mode: fullscreen),
+       (display-mode: minimal-ui) {
+  .nexus-bottom-dock {
+    padding-bottom: 0.5rem;
+  }
+
+  .nexus-bottom-dock__pill {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+html.nexus-standalone .nexus-bottom-dock {
+  padding-bottom: 0.5rem;
+}
+
+html.nexus-standalone .nexus-bottom-dock__pill {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -13,6 +13,7 @@ import {
   dismissManualInstallPrompt,
   getManualInstallPlatform,
   getManualInstallSteps,
+  isIosDevice,
   isRunningStandalone,
 } from '@/lib/pwa';
 
@@ -21,7 +22,9 @@ export default function PwaInstallPrompt() {
   const pwaInstall = usePwaInstall();
   const { isOffline: networkOffline } = useOnlineStatus();
   const standalone = isRunningStandalone();
-  const viewportBottomOffset = useVisualViewportBottomOffset({ enabled: !standalone });
+  const viewportBottomOffset = useVisualViewportBottomOffset({
+    enabled: !standalone && !isIosDevice(),
+  });
   const [showPrompt, setShowPrompt] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [manualInstallPlatform, setManualInstallPlatform] = useState(null);

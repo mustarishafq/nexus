@@ -12,7 +12,7 @@ import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOf
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { cn } from '@/lib/utils';
-import { isRunningStandalone } from '@/lib/pwa';
+import { isIosDevice, isRunningStandalone } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
@@ -24,9 +24,12 @@ export default function BottomNav() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const standalone = isRunningStandalone();
-  // Only needed in Safari browser tabs (collapsing chrome). Standalone PWA has no
-  // URL bar — applying this offset there falsely lifts the dock.
-  const viewportBottomOffset = useVisualViewportBottomOffset({ enabled: !standalone });
+  const isIos = isIosDevice();
+  // Safari/Chrome on iOS report flaky visualViewport gaps that float the dock
+  // mid-screen. Only use this offset for non-iOS browser tabs.
+  const viewportBottomOffset = useVisualViewportBottomOffset({
+    enabled: !standalone && !isIos,
+  });
   const [badgeCounts, setBadgeCounts] = useState({
     notifications: 0,
     messages: 0,
@@ -188,17 +191,14 @@ export default function BottomNav() {
     <nav
       className={cn(
         // Full-width only for centering — must not steal clicks beside the dock.
-        'pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
-        // Small float under the pill. Home-indicator inset is inside the glass in PWA
-        // so the dock reads as flush/low instead of hovering above empty space.
-        standalone ? 'pb-[var(--nexus-dock-float)]' : 'pb-3'
+        'nexus-bottom-dock pointer-events-none fixed left-0 right-0 z-40 flex justify-center px-3 sm:px-4',
       )}
-      style={{ bottom: viewportBottomOffset }}
+      style={viewportBottomOffset ? { bottom: viewportBottomOffset } : undefined}
       aria-label="Main navigation"
     >
       <div
         className={cn(
-          'pointer-events-auto flex flex-col px-1',
+          'nexus-bottom-dock__pill pointer-events-auto flex flex-col px-1',
           glassDockStyles,
           isMobile
             ? 'w-full max-w-lg overflow-visible'
@@ -213,13 +213,6 @@ export default function BottomNav() {
         >
           {navItems.map(renderNavItem)}
         </div>
-        {standalone && isMobile ? (
-          <div
-            className="shrink-0"
-            style={{ height: 'var(--nexus-safe-bottom)' }}
-            aria-hidden
-          />
-        ) : null}
       </div>
     </nav>
   );
