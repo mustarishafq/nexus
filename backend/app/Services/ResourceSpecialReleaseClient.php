@@ -19,7 +19,7 @@ class ResourceSpecialReleaseClient
 
     private const HTTP_TIMEOUT_SECONDS = 4;
 
-    private const CACHE_SECONDS = 60;
+    private const CACHE_SECONDS = 15;
 
     public function __construct(
         private readonly ResourceAttendanceForwarder $forwarder,

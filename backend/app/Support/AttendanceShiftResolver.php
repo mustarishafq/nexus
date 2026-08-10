@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AttendanceLocation;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
+use App\Services\ResourceSpecialReleaseClient;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -42,11 +43,20 @@ class AttendanceShiftResolver
     /**
      * @return array<string, mixed>|null
      */
-    public static function resolveShiftForClockIn(User $user, Carbon $at, ?DepartmentAttendanceSetting $setting = null): ?array
-    {
+    public static function resolveShiftForClockIn(
+        User $user,
+        Carbon $at,
+        ?DepartmentAttendanceSetting $setting = null,
+        ?SpecialReleasePin $activeRelease = null,
+    ): ?array {
         $setting = $setting ?? self::settingForUser($user);
         if (! $setting) {
             return null;
+        }
+
+        $override = self::specialReleaseShiftForMoment($user, $at, $setting, $activeRelease);
+        if ($override) {
+            return $override;
         }
 
         $shifts = self::shiftsForUser($user, $setting);
@@ -72,9 +82,37 @@ class AttendanceShiftResolver
     /**
      * @return array<string, mixed>|null
      */
-    public static function resolveShiftForMoment(User $user, Carbon $at, ?DepartmentAttendanceSetting $setting = null): ?array
-    {
-        return self::resolveShiftForClockIn($user, $at, $setting);
+    public static function resolveShiftForMoment(
+        User $user,
+        Carbon $at,
+        ?DepartmentAttendanceSetting $setting = null,
+        ?SpecialReleasePin $activeRelease = null,
+    ): ?array {
+        return self::resolveShiftForClockIn($user, $at, $setting, $activeRelease);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public static function specialReleaseShiftForMoment(
+        User $user,
+        Carbon $at,
+        ?DepartmentAttendanceSetting $setting = null,
+        ?SpecialReleasePin $activeRelease = null,
+    ): ?array {
+        $setting = $setting ?? self::settingForUser($user);
+        if (! $setting) {
+            return null;
+        }
+
+        $release = $activeRelease;
+        if (! $release) {
+            $date = $at->copy()->timezone($setting->timezone ?: config('app.timezone'))->toDateString();
+            $release = app(ResourceSpecialReleaseClient::class)
+                ->findApprovedForUserOnDate($user->id, $date);
+        }
+
+        return $release?->toSyntheticShift();
     }
 
     public static function locationForShift(

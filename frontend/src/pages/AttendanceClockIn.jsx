@@ -205,6 +205,9 @@ export default function AttendanceClockIn() {
             <CardDescription className="text-pretty">
               Clock within {activeSpecialRelease.radius_meters}m of your approved pin
               {allowOutsideRadius ? ' (outstation outside pin still allowed with warning)' : ''}.
+              {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
+                ? ` Shift hours: ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}${activeSpecialRelease.shift_crosses_midnight ? ' (overnight)' : ''}.`
+                : ''}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -237,6 +240,9 @@ export default function AttendanceClockIn() {
               {activeSpecialRelease ? (
                 <Badge variant="secondary">
                   Special release ({specialReleaseTypeLabel}) · {activeSpecialRelease.radius_meters}m pin
+                  {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
+                    ? ` · ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}`
+                    : ''}
                 </Badge>
               ) : null}
             </div>

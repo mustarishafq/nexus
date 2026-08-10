@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
+use App\Services\ResourceSpecialReleaseClient;
 use Carbon\Carbon;
 
 class AttendanceLateEvaluator
@@ -18,10 +19,12 @@ class AttendanceLateEvaluator
      *     late_minutes: int,
      *     scheduled_start: ?string,
      *     shift_name: ?string,
+     *     shift_id: ?string,
      *     grace_period_minutes: int,
      *     early_clock_in_window_minutes: int,
      *     early_clock_in_cutoff_minutes: int,
-     *     require_late_clock_in_reason: bool
+     *     require_late_clock_in_reason: bool,
+     *     special_release_shift?: bool
      * }
      */
     public static function evaluate(User $user, Carbon $capturedAt): array
@@ -34,6 +37,7 @@ class AttendanceLateEvaluator
             'late_minutes' => 0,
             'scheduled_start' => null,
             'shift_name' => null,
+            'shift_id' => null,
             'grace_period_minutes' => 0,
             'early_clock_in_window_minutes' => $earlyWindow,
             'early_clock_in_cutoff_minutes' => $earlyCutoff,
@@ -49,7 +53,7 @@ class AttendanceLateEvaluator
             ->where('enabled', true)
             ->first();
 
-        if (! $setting || empty($setting->shifts)) {
+        if (! $setting) {
             return $result;
         }
 
@@ -59,34 +63,72 @@ class AttendanceLateEvaluator
         $grace = (int) $setting->grace_period_minutes;
         $result['grace_period_minutes'] = $grace;
 
-        foreach ($setting->shifts as $shift) {
+        $today = $at->toDateString();
+        $release = app(ResourceSpecialReleaseClient::class)
+            ->findApprovedForUserOnDate($user->id, $today);
+        $synthetic = $release?->toSyntheticShift();
+
+        if ($synthetic) {
+            return self::evaluateAgainstShift($synthetic, $at, $grace, $earlyWindow, $result, specialRelease: true);
+        }
+
+        if (empty($setting->shifts)) {
+            return $result;
+        }
+
+        $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
+        foreach ($shifts as $shift) {
             if (! self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
                 continue;
             }
 
-            $start = self::parseTimeToMinutes((string) ($shift['start_time'] ?? '09:00'));
-            $end = self::parseTimeToMinutes((string) ($shift['end_time'] ?? '17:00'));
-            $crosses = (bool) ($shift['crosses_midnight'] ?? false);
-            $current = ($at->hour * 60) + $at->minute;
-            $endBound = min((24 * 60) - 1, $end + $grace);
+            return self::evaluateAgainstShift($shift, $at, $grace, $earlyWindow, $result);
+        }
 
-            // Overnight morning leg is still the previous calendar day's start.
-            $onMorningLeg = $crosses && $current <= $endBound;
-            $scheduled = $at->copy()->startOfDay()->addMinutes($start);
-            if ($onMorningLeg) {
-                $scheduled->subDay();
-            }
+        return $result;
+    }
 
-            $deadline = $scheduled->copy()->addMinutes($grace);
-            $result['scheduled_start'] = $scheduled->toIso8601String();
-            $result['shift_name'] = $shift['name'] ?? null;
+    /**
+     * @param  array<string, mixed>  $shift
+     * @param  array<string, mixed>  $result
+     * @return array<string, mixed>
+     */
+    private static function evaluateAgainstShift(
+        array $shift,
+        Carbon $at,
+        int $grace,
+        int $earlyWindow,
+        array $result,
+        bool $specialRelease = false,
+    ): array {
+        if (! self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
+            return $result;
+        }
 
-            if ($at->gt($deadline)) {
-                $result['is_late'] = true;
-                $result['late_minutes'] = (int) $deadline->diffInMinutes($at);
-            }
+        $start = self::parseTimeToMinutes((string) ($shift['start_time'] ?? '09:00'));
+        $end = self::parseTimeToMinutes((string) ($shift['end_time'] ?? '17:00'));
+        $crosses = (bool) ($shift['crosses_midnight'] ?? false);
+        $current = ($at->hour * 60) + $at->minute;
+        $endBound = min((24 * 60) - 1, $end + $grace);
 
-            break;
+        // Overnight morning leg is still the previous calendar day's start.
+        $onMorningLeg = $crosses && $current <= $endBound;
+        $scheduled = $at->copy()->startOfDay()->addMinutes($start);
+        if ($onMorningLeg) {
+            $scheduled->subDay();
+        }
+
+        $deadline = $scheduled->copy()->addMinutes($grace);
+        $result['scheduled_start'] = $scheduled->toIso8601String();
+        $result['shift_name'] = $shift['name'] ?? null;
+        $result['shift_id'] = isset($shift['id']) ? (string) $shift['id'] : null;
+        if ($specialRelease) {
+            $result['special_release_shift'] = true;
+        }
+
+        if ($at->gt($deadline)) {
+            $result['is_late'] = true;
+            $result['late_minutes'] = (int) $deadline->diffInMinutes($at);
         }
 
         return $result;

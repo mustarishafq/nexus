@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AttendanceRecord;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
+use App\Services\ResourceSpecialReleaseClient;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -33,33 +34,69 @@ class AttendanceReminderEvaluator
             return null;
         }
 
-        $shifts = $setting->shifts ?? [];
+        $now = ($now ?? now())->copy()->timezone($setting->timezone);
+        $shifts = self::effectiveShiftsForUser($user, $setting, $now);
 
         if ($shifts === []) {
             return null;
         }
 
-        $now = ($now ?? now())->copy()->timezone($setting->timezone);
         $nextType = self::resolveNextType($lastRecord);
 
         if ($nextType === 'clock_in') {
-            return self::evaluateClockInReminder($setting, $todayRecords, $now);
+            return self::evaluateClockInReminder($setting, $todayRecords, $now, $shifts);
         }
 
-        return self::evaluateClockOutReminder($setting, $lastRecord, $now);
+        return self::evaluateClockOutReminder($setting, $lastRecord, $now, $shifts);
+    }
+
+    /**
+     * Prefer Insan special-release overwrite hours when approved for the local day.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function effectiveShiftsForUser(
+        User $user,
+        DepartmentAttendanceSetting $setting,
+        Carbon $now,
+    ): array {
+        $date = $now->toDateString();
+        $release = app(ResourceSpecialReleaseClient::class)
+            ->findApprovedForUserOnDate($user->id, $date);
+        $synthetic = $release?->toSyntheticShift();
+
+        if ($synthetic) {
+            return [$synthetic];
+        }
+
+        // Overnight morning leg: release may still be dated yesterday.
+        if ($now->hour < 12) {
+            $yesterday = $now->copy()->subDay()->toDateString();
+            $overnightRelease = app(ResourceSpecialReleaseClient::class)
+                ->findApprovedForUserOnDate($user->id, $yesterday);
+            $overnightSynthetic = $overnightRelease?->toSyntheticShift();
+            if ($overnightSynthetic && (bool) ($overnightSynthetic['crosses_midnight'] ?? false)) {
+                return [$overnightSynthetic];
+            }
+        }
+
+        return array_values(array_filter(
+            is_array($setting->shifts ?? null) ? $setting->shifts : [],
+            static fn ($shift) => is_array($shift),
+        ));
     }
 
     /**
      * @param  Collection<int, AttendanceRecord>  $todayRecords
+     * @param  list<array<string, mixed>>  $shifts
      * @return array<string, mixed>|null
      */
     private static function evaluateClockInReminder(
         DepartmentAttendanceSetting $setting,
         Collection $todayRecords,
         Carbon $now,
+        array $shifts,
     ): ?array {
-        $shifts = $setting->shifts ?? [];
-
         foreach ($shifts as $shift) {
             if (! self::shiftAppliesNow($shift, $now, $setting)) {
                 continue;
@@ -102,6 +139,7 @@ class AttendanceReminderEvaluator
                 'minutes_late' => $minutesLate,
                 'urgency' => $minutesLate >= 30 ? 'high' : 'medium',
                 'action_url' => '/attendance',
+                'special_release_shift' => ! empty($shift['special_release_id']),
             ];
         }
 
@@ -184,12 +222,14 @@ class AttendanceReminderEvaluator
     }
 
     /**
+     * @param  list<array<string, mixed>>  $shifts
      * @return array<string, mixed>|null
      */
     private static function evaluateClockOutReminder(
         DepartmentAttendanceSetting $setting,
         ?AttendanceRecord $lastRecord,
         Carbon $now,
+        array $shifts,
     ): ?array {
         if (! $lastRecord || $lastRecord->type !== 'clock_in') {
             return null;
@@ -202,13 +242,13 @@ class AttendanceReminderEvaluator
         }
 
         $shift = AttendancePolicyValidator::findActiveShift(
-            $setting->shifts ?? [],
+            $shifts,
             $clockInAt,
             $setting->grace_period_minutes,
         );
 
         if (! $shift) {
-            $shift = self::findShiftEndingNow($setting->shifts ?? [], $now, $setting->timezone);
+            $shift = self::findShiftEndingNow($shifts, $now, $setting->timezone);
         }
 
         if (! $shift) {
@@ -243,6 +283,7 @@ class AttendanceReminderEvaluator
             'minutes_late' => $minutesLate,
             'urgency' => $minutesLate >= 30 ? 'high' : 'medium',
             'action_url' => '/attendance',
+            'special_release_shift' => ! empty($shift['special_release_id']),
         ];
     }
 
@@ -291,7 +332,8 @@ class AttendanceReminderEvaluator
             return null;
         }
 
-        $shifts = $setting->shifts ?? [];
+        $now = ($now ?? now())->copy()->timezone($setting->timezone);
+        $shifts = self::effectiveShiftsForUser($user, $setting, $now);
 
         if ($shifts === []) {
             return [
@@ -300,7 +342,6 @@ class AttendanceReminderEvaluator
             ];
         }
 
-        $now = ($now ?? now())->copy()->timezone($setting->timezone);
         $shiftsToday = array_values(array_filter(
             $shifts,
             static fn (array $shift) => self::shiftAppliesNow($shift, $now, $setting),
@@ -324,6 +365,7 @@ class AttendanceReminderEvaluator
                 'has_shift_today' => true,
                 'active_shift' => $activeShift['name'],
                 'message' => sprintf('Current shift: %s (%s–%s)', $activeShift['name'], $activeShift['start_time'], $activeShift['end_time']),
+                'special_release_shift' => ! empty($activeShift['special_release_id']),
             ];
         }
 
@@ -337,6 +379,7 @@ class AttendanceReminderEvaluator
                 $nextShift['name'],
                 $nextShift['start_time'],
             ),
+            'special_release_shift' => ! empty($nextShift['special_release_id']),
         ];
     }
 

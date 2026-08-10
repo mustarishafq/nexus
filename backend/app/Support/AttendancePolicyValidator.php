@@ -62,15 +62,18 @@ class AttendancePolicyValidator
         $activeRelease = self::findActiveSpecialRelease($user, $today);
 
         $at = $capturedAt->copy()->timezone($setting->timezone);
-        $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting);
+        $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
         if ($resolvedShift) {
             $metadata['shift_id'] = $resolvedShift['id'] ?? null;
             $metadata['shift_name'] = $resolvedShift['name'] ?? null;
+            if (! empty($resolvedShift['special_release_id'])) {
+                $metadata['special_release_shift'] = true;
+            }
         }
 
         $location = AttendanceShiftResolver::locationForShift($resolvedShift, $setting, $user);
         self::validateGeofence($setting, $location, $type, $latitude, $longitude, $errors, $warnings, $metadata, $activeRelease);
-        self::validateShiftHours($user, $setting, $capturedAt, $errors, $warnings, $metadata);
+        self::validateShiftHours($user, $setting, $capturedAt, $errors, $warnings, $metadata, $activeRelease);
 
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
             $metadata = array_merge(
@@ -101,12 +104,11 @@ class AttendancePolicyValidator
         $user->loadMissing('department');
         $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
         $at = now()->timezone($setting->timezone ?: config('app.timezone'));
-        $activeShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting);
-        $location = AttendanceShiftResolver::locationForShift($activeShift, $setting, $user);
-
         $timezone = $setting->timezone ?: config('app.timezone');
         $today = now()->timezone($timezone)->toDateString();
         $activeRelease = self::findActiveSpecialRelease($user, $today);
+        $activeShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
+        $location = AttendanceShiftResolver::locationForShift($activeShift, $setting, $user);
 
         return [
             'department_id' => $setting->department_id,
@@ -203,7 +205,7 @@ class AttendancePolicyValidator
         if ($activeRelease) {
             self::validateSpecialReleaseGeofence(
                 $activeRelease,
-                $allowOutside,
+                $activeRelease->allowOutsideRadius,
                 $latitude,
                 $longitude,
                 $errors,
@@ -354,19 +356,44 @@ class AttendancePolicyValidator
         array &$errors,
         array &$warnings,
         array &$metadata,
+        ?SpecialReleasePin $activeRelease = null,
     ): void {
+        $at = $capturedAt->copy()->timezone($setting->timezone);
+        $grace = (int) $setting->grace_period_minutes;
+        $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
+
+        $synthetic = $activeRelease?->toSyntheticShift();
+        if ($synthetic) {
+            if (self::isWithinShift($synthetic, $at, $grace, $earlyWindow)) {
+                $metadata['shift_name'] = $synthetic['name'];
+                $metadata['shift_id'] = $synthetic['id'] ?? null;
+                $metadata['special_release_shift'] = true;
+
+                return;
+            }
+
+            if (! $setting->allow_outside_shift_hours) {
+                $errors[] = 'Clock in/out is not allowed outside your special release shift hours.';
+            } else {
+                $warnings[] = 'Recorded outside special release shift hours.';
+                $metadata['outside_shift_hours'] = true;
+                $metadata['special_release_shift'] = true;
+            }
+
+            return;
+        }
+
         $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
 
         if ($shifts === []) {
             return;
         }
 
-        $at = $capturedAt->copy()->timezone($setting->timezone);
         $activeShift = self::findActiveShift(
             $shifts,
             $at,
-            $setting->grace_period_minutes,
-            GamificationSettings::earlyClockInWindowMinutes(),
+            $grace,
+            $earlyWindow,
         );
 
         if ($activeShift) {
