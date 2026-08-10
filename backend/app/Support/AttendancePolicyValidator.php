@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\AttendanceLocation;
 use App\Models\AttendanceRecord;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
@@ -60,8 +61,16 @@ class AttendancePolicyValidator
         $today = $capturedAt->copy()->timezone($setting->timezone)->toDateString();
         $activeRelease = self::findActiveSpecialRelease($user, $today);
 
-        self::validateGeofence($setting, $type, $latitude, $longitude, $errors, $warnings, $metadata, $activeRelease);
-        self::validateShiftHours($setting, $capturedAt, $errors, $warnings, $metadata);
+        $at = $capturedAt->copy()->timezone($setting->timezone);
+        $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting);
+        if ($resolvedShift) {
+            $metadata['shift_id'] = $resolvedShift['id'] ?? null;
+            $metadata['shift_name'] = $resolvedShift['name'] ?? null;
+        }
+
+        $location = AttendanceShiftResolver::locationForShift($resolvedShift, $setting, $user);
+        self::validateGeofence($setting, $location, $type, $latitude, $longitude, $errors, $warnings, $metadata, $activeRelease);
+        self::validateShiftHours($user, $setting, $capturedAt, $errors, $warnings, $metadata);
 
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
             $metadata = array_merge(
@@ -90,7 +99,10 @@ class AttendancePolicyValidator
         }
 
         $user->loadMissing('department');
-        $location = $setting->attendanceLocation;
+        $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
+        $at = now()->timezone($setting->timezone ?: config('app.timezone'));
+        $activeShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting);
+        $location = AttendanceShiftResolver::locationForShift($activeShift, $setting, $user);
 
         $timezone = $setting->timezone ?: config('app.timezone');
         $today = now()->timezone($timezone)->toDateString();
@@ -99,7 +111,7 @@ class AttendancePolicyValidator
         return [
             'department_id' => $setting->department_id,
             'department_name' => $user->department?->name,
-            'attendance_location_id' => $setting->attendance_location_id,
+            'attendance_location_id' => $location?->id ?? $setting->attendance_location_id,
             'attendance_location_name' => $location?->name,
             'geofence_enabled' => (bool) $location?->geofence_enabled,
             'center_latitude' => $location?->center_latitude !== null ? (float) $location->center_latitude : null,
@@ -117,7 +129,10 @@ class AttendancePolicyValidator
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'overtime_enabled' => $setting->overtime_enabled,
             'standard_hours_per_day' => (float) $setting->standard_hours_per_day,
-            'shifts' => $setting->shifts ?? [],
+            'shifts' => $shifts,
+            'attendance_shift_ids' => $user->assignedAttendanceShiftIds(),
+            'attendance_shift_location_ids' => $user->attendanceShiftLocationMap(),
+            'active_shift_id' => $activeShift['id'] ?? null,
             'active_special_release' => $activeRelease?->toSummary(),
         ];
     }
@@ -170,6 +185,7 @@ class AttendancePolicyValidator
      */
     private static function validateGeofence(
         DepartmentAttendanceSetting $setting,
+        ?AttendanceLocation $location,
         string $type,
         ?float $latitude,
         ?float $longitude,
@@ -178,8 +194,6 @@ class AttendancePolicyValidator
         array &$metadata,
         ?SpecialReleasePin $activeRelease = null,
     ): void {
-        $location = $setting->attendanceLocation;
-
         if (! $location?->geofence_enabled) {
             return;
         }
@@ -334,13 +348,14 @@ class AttendancePolicyValidator
      * @param  array<string, mixed>  $metadata
      */
     private static function validateShiftHours(
+        User $user,
         DepartmentAttendanceSetting $setting,
         Carbon $capturedAt,
         array &$errors,
         array &$warnings,
         array &$metadata,
     ): void {
-        $shifts = $setting->shifts ?? [];
+        $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
 
         if ($shifts === []) {
             return;
@@ -356,6 +371,7 @@ class AttendancePolicyValidator
 
         if ($activeShift) {
             $metadata['shift_name'] = $activeShift['name'];
+            $metadata['shift_id'] = $activeShift['id'] ?? null;
 
             return;
         }
@@ -371,7 +387,7 @@ class AttendancePolicyValidator
     /**
      * @param  array<string, mixed>  $shift
      */
-    private static function isWithinShift(
+    public static function isWithinShift(
         array $shift,
         Carbon $at,
         int $graceMinutes,

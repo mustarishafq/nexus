@@ -131,12 +131,19 @@ class DepartmentAttendanceSettings
             $days = array_values(array_unique(array_map('intval', $shift['days_of_week'] ?? [])));
             $days = array_values(array_filter($days, fn (int $day) => $day >= 1 && $day <= 7));
 
+            $id = trim((string) ($shift['id'] ?? ''));
+            if ($id === '' || strlen($id) > 64) {
+                $id = (string) \Illuminate\Support\Str::uuid();
+            }
+
             $normalized[] = [
+                'id' => $id,
                 'name' => $name,
                 'days_of_week' => $days,
                 'start_time' => $start,
                 'end_time' => $end,
                 'crosses_midnight' => (bool) ($shift['crosses_midnight'] ?? false),
+                'attendance_location_id' => self::toNullableInt($shift['attendance_location_id'] ?? null),
             ];
         }
 

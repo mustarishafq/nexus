@@ -9,6 +9,7 @@ class AttendanceLocationSettings
     /** @var array<string, mixed> */
     public const DEFAULTS = [
         'name' => 'New location',
+        'owner_user_id' => null,
         'geofence_enabled' => false,
         'center_latitude' => null,
         'center_longitude' => null,
@@ -31,6 +32,7 @@ class AttendanceLocationSettings
             $config['name'] = self::DEFAULTS['name'];
         }
 
+        $config['owner_user_id'] = self::toNullableInt($input['owner_user_id'] ?? null);
         $config['geofence_enabled'] = self::toBool($input['geofence_enabled'] ?? false);
         $config['center_latitude'] = self::toNullableFloat($input['center_latitude'] ?? null);
         $config['center_longitude'] = self::toNullableFloat($input['center_longitude'] ?? null);
@@ -70,6 +72,7 @@ class AttendanceLocationSettings
     {
         return [
             'name' => ['required', 'string', 'max:120'],
+            'owner_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'geofence_enabled' => ['nullable', 'boolean'],
             'center_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'center_longitude' => ['nullable', 'numeric', 'between:-180,180'],
@@ -90,6 +93,7 @@ class AttendanceLocationSettings
     public static function toDatabaseColumns(array $config): array
     {
         return [
+            'owner_user_id' => $config['owner_user_id'] ?? null,
             'name' => $config['name'],
             'geofence_enabled' => $config['geofence_enabled'],
             'center_latitude' => $config['center_latitude'],
@@ -108,6 +112,7 @@ class AttendanceLocationSettings
     {
         return [
             'id' => $location->id,
+            'owner_user_id' => $location->owner_user_id !== null ? (int) $location->owner_user_id : null,
             'name' => $location->name,
             'geofence_enabled' => $location->geofence_enabled,
             'center_latitude' => $location->center_latitude !== null ? (float) $location->center_latitude : null,
@@ -149,6 +154,15 @@ class AttendanceLocationSettings
     private static function toBool(mixed $value): bool
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private static function toNullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     private static function toNullableFloat(mixed $value): ?float

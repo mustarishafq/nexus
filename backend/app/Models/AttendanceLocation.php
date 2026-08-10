@@ -10,6 +10,7 @@ class AttendanceLocation extends Model
     use HasFactory;
 
     protected $fillable = [
+        'owner_user_id',
         'name',
         'geofence_enabled',
         'center_latitude',
@@ -23,6 +24,7 @@ class AttendanceLocation extends Model
     protected function casts(): array
     {
         return [
+            'owner_user_id' => 'integer',
             'geofence_enabled' => 'boolean',
             'center_latitude' => 'decimal:7',
             'center_longitude' => 'decimal:7',
@@ -38,6 +40,11 @@ class AttendanceLocation extends Model
         return $type === 'clock_out'
             ? (bool) $this->allow_clock_out_outside_radius
             : (bool) $this->allow_outside_radius;
+    }
+
+    public function owner(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
     }
 
     public function departmentSettings(): HasMany

@@ -31,6 +31,8 @@ class User extends Authenticatable
         'cover_picture_crops',
         'bio',
         'department_id',
+        'attendance_shift_ids',
+        'attendance_shift_location_ids',
         'company_id',
         'job_title',
         'work_phone',
@@ -113,6 +115,8 @@ class User extends Authenticatable
             'children' => 'array',
             'date_of_birth' => 'date',
             'joined_at' => 'date',
+            'attendance_shift_ids' => 'array',
+            'attendance_shift_location_ids' => 'array',
             'last_profile_nudge_at' => 'datetime',
             'last_login_at' => 'datetime',
             'exp_total' => 'integer',
@@ -124,6 +128,54 @@ class User extends Authenticatable
         $name = trim((string) ($this->name ?: $this->full_name ?: $this->email ?: ''));
 
         return $name !== '' ? $name : 'User';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function assignedAttendanceShiftIds(): array
+    {
+        $ids = $this->attendance_shift_ids;
+        if (! is_array($ids)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($id) => is_string($id) || is_numeric($id) ? trim((string) $id) : '',
+            $ids,
+        ), static fn (string $id) => $id !== ''));
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function attendanceShiftLocationMap(): array
+    {
+        $map = $this->attendance_shift_location_ids;
+        if (! is_array($map)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($map as $shiftId => $locationId) {
+            $key = trim((string) $shiftId);
+            if ($key === '' || $locationId === null || $locationId === '') {
+                continue;
+            }
+            $out[$key] = (int) $locationId;
+        }
+
+        return $out;
+    }
+
+    public function locationIdForAttendanceShift(?string $shiftId): ?int
+    {
+        if ($shiftId === null || $shiftId === '') {
+            return null;
+        }
+        $map = $this->attendanceShiftLocationMap();
+
+        return $map[$shiftId] ?? null;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AttendanceLocation;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\User;
@@ -150,6 +151,12 @@ class EmployeeSyncApplyService
 
             $user->forceFill($fill)->save();
 
+            if (array_key_exists('attendance_shift_ids', $row)
+                || array_key_exists('attendance_shift_location_names', $row)
+            ) {
+                $this->applyAttendanceShiftFields($user, $row);
+            }
+
             if (array_key_exists('education_history', $row)) {
                 SyncUserProfileRecords::syncEducations(
                     $user,
@@ -226,5 +233,57 @@ class EmployeeSyncApplyService
         $this->companyIdsByName[$name] = $id;
 
         return $id;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function applyAttendanceShiftFields(User $user, array $row): void
+    {
+        if (array_key_exists('attendance_shift_ids', $row)) {
+            $ids = is_array($row['attendance_shift_ids'] ?? null)
+                ? array_values(array_filter(array_map(
+                    static fn ($id) => is_string($id) || is_numeric($id) ? trim((string) $id) : '',
+                    $row['attendance_shift_ids'],
+                ), static fn (string $id) => $id !== ''))
+                : [];
+            $user->attendance_shift_ids = $ids;
+        }
+
+        if (array_key_exists('attendance_shift_location_names', $row)) {
+            $raw = is_array($row['attendance_shift_location_names'] ?? null)
+                ? $row['attendance_shift_location_names']
+                : [];
+            $assigned = $user->assignedAttendanceShiftIds();
+            $locationMap = [];
+            foreach ($raw as $shiftId => $locationName) {
+                $shiftKey = trim((string) $shiftId);
+                $name = trim((string) $locationName);
+                if ($shiftKey === '' || $name === '' || ! in_array($shiftKey, $assigned, true)) {
+                    continue;
+                }
+                $location = AttendanceLocation::query()
+                    ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($name)])
+                    ->where(function ($query) use ($user) {
+                        $query->whereNull('owner_user_id')
+                            ->orWhere('owner_user_id', $user->id);
+                    })
+                    ->first();
+                if ($location) {
+                    $locationMap[$shiftKey] = (int) $location->id;
+                }
+            }
+            $user->attendance_shift_location_ids = $locationMap;
+        } elseif (array_key_exists('attendance_shift_ids', $row)) {
+            $kept = [];
+            foreach ($user->attendanceShiftLocationMap() as $shiftId => $locationId) {
+                if (in_array($shiftId, $user->assignedAttendanceShiftIds(), true)) {
+                    $kept[$shiftId] = $locationId;
+                }
+            }
+            $user->attendance_shift_location_ids = $kept;
+        }
+
+        $user->save();
     }
 }

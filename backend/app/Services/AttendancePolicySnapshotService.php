@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AttendanceLocation;
 use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
+use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\AttendanceLocationSettings;
 use App\Support\AttendanceWatermarkSettings;
@@ -108,6 +109,10 @@ class AttendancePolicySnapshotService
                 $name = $config['name'];
                 $keptLocationNames[] = $name;
 
+                $existing = AttendanceLocation::query()->where('name', $name)->first();
+                $ownerId = $this->resolveLocationOwnerId($row, $existing);
+                $config['owner_user_id'] = $ownerId;
+
                 AttendanceLocation::query()->updateOrCreate(
                     ['name' => $name],
                     AttendanceLocationSettings::toDatabaseColumns($config),
@@ -116,7 +121,7 @@ class AttendancePolicySnapshotService
             }
 
             if ($pruneMissing) {
-                $query = AttendanceLocation::query();
+                $query = AttendanceLocation::query()->whereNull('owner_user_id');
                 if ($keptLocationNames !== []) {
                     $query->whereNotIn('name', array_values(array_unique($keptLocationNames)));
                 }
@@ -145,8 +150,28 @@ class AttendancePolicySnapshotService
                     $locationId = $location?->id;
                 }
 
+                $shifts = is_array($row['shifts'] ?? null) ? $row['shifts'] : [];
+                $normalizedShifts = [];
+                foreach ($shifts as $shift) {
+                    if (! is_array($shift)) {
+                        continue;
+                    }
+                    $shiftLocationName = trim((string) ($shift['location_name'] ?? ''));
+                    $shiftLocationId = null;
+                    if ($shiftLocationName !== '') {
+                        $shiftLocationId = $locationsByName->get(mb_strtolower($shiftLocationName))?->id;
+                    } elseif (isset($shift['attendance_location_id'])) {
+                        // Ignore peer local IDs; names are the portable key.
+                        $shiftLocationId = null;
+                    }
+                    $normalizedShifts[] = array_merge($shift, [
+                        'attendance_location_id' => $shiftLocationId,
+                    ]);
+                }
+
                 $config = DepartmentAttendanceSettings::normalizeConfig(array_merge($row, [
                     'attendance_location_id' => $locationId,
+                    'shifts' => $normalizedShifts,
                 ]));
 
                 DepartmentAttendanceSetting::query()->updateOrCreate(
@@ -177,6 +202,34 @@ class AttendancePolicySnapshotService
         });
 
         return $stats;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function resolveLocationOwnerId(array $row, ?AttendanceLocation $existing): ?int
+    {
+        $nexusId = trim((string) ($row['owner_nexus_user_id'] ?? ''));
+        if ($nexusId !== '' && ctype_digit($nexusId)) {
+            $user = User::query()->find((int) $nexusId);
+            if ($user) {
+                return (int) $user->id;
+            }
+        }
+
+        $email = strtolower(trim((string) ($row['owner_email'] ?? '')));
+        if ($email !== '') {
+            $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+            if ($user) {
+                return (int) $user->id;
+            }
+        }
+
+        if ($existing?->owner_user_id) {
+            return (int) $existing->owner_user_id;
+        }
+
+        return null;
     }
 
     private function absolutizeMediaUrl(?string $url): ?string
