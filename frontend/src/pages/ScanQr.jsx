@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
+import EventCheckInAnswersFields from '@/components/calendar/EventCheckInAnswersFields';
+import { emptyCheckInAnswers, staffMustFillCheckInForm } from '@/lib/eventCheckInForm';
 
 const SCANNER_ELEMENT_ID = 'nexus-event-qr-scanner';
 const VIDEO_READY_TIMEOUT_MS = 8000;
@@ -92,6 +95,7 @@ function formatEventWhen(event) {
 }
 
 export default function ScanQr() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const scannerRef = useRef(null);
   const handlingRef = useRef(false);
@@ -106,6 +110,7 @@ export default function ScanQr() {
   const [busy, setBusy] = useState(false);
   const [scannerKey, setScannerKey] = useState(0);
   const [scannerSession, setScannerSession] = useState(0);
+  const [answers, setAnswers] = useState({});
 
   const refreshCalendarViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
@@ -162,6 +167,12 @@ export default function ScanQr() {
       if (!mountedRef.current) {
         return;
       }
+      const fields = event?.check_in_form?.fields;
+      const nextAnswers = emptyCheckInAnswers(fields);
+      if (nextAnswers.name !== undefined) {
+        nextAnswers.name = user?.full_name || user?.name || '';
+      }
+      setAnswers(nextAnswers);
       setPendingConfirm({ token, event });
     } catch (error) {
       if (!mountedRef.current) {
@@ -179,7 +190,7 @@ export default function ScanQr() {
       }
       handlingRef.current = false;
     }
-  }, [stopScanner]);
+  }, [stopScanner, user]);
 
   const handleDecodedRef = useRef(handleDecoded);
   handleDecodedRef.current = handleDecoded;
@@ -192,7 +203,7 @@ export default function ScanQr() {
     setBusy(true);
 
     try {
-      const data = await db.eventCheckIn.checkInMe(pendingConfirm.token);
+      const data = await db.eventCheckIn.checkInMe(pendingConfirm.token, { answers });
       if (!mountedRef.current) {
         return;
       }
@@ -240,7 +251,7 @@ export default function ScanQr() {
         setBusy(false);
       }
     }
-  }, [busy, pendingConfirm, refreshCalendarViews]);
+  }, [answers, busy, pendingConfirm, refreshCalendarViews]);
 
   const startScanner = useCallback(async () => {
     if (!mountedRef.current) {
@@ -250,6 +261,7 @@ export default function ScanQr() {
     setCameraError(null);
     setLastResult(null);
     setPendingConfirm(null);
+    setAnswers({});
     setLoadingEvent(false);
     setStarting(true);
     setScanning(false);
@@ -432,6 +444,9 @@ export default function ScanQr() {
   const opensAtLabel = pendingConfirm?.event?.check_in_opens_at
     ? format(parseISO(pendingConfirm.event.check_in_opens_at), 'EEEE, MMM d · h:mm a')
     : null;
+  const pendingForm = pendingConfirm?.event?.check_in_form;
+  const staffFillsForm = staffMustFillCheckInForm(pendingForm);
+  const pendingFields = Array.isArray(pendingForm?.fields) ? pendingForm.fields : [];
 
   let overlayLabel = null;
   if (busy) {
@@ -489,7 +504,13 @@ export default function ScanQr() {
           ) : null}
 
           {pendingConfirm ? (
-            <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4 space-y-4">
+            <form
+              className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                confirmCheckIn();
+              }}
+            >
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Confirm check-in
@@ -512,12 +533,29 @@ export default function ScanQr() {
                     <span>{pendingConfirm.event.location}</span>
                   </p>
                 ) : null}
+                {user?.email ? (
+                  <p className="text-xs">
+                    Checking in as <span className="font-medium text-foreground">{user.email}</span>
+                  </p>
+                ) : null}
               </div>
 
               {!attendanceOpen ? (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
                   Attendance opens{opensAtLabel ? ` at ${opensAtLabel}` : ' later'}.
                 </div>
+              ) : null}
+
+              {attendanceOpen && staffFillsForm ? (
+                <EventCheckInAnswersFields
+                  fields={pendingFields}
+                  values={answers}
+                  onChange={(key, value) => {
+                    setAnswers((current) => ({ ...current, [key]: value }));
+                  }}
+                  disabled={busy}
+                  idPrefix="scan-checkin"
+                />
               ) : null}
 
               {attendanceOpen ? (
@@ -528,6 +566,7 @@ export default function ScanQr() {
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button
+                  type="button"
                   variant="outline"
                   className="gap-2"
                   onClick={startScanner}
@@ -537,15 +576,15 @@ export default function ScanQr() {
                   Wrong event
                 </Button>
                 <Button
+                  type="submit"
                   className="gap-2"
-                  onClick={confirmCheckIn}
                   disabled={busy || !attendanceOpen}
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   {busy ? 'Checking in…' : 'Confirm check-in'}
                 </Button>
               </div>
-            </div>
+            </form>
           ) : null}
 
           {lastResult && !pendingConfirm ? (

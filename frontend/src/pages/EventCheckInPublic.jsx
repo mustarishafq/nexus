@@ -12,6 +12,12 @@ import { useAuth } from '@/lib/AuthContext';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import PageLoader from '@/components/PageLoader';
+import EventCheckInAnswersFields from '@/components/calendar/EventCheckInAnswersFields';
+import {
+  defaultCheckInFormFields,
+  emptyCheckInAnswers,
+  staffMustFillCheckInForm,
+} from '@/lib/eventCheckInForm';
 
 function formatEventWhen(event) {
   if (!event?.start_at) {
@@ -32,7 +38,7 @@ export default function EventCheckInPublic() {
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoadingAuth, user, appPublicSettings } = useAuth();
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+  const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
 
@@ -75,7 +81,7 @@ export default function EventCheckInPublic() {
   });
 
   const meMut = useMutation({
-    mutationFn: () => db.eventCheckIn.checkInMe(token),
+    mutationFn: (payload) => db.eventCheckIn.checkInMe(token, payload),
     onSuccess: (data) => {
       setAlreadyCheckedIn(false);
       setResult(data);
@@ -97,16 +103,36 @@ export default function EventCheckInPublic() {
   useEffect(() => {
     if (user?.email) {
       setEmail(user.email);
-      setName(user.full_name || user.name || '');
     }
   }, [user]);
+
+  useEffect(() => {
+    const fields = eventQuery.data?.check_in_form?.fields;
+    const next = emptyCheckInAnswers(Array.isArray(fields) ? fields : defaultCheckInFormFields());
+
+    if (next.name !== undefined) {
+      next.name = user?.full_name || user?.name || '';
+    }
+
+    setAnswers(next);
+  }, [eventQuery.data, user]);
+
+  const handleAnswerChange = (key, value) => {
+    setAnswers((current) => ({ ...current, [key]: value }));
+  };
 
   const handlePublicSubmit = (event) => {
     event.preventDefault();
     publicMut.mutate({
       email: email.trim(),
-      name: name.trim() || undefined,
+      answers,
+      name: String(answers.name || '').trim() || undefined,
     });
+  };
+
+  const handleStaffSubmit = (event) => {
+    event.preventDefault();
+    meMut.mutate({ answers });
   };
 
   if (isLoadingAuth || eventQuery.isLoading) {
@@ -139,6 +165,11 @@ export default function EventCheckInPublic() {
   const opensAtLabel = event?.check_in_opens_at
     ? format(parseISO(event.check_in_opens_at), 'EEEE, MMM d · h:mm a')
     : null;
+  const checkInForm = event?.check_in_form;
+  const checkInFields = Array.isArray(checkInForm?.fields)
+    ? checkInForm.fields
+    : defaultCheckInFormFields();
+  const staffFillsForm = isAuthenticated && staffMustFillCheckInForm(checkInForm);
   const formError = (!result && (publicMut.error || meMut.error))
     ? (publicMut.error || meMut.error)?.message
     : null;
@@ -195,7 +226,7 @@ export default function EventCheckInPublic() {
                   : 'Attendance recorded.'}
             </p>
           </div>
-        ) : !attendanceOpen ? null : isAuthenticated ? (
+        ) : !attendanceOpen ? null : isAuthenticated && !staffFillsForm ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
               Checking in as <span className="font-medium text-foreground">{user?.email}</span>
@@ -211,6 +242,35 @@ export default function EventCheckInPublic() {
               {meMut.isPending ? 'Checking in…' : 'Check in'}
             </Button>
           </div>
+        ) : staffFillsForm ? (
+          <form onSubmit={handleStaffSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="checkin-email">Email</Label>
+              <Input
+                id="checkin-email"
+                type="email"
+                value={user?.email || email}
+                readOnly
+                disabled
+                autoComplete="email"
+              />
+              <p className="text-xs text-muted-foreground">
+                Checking in as your staff account. Please complete the fields below.
+              </p>
+            </div>
+            <EventCheckInAnswersFields
+              fields={checkInFields}
+              values={answers}
+              onChange={handleAnswerChange}
+              disabled={meMut.isPending}
+            />
+            {formError ? (
+              <p className="text-sm text-destructive">{formError}</p>
+            ) : null}
+            <Button type="submit" className="w-full" disabled={meMut.isPending}>
+              {meMut.isPending ? 'Checking in…' : 'Check in'}
+            </Button>
+          </form>
         ) : (
           <form onSubmit={handlePublicSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -228,16 +288,12 @@ export default function EventCheckInPublic() {
                 Staff emails are linked to your account. Other emails are recorded as public guests.
               </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="checkin-name">Name (optional)</Label>
-              <Input
-                id="checkin-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                autoComplete="name"
-              />
-            </div>
+            <EventCheckInAnswersFields
+              fields={checkInFields}
+              values={answers}
+              onChange={handleAnswerChange}
+              disabled={publicMut.isPending}
+            />
             {formError ? (
               <p className="text-sm text-destructive">{formError}</p>
             ) : null}

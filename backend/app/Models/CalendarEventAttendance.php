@@ -15,6 +15,7 @@ class CalendarEventAttendance extends Model
         'email',
         'user_id',
         'display_name',
+        'form_answers',
         'source',
         'checked_in_at',
     ];
@@ -23,6 +24,7 @@ class CalendarEventAttendance extends Model
     {
         return [
             'checked_in_at' => 'datetime',
+            'form_answers' => 'array',
         ];
     }
 

@@ -64,6 +64,14 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import EventQrDialog from '@/components/calendar/EventQrDialog';
 import EventAttendanceList from '@/components/calendar/EventAttendanceList';
+import EventCheckInFormFieldsEditor from '@/components/calendar/EventCheckInFormFieldsEditor';
+import {
+  CHECK_IN_FORM_AUDIENCE_PUBLIC,
+  defaultCheckInFormFields,
+  normalizeCheckInFormAudience,
+  normalizeCheckInFormFields,
+  pollFieldHasEnoughOptions,
+} from '@/lib/eventCheckInForm';
 
 function toDateTimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -183,6 +191,8 @@ export default function AdminCalendar() {
   const [startAt, setStartAt] = useState(toDateTimeLocalValue(new Date()));
   const [endAt, setEndAt] = useState(toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
   const [checkInOpensAt, setCheckInOpensAt] = useState('');
+  const [checkInFormFields, setCheckInFormFields] = useState(() => defaultCheckInFormFields());
+  const [checkInFormAudience, setCheckInFormAudience] = useState(CHECK_IN_FORM_AUDIENCE_PUBLIC);
   const [isAllDay, setIsAllDay] = useState(false);
   const [recurrenceFrequency, setRecurrenceFrequency] = useState('none');
   const [seriesShareQr, setSeriesShareQr] = useState(false);
@@ -346,6 +356,16 @@ export default function AdminCalendar() {
       opensAt = opens.toISOString();
     }
 
+    if (checkInFormFields.some((field) => !String(field.label || '').trim())) {
+      toast.error('Each check-in field needs a label');
+      return;
+    }
+
+    if (checkInFormFields.some((field) => !pollFieldHasEnoughOptions(field))) {
+      toast.error('Poll fields need at least two options');
+      return;
+    }
+
     const allInvitees = Array.from(new Set(
       [...selectedUserEmails, ...customInvitees]
         .map((email) => String(email).trim().toLowerCase())
@@ -359,6 +379,8 @@ export default function AdminCalendar() {
       start_at: start.toISOString(),
       end_at: end.toISOString(),
       check_in_opens_at: opensAt,
+      check_in_form_fields: normalizeCheckInFormFields(checkInFormFields),
+      check_in_form_audience: normalizeCheckInFormAudience(checkInFormAudience),
       is_all_day: isAllDay,
       attendee_emails: allInvitees.length ? allInvitees : null,
     };
@@ -401,6 +423,8 @@ export default function AdminCalendar() {
     setStartAt(toDateTimeLocalValue(new Date()));
     setEndAt(toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
     setCheckInOpensAt('');
+    setCheckInFormFields(defaultCheckInFormFields());
+    setCheckInFormAudience(CHECK_IN_FORM_AUDIENCE_PUBLIC);
     setSelectedUserEmails([]);
     setCustomInvitees([]);
     setCustomInviteeInput('');
@@ -424,6 +448,8 @@ export default function AdminCalendar() {
     setStartAt(toDateTimeLocalValue(start));
     setEndAt(toDateTimeLocalValue(end));
     setCheckInOpensAt('');
+    setCheckInFormFields(defaultCheckInFormFields());
+    setCheckInFormAudience(CHECK_IN_FORM_AUDIENCE_PUBLIC);
     setSelectedUserEmails([]);
     setCustomInvitees([]);
     setCustomInviteeInput('');
@@ -474,6 +500,8 @@ export default function AdminCalendar() {
         ? toDateTimeLocalValue(new Date(event.check_in_opens_at))
         : ''
     );
+    setCheckInFormFields(normalizeCheckInFormFields(event.check_in_form_fields));
+    setCheckInFormAudience(normalizeCheckInFormAudience(event.check_in_form_audience));
     setSelectedUserEmails(Array.from(new Set(selected)));
     setCustomInvitees(Array.from(new Set(custom)));
     setCustomInviteeInput('');
@@ -1019,6 +1047,15 @@ export default function AdminCalendar() {
                   />
                 </div>
               ) : null}
+
+              <div className="border-t pt-3">
+                <EventCheckInFormFieldsEditor
+                  fields={checkInFormFields}
+                  onFieldsChange={setCheckInFormFields}
+                  audience={checkInFormAudience}
+                  onAudienceChange={setCheckInFormAudience}
+                />
+              </div>
             </div>
 
             {!editingId ? (

@@ -8,6 +8,7 @@ use App\Models\CalendarEventAttendance;
 use App\Models\User;
 use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
+use App\Support\CalendarEventCheckInForm;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,22 +43,32 @@ class CalendarEventCheckInController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'email:rfc', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
+            'answers' => ['sometimes', 'nullable', 'array'],
         ]);
 
         $email = strtolower(trim($validated['email']));
-        $displayName = isset($validated['name']) ? trim((string) $validated['name']) : null;
-        $displayName = $displayName !== '' ? $displayName : null;
+        $answers = CalendarEventCheckInForm::validateAnswers(
+            CalendarEventCheckInForm::fieldsForEvent($event->check_in_form_fields),
+            $validated['answers'] ?? [],
+            $validated['name'] ?? null,
+        );
 
         $user = User::query()
             ->whereRaw('LOWER(email) = ?', [$email])
             ->first();
 
+        $displayName = CalendarEventCheckInForm::displayNameFromAnswers(
+            $answers,
+            $user?->full_name ?? $user?->name
+        );
+
         return $this->createAttendance(
             $event,
             $email,
             $user?->id,
-            $displayName ?? $user?->full_name ?? $user?->name,
-            CalendarEventAttendance::SOURCE_PUBLIC_FORM
+            $displayName,
+            CalendarEventAttendance::SOURCE_PUBLIC_FORM,
+            $answers,
         );
     }
 
@@ -85,12 +96,32 @@ class CalendarEventCheckInController extends Controller
             return response()->json(['message' => 'Your account does not have an email address.'], 422);
         }
 
+        $request->validate([
+            'answers' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        $audience = CalendarEventCheckInForm::audienceForEvent($event->check_in_form_audience);
+        $answers = [];
+
+        if (CalendarEventCheckInForm::requiresAnswersForStaff($audience)) {
+            $answers = CalendarEventCheckInForm::validateAnswers(
+                CalendarEventCheckInForm::fieldsForEvent($event->check_in_form_fields),
+                $request->input('answers'),
+            );
+        }
+
+        $displayName = CalendarEventCheckInForm::displayNameFromAnswers(
+            $answers,
+            $user->full_name ?: $user->name
+        );
+
         return $this->createAttendance(
             $event,
             $email,
             $user->id,
-            $user->full_name ?: $user->name,
-            CalendarEventAttendance::SOURCE_IN_APP
+            $displayName,
+            CalendarEventAttendance::SOURCE_IN_APP,
+            $answers,
         );
     }
 
@@ -118,6 +149,7 @@ class CalendarEventCheckInController extends Controller
                 'is_staff' => $attendance->user_id !== null,
                 'source' => $attendance->source,
                 'checked_in_at' => $attendance->checked_in_at?->toISOString(),
+                'form_answers' => is_array($attendance->form_answers) ? $attendance->form_answers : [],
                 'user' => $attendance->user ? [
                     'id' => $attendance->user->id,
                     'name' => $attendance->user->full_name ?: $attendance->user->name,
@@ -129,6 +161,10 @@ class CalendarEventCheckInController extends Controller
         return response()->json([
             'event_id' => $calendarEvent->id,
             'count' => $attendances->count(),
+            'check_in_form' => CalendarEventCheckInForm::present(
+                $calendarEvent->check_in_form_fields,
+                $calendarEvent->check_in_form_audience,
+            ),
             'attendances' => $attendances,
         ]);
     }
@@ -194,19 +230,29 @@ class CalendarEventCheckInController extends Controller
             ->with('user:id,name,full_name,email')
             ->orderBy('checked_in_at');
 
+        $extraFields = CalendarEventCheckInForm::extraColumns(
+            CalendarEventCheckInForm::fieldsForEvent($calendarEvent->check_in_form_fields)
+        );
+
         $safeTitle = preg_replace('/[^A-Za-z0-9_\-]+/', '-', (string) $calendarEvent->title) ?: 'event';
         $filename = 'event-attendance-'.$safeTitle.'-'.now()->format('Y-m-d-His').'.csv';
 
-        return response()->streamDownload(function () use ($query) {
+        return response()->streamDownload(function () use ($query, $extraFields) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            $headers = [
                 'Name',
                 'Email',
                 'Type',
                 'Source',
                 'Checked in at',
-            ]);
+            ];
+
+            foreach ($extraFields as $field) {
+                $headers[] = $field['label'];
+            }
+
+            fputcsv($handle, $headers);
 
             foreach ($query->lazy(500) as $attendance) {
                 $name = $attendance->display_name
@@ -214,13 +260,21 @@ class CalendarEventCheckInController extends Controller
                     ?: $attendance->user?->name
                     ?: '';
 
-                fputcsv($handle, [
+                $answers = is_array($attendance->form_answers) ? $attendance->form_answers : [];
+
+                $row = [
                     $name,
                     $attendance->email,
                     $attendance->user_id !== null ? 'Staff' : 'Public',
                     $attendance->source,
                     $attendance->checked_in_at?->toIso8601String(),
-                ]);
+                ];
+
+                foreach ($extraFields as $field) {
+                    $row[] = CalendarEventCheckInForm::formatAnswer($answers[$field['key']] ?? null);
+                }
+
+                fputcsv($handle, $row);
             }
 
             fclose($handle);
@@ -321,6 +375,10 @@ class CalendarEventCheckInController extends Controller
             'is_all_day' => (bool) $event->is_all_day,
             'check_in_opens_at' => $event->check_in_opens_at?->toISOString(),
             'attendance_open' => $open,
+            'check_in_form' => CalendarEventCheckInForm::present(
+                $event->check_in_form_fields,
+                $event->check_in_form_audience,
+            ),
         ];
     }
 
@@ -330,6 +388,7 @@ class CalendarEventCheckInController extends Controller
         ?int $userId,
         ?string $displayName,
         string $source,
+        array $formAnswers = [],
     ): JsonResponse {
         $existing = CalendarEventAttendance::query()
             ->where('calendar_event_id', $event->id)
@@ -349,6 +408,7 @@ class CalendarEventCheckInController extends Controller
                 'email' => $email,
                 'user_id' => $userId,
                 'display_name' => $displayName,
+                'form_answers' => $formAnswers === [] ? null : $formAnswers,
                 'source' => $source,
                 'checked_in_at' => Carbon::now(),
             ]);
@@ -408,6 +468,7 @@ class CalendarEventCheckInController extends Controller
             'is_staff' => $attendance->user_id !== null,
             'source' => $attendance->source,
             'checked_in_at' => $attendance->checked_in_at?->toISOString(),
+            'form_answers' => is_array($attendance->form_answers) ? $attendance->form_answers : [],
         ];
     }
 

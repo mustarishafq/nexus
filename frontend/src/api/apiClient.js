@@ -462,9 +462,10 @@ export const db = {
 			});
 		},
 
-		async checkInMe(token) {
+		async checkInMe(token, data) {
 			return request(`/event-check-in/${encodeURIComponent(token)}/me`, {
 				method: 'POST',
+				body: data || {},
 			});
 		},
 

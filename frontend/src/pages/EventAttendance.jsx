@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { extraCheckInFormFields, formatCheckInAnswer, normalizeCheckInFormFields } from '@/lib/eventCheckInForm';
 
 const TABLE_HEAD_CLASS = 'h-11 whitespace-nowrap bg-muted/40 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground';
 const TABLE_CELL_CLASS = 'whitespace-nowrap align-middle px-3 py-3';
@@ -67,6 +68,10 @@ export default function EventAttendance() {
     ? seriesQuery.data.occurrences
     : [];
   const isRecurring = Boolean(event?.series_id) && occurrences.length > 0;
+  const extraFields = extraCheckInFormFields(
+    attendanceQuery.data?.check_in_form?.fields
+      || normalizeCheckInFormFields(event?.check_in_form_fields)
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -77,7 +82,10 @@ export default function EventAttendance() {
     return attendances.filter((row) => {
       const name = displayName(row).toLowerCase();
       const email = String(row.email || '').toLowerCase();
-      return name.includes(q) || email.includes(q);
+      const answers = row.form_answers && typeof row.form_answers === 'object'
+        ? Object.values(row.form_answers).map((value) => formatCheckInAnswer(value)).join(' ').toLowerCase()
+        : '';
+      return name.includes(q) || email.includes(q) || answers.includes(q);
     });
   }, [attendances, search]);
 
@@ -218,7 +226,7 @@ export default function EventAttendance() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name or email"
+              placeholder="Search name, email, or answers"
               className="pl-9"
             />
           </div>
@@ -235,6 +243,11 @@ export default function EventAttendance() {
                   <TableRow>
                     <TableHead className={TABLE_HEAD_CLASS}>Name</TableHead>
                     <TableHead className={TABLE_HEAD_CLASS}>Email</TableHead>
+                    {extraFields.map((field) => (
+                      <TableHead key={field.key} className={TABLE_HEAD_CLASS}>
+                        {field.label}
+                      </TableHead>
+                    ))}
                     <TableHead className={TABLE_HEAD_CLASS}>Type</TableHead>
                     <TableHead className={TABLE_HEAD_CLASS}>Checked in</TableHead>
                   </TableRow>
@@ -248,6 +261,11 @@ export default function EventAttendance() {
                       <TableCell className={`${TABLE_CELL_CLASS} text-muted-foreground`}>
                         {row.email}
                       </TableCell>
+                      {extraFields.map((field) => (
+                        <TableCell key={field.key} className={`${TABLE_CELL_CLASS} text-muted-foreground`}>
+                          {formatCheckInAnswer(row.form_answers?.[field.key]) || '—'}
+                        </TableCell>
+                      ))}
                       <TableCell className={TABLE_CELL_CLASS}>
                         <Badge variant={row.is_staff ? 'secondary' : 'outline'}>
                           {row.is_staff ? 'Staff' : 'Public'}

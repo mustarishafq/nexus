@@ -98,6 +98,8 @@ class CalendarEventRecurrenceService
             'start_at' => $nextStart,
             'end_at' => $nextEnd,
             'check_in_opens_at' => $nextCheckInOpensAt,
+            'check_in_form_fields' => $event->check_in_form_fields,
+            'check_in_form_audience' => $event->check_in_form_audience,
             'is_all_day' => (bool) $event->is_all_day,
             'created_by' => $event->created_by,
             'series_id' => $event->series_id,

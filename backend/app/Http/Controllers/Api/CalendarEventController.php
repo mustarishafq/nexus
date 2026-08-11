@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\CalendarEventNotificationService;
 use App\Services\CalendarEventRecurrenceService;
 use App\Support\ApiTokenAuth;
+use App\Support\CalendarEventCheckInForm;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,6 +87,11 @@ class CalendarEventController extends Controller
             'start_at' => ['required', 'date'],
             'end_at' => ['required', 'date', 'after_or_equal:start_at'],
             'check_in_opens_at' => ['nullable', 'date'],
+            'check_in_form_fields' => ['sometimes', 'nullable', 'array', 'max:'.CalendarEventCheckInForm::MAX_FIELDS],
+            'check_in_form_audience' => ['sometimes', 'nullable', Rule::in([
+                CalendarEventCheckInForm::AUDIENCE_PUBLIC,
+                CalendarEventCheckInForm::AUDIENCE_EVERYONE,
+            ])],
             'is_all_day' => ['sometimes', 'boolean'],
             'attendee_emails' => ['nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
@@ -147,6 +153,12 @@ class CalendarEventController extends Controller
         }
 
         $validated['created_by'] = $user->email;
+        $validated['check_in_form_fields'] = array_key_exists('check_in_form_fields', $validated)
+            ? CalendarEventCheckInForm::normalizeFields($validated['check_in_form_fields'] ?? [])
+            : CalendarEventCheckInForm::defaultFields();
+        $validated['check_in_form_audience'] = CalendarEventCheckInForm::normalizeAudience(
+            $validated['check_in_form_audience'] ?? null
+        );
         $attendeeEmails = $this->normalizeAttendeeEmails($validated['attendee_emails'] ?? null);
         unset(
             $validated['attendee_emails'],
@@ -277,6 +289,11 @@ class CalendarEventController extends Controller
             'start_at' => ['sometimes', 'date'],
             'end_at' => ['sometimes', 'date'],
             'check_in_opens_at' => ['sometimes', 'nullable', 'date'],
+            'check_in_form_fields' => ['sometimes', 'nullable', 'array', 'max:'.CalendarEventCheckInForm::MAX_FIELDS],
+            'check_in_form_audience' => ['sometimes', 'nullable', Rule::in([
+                CalendarEventCheckInForm::AUDIENCE_PUBLIC,
+                CalendarEventCheckInForm::AUDIENCE_EVERYONE,
+            ])],
             'is_all_day' => ['sometimes', 'boolean'],
             'attendee_emails' => ['sometimes', 'nullable', 'array'],
             'attendee_emails.*' => ['email:rfc'],
@@ -287,6 +304,18 @@ class CalendarEventController extends Controller
             $attendeeEmails = $this->normalizeAttendeeEmails($validated['attendee_emails']);
         }
         unset($validated['attendee_emails']);
+
+        if (array_key_exists('check_in_form_fields', $validated)) {
+            $validated['check_in_form_fields'] = CalendarEventCheckInForm::normalizeFields(
+                $validated['check_in_form_fields'] ?? []
+            );
+        }
+
+        if (array_key_exists('check_in_form_audience', $validated)) {
+            $validated['check_in_form_audience'] = CalendarEventCheckInForm::normalizeAudience(
+                $validated['check_in_form_audience']
+            );
+        }
 
         $wasRescheduled = $this->wasScheduleChanged($calendarEvent, $validated);
 
@@ -417,6 +446,8 @@ class CalendarEventController extends Controller
                 ->exists();
 
         $data['attended_by_me'] = $attended;
+        $data['check_in_form_fields'] = CalendarEventCheckInForm::fieldsForEvent($event->check_in_form_fields);
+        $data['check_in_form_audience'] = CalendarEventCheckInForm::audienceForEvent($event->check_in_form_audience);
 
         if ($this->userCanManageEvent($user, $event)) {
             $data['check_in_token'] = $event->check_in_token;
