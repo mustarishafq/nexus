@@ -41,19 +41,13 @@ class CalendarEventCheckInForm
     ];
 
     /**
+     * Guests are only asked for email unless the organizer adds fields.
+     *
      * @return list<array{id: string, key: string, label: string, type: string, required: bool}>
      */
     public static function defaultFields(): array
     {
-        return [
-            [
-                'id' => 'name',
-                'key' => 'name',
-                'label' => 'Name',
-                'type' => self::TYPE_TEXT,
-                'required' => false,
-            ],
-        ];
+        return [];
     }
 
     public static function defaultAudience(): string

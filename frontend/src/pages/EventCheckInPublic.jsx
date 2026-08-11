@@ -14,7 +14,6 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import PageLoader from '@/components/PageLoader';
 import EventCheckInAnswersFields from '@/components/calendar/EventCheckInAnswersFields';
 import {
-  defaultCheckInFormFields,
   emptyCheckInAnswers,
   staffMustFillCheckInForm,
 } from '@/lib/eventCheckInForm';
@@ -108,7 +107,7 @@ export default function EventCheckInPublic() {
 
   useEffect(() => {
     const fields = eventQuery.data?.check_in_form?.fields;
-    const next = emptyCheckInAnswers(Array.isArray(fields) ? fields : defaultCheckInFormFields());
+    const next = emptyCheckInAnswers(Array.isArray(fields) ? fields : []);
 
     if (next.name !== undefined) {
       next.name = user?.full_name || user?.name || '';
@@ -168,7 +167,7 @@ export default function EventCheckInPublic() {
   const checkInForm = event?.check_in_form;
   const checkInFields = Array.isArray(checkInForm?.fields)
     ? checkInForm.fields
-    : defaultCheckInFormFields();
+    : [];
   const staffFillsForm = isAuthenticated && staffMustFillCheckInForm(checkInForm);
   const formError = (!result && (publicMut.error || meMut.error))
     ? (publicMut.error || meMut.error)?.message

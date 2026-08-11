@@ -13,15 +13,9 @@ export const CHECK_IN_FORM_TYPES = [
 ];
 
 export function defaultCheckInFormFields() {
-  return [
-    {
-      id: 'name',
-      key: 'name',
-      label: 'Name',
-      type: 'text',
-      required: false,
-    },
-  ];
+  // Email is always collected. Extra fields are opt-in so organizers
+  // only see (and guests only fill) what they actually added.
+  return [];
 }
 
 export function slugifyCheckInFieldKey(label) {

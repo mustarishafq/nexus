@@ -42,7 +42,7 @@ class CalendarEventCheckInTest extends TestCase
 
         $this->assertNotEmpty($response->json('check_in_token'));
         $this->assertStringContainsString('/event-check-in/', (string) $response->json('check_in_url'));
-        $this->assertSame('Name', $response->json('check_in_form_fields.0.label'));
+        $this->assertSame([], $response->json('check_in_form_fields'));
         $this->assertSame(CalendarEventCheckInForm::AUDIENCE_PUBLIC, $response->json('check_in_form_audience'));
     }
 
@@ -89,13 +89,12 @@ class CalendarEventCheckInTest extends TestCase
 
         $this->postJson('/api/event-check-in/'.$event->check_in_token, [
             'email' => 'visitor@external.com',
-            'name' => 'Visitor',
         ])
             ->assertCreated()
             ->assertJsonPath('attendance.email', 'visitor@external.com')
             ->assertJsonPath('attendance.user_id', null)
             ->assertJsonPath('attendance.is_staff', false)
-            ->assertJsonPath('attendance.display_name', 'Visitor');
+            ->assertJsonPath('attendance.display_name', null);
     }
 
     public function test_authenticated_scan_check_in_and_duplicate_is_rejected(): void
@@ -364,9 +363,16 @@ class CalendarEventCheckInTest extends TestCase
             ->assertJsonPath('check_in_form_audience', CalendarEventCheckInForm::AUDIENCE_PUBLIC)
             ->assertJsonPath('check_in_form_fields.0.key', 'company')
             ->assertJsonPath('check_in_form_fields.0.required', false);
+
+        $this->withToken($token)
+            ->patchJson('/api/calendar-events/'.$created->json('id'), [
+                'check_in_form_fields' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('check_in_form_fields', []);
     }
 
-    public function test_public_show_includes_default_check_in_form(): void
+    public function test_public_show_has_no_extra_check_in_fields_by_default(): void
     {
         $event = CalendarEvent::create([
             'title' => 'Form preview',
@@ -378,8 +384,7 @@ class CalendarEventCheckInTest extends TestCase
         $this->getJson('/api/event-check-in/'.$event->check_in_token)
             ->assertOk()
             ->assertJsonPath('check_in_form.audience', CalendarEventCheckInForm::AUDIENCE_PUBLIC)
-            ->assertJsonPath('check_in_form.fields.0.key', 'name')
-            ->assertJsonPath('check_in_form.fields.0.required', false);
+            ->assertJsonPath('check_in_form.fields', []);
     }
 
     public function test_required_custom_field_is_rejected_when_missing(): void
