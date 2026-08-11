@@ -14,6 +14,7 @@ import {
   attendanceLocationToPayload,
   DEFAULT_ATTENDANCE_LOCATION,
   normalizeAttendanceLocation,
+  sharedAttendanceLocations,
 } from '@/lib/attendanceLocation';
 import { toast } from 'sonner';
 
@@ -90,12 +91,12 @@ export default function AttendanceLocationPanel({ peerHint = 'Insan' }) {
     queryFn: () => db.attendanceLocations.list(),
   });
 
-  const locations = data?.locations || [];
+  const locations = sharedAttendanceLocations(data?.locations);
 
   useEffect(() => {
-    if (!locationId && locations.length) {
-      setLocationId(String(locations[0].id));
-    }
+    if (locationId === 'new') return;
+    if (locationId && locations.some((item) => String(item.id) === locationId)) return;
+    setLocationId(locations[0] ? String(locations[0].id) : '');
   }, [locationId, locations]);
 
   useEffect(() => {

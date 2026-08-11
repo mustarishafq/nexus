@@ -51,4 +51,46 @@ class AttendanceLocation extends Model
     {
         return $this->hasMany(DepartmentAttendanceSetting::class);
     }
+
+    public function isPersonal(): bool
+    {
+        return $this->owner_user_id !== null;
+    }
+
+    public function isVisibleToUser(?int $userId): bool
+    {
+        if ($this->owner_user_id === null) {
+            return true;
+        }
+
+        return $userId !== null && (int) $this->owner_user_id === (int) $userId;
+    }
+
+    public function scopeShared($query)
+    {
+        return $query->whereNull('owner_user_id');
+    }
+
+    /**
+     * @param  list<int|null>  $ids
+     * @return list<int>
+     */
+    public static function existingSharedIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn ($id) => $id === null || $id === '' ? null : (int) $id, $ids),
+            static fn ($id) => $id !== null && $id > 0,
+        )));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return static::query()
+            ->shared()
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
 }

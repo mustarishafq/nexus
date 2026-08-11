@@ -9,6 +9,24 @@ export const DEFAULT_ATTENDANCE_LOCATION = {
   allow_clock_out_outside_radius: false,
 };
 
+export function isPersonalAttendanceLocation(location) {
+  return location?.owner_user_id != null && location.owner_user_id !== '';
+}
+
+/** Shared company sites only — not staff home / personal geofences. */
+export function sharedAttendanceLocations(locations) {
+  return (locations || []).filter((location) => !isPersonalAttendanceLocation(location));
+}
+
+/** Shared sites plus personal locations owned by this employee. */
+export function attendanceLocationsForUser(locations, userId) {
+  const uid = userId == null || userId === '' ? null : Number(userId);
+  return (locations || []).filter((location) => {
+    if (!isPersonalAttendanceLocation(location)) return true;
+    return uid != null && Number(location.owner_user_id) === uid;
+  });
+}
+
 export function normalizeAttendanceLocation(input = {}) {
   let sites = Array.isArray(input.sites) && input.sites.length
     ? input.sites.map((site) => ({
@@ -35,6 +53,7 @@ export function normalizeAttendanceLocation(input = {}) {
 
   return {
     id: input.id ?? null,
+    owner_user_id: input.owner_user_id ?? null,
     name: input.name || DEFAULT_ATTENDANCE_LOCATION.name,
     geofence_enabled: Boolean(input.geofence_enabled),
     center_latitude: input.center_latitude ?? primarySite.latitude ?? '',

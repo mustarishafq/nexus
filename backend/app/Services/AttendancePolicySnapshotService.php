@@ -20,12 +20,33 @@ class AttendancePolicySnapshotService
      */
     public function export(bool $absolutizeLogo = true): array
     {
+        $ownerIds = AttendanceLocation::query()
+            ->whereNotNull('owner_user_id')
+            ->pluck('owner_user_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+        $ownersById = $ownerIds === []
+            ? collect()
+            : User::query()
+                ->whereIn('id', $ownerIds)
+                ->get(['id', 'email'])
+                ->keyBy('id');
+
         $locations = AttendanceLocation::query()
             ->orderBy('name')
             ->get()
-            ->map(function (AttendanceLocation $location) {
+            ->map(function (AttendanceLocation $location) use ($ownersById) {
                 $row = AttendanceLocationSettings::serializeForApi($location);
-                unset($row['id'], $row['department_count']);
+                unset($row['id'], $row['department_count'], $row['owner_user_id']);
+                $owner = $location->owner_user_id
+                    ? $ownersById->get($location->owner_user_id)
+                    : null;
+                $row['owner_email'] = $owner?->email;
+                $row['owner_nexus_user_id'] = $location->owner_user_id
+                    ? (string) $location->owner_user_id
+                    : null;
 
                 return $row;
             })
@@ -128,9 +149,12 @@ class AttendancePolicySnapshotService
                 $stats['locations_pruned'] = (int) $query->delete();
             }
 
-            $locationsByName = AttendanceLocation::query()->get()->keyBy(
-                fn (AttendanceLocation $location) => mb_strtolower((string) $location->name)
-            );
+            $locationsByName = AttendanceLocation::query()
+                ->shared()
+                ->get()
+                ->keyBy(
+                    fn (AttendanceLocation $location) => mb_strtolower((string) $location->name)
+                );
 
             foreach ($departmentRows as $row) {
                 if (! is_array($row)) {

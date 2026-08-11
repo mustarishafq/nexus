@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { sharedAttendanceLocations } from '@/lib/attendanceLocation';
 import {
   DEFAULT_SHIFT,
   departmentAttendanceSettingsToPayload,
@@ -280,7 +281,7 @@ export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) 
   });
 
   const departments = data?.departments || [];
-  const locations = locationsData?.locations || [];
+  const locations = sharedAttendanceLocations(locationsData?.locations);
 
   const filteredDepartments = useMemo(
     () => departments.filter((entry) => departmentMatchesCompany(entry, companyId)),

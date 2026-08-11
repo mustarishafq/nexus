@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\AttendanceLocation;
 use App\Models\DepartmentAttendanceSetting;
 
 class DepartmentAttendanceSettings
@@ -52,7 +53,7 @@ class DepartmentAttendanceSettings
         $config['overtime_threshold_minutes'] = max(0, min(480, (int) ($input['overtime_threshold_minutes'] ?? 0)));
         $config['shifts'] = self::normalizeShifts($input['shifts'] ?? []);
 
-        return $config;
+        return self::restrictLocationIdsToShared($config);
     }
 
     /**
@@ -148,6 +149,35 @@ class DepartmentAttendanceSettings
         }
 
         return $normalized;
+    }
+
+    /**
+     * Personal (owner-scoped) sites cannot be department or shift defaults.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private static function restrictLocationIdsToShared(array $config): array
+    {
+        $ids = [$config['attendance_location_id'] ?? null];
+        foreach ($config['shifts'] ?? [] as $shift) {
+            $ids[] = is_array($shift) ? ($shift['attendance_location_id'] ?? null) : null;
+        }
+
+        $sharedSet = array_fill_keys(AttendanceLocation::existingSharedIds($ids), true);
+
+        $config['attendance_location_id'] = isset($sharedSet[$config['attendance_location_id'] ?? null])
+            ? $config['attendance_location_id']
+            : null;
+
+        $config['shifts'] = array_map(static function (array $shift) use ($sharedSet) {
+            $id = $shift['attendance_location_id'] ?? null;
+            $shift['attendance_location_id'] = isset($sharedSet[$id]) ? $id : null;
+
+            return $shift;
+        }, $config['shifts'] ?? []);
+
+        return $config;
     }
 
     /**

@@ -21,6 +21,7 @@ class AttendanceLocationController extends Controller
         }
 
         $locations = AttendanceLocation::query()
+            ->shared()
             ->withCount('departmentSettings')
             ->orderBy('name')
             ->get();
@@ -40,6 +41,8 @@ class AttendanceLocationController extends Controller
 
         $validated = $request->validate(AttendanceLocationSettings::validationRules());
         $config = AttendanceLocationSettings::normalizeConfig($validated);
+        // Admin-created locations are shared company sites, not personal.
+        $config['owner_user_id'] = null;
 
         $location = AttendanceLocation::query()->create(
             AttendanceLocationSettings::toDatabaseColumns($config),
@@ -60,6 +63,8 @@ class AttendanceLocationController extends Controller
 
         $validated = $request->validate(AttendanceLocationSettings::validationRules());
         $config = AttendanceLocationSettings::normalizeConfig($validated);
+        // Keep personal ownership; admin editor does not reassign owners.
+        $config['owner_user_id'] = $attendanceLocation->owner_user_id;
 
         $attendanceLocation->update(AttendanceLocationSettings::toDatabaseColumns($config));
 
