@@ -118,21 +118,33 @@ export default function PostPoll({ postId, poll, disabled = false, isAuthor = fa
                   className={cn(
                     'group relative w-full overflow-hidden rounded-md border text-left transition-all',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    isSelected
-                      ? 'border-primary/55 bg-primary/[0.07]'
-                      : 'border-border/80 bg-background/40 hover:border-primary/35 hover:bg-muted/25',
+                    showResults
+                      ? isSelected
+                        ? 'border-primary/55 bg-transparent'
+                        : 'border-border/80 bg-transparent hover:border-primary/35'
+                      : isSelected
+                        ? 'border-primary/55 bg-primary/[0.07]'
+                        : 'border-border/80 bg-background/40 hover:border-primary/35 hover:bg-muted/25',
                     busy && !isBusyOption && 'opacity-60'
                   )}
                 >
                   {showResults ? (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'absolute inset-y-0 left-0 transition-[width] duration-300 ease-out',
-                        isSelected ? 'bg-primary/20' : 'bg-muted/50'
-                      )}
-                      style={{ width: `${Math.min(percent, 100)}%` }}
-                    />
+                    <>
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 bg-muted/20 dark:bg-muted/35"
+                      />
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'absolute inset-y-0 left-0 transition-[width] duration-300 ease-out',
+                          isSelected
+                            ? 'bg-primary/25 dark:bg-primary/35'
+                            : 'bg-foreground/[0.06] dark:bg-foreground/12'
+                        )}
+                        style={{ width: `${Math.min(percent, 100)}%` }}
+                      />
+                    </>
                   ) : null}
 
                   <span className="relative flex items-center gap-2 px-2.5 py-1.5">
