@@ -91,6 +91,43 @@ class UserSearchControllerTest extends TestCase
             ->assertJsonCount(1, 'users');
     }
 
+    public function test_directory_can_sort_by_last_login_newest_first(): void
+    {
+        $viewer = User::factory()->create(['is_approved' => true]);
+        $token = $this->issueToken($viewer);
+
+        User::factory()->create([
+            'name' => 'Oldest',
+            'full_name' => 'Oldest Login',
+            'is_approved' => true,
+            'last_login_at' => now()->subDays(10),
+        ]);
+        User::factory()->create([
+            'name' => 'Newest',
+            'full_name' => 'Newest Login',
+            'is_approved' => true,
+            'last_login_at' => now()->subHour(),
+        ]);
+        User::factory()->create([
+            'name' => 'Never',
+            'full_name' => 'Never Logged In',
+            'is_approved' => true,
+            'last_login_at' => null,
+        ]);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/users/directory?sort=-last_login_at&limit=10')
+            ->assertOk();
+
+        $names = collect($response->json('users'))
+            ->pluck('name')
+            ->reject(fn ($name) => $name === $viewer->name)
+            ->values()
+            ->all();
+
+        $this->assertSame(['Newest', 'Oldest', 'Never'], $names);
+    }
+
     public function test_profile_returns_public_profile(): void
     {
         $viewer = User::factory()->create(['is_approved' => true]);

@@ -561,7 +561,7 @@ class UserController extends Controller
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'access_group_id' => ['sometimes', 'nullable', 'integer', 'exists:access_groups,id'],
-            'sort' => ['sometimes', 'string', Rule::in(['full_name', '-full_name', 'joined_at', '-joined_at'])],
+            'sort' => ['sometimes', 'string', Rule::in(['full_name', '-full_name', 'joined_at', '-joined_at', 'last_login_at', '-last_login_at'])],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -589,7 +589,12 @@ class UserController extends Controller
 
         $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
         $column = ltrim($sort, '-');
-        $query->orderBy($column, $direction)->orderBy('full_name');
+        // Put never-logged-in users after everyone when sorting by last activity.
+        if ($column === 'last_login_at') {
+            $query->orderByRaw('last_login_at is null')->orderBy($column, $direction)->orderBy('full_name');
+        } else {
+            $query->orderBy($column, $direction)->orderBy('full_name');
+        }
 
         $users = $query->limit($limit)->get();
 
