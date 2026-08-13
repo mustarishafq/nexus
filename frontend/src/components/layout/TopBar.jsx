@@ -1,6 +1,6 @@
 import db from '@/api/apiClient';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { useUnreadNotifications } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
@@ -22,6 +22,7 @@ import { glassDialogIconButton, glassDialogMutedText, glassDialogTitleText, glas
 
 export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser, logout } = useAuth();
   const [user, setUser] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -45,6 +46,11 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
     if (authUser) return;
     db.auth.me().then(setUser).catch(() => {});
   }, [authUser]);
+
+  // Always dismiss the drawer after in-app navigation (e.g. notification → feed post).
+  useEffect(() => {
+    setPanelOpen(false);
+  }, [location.pathname, location.search]);
 
   return (
     <>
@@ -92,7 +98,7 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
 
             <ThemeToggle />
             <button
-              onClick={() => setPanelOpen(!panelOpen)}
+              onClick={() => setPanelOpen((prev) => !prev)}
               className={cn('relative rounded-lg p-2', glassDialogIconButton)}
             >
               <Bell className="h-5 w-5" />

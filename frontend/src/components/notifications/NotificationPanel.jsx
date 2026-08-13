@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { followNotificationAction } from '@/lib/notificationAction';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X, CheckCheck, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -174,108 +174,105 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
 
   const unreadCount = notifications.filter(isUnreadNotification).length;
 
+  // Render nothing when closed. Exit animations via AnimatePresence were getting
+  // interrupted by mark-as-read re-renders, leaving the drawer stuck open with
+  // open===false (so the X/backdrop could not recover it).
+  if (!open) {
+    return null;
+  }
+
   return createPortal(
     <>
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            key="notification-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
-          />
-        ) : null}
-      </AnimatePresence>
+      <motion.div
+        key="notification-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
+      />
 
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            key="notification-drawer"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className={cn(
-              'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
-              'rounded-bl-2xl sm:rounded-none border-l pt-[var(--nexus-safe-top)]',
-              glassPanelStyles
+      <motion.div
+        key="notification-drawer"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        className={cn(
+          'fixed right-0 top-0 bottom-0 z-[61] flex w-full max-w-md flex-col',
+          'rounded-bl-2xl sm:rounded-none border-l pt-[var(--nexus-safe-top)]',
+          glassPanelStyles
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold text-lg">Notifications</h2>
+            {unreadCount > 0 && (
+              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium">
+                {unreadCount}
+              </span>
             )}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                <h2 className="font-semibold text-lg">Notifications</h2>
-                {unreadCount > 0 && (
-                  <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={markAllRead} className="text-xs h-8">
-                  <CheckCheck className="w-3.5 h-3.5 mr-1" /> Mark all read
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={markAllRead} className="text-xs h-8">
+              <CheckCheck className="w-3.5 h-3.5 mr-1" /> Mark all read
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
 
-            {/* Filter Tabs */}
-            <div className="px-4 pt-3">
-              <Tabs value={filter} onValueChange={setFilter}>
-                <TabsList className="w-full bg-muted/50 h-9 text-foreground/60">
-                  <TabsTrigger value="all" className="text-xs flex-1 data-[state=active]:text-foreground">All</TabsTrigger>
-                  <TabsTrigger value="unread" className="text-xs flex-1 data-[state=active]:text-foreground">Unread</TabsTrigger>
-                  <TabsTrigger value="critical" className="text-xs flex-1 data-[state=active]:text-foreground">Critical</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+        {/* Filter Tabs */}
+        <div className="px-4 pt-3">
+          <Tabs value={filter} onValueChange={setFilter}>
+            <TabsList className="w-full bg-muted/50 h-9 text-foreground/60">
+              <TabsTrigger value="all" className="text-xs flex-1 data-[state=active]:text-foreground">All</TabsTrigger>
+              <TabsTrigger value="unread" className="text-xs flex-1 data-[state=active]:text-foreground">Unread</TabsTrigger>
+              <TabsTrigger value="critical" className="text-xs flex-1 data-[state=active]:text-foreground">Critical</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-            {/* Notifications List */}
-            <ScrollArea className="flex-1 px-3 py-2">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <Bell className="w-10 h-10 mb-3 opacity-30" />
-                  <p className="text-sm font-medium">No notifications</p>
-                  <p className="text-xs text-foreground/60 dark:text-muted-foreground mt-1">You're all caught up!</p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {filtered.map(notif => (
-                    <NotificationItem
-                      key={notif.id}
-                      notification={notif}
-                      onMarkRead={markRead}
-                      onSnooze={snooze}
-                      onDelete={dismiss}
-                      onActivate={activateNotification}
-                      onClose={onClose}
-                    />
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-
-            {/* Footer */}
-            <div className="p-3 border-t border-border/50">
-              <Link to="/notifications" onClick={onClose}>
-                <Button variant="outline" className="w-full text-sm h-9">
-                  View All Notifications
-                </Button>
-              </Link>
+        {/* Notifications List */}
+        <ScrollArea className="flex-1 px-3 py-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
             </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Bell className="w-10 h-10 mb-3 opacity-30" />
+              <p className="text-sm font-medium">No notifications</p>
+              <p className="text-xs text-foreground/60 dark:text-muted-foreground mt-1">You're all caught up!</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {filtered.map(notif => (
+                <NotificationItem
+                  key={notif.id}
+                  notification={notif}
+                  onMarkRead={markRead}
+                  onSnooze={snooze}
+                  onDelete={dismiss}
+                  onActivate={activateNotification}
+                  onClose={onClose}
+                />
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+
+        {/* Footer */}
+        <div className="p-3 border-t border-border/50">
+          <Link to="/notifications" onClick={onClose}>
+            <Button variant="outline" className="w-full text-sm h-9">
+              View All Notifications
+            </Button>
+          </Link>
+        </div>
+      </motion.div>
     </>,
     document.body
   );

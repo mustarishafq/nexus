@@ -26,20 +26,19 @@ export default function NotificationItem({ notification, onMarkRead, onSnooze, o
   const isUnread = notification.is_read !== true && notification.is_read !== 1 && notification.is_read !== '1';
   const message = plainNotificationMessage(notification.message);
 
-  const handleClick = async () => {
-    // Close the drawer immediately so navigation never leaves it stuck open.
+  const handleClick = () => {
+    // Close first, then fire mark-read / navigate without awaiting mark-read.
+    // Awaiting mark-read re-rendered the drawer mid-close and could leave it stuck.
     onClose?.();
 
     if (isUnread && onMarkRead) {
-      try {
-        await onMarkRead(notification);
-      } catch {
+      void Promise.resolve(onMarkRead(notification)).catch(() => {
         // Still follow the action even if mark-as-read fails.
-      }
+      });
     }
 
     if (hasAction && onActivate) {
-      await onActivate(notification);
+      void Promise.resolve(onActivate(notification));
     }
   };
 
