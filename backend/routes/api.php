@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccessGroupController;
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\AdminManualExpAwardController;
 use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\ApiTokenController;
 use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
@@ -174,6 +175,8 @@ Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
 Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);
 
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
+Route::get('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'index']);
+Route::post('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'store']);
 Route::post('/admin/impersonate/stop', [ImpersonateController::class, 'stop']);
 Route::post('/admin/impersonate/{user}', [ImpersonateController::class, 'start']);
 Route::get('/admin/api-tokens', [ApiTokenController::class, 'index']);

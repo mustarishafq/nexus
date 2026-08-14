@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   Flame,
+  Gift,
   Image as ImageIcon,
   Loader2,
   MessageCircle,
@@ -88,7 +89,9 @@ function AnimatedNumber({ value }) {
 }
 
 function MissionIcon({ actionKey, muted = false }) {
-  const Icon = MISSION_ICONS[actionKey] || Target;
+  const Icon = (typeof actionKey === 'string' && actionKey.startsWith('manual_award'))
+    ? Gift
+    : (MISSION_ICONS[actionKey] || Target);
   return (
     <div
       className={cn(
@@ -202,10 +205,39 @@ function MissionGroup({ title, items, empty, muted = false }) {
               <div className={cn('flex items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3', muted && 'opacity-65')}>
                 <MissionIcon actionKey={mission.action_key} muted={muted} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{mission.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{mission.description}</p>
-                  <CapProgress mission={mission} />
+                  <p className={cn('text-sm font-semibold', muted && 'text-muted-foreground')}>{mission.title}</p>
+                  {mission.description ? (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{mission.description}</p>
+                  ) : null}
+                  {mission.base != null ? (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                        +{mission.base} EXP
+                      </span>
+                      {mission.is_manual_award && mission.reward_status === 'pending' ? (
+                        <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                          Ready to claim
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {mission.is_manual_award ? (
+                    <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                      <Check className="h-3 w-3" />
+                      Done today
+                    </p>
+                  ) : (
+                    <CapProgress mission={mission} />
+                  )}
                 </div>
+                {/* Match catalog row width (Go button column) so layouts align */}
+                <span
+                  className="invisible inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-medium"
+                  aria-hidden
+                >
+                  Go
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </span>
               </div>
             )}
           </motion.li>
@@ -250,6 +282,9 @@ function PendingList({ pending, isLoading, claim, claimPending }) {
             <MissionIcon actionKey={reward.action_key} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold truncate">{reward.title}</p>
+              {reward?.metadata?.reason ? (
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{reward.metadata.reason}</p>
+              ) : null}
               <p className="text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
                 +{reward.amount} EXP ready
               </p>

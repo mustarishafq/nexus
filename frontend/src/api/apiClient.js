@@ -1376,6 +1376,20 @@ export const db = {
 		});
 	},
 
+	async listManualExpAwards(params = {}) {
+		const query = new URLSearchParams();
+		if (params.limit) query.set('limit', String(params.limit));
+		const suffix = query.toString() ? `?${query}` : '';
+		return request(`/admin/gamification/manual-awards${suffix}`);
+	},
+
+	async createManualExpAwards(payload) {
+		return request('/admin/gamification/manual-awards', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
 	async listAdminApiTokens() {
 		return request('/admin/api-tokens');
 	},

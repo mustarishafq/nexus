@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch, Gift } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn, formatDateForInput } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -254,6 +255,7 @@ function getAdminIndividualDashboards(dashboards) {
 
 function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder = 'Search user by name or email...' }) {
   const selectedUsers = users.filter((user) => selectedIds.has(user.id));
+  const displayName = (user) => user.full_name || user.name || user.email || 'User';
 
   return (
     <div className="space-y-3">
@@ -270,7 +272,7 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
                 fallbackClassName="bg-primary/15 text-xs"
               />
               <div className="min-w-0 flex-1">
-                <p className="font-medium truncate">{user.full_name || user.email}</p>
+                <p className="font-medium truncate">{displayName(user)}</p>
                 <p className="text-xs opacity-70 truncate">{user.email}</p>
               </div>
               <button
@@ -295,7 +297,7 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
             return (
               <CommandItem
                 key={user.id}
-                value={`${user.full_name || ''} ${user.email || ''}`}
+                value={`${user.full_name || ''} ${user.name || ''} ${user.email || ''}`}
                 onSelect={() => onToggle(user.id)}
                 className="gap-3"
               >
@@ -305,7 +307,7 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
                   fallbackClassName="bg-muted text-xs text-foreground"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{user.full_name || user.email}</p>
+                  <p className="font-medium truncate">{displayName(user)}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
                 <Check className={cn('w-4 h-4 shrink-0', checked ? 'opacity-100 text-primary' : 'opacity-0')} />
@@ -396,6 +398,15 @@ export default function UserManagement() {
     sendInApp: true,
     sendWebPush: true,
   });
+  const [expAwardDialogOpen, setExpAwardDialogOpen] = useState(false);
+  const [expAwardSending, setExpAwardSending] = useState(false);
+  const [expAwardUserIds, setExpAwardUserIds] = useState(new Set());
+  const [expAwardForm, setExpAwardForm] = useState({
+    amount: '50',
+    title: '',
+    reason: '',
+    notify: true,
+  });
   const [apiTokenCreateUserId, setApiTokenCreateUserId] = useState(null);
   const [apiTokenCreateSignal, setApiTokenCreateSignal] = useState(0);
   const csvRef = useRef(null);
@@ -436,7 +447,7 @@ export default function UserManagement() {
       const roster = await db.getUserRoster();
       return Array.isArray(roster?.users) ? roster.users : [];
     },
-    enabled: groupDialogOpen || dashboardDialogOpen || notificationDialogOpen || activeSection === 'api-tokens' || Boolean(assignAnalyticsUser),
+    enabled: groupDialogOpen || dashboardDialogOpen || notificationDialogOpen || expAwardDialogOpen || activeSection === 'api-tokens' || Boolean(assignAnalyticsUser),
     staleTime: 60_000,
   });
 
@@ -466,6 +477,14 @@ export default function UserManagement() {
     queryFn: () => db.listAdminApiTokens(),
   });
   const apiTokenCount = apiTokensData?.items?.length ?? 0;
+
+  const { data: manualExpAwardsData } = useQuery({
+    queryKey: ['manual-exp-awards'],
+    queryFn: () => db.listManualExpAwards({ limit: 8 }),
+    enabled: expAwardDialogOpen && (isAdmin || isHrUser),
+    staleTime: 30_000,
+  });
+  const recentExpAwards = Array.isArray(manualExpAwardsData?.batches) ? manualExpAwardsData.batches : [];
 
   const [accessGroups, setAccessGroups] = useState([]);
   const [metabaseDashboards, setMetabaseDashboards] = useState([]);
@@ -1040,6 +1059,12 @@ export default function UserManagement() {
             Send notification
           </DropdownMenuItem>
         ) : null}
+        {(isAdmin || isHrUser) && user.is_approved ? (
+          <DropdownMenuItem onClick={() => openExpAwardDialog(user)}>
+            <Gift className="w-4 h-4 mr-2" />
+            Award EXP
+          </DropdownMenuItem>
+        ) : null}
         {isAdmin ? (
           <DropdownMenuItem onClick={() => openApiTokenDialog(user)}>
             <Key className="w-4 h-4 mr-2" />
@@ -1502,6 +1527,71 @@ export default function UserManagement() {
     }
   };
 
+  const openExpAwardDialog = (user = null) => {
+    setExpAwardUserIds(new Set(user ? [user.id] : []));
+    setExpAwardForm({
+      amount: '50',
+      title: '',
+      reason: '',
+      notify: true,
+    });
+    setExpAwardDialogOpen(true);
+  };
+
+  const toggleExpAwardUser = (userId) => {
+    setExpAwardUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const handleAwardManualExp = async () => {
+    const title = expAwardForm.title.trim();
+    const amount = Number.parseInt(String(expAwardForm.amount), 10);
+
+    if (!title) {
+      toast.error('Enter an award title');
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount < 1 || amount > 5000) {
+      toast.error('Enter an EXP amount between 1 and 5000');
+      return;
+    }
+
+    if (expAwardUserIds.size === 0) {
+      toast.error('Select at least one user');
+      return;
+    }
+
+    setExpAwardSending(true);
+    try {
+      const result = await db.createManualExpAwards({
+        user_ids: [...expAwardUserIds].map(Number),
+        amount,
+        title,
+        reason: expAwardForm.reason.trim() || null,
+        notify: expAwardForm.notify,
+      });
+      setExpAwardDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['manual-exp-awards'] });
+      const skipped = Array.isArray(result?.skipped) ? result.skipped.length : 0;
+      toast.success(
+        result?.message
+          || `Awarded ${amount} EXP to ${result?.awarded || 0} user(s)${skipped ? ` (${skipped} skipped)` : ''}`
+      );
+    } catch (err) {
+      toast.error(err?.data?.message || err.message || 'Failed to award EXP');
+    } finally {
+      setExpAwardSending(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearch('');
     setRoleFilter('all');
@@ -1514,11 +1604,12 @@ export default function UserManagement() {
 
   const selectableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
     .filter((user) => user.role !== 'admin')
-    .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
+    .sort((a, b) => (a.full_name || a.name || a.email || '').localeCompare(b.full_name || b.name || b.email || ''));
 
+  // Roster payloads are already approved and omit `is_approved`; admin list rows include it.
   const notifiableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
-    .filter((user) => user.is_approved)
-    .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
+    .filter((user) => user.is_approved !== false)
+    .sort((a, b) => (a.full_name || a.name || a.email || '').localeCompare(b.full_name || b.name || b.email || ''));
 
   const importBusy = importing || importingHr || assigningGroups;
 
@@ -1586,6 +1677,17 @@ export default function UserManagement() {
             >
               <Send className="w-4 h-4 shrink-0" />
               <span className="truncate">Send notification</span>
+            </Button>
+          ) : null}
+          {(isAdmin || isHrUser) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 w-full sm:w-auto min-h-[40px]"
+              onClick={() => openExpAwardDialog()}
+            >
+              <Gift className="w-4 h-4 shrink-0" />
+              <span className="truncate">Award EXP</span>
             </Button>
           ) : null}
           <Button
@@ -3128,6 +3230,163 @@ export default function UserManagement() {
                 <>
                   <Send className="w-4 h-4 mr-2" />
                   Send notification
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={expAwardDialogOpen} onOpenChange={setExpAwardDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
+            <DialogTitle>Award EXP</DialogTitle>
+            <DialogDescription className="text-xs">
+              Grant custom EXP to selected users. Rewards stay pending until they claim them from Missions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Recipients *</Label>
+              <SearchableUserMultiSelect
+                users={notifiableUsers}
+                selectedIds={expAwardUserIds}
+                onToggle={toggleExpAwardUser}
+                placeholder="Search approved users by name or email..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-exp-amount">EXP amount *</Label>
+              <Input
+                id="manual-exp-amount"
+                type="number"
+                min={1}
+                max={5000}
+                className="max-w-[160px]"
+                value={expAwardForm.amount}
+                onChange={(e) => setExpAwardForm((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-exp-title">Title *</Label>
+              <Input
+                id="manual-exp-title"
+                value={expAwardForm.title}
+                onChange={(e) => setExpAwardForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="Company outing helper"
+                maxLength={120}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-exp-reason">Reason</Label>
+              <Textarea
+                id="manual-exp-reason"
+                value={expAwardForm.reason}
+                onChange={(e) => setExpAwardForm((prev) => ({ ...prev, reason: e.target.value }))}
+                placeholder="Optional note shown in the notification"
+                rows={3}
+                maxLength={500}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+              <div>
+                <Label>Notify recipients</Label>
+                <p className="text-xs text-muted-foreground mt-1">Sends in-app and push with a link to Missions.</p>
+              </div>
+              <Switch
+                checked={expAwardForm.notify}
+                onCheckedChange={(checked) => setExpAwardForm((prev) => ({ ...prev, notify: checked }))}
+              />
+            </div>
+            {recentExpAwards.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Recent awards</Label>
+                <div className="rounded-xl border border-border divide-y divide-border/70">
+                  {recentExpAwards.map((batch) => {
+                    const recipients = Array.isArray(batch.users) ? batch.users : [];
+                    const userCount = batch.user_count || recipients.length || 0;
+                    return (
+                      <div key={batch.batch_id} className="px-3 py-2.5 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{batch.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-1">
+                              <span>+{batch.amount} EXP</span>
+                              <span>·</span>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                                  >
+                                    {userCount} user{userCount === 1 ? '' : 's'}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="start"
+                                  className="w-80 p-0"
+                                  onOpenAutoFocus={(e) => e.preventDefault()}
+                                >
+                                  <div className="border-b border-border px-3 py-2">
+                                    <p className="text-sm font-medium">Recipients</p>
+                                    <p className="text-xs text-muted-foreground truncate">{batch.title}</p>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto py-1">
+                                    {recipients.length === 0 ? (
+                                      <p className="px-3 py-2 text-xs text-muted-foreground">No recipients listed.</p>
+                                    ) : (
+                                      recipients.map((user) => (
+                                        <div key={user.id} className="px-3 py-2">
+                                          <p className="text-sm font-medium truncate">{user.name || 'User'}</p>
+                                          <p className="text-xs text-muted-foreground truncate">
+                                            {user.email || 'No email'}
+                                          </p>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                              {batch.awarded_by_name ? (
+                                <>
+                                  <span>·</span>
+                                  <span>by {batch.awarded_by_name}</span>
+                                </>
+                              ) : null}
+                            </p>
+                          </div>
+                          {batch.created_at ? (
+                            <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                              {formatRelativeDate(batch.created_at)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setExpAwardDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={expAwardSending || expAwardUserIds.size === 0}
+              onClick={handleAwardManualExp}
+            >
+              {expAwardSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Awarding...
+                </>
+              ) : (
+                <>
+                  <Gift className="w-4 h-4 mr-2" />
+                  Award EXP
                 </>
               )}
             </Button>

@@ -9,10 +9,165 @@ use App\Support\GamificationCatalog;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class GamificationService
 {
+    public const ACTION_MANUAL_AWARD = 'manual_award';
+
+    /**
+     * Offer a custom pending EXP reward (HR/Admin grant). Not part of the mission catalog.
+     *
+     * @param  array<string, mixed>  $extraMeta
+     */
+    public function offerManual(
+        User $user,
+        int $amount,
+        string $title,
+        User $awardedBy,
+        ?string $reason = null,
+        ?string $batchId = null,
+        array $extraMeta = [],
+    ): ExpReward {
+        $amount = max(1, $amount);
+        $batchId = $batchId ?? (string) Str::uuid();
+        $sourceId = (string) Str::uuid();
+
+        $metadata = array_merge([
+            'awarded_by_id' => $awardedBy->id,
+            'awarded_by_name' => $awardedBy->displayName(),
+            'reason' => $reason,
+            'batch_id' => $batchId,
+        ], $extraMeta);
+
+        return ExpReward::query()->create([
+            'user_id' => $user->id,
+            'action_key' => self::ACTION_MANUAL_AWARD,
+            'amount' => $amount,
+            'title' => $title,
+            'status' => ExpReward::STATUS_PENDING,
+            'source_type' => self::ACTION_MANUAL_AWARD,
+            'source_id' => $sourceId,
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * Award custom pending EXP to many users in one batch.
+     *
+     * @param  list<User>  $users
+     * @return array{batch_id: string, rewards: list<ExpReward>}
+     */
+    public function offerManualBatch(
+        array $users,
+        int $amount,
+        string $title,
+        User $awardedBy,
+        ?string $reason = null,
+    ): array {
+        $batchId = (string) Str::uuid();
+
+        return DB::transaction(function () use ($users, $amount, $title, $awardedBy, $reason, $batchId) {
+            $rewards = [];
+
+            foreach ($users as $user) {
+                $rewards[] = $this->offerManual(
+                    $user,
+                    $amount,
+                    $title,
+                    $awardedBy,
+                    $reason,
+                    $batchId,
+                );
+            }
+
+            return [
+                'batch_id' => $batchId,
+                'rewards' => $rewards,
+            ];
+        });
+    }
+
+    /**
+     * Recent manual award batches for HR/Admin audit.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listManualAwardBatches(int $limit = 30): array
+    {
+        $limit = max(1, min(100, $limit));
+
+        $rewards = ExpReward::query()
+            ->where('action_key', self::ACTION_MANUAL_AWARD)
+            ->orderByDesc('id')
+            ->limit(500)
+            ->get();
+
+        $batches = [];
+
+        foreach ($rewards as $reward) {
+            $batchId = (string) ($reward->metadata['batch_id'] ?? $reward->source_id);
+            if (! isset($batches[$batchId])) {
+                $batches[$batchId] = [
+                    'batch_id' => $batchId,
+                    'title' => $reward->title,
+                    'amount' => (int) $reward->amount,
+                    'reason' => $reward->metadata['reason'] ?? null,
+                    'awarded_by_id' => $reward->metadata['awarded_by_id'] ?? null,
+                    'awarded_by_name' => $reward->metadata['awarded_by_name'] ?? null,
+                    'user_count' => 0,
+                    'user_ids' => [],
+                    'created_at' => $reward->created_at?->toISOString(),
+                ];
+            }
+
+            $batches[$batchId]['user_count']++;
+            $batches[$batchId]['user_ids'][] = $reward->user_id;
+        }
+
+        $batches = array_values(array_slice($batches, 0, $limit));
+
+        $allUserIds = collect($batches)
+            ->flatMap(fn (array $batch) => $batch['user_ids'])
+            ->unique()
+            ->values()
+            ->all();
+
+        $usersById = $allUserIds === []
+            ? collect()
+            : User::query()
+                ->withTrashed()
+                ->whereIn('id', $allUserIds)
+                ->get(['id', 'name', 'full_name', 'email'])
+                ->keyBy('id');
+
+        foreach ($batches as &$batch) {
+            $batch['users'] = collect($batch['user_ids'])
+                ->map(function ($userId) use ($usersById) {
+                    $user = $usersById->get($userId);
+                    if (! $user) {
+                        return [
+                            'id' => (int) $userId,
+                            'name' => 'Unknown user',
+                            'email' => null,
+                        ];
+                    }
+
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->displayName(),
+                        'email' => $user->email,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+        unset($batch);
+
+        return $batches;
+    }
+
     /**
      * @param  array<string, mixed>  $meta
      */
@@ -291,8 +446,49 @@ class GamificationService
                     'streak_count' => $streak ? (int) $streak->current_count : 0,
                 ]);
             })
-            ->values()
-            ->all();
+            ->values();
+
+        $manualToday = ExpReward::query()
+            ->where('user_id', $user->id)
+            ->where('action_key', self::ACTION_MANUAL_AWARD)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($manualToday as $reward) {
+            $meta = is_array($reward->metadata) ? $reward->metadata : [];
+            $awardedBy = trim((string) ($meta['awarded_by_name'] ?? ''));
+            $reason = trim((string) ($meta['reason'] ?? ''));
+            $parts = [];
+            if ($reason !== '') {
+                $parts[] = $reason;
+            }
+            if ($awardedBy !== '') {
+                $parts[] = 'from '.$awardedBy;
+            }
+            if ($parts === [] && $reward->status === ExpReward::STATUS_PENDING) {
+                $parts[] = 'Claim it from Pending';
+            }
+
+            $missions->push([
+                'action_key' => self::ACTION_MANUAL_AWARD.'_'.$reward->id,
+                'title' => $reward->title,
+                'description' => $parts === [] ? '' : implode(' · ', $parts),
+                'href' => null,
+                'base' => (int) $reward->amount,
+                'daily_cap' => 1,
+                'streak_key' => null,
+                'offered_today' => 1,
+                'remaining_today' => 0,
+                'completed_today' => true,
+                'streak_count' => 0,
+                'is_manual_award' => true,
+                'reward_status' => $reward->status,
+                'reason' => $reason !== '' ? $reason : null,
+            ]);
+        }
+
+        $missions = $missions->values()->all();
 
         $pending = ExpReward::query()
             ->where('user_id', $user->id)
