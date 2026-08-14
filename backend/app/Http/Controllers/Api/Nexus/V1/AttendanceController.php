@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Nexus\V1;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\User;
+use App\Services\GamificationService;
 use App\Support\NexusSatelliteAuth;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -85,9 +86,9 @@ class AttendanceController extends Controller
             'metadata' => ['nullable', 'array'],
         ]);
 
-        // De-duplicate: if this external_id from kashfi already exists, return it.
+        // De-duplicate: satellite punches (Insan; legacy rows may still say kashfi).
         $existing = AttendanceRecord::query()
-            ->where('source', 'kashfi')
+            ->whereIn('source', ['insan', 'kashfi', 'resource'])
             ->where('external_id', $validated['external_id'])
             ->first();
 
@@ -122,9 +123,12 @@ class AttendanceController extends Controller
             'ip_address' => $request->ip(),
             'metadata' => $validated['metadata'] ?? null,
             'captured_at' => $capturedAt,
-            'source' => 'kashfi',
+            'source' => 'insan',
             'external_id' => $validated['external_id'],
         ]);
+
+        // Insan clocks must earn the same missions as Brain /attendance/clock.
+        app(GamificationService::class)->offerForAttendanceRecord($user, $record);
 
         return response()->json($this->serializeRecord($record->load('user')), 201);
     }

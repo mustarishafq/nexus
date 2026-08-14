@@ -14,7 +14,6 @@ use App\Support\AppSettings;
 use App\Support\AttendanceLateEvaluator;
 use App\Support\AttendancePolicyValidator;
 use App\Support\AttendanceReminderEvaluator;
-use App\Support\GamificationSettings;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -392,25 +391,7 @@ class AttendanceController extends Controller
         app(ResourceAttendanceForwarder::class)->forwardAfterResponse($record, $user);
 
         $gamification = app(GamificationService::class);
-        $offers = [];
-
-        if ($validated['type'] === 'clock_in') {
-            $offers[] = $gamification->offer($user, 'clock_in', 'attendance_record', $record->id);
-            $isLate = (bool) data_get($metadata, 'policy.is_late', false);
-            $hasShift = filled(data_get($metadata, 'policy.scheduled_start'));
-            $cutoff = GamificationSettings::earlyClockInCutoffMinutes();
-            $withinEarlyCutoff = true;
-            if ($cutoff > 0 && $hasShift) {
-                $scheduledStart = Carbon::parse((string) data_get($metadata, 'policy.scheduled_start'));
-                $deadline = $scheduledStart->copy()->subMinutes($cutoff);
-                $withinEarlyCutoff = ! $capturedAt->gt($deadline);
-            }
-            if ($hasShift && ! $isLate && $withinEarlyCutoff) {
-                $offers[] = $gamification->offer($user, 'clock_in_early', 'attendance_record', $record->id);
-            }
-        } else {
-            $offers[] = $gamification->offer($user, 'clock_out', 'attendance_record', $record->id);
-        }
+        $offers = $gamification->offerForAttendanceRecord($user, $record);
 
         return response()->json(array_merge(
             $this->serializeRecord($record->load('user:id,full_name,name,email')),

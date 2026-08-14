@@ -241,6 +241,81 @@ class NexusV1ResourceIntegrationTest extends TestCase
             ->assertJsonPath('pagination.has_more', false);
     }
 
+    public function test_attendance_ingest_offers_clock_in_and_early_missions(): void
+    {
+        $this->createResourceApplication();
+        $user = User::factory()->create([
+            'email' => 'satellite-clock@example.com',
+            'is_approved' => true,
+        ]);
+
+        $capturedAt = now()->setTime(8, 30);
+
+        $response = $this->postJson('/api/nexus/v1/attendance/ingest', [
+            'external_id' => 'insan-punch-1001',
+            'nexus_user_id' => (string) $user->id,
+            'email' => $user->email,
+            'type' => 'clock_in',
+            'captured_at' => $capturedAt->toIso8601String(),
+            'photo_url' => 'https://example.com/selfie.jpg',
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'metadata' => [
+                'policy' => [
+                    'is_late' => false,
+                    'late_minutes' => 0,
+                    'scheduled_start' => $capturedAt->copy()->setTime(9, 0)->toIso8601String(),
+                    'shift_name' => 'Special release (Outstation)',
+                    'special_release_shift' => true,
+                ],
+            ],
+        ], $this->authHeaders('brain-attendance'))
+            ->assertCreated();
+
+        $recordId = (string) $response->json('external_id');
+
+        $this->assertDatabaseHas('attendance_records', [
+            'id' => (int) $recordId,
+            'user_id' => $user->id,
+            'source' => 'insan',
+            'external_id' => 'insan-punch-1001',
+            'type' => 'clock_in',
+        ]);
+
+        $this->assertDatabaseHas('exp_rewards', [
+            'user_id' => $user->id,
+            'action_key' => 'clock_in',
+            'source_type' => 'attendance_record',
+            'source_id' => $recordId,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseHas('exp_rewards', [
+            'user_id' => $user->id,
+            'action_key' => 'clock_in_early',
+            'source_type' => 'attendance_record',
+            'source_id' => $recordId,
+            'status' => 'pending',
+        ]);
+
+        // Idempotent re-ingest must not duplicate rewards.
+        $this->postJson('/api/nexus/v1/attendance/ingest', [
+            'external_id' => 'insan-punch-1001',
+            'email' => $user->email,
+            'type' => 'clock_in',
+            'captured_at' => $capturedAt->toIso8601String(),
+        ], $this->authHeaders('brain-attendance'))
+            ->assertOk();
+
+        $this->assertSame(
+            1,
+            \App\Models\ExpReward::query()
+                ->where('user_id', $user->id)
+                ->where('action_key', 'clock_in')
+                ->where('source_id', $recordId)
+                ->count()
+        );
+    }
+
     public function test_attendance_forwarder_posts_ingest_payload(): void
     {
         $this->createResourceApplication();

@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\AttendanceRecord;
 use App\Models\ExpReward;
 use App\Models\User;
 use App\Models\UserStreak;
 use App\Support\GamificationCatalog;
+use App\Support\GamificationSettings;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -248,6 +250,40 @@ class GamificationService
             // Race on unique constraint — treat as already offered.
             return null;
         }
+    }
+
+    /**
+     * Offer clock-in / early / clock-out EXP for an attendance punch (Brain or satellite ingest).
+     *
+     * @return list<?ExpReward>
+     */
+    public function offerForAttendanceRecord(User $user, AttendanceRecord $record): array
+    {
+        $offers = [];
+        $metadata = is_array($record->metadata) ? $record->metadata : [];
+        $capturedAt = $record->captured_at instanceof Carbon
+            ? $record->captured_at->copy()
+            : Carbon::parse((string) $record->captured_at);
+
+        if ($record->type === 'clock_in') {
+            $offers[] = $this->offer($user, 'clock_in', 'attendance_record', $record->id);
+            $isLate = (bool) data_get($metadata, 'policy.is_late', false);
+            $hasShift = filled(data_get($metadata, 'policy.scheduled_start'));
+            $cutoff = GamificationSettings::earlyClockInCutoffMinutes();
+            $withinEarlyCutoff = true;
+            if ($cutoff > 0 && $hasShift) {
+                $scheduledStart = Carbon::parse((string) data_get($metadata, 'policy.scheduled_start'));
+                $deadline = $scheduledStart->copy()->subMinutes($cutoff);
+                $withinEarlyCutoff = ! $capturedAt->gt($deadline);
+            }
+            if ($hasShift && ! $isLate && $withinEarlyCutoff) {
+                $offers[] = $this->offer($user, 'clock_in_early', 'attendance_record', $record->id);
+            }
+        } elseif ($record->type === 'clock_out') {
+            $offers[] = $this->offer($user, 'clock_out', 'attendance_record', $record->id);
+        }
+
+        return $offers;
     }
 
     public function claim(User $user, ExpReward $reward): ExpReward
