@@ -35,6 +35,8 @@ class FeedPollTest extends TestCase
         $this->assertFalse($item['poll']['has_voted']);
         $this->assertFalse($item['poll']['allow_multiple']);
         $this->assertFalse($item['poll']['allow_add_options']);
+        $this->assertFalse($item['poll']['is_qna']);
+        $this->assertNull($item['poll']['correct_option_id']);
 
         $pollId = $item['poll']['id'];
         $optionId = $item['poll']['options'][1]['id'];
@@ -277,5 +279,207 @@ class FeedPollTest extends TestCase
 
         $this->assertCount(0, $cleared['polls']);
         $this->assertNull($cleared['poll']);
+    }
+
+    public function test_user_can_create_qna_poll_and_voter_sees_answer_after_voting(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $voter = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $authorToken = ApiTokenAuth::issueToken($author);
+        $voterToken = ApiTokenAuth::issueToken($voter);
+
+        $item = $this->withToken($authorToken)
+            ->postJson('/api/posts', [
+                'body' => 'Capital of France?',
+                'poll' => [
+                    'options' => ['Berlin', 'Paris', 'Madrid'],
+                    'is_qna' => true,
+                    'correct_option_index' => 1,
+                ],
+            ])
+            ->assertCreated()
+            ->json('item');
+
+        $this->assertTrue($item['poll']['is_qna']);
+        $this->assertFalse($item['poll']['allow_multiple']);
+        $this->assertFalse($item['poll']['allow_add_options']);
+        $correctId = $item['poll']['options'][1]['id'];
+        $this->assertSame($correctId, $item['poll']['correct_option_id']);
+
+        $feed = $this->withToken($voterToken)
+            ->getJson('/api/feed')
+            ->assertOk()
+            ->json('items');
+
+        $seen = collect($feed)->first(
+            fn (array $row) => ($row['type'] ?? null) === 'post' && (int) $row['id'] === (int) $item['id']
+        );
+        $this->assertNotNull($seen);
+        $this->assertTrue($seen['poll']['is_qna']);
+        $this->assertNull($seen['poll']['correct_option_id']);
+        $this->assertFalse($seen['poll']['has_voted']);
+
+        $pollId = $item['poll']['id'];
+        $wrongId = $item['poll']['options'][0]['id'];
+
+        $voted = $this->withToken($voterToken)
+            ->postJson("/api/posts/{$item['id']}/polls/{$pollId}/vote", [
+                'option_id' => $wrongId,
+            ])
+            ->assertOk()
+            ->json('item');
+
+        $this->assertTrue($voted['poll']['has_voted']);
+        $this->assertSame($correctId, $voted['poll']['correct_option_id']);
+        $this->assertSame($wrongId, $voted['poll']['my_option_id']);
+    }
+
+    public function test_qna_poll_rejects_missing_correct_option_and_other_settings(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $token = ApiTokenAuth::issueToken($author);
+
+        $this->withToken($token)
+            ->postJson('/api/posts', [
+                'poll' => [
+                    'options' => ['Yes', 'No'],
+                    'is_qna' => true,
+                ],
+            ])
+            ->assertStatus(422);
+
+        $this->withToken($token)
+            ->postJson('/api/posts', [
+                'poll' => [
+                    'options' => ['Yes', 'No'],
+                    'is_qna' => true,
+                    'correct_option_index' => 1,
+                    'allow_multiple' => true,
+                ],
+            ])
+            ->assertStatus(422);
+
+        $this->withToken($token)
+            ->postJson('/api/posts', [
+                'poll' => [
+                    'options' => ['Yes', 'No'],
+                    'is_qna' => true,
+                    'correct_option_index' => 5,
+                ],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_qna_vote_cannot_be_changed_and_poll_cannot_be_edited(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $voter = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $authorToken = ApiTokenAuth::issueToken($author);
+        $voterToken = ApiTokenAuth::issueToken($voter);
+
+        $item = $this->withToken($authorToken)
+            ->postJson('/api/posts', [
+                'poll' => [
+                    'options' => ['A', 'B'],
+                    'is_qna' => true,
+                    'correct_option_index' => 0,
+                ],
+            ])
+            ->assertCreated()
+            ->json('item');
+
+        $pollId = $item['poll']['id'];
+        $firstId = $item['poll']['options'][0]['id'];
+        $secondId = $item['poll']['options'][1]['id'];
+
+        $this->withToken($voterToken)
+            ->postJson("/api/posts/{$item['id']}/polls/{$pollId}/vote", [
+                'option_id' => $firstId,
+            ])
+            ->assertOk();
+
+        $this->withToken($voterToken)
+            ->postJson("/api/posts/{$item['id']}/polls/{$pollId}/vote", [
+                'option_id' => $firstId,
+            ])
+            ->assertStatus(422);
+
+        $this->withToken($voterToken)
+            ->postJson("/api/posts/{$item['id']}/polls/{$pollId}/vote", [
+                'option_id' => $secondId,
+            ])
+            ->assertStatus(422);
+
+        $this->withToken($authorToken)
+            ->putJson("/api/posts/{$item['id']}/polls/{$pollId}", [
+                'options' => [
+                    ['id' => $firstId, 'label' => 'A'],
+                    ['id' => $secondId, 'label' => 'B renamed'],
+                ],
+            ])
+            ->assertStatus(422);
+
+        $this->withToken($voterToken)
+            ->postJson("/api/posts/{$item['id']}/polls/{$pollId}/options", [
+                'label' => 'C',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_normal_poll_cannot_become_qna_after_posting(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $token = ApiTokenAuth::issueToken($author);
+
+        $item = $this->withToken($token)
+            ->postJson('/api/posts', [
+                'poll' => [
+                    'options' => ['Yes', 'No'],
+                ],
+            ])
+            ->assertCreated()
+            ->json('item');
+
+        $this->assertFalse($item['poll']['is_qna']);
+        $this->assertNull($item['poll']['correct_option_id']);
+
+        $pollId = $item['poll']['id'];
+        $yesId = $item['poll']['options'][0]['id'];
+        $noId = $item['poll']['options'][1]['id'];
+
+        $this->withToken($token)
+            ->putJson("/api/posts/{$item['id']}/polls/{$pollId}", [
+                'is_qna' => true,
+                'options' => [
+                    ['id' => $yesId, 'label' => 'Yes'],
+                    ['id' => $noId, 'label' => 'No'],
+                ],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_author_can_add_qna_poll_to_existing_post(): void
+    {
+        $author = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+        $token = ApiTokenAuth::issueToken($author);
+
+        $item = $this->withToken($token)
+            ->postJson('/api/posts', [
+                'body' => 'Starting without a poll',
+            ])
+            ->assertCreated()
+            ->json('item');
+
+        $withPoll = $this->withToken($token)
+            ->postJson("/api/posts/{$item['id']}/polls", [
+                'options' => ['One', 'Two'],
+                'is_qna' => true,
+                'correct_option_index' => 1,
+            ])
+            ->assertCreated()
+            ->json('item');
+
+        $this->assertTrue($withPoll['poll']['is_qna']);
+        $this->assertSame($withPoll['poll']['options'][1]['id'], $withPoll['poll']['correct_option_id']);
     }
 }

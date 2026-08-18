@@ -604,10 +604,16 @@ export const db = {
 					})
 					.filter(Boolean);
 				if (options.length < 2) return null;
+				const isQna = Boolean(entry.is_qna);
+				const correctIndex = entry.correct_option_index == null || entry.correct_option_index === ''
+					? null
+					: Number(entry.correct_option_index);
 				return {
 					options,
-					allow_multiple: Boolean(entry.allow_multiple),
-					allow_add_options: Boolean(entry.allow_add_options),
+					allow_multiple: isQna ? false : Boolean(entry.allow_multiple),
+					allow_add_options: isQna ? false : Boolean(entry.allow_add_options),
+					is_qna: isQna,
+					correct_option_index: isQna && Number.isInteger(correctIndex) ? correctIndex : null,
 				};
 			};
 
@@ -644,24 +650,27 @@ export const db = {
 			});
 		},
 
-		async updatePoll(postId, pollId, { options, allow_multiple, allow_add_options } = {}) {
+		async updatePoll(postId, pollId, { options, allow_multiple, allow_add_options, is_qna } = {}) {
 			return request(`/posts/${postId}/polls/${pollId}`, {
 				method: 'PUT',
 				body: {
 					options,
 					allow_multiple,
 					allow_add_options,
+					is_qna,
 				},
 			});
 		},
 
-		async createPoll(postId, { options, allow_multiple, allow_add_options } = {}) {
+		async createPoll(postId, { options, allow_multiple, allow_add_options, is_qna, correct_option_index } = {}) {
 			return request(`/posts/${postId}/polls`, {
 				method: 'POST',
 				body: {
 					options,
 					allow_multiple,
 					allow_add_options,
+					is_qna,
+					correct_option_index,
 				},
 			});
 		},

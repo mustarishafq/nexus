@@ -370,6 +370,9 @@ export function applyPollVoteOptimistic(item, pollId, optionId) {
     }
 
     const allowMultiple = Boolean(poll.allow_multiple);
+    if (Boolean(poll.is_qna) && Boolean(poll.has_voted)) {
+      return poll;
+    }
     const optionIdNum = Number(optionId);
     const myIds = new Set(
       (Array.isArray(poll.my_option_ids) ? poll.my_option_ids : [])

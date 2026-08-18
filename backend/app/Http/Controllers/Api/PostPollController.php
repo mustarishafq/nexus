@@ -11,6 +11,7 @@ use App\Models\PostPollVote;
 use App\Models\User;
 use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
+use App\Support\PostPollPayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,13 +50,20 @@ class PostPollController extends Controller
 
         $optionId = (int) $validated['option_id'];
 
-        $voted = DB::transaction(function () use ($poll, $viewer, $optionId) {
+        $existingVotes = PostPollVote::query()
+            ->where('post_poll_id', $poll->id)
+            ->where('user_id', $viewer->id)
+            ->get();
+
+        if ($poll->is_qna && $existingVotes->isNotEmpty()) {
+            return response()->json([
+                'message' => 'This question\'s vote cannot be changed.',
+            ], 422);
+        }
+
+        $voted = DB::transaction(function () use ($poll, $viewer, $optionId, $existingVotes) {
             if ($poll->allow_multiple) {
-                $existing = PostPollVote::query()
-                    ->where('post_poll_id', $poll->id)
-                    ->where('user_id', $viewer->id)
-                    ->where('post_poll_option_id', $optionId)
-                    ->first();
+                $existing = $existingVotes->firstWhere('post_poll_option_id', $optionId);
 
                 if ($existing) {
                     $existing->delete();
@@ -72,10 +80,7 @@ class PostPollController extends Controller
                 return true;
             }
 
-            $existing = PostPollVote::query()
-                ->where('post_poll_id', $poll->id)
-                ->where('user_id', $viewer->id)
-                ->first();
+            $existing = $existingVotes->first();
 
             if ($existing && (int) $existing->post_poll_option_id === $optionId) {
                 $existing->delete();
@@ -132,8 +137,11 @@ class PostPollController extends Controller
 
         $poll->load('options');
 
-        if (! $poll->allow_add_options) {
-            return response()->json(['message' => 'This poll does not allow new options.'], 422);
+        if ($poll->is_qna || ! $poll->allow_add_options) {
+            return response()->json(['message' => $poll->is_qna
+                ? 'QnA polls cannot accept new options.'
+                : 'This poll does not allow new options.',
+            ], 422);
         }
 
         if ($poll->options->count() >= PostPoll::ABSOLUTE_MAX_OPTIONS) {
@@ -188,13 +196,26 @@ class PostPollController extends Controller
 
         $poll->load('options');
 
+        if ($poll->is_qna) {
+            return response()->json([
+                'message' => 'QnA polls cannot be edited after posting.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'allow_multiple' => ['sometimes', 'boolean'],
             'allow_add_options' => ['sometimes', 'boolean'],
+            'is_qna' => ['sometimes', 'boolean'],
             'options' => ['required', 'array', 'min:'.PostPoll::MIN_OPTIONS, 'max:'.PostPoll::ABSOLUTE_MAX_OPTIONS],
             'options.*.id' => ['nullable', 'integer'],
             'options.*.label' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
         ]);
+
+        if ($validated['is_qna'] ?? false) {
+            return response()->json([
+                'message' => 'A normal poll cannot be turned into a QnA poll after posting.',
+            ], 422);
+        }
 
         $options = collect($validated['options'])
             ->map(fn (array $option) => [
@@ -283,37 +304,29 @@ class PostPollController extends Controller
         $validated = $request->validate([
             'allow_multiple' => ['sometimes', 'boolean'],
             'allow_add_options' => ['sometimes', 'boolean'],
+            'is_qna' => ['sometimes', 'boolean'],
+            'correct_option_index' => ['nullable', 'integer', 'min:0'],
             'options' => ['required', 'array', 'min:'.PostPoll::MIN_OPTIONS, 'max:'.PostPoll::MAX_OPTIONS],
             'options.*' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
         ]);
 
-        $options = collect($validated['options'])
-            ->map(fn ($label) => trim((string) $label))
-            ->filter()
-            ->unique()
-            ->values()
-            ->take(PostPoll::MAX_OPTIONS)
-            ->all();
-
-        if (count($options) < PostPoll::MIN_OPTIONS) {
-            return response()->json([
-                'message' => 'Polls need at least '.PostPoll::MIN_OPTIONS.' unique options.',
-            ], 422);
+        $conflict = PostPollPayload::conflictMessage($validated);
+        if ($conflict) {
+            return response()->json(['message' => $conflict], 422);
         }
 
-        DB::transaction(function () use ($post, $validated, $options) {
-            $poll = $post->polls()->create([
-                'sort_order' => ((int) $post->polls()->max('sort_order')) + 1,
-                'allow_multiple' => (bool) ($validated['allow_multiple'] ?? false),
-                'allow_add_options' => (bool) ($validated['allow_add_options'] ?? false),
-            ]);
+        $pollData = PostPollPayload::normalize($validated);
+        $invalid = PostPollPayload::validationMessage($pollData);
+        if ($invalid) {
+            return response()->json(['message' => $invalid], 422);
+        }
 
-            foreach ($options as $index => $label) {
-                $poll->options()->create([
-                    'label' => $label,
-                    'sort_order' => $index,
-                ]);
-            }
+        DB::transaction(function () use ($post, $pollData) {
+            PostPollPayload::createOnPost(
+                $post,
+                $pollData,
+                ((int) $post->polls()->max('sort_order')) + 1,
+            );
         });
 
         return response()->json([

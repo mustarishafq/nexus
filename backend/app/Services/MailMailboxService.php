@@ -66,15 +66,15 @@ class MailMailboxService
 
     protected function resolveMailHost(?object $settings, ?User $user = null, ?string $mailboxEmail = null): string
     {
-        $candidates = [];
+        $configured = trim((string) (($settings->imap_host ?? '') ?: ($settings->smtp_host ?? '')));
 
-        foreach ([$settings->imap_host ?? null, $settings->smtp_host ?? null] as $configured) {
-            $configured = trim((string) $configured);
-            if ($configured !== '') {
-                $candidates[] = $configured;
-            }
+        // Admin-configured hosts are used as-is. DNS probes here can hang for
+        // tens of seconds on macOS and take down php artisan serve.
+        if ($configured !== '') {
+            return rtrim($configured, '.');
         }
 
+        $candidates = [];
         $emailForDomain = $mailboxEmail ?: $user?->email;
         if ($emailForDomain) {
             $domain = $this->domainFromEmail($emailForDomain);
@@ -94,11 +94,6 @@ class MailMailboxService
             if ($this->hostResolves($candidate)) {
                 return rtrim($candidate, '.');
             }
-        }
-
-        $configured = trim((string) ($settings->imap_host ?? $settings->smtp_host ?? ''));
-        if ($configured !== '') {
-            throw new RuntimeException("Mail server host \"{$configured}\" could not be resolved. Check admin email settings or use mail.yourdomain.com.");
         }
 
         return '';
@@ -134,9 +129,21 @@ class MailMailboxService
             return false;
         }
 
-        return checkdnsrr($host, 'A')
-            || checkdnsrr($host, 'AAAA')
-            || checkdnsrr($host, 'CNAME');
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+
+        $cacheKey = 'mail.host_resolves.'.strtolower($host);
+        $cached = Cache::get($cacheKey);
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $records = @dns_get_record($host, DNS_A + DNS_AAAA + DNS_CNAME);
+        $resolved = is_array($records) && $records !== [];
+        Cache::put($cacheKey, $resolved, $resolved ? 300 : 60);
+
+        return $resolved;
     }
 
     public function isServerConfigured(): bool
@@ -148,6 +155,10 @@ class MailMailboxService
 
     public function isServerReachableForUser(User $user): bool
     {
+        if (! $this->isServerConfigured()) {
+            return false;
+        }
+
         try {
             $this->serverConfig($user);
 

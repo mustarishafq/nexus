@@ -69,6 +69,7 @@ class MailControllerTest extends TestCase
             ->assertOk()
             ->assertJson([
                 'configured' => true,
+                'reachable' => true,
                 'connected' => false,
             ]);
     }

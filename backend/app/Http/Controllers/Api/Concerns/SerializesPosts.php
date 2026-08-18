@@ -45,7 +45,7 @@ trait SerializesPosts
         $seenCount = (int) ($post->views_count ?? $post->views()->count());
         $reachCount = (int) ($post->reaches_count ?? $post->reaches()->count());
         $canViewInsights = $isAuthor || $canModerate;
-        $polls = $this->serializePostPolls($post, $viewer);
+        $polls = $this->serializePostPolls($post, $viewer, $isAuthor);
         $viewerHasSeen = $isAuthor || $this->viewerHasSeenPost($post, $viewer);
 
         return [
@@ -97,14 +97,14 @@ trait SerializesPosts
     /**
      * @return list<array<string, mixed>>
      */
-    protected function serializePostPolls(Post $post, User $viewer): array
+    protected function serializePostPolls(Post $post, User $viewer, bool $isAuthor = false): array
     {
         $polls = $post->relationLoaded('polls')
             ? $post->polls
             : $post->polls()->with(['options', 'votes'])->get();
 
         return $polls
-            ->map(fn (PostPoll $poll) => $this->serializeOnePostPoll($poll, $viewer))
+            ->map(fn (PostPoll $poll) => $this->serializeOnePostPoll($poll, $viewer, $isAuthor))
             ->values()
             ->all();
     }
@@ -112,7 +112,7 @@ trait SerializesPosts
     /**
      * @return array<string, mixed>
      */
-    protected function serializeOnePostPoll(PostPoll $poll, User $viewer): array
+    protected function serializeOnePostPoll(PostPoll $poll, User $viewer, bool $isAuthor = false): array
     {
         if (! $poll->relationLoaded('options')) {
             $poll->load('options');
@@ -134,6 +134,8 @@ trait SerializesPosts
         $countsByOption = $votes
             ->groupBy('post_poll_option_id')
             ->map->count();
+        $hasVoted = $myOptionIds !== [];
+        $revealCorrect = (bool) $poll->is_qna && ($hasVoted || $isAuthor);
 
         $options = $poll->options->map(function ($option) use ($countsByOption, $voterCount, $myOptionIds) {
             $votesCount = (int) ($countsByOption[$option->id] ?? 0);
@@ -155,9 +157,11 @@ trait SerializesPosts
             'sort_order' => (int) $poll->sort_order,
             'allow_multiple' => (bool) $poll->allow_multiple,
             'allow_add_options' => (bool) $poll->allow_add_options,
+            'is_qna' => (bool) $poll->is_qna,
             'can_add_options' => (bool) $poll->allow_add_options && $optionCount < PostPoll::ABSOLUTE_MAX_OPTIONS,
+            'correct_option_id' => $revealCorrect ? ($poll->correct_option_id ? (int) $poll->correct_option_id : null) : null,
             'total_votes' => $voterCount,
-            'has_voted' => $myOptionIds !== [],
+            'has_voted' => $hasVoted,
             'my_option_id' => $myOptionIds[0] ?? null,
             'my_option_ids' => $myOptionIds,
             'options' => $options,

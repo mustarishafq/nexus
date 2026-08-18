@@ -22,12 +22,16 @@ class PostPoll extends Model
         'sort_order',
         'allow_multiple',
         'allow_add_options',
+        'is_qna',
+        'correct_option_id',
     ];
 
     protected $casts = [
         'allow_multiple' => 'boolean',
         'allow_add_options' => 'boolean',
+        'is_qna' => 'boolean',
         'sort_order' => 'integer',
+        'correct_option_id' => 'integer',
     ];
 
     public function post(): BelongsTo
@@ -38,6 +42,11 @@ class PostPoll extends Model
     public function options(): HasMany
     {
         return $this->hasMany(PostPollOption::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function correctOption(): BelongsTo
+    {
+        return $this->belongsTo(PostPollOption::class, 'correct_option_id');
     }
 
     public function votes(): HasMany
