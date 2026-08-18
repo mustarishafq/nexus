@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, BarChart3, Monitor, Bell, User, Wifi, Calendar,
   Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
-  Sparkles, QrCode, Target,
+  Sparkles, QrCode, Target, Gamepad2,
 } from 'lucide-react';
 
 export const MOBILE_BOTTOM_NAV_ITEMS = [
@@ -46,6 +46,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
+    { path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') },
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     { path: '/profile', icon: User, label: 'Profile', match: (path) => path === '/profile' },
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
@@ -92,6 +93,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
+    { path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') },
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     ...(canManageUsers ? [
       { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },

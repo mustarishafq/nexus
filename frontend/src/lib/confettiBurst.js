@@ -40,3 +40,80 @@ export function fireBirthdayConfetti() {
 
   frame();
 }
+
+/** Small burst for a correct answer */
+export function fireCorrectConfetti() {
+  confetti({
+    particleCount: 48,
+    spread: 62,
+    startVelocity: 28,
+    origin: { y: 0.7 },
+    colors: COLORS,
+    zIndex: 9999,
+  });
+}
+
+/** Bigger burst for streak milestones */
+export function fireStreakConfetti() {
+  confetti({
+    particleCount: 70,
+    spread: 75,
+    startVelocity: 34,
+    origin: { y: 0.65 },
+    colors: COLORS,
+    zIndex: 9999,
+  });
+}
+
+/** Side cannons for reveal / leaderboard moments */
+export function fireCelebrateConfetti() {
+  confetti({
+    particleCount: 55,
+    angle: 60,
+    spread: 55,
+    origin: { x: 0, y: 0.65 },
+    colors: COLORS,
+    zIndex: 9999,
+  });
+  confetti({
+    particleCount: 55,
+    angle: 120,
+    spread: 55,
+    origin: { x: 1, y: 0.65 },
+    colors: COLORS,
+    zIndex: 9999,
+  });
+}
+
+/** Finale for game / test complete */
+export function fireWinnerConfetti() {
+  const end = Date.now() + 1800;
+  confetti({
+    particleCount: 100,
+    spread: 90,
+    startVelocity: 40,
+    origin: { y: 0.55 },
+    colors: COLORS,
+    zIndex: 9999,
+  });
+  const frame = () => {
+    confetti({
+      particleCount: 3,
+      angle: 60,
+      spread: 50,
+      origin: { x: 0, y: 0.6 },
+      colors: COLORS,
+      zIndex: 9999,
+    });
+    confetti({
+      particleCount: 3,
+      angle: 120,
+      spread: 50,
+      origin: { x: 1, y: 0.6 },
+      colors: COLORS,
+      zIndex: 9999,
+    });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  };
+  frame();
+}

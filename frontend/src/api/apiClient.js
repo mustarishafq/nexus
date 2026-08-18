@@ -513,6 +513,95 @@ export const db = {
 		},
 	},
 
+	quizzes: {
+		async list({ scope } = {}) {
+			const query = buildQuery({ scope });
+			return request(`/quizzes${query}`);
+		},
+
+		async get(id) {
+			return request(`/quizzes/${id}`);
+		},
+
+		async create(data) {
+			return request('/quizzes', { method: 'POST', body: data });
+		},
+
+		async update(id, data) {
+			return request(`/quizzes/${id}`, { method: 'PUT', body: data });
+		},
+
+		async delete(id) {
+			return request(`/quizzes/${id}`, { method: 'DELETE' });
+		},
+
+		async attempts(id) {
+			return request(`/quizzes/${id}/attempts`);
+		},
+
+		async startSession(id, data = {}) {
+			return request(`/quizzes/${id}/sessions`, { method: 'POST', body: data });
+		},
+	},
+
+	quizSessions: {
+		async join(pin) {
+			return request('/quiz-sessions/join', { method: 'POST', body: { pin } });
+		},
+
+		async get(id) {
+			return request(`/quiz-sessions/${id}`);
+		},
+
+		async start(id) {
+			return request(`/quiz-sessions/${id}/start`, { method: 'POST' });
+		},
+
+		async reveal(id) {
+			return request(`/quiz-sessions/${id}/reveal`, { method: 'POST' });
+		},
+
+		async leaderboard(id) {
+			return request(`/quiz-sessions/${id}/leaderboard`, { method: 'POST' });
+		},
+
+		async next(id) {
+			return request(`/quiz-sessions/${id}/next`, { method: 'POST' });
+		},
+
+		async end(id) {
+			return request(`/quiz-sessions/${id}/end`, { method: 'POST' });
+		},
+
+		async answer(id, optionId) {
+			return request(`/quiz-sessions/${id}/answer`, {
+				method: 'POST',
+				body: { option_id: optionId },
+			});
+		},
+
+		async powerUp(id, type) {
+			return request(`/quiz-sessions/${id}/power-ups`, {
+				method: 'POST',
+				body: { type },
+			});
+		},
+
+		async music(id, enabledOrSettings) {
+			const body = typeof enabledOrSettings === 'boolean'
+				? { enabled: enabledOrSettings }
+				: enabledOrSettings;
+			return request(`/quiz-sessions/${id}/music`, {
+				method: 'POST',
+				body,
+			});
+		},
+
+		async showByToken(token) {
+			return request(`/quiz-join/${encodeURIComponent(token)}`);
+		},
+	},
+
 	dashboard: {
 		async celebrations({ date } = {}) {
 			const query = date ? `?date=${encodeURIComponent(date)}` : '';

@@ -11,7 +11,7 @@ export function normalizeMinutes(value) {
 }
 
 /**
- * Format minutes as a human-readable duration (e.g. "1h 30m", "45m").
+ * Format minutes as a human-readable duration (e.g. "1h 30m", "2d 3h", "45m").
  */
 export function formatDurationMinutes(value, { style = 'short' } = {}) {
   const totalMinutes = normalizeMinutes(value);
@@ -20,26 +20,35 @@ export function formatDurationMinutes(value, { style = 'short' } = {}) {
     return style === 'long' ? '0 min' : '0m';
   }
 
-  const hours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
 
   if (style === 'long') {
-    if (hours > 0 && minutes > 0) {
-      return `${hours} hr ${minutes} min`;
+    const parts = [];
+    if (days > 0) {
+      parts.push(`${days} day${days === 1 ? '' : 's'}`);
     }
     if (hours > 0) {
-      return `${hours} hr`;
+      parts.push(`${hours} hr`);
     }
-    return `${minutes} min`;
+    if (minutes > 0 && days === 0) {
+      parts.push(`${minutes} min`);
+    }
+    return parts.join(' ') || '0 min';
   }
 
-  if (hours > 0 && minutes > 0) {
-    return `${hours}h ${minutes}m`;
+  const parts = [];
+  if (days > 0) {
+    parts.push(`${days}d`);
   }
   if (hours > 0) {
-    return `${hours}h`;
+    parts.push(`${hours}h`);
   }
-  return `${minutes}m`;
+  if (minutes > 0 && days === 0) {
+    parts.push(`${minutes}m`);
+  }
+  return parts.join(' ') || '0m';
 }
 
 /**

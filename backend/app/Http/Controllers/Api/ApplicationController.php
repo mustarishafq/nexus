@@ -122,6 +122,7 @@ class ApplicationController extends Controller
                 'health_check_mode',
                 'notification_config',
                 'calendar_config',
+                'open_mode',
                 'status',
                 'environment',
             ]);
@@ -222,6 +223,7 @@ class ApplicationController extends Controller
                 'health_check_mode',
                 'notification_config',
                 'calendar_config',
+                'open_mode',
                 'status',
                 'environment',
             ]);

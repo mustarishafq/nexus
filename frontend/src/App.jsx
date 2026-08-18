@@ -50,6 +50,12 @@ const AttendanceRecords = lazy(() => import('@/pages/AttendanceRecords'));
 const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const Missions = lazy(() => import('@/pages/Missions'));
 const Email = lazy(() => import('@/pages/Email'));
+const Games = lazy(() => import('@/pages/Games'));
+const QuizBuilder = lazy(() => import('@/pages/QuizBuilder'));
+const QuizHost = lazy(() => import('@/pages/QuizHost'));
+const QuizPlay = lazy(() => import('@/pages/QuizPlay'));
+const QuizPreview = lazy(() => import('@/pages/QuizPreview'));
+const QuizJoinPublic = lazy(() => import('@/pages/QuizJoinPublic'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -122,6 +128,12 @@ const ProtectedRoutes = () => {
           <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
           <Route path="/calendar" element={<AdminCalendar />} />
           <Route path="/calendar/events/:id/attendance" element={<EventAttendance />} />
+          <Route path="/games" element={<Games />} />
+          <Route path="/games/new" element={<QuizBuilder />} />
+          <Route path="/games/:id/edit" element={<QuizBuilder />} />
+          <Route path="/games/:id/preview" element={<QuizPreview />} />
+          <Route path="/games/sessions/:id/host" element={<QuizHost />} />
+          <Route path="/games/play/:id" element={<QuizPlay />} />
           <Route path="/scan-qr" element={<ScanQr />} />
           <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
           <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
@@ -157,6 +169,7 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/event-check-in/:token" element={<EventCheckInPublic />} />
+                <Route path="/quiz-join/:token" element={<QuizJoinPublic />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </Suspense>

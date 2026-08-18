@@ -104,7 +104,12 @@ class AttendanceReminderEvaluator
 
             [$start, $end] = AttendanceShiftSchedule::windowForDay(
                 $shift,
-                self::shiftWindowDay($shift, $now, $setting->timezone),
+                AttendanceShiftSchedule::windowDayForInstant(
+                    $shift,
+                    $now,
+                    $setting->timezone,
+                    $setting->grace_period_minutes,
+                ),
                 $setting->timezone,
             );
             $remindAfter = $start->copy()->subMinutes($setting->grace_period_minutes);
@@ -117,17 +122,17 @@ class AttendanceReminderEvaluator
                 continue;
             }
 
-            $minutesLate = (int) max(0, $start->diffInMinutes($now));
+            $minutesLate = (int) max(0, $start->diffInMinutes($now, true));
 
             return [
                 'type' => 'clock_in',
                 'title' => 'Clock in reminder',
                 'message' => $minutesLate > 0
                     ? sprintf(
-                        '%s started at %s (%d min ago). Please clock in.',
+                        '%s started at %s (%s ago). Please clock in.',
                         $shift['name'],
                         $start->format('g:i A'),
-                        $minutesLate,
+                        self::formatElapsedMinutes($minutesLate),
                     )
                     : sprintf(
                         '%s has started. Please clock in now.',
@@ -147,41 +152,28 @@ class AttendanceReminderEvaluator
     }
 
     /**
-     * @param  array<string, mixed>  $shift
-     */
-    private static function shiftWindowDay(array $shift, Carbon $now, string $timezone): Carbon
-    {
-        if (AttendanceShiftSchedule::appliesOnDay($shift, $now)) {
-            return $now;
-        }
-
-        return $now->copy()->subDay();
-    }
-
-    /**
      * A shift applies if it is scheduled for today, or is an overnight shift still in progress.
      *
      * @param  array<string, mixed>  $shift
      */
     private static function shiftAppliesNow(array $shift, Carbon $now, DepartmentAttendanceSetting $setting): bool
     {
-        if (AttendanceShiftSchedule::appliesOnDay($shift, $now)) {
-            return true;
-        }
+        $windowDay = AttendanceShiftSchedule::windowDayForInstant(
+            $shift,
+            $now,
+            $setting->timezone,
+            $setting->grace_period_minutes,
+        );
 
-        if (! (bool) ($shift['crosses_midnight'] ?? false)) {
+        if (! AttendanceShiftSchedule::appliesOnDay($shift, $windowDay)) {
             return false;
         }
 
-        $yesterday = $now->copy()->subDay();
+        [$start, $end] = AttendanceShiftSchedule::windowForDay($shift, $windowDay, $setting->timezone);
+        $graceStart = $start->copy()->subMinutes($setting->grace_period_minutes);
+        $graceEnd = $end->copy()->addMinutes($setting->grace_period_minutes);
 
-        if (! AttendanceShiftSchedule::appliesOnDay($shift, $yesterday)) {
-            return false;
-        }
-
-        [$start, $end] = AttendanceShiftSchedule::windowForDay($shift, $yesterday, $setting->timezone);
-
-        return $now->gte($start) && $now->lt($end);
+        return $now->gte($graceStart) && $now->lte($graceEnd);
     }
 
     /**
@@ -246,6 +238,7 @@ class AttendanceReminderEvaluator
             $clockInAt,
             $setting->grace_period_minutes,
         );
+        $windowAnchor = $clockInAt;
 
         if (! $shift) {
             $shift = self::findShiftEndingNow($shifts, $now, $setting->timezone);
@@ -255,27 +248,34 @@ class AttendanceReminderEvaluator
             return null;
         }
 
-        [$start, $end] = AttendanceShiftSchedule::windowForDay($shift, $clockInAt, $setting->timezone);
+        $windowDay = AttendanceShiftSchedule::windowDayForInstant(
+            $shift,
+            $windowAnchor,
+            $setting->timezone,
+            $setting->grace_period_minutes,
+        );
+        [$start, $end] = AttendanceShiftSchedule::windowForDay($shift, $windowDay, $setting->timezone);
         $remindAfter = $end->copy()->addMinutes(self::REMIND_AFTER_END_MINUTES + $setting->grace_period_minutes);
 
         if ($now->lt($remindAfter)) {
             return null;
         }
 
-        if ($now->diffInHours($remindAfter) > self::MAX_CLOCK_OUT_REMINDER_HOURS) {
+        // Carbon 3 diffIn* is signed by default; compare against an absolute cutoff.
+        if ($now->gt($remindAfter->copy()->addHours(self::MAX_CLOCK_OUT_REMINDER_HOURS))) {
             return null;
         }
 
-        $minutesLate = (int) max(0, $end->diffInMinutes($now));
+        $minutesLate = (int) max(0, $end->diffInMinutes($now, true));
 
         return [
             'type' => 'clock_out',
             'title' => 'Clock out reminder',
             'message' => sprintf(
-                '%s ended at %s (%d min ago). Please clock out.',
+                '%s ended at %s (%s ago). Please clock out.',
                 $shift['name'],
                 $end->format('g:i A'),
-                $minutesLate,
+                self::formatElapsedMinutes($minutesLate),
             ),
             'shift_name' => $shift['name'],
             'shift_start' => $start->toISOString(),
@@ -285,6 +285,39 @@ class AttendanceReminderEvaluator
             'action_url' => '/attendance',
             'special_release_shift' => ! empty($shift['special_release_id']),
         ];
+    }
+
+    /**
+     * Human-readable elapsed time (e.g. "45 min", "2 hr 10 min", "1 day 3 hr").
+     */
+    private static function formatElapsedMinutes(int $totalMinutes): string
+    {
+        $totalMinutes = max(0, $totalMinutes);
+
+        if ($totalMinutes === 0) {
+            return '0 min';
+        }
+
+        $days = intdiv($totalMinutes, 1440);
+        $hours = intdiv($totalMinutes % 1440, 60);
+        $minutes = $totalMinutes % 60;
+
+        $parts = [];
+
+        if ($days > 0) {
+            $parts[] = $days === 1 ? '1 day' : "{$days} days";
+        }
+
+        if ($hours > 0) {
+            $parts[] = "{$hours} hr";
+        }
+
+        // Skip leftover minutes once we're into days — not useful at that scale.
+        if ($minutes > 0 && $days === 0) {
+            $parts[] = "{$minutes} min";
+        }
+
+        return implode(' ', $parts);
     }
 
     /**

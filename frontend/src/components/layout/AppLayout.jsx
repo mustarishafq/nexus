@@ -53,6 +53,8 @@ export default function AppLayout() {
 
   const isAppViewer = /^\/applications\/\d+\/view$/.test(location.pathname);
   const isFullBleed = isAppViewer || isEmailFullscreen;
+  // Host / play / preview: keep TopBar, but stage fills main edge-to-edge (no page padding gap)
+  const isGameImmersive = /^\/games\/(sessions\/[^/]+\/host|play\/[^/]+|[^/]+\/preview)$/.test(location.pathname);
   const isAnalyticsPage = location.pathname === '/analytics';
   const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
   const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage) && !isFullBleed;
@@ -93,6 +95,7 @@ export default function AppLayout() {
             'min-w-0 max-w-full flex-1',
             lockToViewport && 'min-h-0 overflow-hidden',
             showBottomNav
+              && !isGameImmersive
               && (standalone
                 ? 'pb-[var(--nexus-dock-clearance)]'
                 : 'pb-[4.5rem]')
@@ -104,6 +107,10 @@ export default function AppLayout() {
             </div>
           ) : isFullBleed ? (
             <Outlet />
+          ) : isGameImmersive ? (
+            <div className="flex-1 flex flex-col min-h-0 w-full">
+              <Outlet />
+            </div>
           ) : isViewportFillPage ? (
             <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden px-4 pt-4 sm:px-6 sm:pt-6">
               <Outlet />
@@ -115,7 +122,7 @@ export default function AppLayout() {
           )}
         </main>
         {showBottomNav && <BottomNav />}
-        <TeamRosterPanel hidden={isFullBleed || isViewportFillPage || isMobile} />
+        <TeamRosterPanel hidden={isFullBleed || isViewportFillPage || isGameImmersive || isMobile} />
       </div>
     </UserPresenceGate>
   );

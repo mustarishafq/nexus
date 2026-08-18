@@ -25,6 +25,39 @@ class AttendanceShiftSchedule
     }
 
     /**
+     * Calendar day the overnight (or regular) shift started for a timestamp inside that shift.
+     *
+     * Overnight example (22:00–18:00): a clock-in at 10:00 belongs to yesterday's start,
+     * not today's upcoming 22:00 window.
+     *
+     * @param  array<string, mixed>  $shift
+     */
+    public static function windowDayForInstant(
+        array $shift,
+        Carbon $at,
+        string $timezone,
+        int $graceMinutes = 0,
+    ): Carbon {
+        $at = $at->copy()->timezone($timezone);
+
+        if (! (bool) ($shift['crosses_midnight'] ?? false)) {
+            return $at;
+        }
+
+        $startMinutes = self::timeToMinutes((string) ($shift['start_time'] ?? '00:00'));
+        $currentMinutes = ($at->hour * 60) + $at->minute;
+        $startBound = max(0, $startMinutes - max(0, $graceMinutes));
+
+        // Evening start (including early grace): shift began today.
+        // Morning / end portion (before startBound): shift began yesterday.
+        if ($currentMinutes >= $startBound) {
+            return $at;
+        }
+
+        return $at->copy()->subDay();
+    }
+
+    /**
      * @param  array<string, mixed>  $shift
      */
     public static function appliesOnDay(array $shift, Carbon $day): bool
@@ -55,5 +88,12 @@ class AttendanceShiftSchedule
         [$hour, $minute] = array_map('intval', explode(':', strlen($time) === 5 ? $time : substr($time, 0, 5)));
 
         return $day->copy()->setTime($hour, $minute, 0);
+    }
+
+    private static function timeToMinutes(string $time): int
+    {
+        [$hour, $minute] = array_map('intval', explode(':', strlen($time) === 5 ? $time : substr($time, 0, 5)));
+
+        return ($hour * 60) + $minute;
     }
 }

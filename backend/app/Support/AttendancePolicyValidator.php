@@ -181,8 +181,8 @@ class AttendancePolicyValidator
     }
 
     /**
-     * @param  array<string, mixed>  $errors
-     * @param  array<string, mixed>  $warnings
+     * @param  array<int, string>  $errors
+     * @param  array<int, string>  $warnings
      * @param  array<string, mixed>  $metadata
      */
     private static function validateGeofence(
@@ -284,8 +284,8 @@ class AttendancePolicyValidator
     }
 
     /**
-     * @param  array<string, mixed>  $errors
-     * @param  array<string, mixed>  $warnings
+     * @param  array<int, string>  $errors
+     * @param  array<int, string>  $warnings
      * @param  array<string, mixed>  $metadata
      */
     private static function validateSpecialReleaseGeofence(

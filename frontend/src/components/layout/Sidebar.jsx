@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import { 
   LayoutDashboard, Bell, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode,
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
@@ -40,6 +40,7 @@ export default function Sidebar({
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/network-health', icon: Wifi, label: 'Network Health' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
+    { path: '/games', icon: Gamepad2, label: 'Games' },
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR' },
     ...(showUserManagement ? [
       { path: '/admin/users', icon: Users, label: isAdmin ? 'User Management' : 'HR Management' },
