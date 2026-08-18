@@ -16,6 +16,7 @@ use App\Services\MentionService;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
 use App\Support\FeedLinks;
+use App\Support\PostPollPayload;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,11 +45,15 @@ class PostController extends Controller
             'poll.options.*' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
             'poll.allow_multiple' => ['sometimes', 'boolean'],
             'poll.allow_add_options' => ['sometimes', 'boolean'],
+            'poll.is_qna' => ['sometimes', 'boolean'],
+            'poll.correct_option_index' => ['nullable', 'integer', 'min:0'],
             'polls' => ['nullable', 'array', 'max:'.PostPoll::MAX_PER_POST],
             'polls.*.options' => ['required', 'array', 'min:'.PostPoll::MIN_OPTIONS, 'max:'.PostPoll::MAX_OPTIONS],
             'polls.*.options.*' => ['required', 'string', 'max:'.PostPoll::MAX_OPTION_LENGTH],
             'polls.*.allow_multiple' => ['sometimes', 'boolean'],
             'polls.*.allow_add_options' => ['sometimes', 'boolean'],
+            'polls.*.is_qna' => ['sometimes', 'boolean'],
+            'polls.*.correct_option_index' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $body = trim($validated['body'] ?? '');
@@ -71,22 +76,15 @@ class PostController extends Controller
             $pollPayloads = collect([$validated['poll']]);
         }
 
-        $normalizedPolls = $pollPayloads
-            ->map(function (array $poll) {
-                $options = collect($poll['options'] ?? [])
-                    ->map(fn ($label) => trim((string) $label))
-                    ->filter()
-                    ->unique()
-                    ->values()
-                    ->take(PostPoll::MAX_OPTIONS)
-                    ->all();
+        foreach ($pollPayloads as $pollPayload) {
+            $conflict = PostPollPayload::conflictMessage($pollPayload);
+            if ($conflict) {
+                return response()->json(['message' => $conflict], 422);
+            }
+        }
 
-                return [
-                    'options' => $options,
-                    'allow_multiple' => (bool) ($poll['allow_multiple'] ?? false),
-                    'allow_add_options' => (bool) ($poll['allow_add_options'] ?? false),
-                ];
-            })
+        $normalizedPolls = $pollPayloads
+            ->map(fn (array $poll) => PostPollPayload::normalize($poll))
             ->filter(fn (array $poll) => count($poll['options']) >= PostPoll::MIN_OPTIONS)
             ->take(PostPoll::MAX_PER_POST)
             ->values()
@@ -104,6 +102,13 @@ class PostController extends Controller
             ], 422);
         }
 
+        foreach ($normalizedPolls as $pollData) {
+            $invalid = PostPollPayload::validationMessage($pollData);
+            if ($invalid) {
+                return response()->json(['message' => $invalid], 422);
+            }
+        }
+
         $requiresApproval = AppSettings::userRequiresFeedPostApproval($viewer);
         $now = now();
 
@@ -119,18 +124,7 @@ class PostController extends Controller
             ]);
 
             foreach ($normalizedPolls as $sortOrder => $pollData) {
-                $poll = $post->polls()->create([
-                    'sort_order' => $sortOrder,
-                    'allow_multiple' => $pollData['allow_multiple'],
-                    'allow_add_options' => $pollData['allow_add_options'],
-                ]);
-
-                foreach ($pollData['options'] as $index => $label) {
-                    $poll->options()->create([
-                        'label' => $label,
-                        'sort_order' => $index,
-                    ]);
-                }
+                PostPollPayload::createOnPost($post, $pollData, $sortOrder);
             }
 
             return $post;

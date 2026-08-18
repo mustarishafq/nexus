@@ -83,6 +83,8 @@ function emptyPollDraft(key = `poll-${Date.now()}-${Math.random().toString(36).s
     ],
     allowMultiple: false,
     allowAddOptions: false,
+    isQna: false,
+    correctOptionKey: null,
   };
 }
 
@@ -91,16 +93,24 @@ function pollDraftFromItem(poll, keyPrefix = 'poll') {
     return emptyPollDraft(keyPrefix);
   }
 
+  const options = poll.options.map((option, index) => ({
+    key: `opt-${option.id ?? index}`,
+    id: option.id ?? null,
+    label: option.label || '',
+  }));
+  const correctId = poll.correct_option_id != null ? Number(poll.correct_option_id) : null;
+  const correctOption = correctId != null
+    ? options.find((option) => Number(option.id) === correctId)
+    : null;
+
   return {
     key: `${keyPrefix}-${poll.id ?? 'new'}`,
     id: poll.id ?? null,
-    options: poll.options.map((option, index) => ({
-      key: `opt-${option.id ?? index}`,
-      id: option.id ?? null,
-      label: option.label || '',
-    })),
+    options,
     allowMultiple: Boolean(poll.allow_multiple),
     allowAddOptions: Boolean(poll.allow_add_options),
+    isQna: Boolean(poll.is_qna),
+    correctOptionKey: correctOption?.key ?? null,
   };
 }
 
@@ -108,32 +118,57 @@ function pollDraftsFromItem(item) {
   return pollsFromItem(item).map((poll, index) => pollDraftFromItem(poll, `poll-${index}`));
 }
 
-function serializePollDraft(options, allowMultiple, allowAddOptions) {
-  const cleaned = options
-    .map((option) => ({
+function serializePollDraft(draft) {
+  const cleaned = [];
+  const seen = new Set();
+
+  (draft.options || []).forEach((option) => {
+    const label = String(option.label || '').trim();
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    cleaned.push({
       id: option.id || undefined,
-      label: String(option.label || '').trim(),
-    }))
-    .filter((option) => option.label);
+      label,
+      key: option.key,
+    });
+  });
+
+  const isQna = Boolean(draft.isQna);
+  const markedIndex = isQna
+    ? cleaned.findIndex((option) => option.key === draft.correctOptionKey)
+    : -1;
 
   return {
-    options: cleaned,
-    allow_multiple: Boolean(allowMultiple),
-    allow_add_options: Boolean(allowAddOptions),
+    options: cleaned.map(({ id, label }) => ({ id, label })),
+    allow_multiple: isQna ? false : Boolean(draft.allowMultiple),
+    allow_add_options: isQna ? false : Boolean(draft.allowAddOptions),
+    is_qna: isQna,
+    correct_option_index: markedIndex >= 0 ? markedIndex : null,
   };
 }
 
 function isPollDraftValid(draft) {
-  const cleaned = (draft.options || [])
-    .map((option) => String(option.label || '').trim())
-    .filter(Boolean);
-  return cleaned.length >= MIN_POLL_OPTIONS;
+  const payload = serializePollDraft(draft);
+  if (payload.options.length < MIN_POLL_OPTIONS) return false;
+  if (payload.is_qna && payload.correct_option_index == null) return false;
+  return true;
+}
+
+function pollDraftIssue(draft) {
+  const payload = serializePollDraft(draft);
+  if (payload.options.length < MIN_POLL_OPTIONS) {
+    return `Each poll needs at least ${MIN_POLL_OPTIONS} options.`;
+  }
+  if (payload.is_qna && payload.correct_option_index == null) {
+    return 'QnA polls need one correct option.';
+  }
+  return null;
 }
 
 function pollDraftUnchanged(poll, draft) {
   if (!poll && !draft) return true;
   if (!poll || !draft) return false;
-  const current = serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions);
+  const current = serializePollDraft(draft);
   const originalLabels = (poll.options || []).map((option) => ({
     id: option.id,
     label: String(option.label || '').trim(),
@@ -141,6 +176,7 @@ function pollDraftUnchanged(poll, draft) {
 
   if (Boolean(poll.allow_multiple) !== current.allow_multiple) return false;
   if (Boolean(poll.allow_add_options) !== current.allow_add_options) return false;
+  if (Boolean(poll.is_qna) !== current.is_qna) return false;
   if (originalLabels.length !== current.options.length) return false;
 
   return originalLabels.every((option, index) => (
@@ -157,18 +193,26 @@ function PollEditorPanel({
   onAllowMultipleChange,
   allowAddOptions,
   onAllowAddOptionsChange,
+  isQna = false,
+  onIsQnaChange,
+  correctOptionKey = null,
+  onCorrectOptionKeyChange,
+  locked = false,
   disabled = false,
   maxOptions = MAX_POLL_OPTIONS,
   onRemove = null,
 }) {
+  const fieldsDisabled = disabled || locked;
+
   const updateOption = (index, value) => {
+    if (fieldsDisabled) return;
     onOptionsChange(options.map((option, i) => (
       i === index ? { ...option, label: value } : option
     )));
   };
 
   const addOption = () => {
-    if (options.length >= maxOptions) return;
+    if (fieldsDisabled || options.length >= maxOptions) return;
     onOptionsChange([
       ...options,
       { key: `new-${Date.now()}`, id: null, label: '' },
@@ -176,6 +220,11 @@ function PollEditorPanel({
   };
 
   const removeOption = (index) => {
+    if (fieldsDisabled) return;
+    const removed = options[index];
+    if (removed?.key && removed.key === correctOptionKey) {
+      onCorrectOptionKeyChange?.(null);
+    }
     if (options.length <= MIN_POLL_OPTIONS) {
       onOptionsChange(options.map((option, i) => (
         i === index ? { ...option, label: '' } : option
@@ -207,46 +256,84 @@ function PollEditorPanel({
       </div>
       {options.map((option, index) => (
         <div key={option.key || `poll-option-${index}`} className="flex items-center gap-2">
+          {isQna ? (
+            <button
+              type="button"
+              title="Mark as correct"
+              aria-pressed={option.key === correctOptionKey}
+              disabled={fieldsDisabled || !option.label.trim()}
+              onClick={() => onCorrectOptionKeyChange?.(
+                option.key === correctOptionKey ? null : option.key
+              )}
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors',
+                option.key === correctOptionKey
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
+              )}
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
           <Input
             value={option.label}
             onChange={(event) => updateOption(index, event.target.value)}
             placeholder={`Option ${index + 1}`}
             maxLength={120}
-            disabled={disabled}
+            disabled={fieldsDisabled}
             className="h-9"
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0 text-muted-foreground"
-            onClick={() => removeOption(index)}
-            disabled={disabled || (options.length <= MIN_POLL_OPTIONS && !option.label.trim())}
-            title="Remove option"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          {!locked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground"
+              onClick={() => removeOption(index)}
+              disabled={fieldsDisabled || (options.length <= MIN_POLL_OPTIONS && !option.label.trim())}
+              title="Remove option"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       ))}
-      {options.length < maxOptions ? (
+      {!locked && options.length < maxOptions ? (
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="h-8 gap-1.5 px-2 text-xs text-muted-foreground"
           onClick={addOption}
-          disabled={disabled}
+          disabled={fieldsDisabled}
         >
           <Plus className="h-3.5 w-3.5" />
           Add option
         </Button>
       ) : null}
+      {locked ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          QnA polls cannot be edited after posting. You can still remove this poll.
+        </p>
+      ) : null}
       <div className="space-y-2 border-t border-border/50 pt-2.5">
-        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-muted-foreground">
+        <label className={cn('flex items-start gap-2.5 text-xs text-muted-foreground', fieldsDisabled ? 'cursor-default' : 'cursor-pointer')}>
+          <Checkbox
+            checked={isQna}
+            onCheckedChange={(checked) => onIsQnaChange?.(checked === true)}
+            disabled={fieldsDisabled}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium text-foreground">QnA poll</span>
+            <span className="mt-0.5 block">Mark one option as correct. After posting, the answer is locked and votes cannot be changed.</span>
+          </span>
+        </label>
+        <label className={cn('flex items-start gap-2.5 text-xs text-muted-foreground', (fieldsDisabled || isQna) ? 'cursor-default' : 'cursor-pointer')}>
           <Checkbox
             checked={allowMultiple}
             onCheckedChange={(checked) => onAllowMultipleChange(checked === true)}
-            disabled={disabled}
+            disabled={fieldsDisabled || isQna}
             className="mt-0.5"
           />
           <span>
@@ -254,11 +341,11 @@ function PollEditorPanel({
             <span className="mt-0.5 block">People can select more than one option</span>
           </span>
         </label>
-        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-muted-foreground">
+        <label className={cn('flex items-start gap-2.5 text-xs text-muted-foreground', (fieldsDisabled || isQna) ? 'cursor-default' : 'cursor-pointer')}>
           <Checkbox
             checked={allowAddOptions}
             onCheckedChange={(checked) => onAllowAddOptionsChange(checked === true)}
-            disabled={disabled}
+            disabled={fieldsDisabled || isQna}
             className="mt-0.5"
           />
           <span>
@@ -792,6 +879,8 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             options: poll.payload.options.map((option) => option.label),
             allow_multiple: poll.payload.allow_multiple,
             allow_add_options: poll.payload.allow_add_options,
+            is_qna: poll.payload.is_qna,
+            correct_option_index: poll.payload.correct_option_index,
           });
         }
       }
@@ -864,15 +953,15 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const handleSaveEdit = () => {
     if (updatePost.isPending || !canSaveEdit || draftUnchanged) return;
     if (!pollsValid) {
-      toast.error(`Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
+      toast.error(draftPolls.map(pollDraftIssue).find(Boolean) || `Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
       return;
     }
 
     const pollsToSave = draftPolls
       .map((draft, index) => {
-        const payload = serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions);
+        const payload = serializePollDraft(draft);
         const original = itemPolls.find((poll) => Number(poll.id) === Number(draft.id)) || null;
-        if (draft.id && pollDraftUnchanged(original, draft)) {
+        if (draft.id && (draft.isQna || pollDraftUnchanged(original, draft))) {
           return null;
         }
         return { id: draft.id, payload, index };
@@ -996,13 +1085,29 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             {draftPolls.map((draft, index) => (
               <PollEditorPanel
                 key={draft.key}
-                title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
+                title={draft.isQna ? (draftPolls.length > 1 ? `Question ${index + 1}` : 'Question') : (draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll')}
                 options={draft.options}
                 onOptionsChange={(options) => updateDraftPoll(index, { options })}
                 allowMultiple={draft.allowMultiple}
-                onAllowMultipleChange={(allowMultiple) => updateDraftPoll(index, { allowMultiple })}
+                onAllowMultipleChange={(allowMultiple) => updateDraftPoll(index, {
+                  allowMultiple,
+                  ...(allowMultiple ? { isQna: false, correctOptionKey: null } : {}),
+                })}
                 allowAddOptions={draft.allowAddOptions}
-                onAllowAddOptionsChange={(allowAddOptions) => updateDraftPoll(index, { allowAddOptions })}
+                onAllowAddOptionsChange={(allowAddOptions) => updateDraftPoll(index, {
+                  allowAddOptions,
+                  ...(allowAddOptions ? { isQna: false, correctOptionKey: null } : {}),
+                })}
+                isQna={draft.isQna}
+                onIsQnaChange={(isQna) => updateDraftPoll(index, {
+                  isQna,
+                  ...(isQna
+                    ? { allowMultiple: false, allowAddOptions: false }
+                    : { correctOptionKey: null }),
+                })}
+                correctOptionKey={draft.correctOptionKey}
+                onCorrectOptionKeyChange={(correctOptionKey) => updateDraftPoll(index, { correctOptionKey })}
+                locked={Boolean(draft.id && draft.isQna)}
                 disabled={updatePost.isPending}
                 maxOptions={MAX_POLL_OPTIONS_EDIT}
                 onRemove={() => {
@@ -1286,11 +1391,15 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
               id: `temp-poll-${index}`,
               allow_multiple: Boolean(poll.allow_multiple),
               allow_add_options: Boolean(poll.allow_add_options),
+              is_qna: Boolean(poll.is_qna),
               can_add_options: false,
               total_votes: 0,
               has_voted: false,
               my_option_id: null,
               my_option_ids: [],
+              correct_option_id: Boolean(poll.is_qna) && poll.correct_option_index != null
+                ? `temp-opt-${index}-${poll.correct_option_index}`
+                : null,
               options: (poll.options || []).map((option, optionIndex) => ({
                 id: `temp-opt-${index}-${optionIndex}`,
                 label: option.label || option,
@@ -1393,8 +1502,8 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
   };
 
   const validPolls = draftPolls
-    .map((draft) => serializePollDraft(draft.options, draft.allowMultiple, draft.allowAddOptions))
-    .filter((poll) => poll.options.length >= MIN_POLL_OPTIONS);
+    .map((draft) => serializePollDraft(draft))
+    .filter((poll) => poll.options.length >= MIN_POLL_OPTIONS && (!poll.is_qna || poll.correct_option_index != null));
   const hasValidPolls = validPolls.length > 0 && validPolls.length === draftPolls.length;
   const canPost = Boolean(
     (!isEmptyRichText(body) || imageItems.length > 0 || hasValidPolls)
@@ -1420,7 +1529,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
     if (submitLockRef.current || createPost.isPending || !canPost) return;
 
     if (draftPolls.length > 0 && !hasValidPolls) {
-      toast.error(`Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
+      toast.error(draftPolls.map(pollDraftIssue).find(Boolean) || `Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
       return;
     }
 
@@ -1469,13 +1578,28 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
               {draftPolls.map((draft, index) => (
                 <PollEditorPanel
                   key={draft.key}
-                  title={draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll'}
+                  title={draft.isQna ? (draftPolls.length > 1 ? `Question ${index + 1}` : 'Question') : (draftPolls.length > 1 ? `Poll ${index + 1}` : 'Poll')}
                   options={draft.options}
                   onOptionsChange={(options) => updateComposerPoll(index, { options })}
                   allowMultiple={draft.allowMultiple}
-                  onAllowMultipleChange={(allowMultiple) => updateComposerPoll(index, { allowMultiple })}
+                  onAllowMultipleChange={(allowMultiple) => updateComposerPoll(index, {
+                    allowMultiple,
+                    ...(allowMultiple ? { isQna: false, correctOptionKey: null } : {}),
+                  })}
                   allowAddOptions={draft.allowAddOptions}
-                  onAllowAddOptionsChange={(allowAddOptions) => updateComposerPoll(index, { allowAddOptions })}
+                  onAllowAddOptionsChange={(allowAddOptions) => updateComposerPoll(index, {
+                    allowAddOptions,
+                    ...(allowAddOptions ? { isQna: false, correctOptionKey: null } : {}),
+                  })}
+                  isQna={draft.isQna}
+                  onIsQnaChange={(isQna) => updateComposerPoll(index, {
+                    isQna,
+                    ...(isQna
+                      ? { allowMultiple: false, allowAddOptions: false }
+                      : { correctOptionKey: null }),
+                  })}
+                  correctOptionKey={draft.correctOptionKey}
+                  onCorrectOptionKeyChange={(correctOptionKey) => updateComposerPoll(index, { correctOptionKey })}
                   disabled={isSubmitting}
                   maxOptions={MAX_POLL_OPTIONS}
                   onRemove={() => setDraftPolls((current) => current.filter((_, i) => i !== index))}
