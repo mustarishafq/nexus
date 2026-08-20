@@ -16,13 +16,78 @@ export const IMAGE_EXPORT_QUALITY = 0.97;
 export const COVER_PHOTO_MAX_WIDTH = 3200;
 export const PROFILE_PHOTO_MAX_SIZE = 1200;
 
+/**
+ * Public disk files are served at /storage/..., never under /api.
+ * Upload responses may be relative or absolute (APP_URL) — canonicalize the path.
+ */
+export function extractPublicStoragePath(url) {
+  if (!url || typeof url !== 'string') return null;
+
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  let pathname = trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      pathname = new URL(trimmed).pathname || '';
+    } catch {
+      return null;
+    }
+  } else if (!trimmed.startsWith('/')) {
+    pathname = `/${trimmed}`;
+  }
+
+  const marker = '/storage/';
+  const index = pathname.indexOf(marker);
+  if (index === -1) return null;
+
+  return pathname.slice(index);
+}
+
+function publicAssetOrigin() {
+  if (API_ORIGIN && /^https?:\/\//i.test(API_ORIGIN)) {
+    try {
+      return new URL(API_ORIGIN).origin;
+    } catch {
+      // Fall through to the current page origin.
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return '';
+}
+
+/** Resolve profile, cover, quiz, and other public-disk URLs for <img src>. */
+export function toPublicFileUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+
+  const storagePath = extractPublicStoragePath(url);
+  if (storagePath) {
+    const origin = publicAssetOrigin();
+    return origin ? `${origin}${storagePath}` : storagePath;
+  }
+
+  return toAbsoluteUrl(url);
+}
+
 export function toAbsoluteUrl(url) {
   if (!url) return '';
-  if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+
+  const storagePath = extractPublicStoragePath(url);
+  if (storagePath) {
+    return toPublicFileUrl(url);
+  }
+
+  if (/^https?:\/\//i.test(url)) {
     return url;
   }
 
-  if (!API_ORIGIN) return url;
+  if (!API_ORIGIN) return url.startsWith('/') ? url : `/${url}`;
 
   return url.startsWith('/') ? `${API_ORIGIN}${url}` : `${API_ORIGIN}/${url}`;
 }
@@ -125,7 +190,7 @@ export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'co
 
   if (!normalized?.width || !normalized?.height) {
     return {
-      backgroundImage: `url(${imageUrl})`,
+      backgroundImage: `url(${JSON.stringify(imageUrl)})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
@@ -134,7 +199,7 @@ export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'co
 
   if (isExactFullImageCrop(normalized)) {
     return {
-      backgroundImage: `url(${imageUrl})`,
+      backgroundImage: `url(${JSON.stringify(imageUrl)})`,
       backgroundSize: fullImageFit === 'cover' ? 'cover' : 'contain',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
@@ -148,7 +213,7 @@ export function getCoverCropBackgroundStyle(imageUrl, crop, { fullImageFit = 'co
   const posY = Math.abs(height - 100) < 0.01 ? 50 : (y / (100 - height)) * 100;
 
   return {
-    backgroundImage: `url(${imageUrl})`,
+    backgroundImage: `url(${JSON.stringify(imageUrl)})`,
     backgroundSize: `${sizeX}% ${sizeY}%`,
     backgroundPosition: `${posX}% ${posY}%`,
     backgroundRepeat: 'no-repeat',

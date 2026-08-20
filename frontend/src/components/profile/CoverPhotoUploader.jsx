@@ -23,6 +23,7 @@ import {
   getCoverCropBackgroundStyle,
   getResizedImageBlob,
   normalizeMediaCropArea,
+  extractPublicStoragePath,
   toAbsoluteUrl,
 } from '@/lib/media';
 import { cn } from '@/lib/utils';
@@ -164,7 +165,7 @@ export default function CoverPhotoUploader({
         folder: 'cover-pictures-new',
       });
       await db.auth.updateMe({
-        cover_picture: file_url,
+        cover_picture: extractPublicStoragePath(file_url) || file_url,
         cover_picture_crops: {
           desktop: desktopCrop,
           mobile: mobileCrop,

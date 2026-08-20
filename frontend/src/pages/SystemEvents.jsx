@@ -2,7 +2,7 @@ import db from '@/api/apiClient';
 import React, { useState, useEffect } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Search, CheckCircle, Clock, XCircle, AlertTriangle, Info, AlertOctagon, BookOpen, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Terminal, Copy, Check } from 'lucide-react';
+import { Shield, Search, CheckCircle, Clock, XCircle, Info, BookOpen, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

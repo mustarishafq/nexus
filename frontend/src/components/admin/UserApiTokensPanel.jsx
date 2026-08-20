@@ -219,8 +219,6 @@ function McpAccessDialog({ target, saving, onClose, onSave }) {
     setAppFilter('all');
   }, [data]);
 
-  if (!target) return null;
-
   const applications = data?.applications ?? [];
   const overrideCount = Object.keys(appOverrides).length;
 
@@ -236,6 +234,8 @@ function McpAccessDialog({ target, saving, onClose, onSave }) {
       return [app.name, app.slug].filter(Boolean).join(' ').toLowerCase().includes(term);
     });
   }, [applications, appOverrides, appFilter, appSearch]);
+
+  if (!target) return null;
 
   const hasChanges = data
     ? defaultAccess !== (data.mcp_access || 'none')

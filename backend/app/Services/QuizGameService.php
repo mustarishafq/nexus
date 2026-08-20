@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Events\QuizSessionStateChanged;
+use App\Models\ExpReward;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
@@ -11,12 +12,47 @@ use App\Models\QuizSessionAnswer;
 use App\Models\QuizSessionPlayer;
 use App\Models\QuizSessionPowerUp;
 use App\Models\User;
+use App\Support\MediaCropNormalizer;
+use App\Support\PublicStorageUrl;
+use App\Support\QuizAccessories;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class QuizGameService
 {
+    public const COMPLETION_EXP_ACTION = 'quiz_complete';
+
+    public const COMPLETION_EXP_SOURCE = 'quiz_session';
+
+    public function __construct(
+        protected GamificationService $gamification,
+    ) {}
+
+    public static function completionExpForRank(int $rank): int
+    {
+        if ($rank <= 0) {
+            return 0;
+        }
+        if ($rank === 1) {
+            return 20;
+        }
+        if ($rank === 2) {
+            return 15;
+        }
+        if ($rank === 3) {
+            return 10;
+        }
+        if ($rank <= 10) {
+            return 5;
+        }
+
+        return 2;
+    }
+
     public function createLiveSession(Quiz $quiz, User $host): QuizSession
     {
         $quiz->loadMissing('questions.options');
@@ -49,7 +85,8 @@ class QuizGameService
             'status' => QuizSession::STATUS_LOBBY,
             'music_enabled' => true,
             'bgm_theme' => $quiz->bgm_theme ?: 'party',
-            'sfx_pack' => $quiz->sfx_pack ?: 'soft',
+            'sfx_pack' => $quiz->sfx_pack ?: 'classic',
+            'host_last_seen_at' => now(),
         ]);
 
         $this->broadcast($session, 'session.created');
@@ -62,12 +99,7 @@ class QuizGameService
         $session = QuizSession::query()
             ->where('pin', $pin)
             ->where('mode', QuizSession::MODE_LIVE)
-            ->whereIn('status', [
-                QuizSession::STATUS_LOBBY,
-                QuizSession::STATUS_QUESTION,
-                QuizSession::STATUS_REVEAL,
-                QuizSession::STATUS_LEADERBOARD,
-            ])
+            ->where('status', '!=', QuizSession::STATUS_FINISHED)
             ->first();
 
         if (! $session) {
@@ -76,164 +108,301 @@ class QuizGameService
             ]);
         }
 
-        if ($session->host_user_id === $user->id) {
+        if ((int) $session->host_user_id === (int) $user->id) {
             throw ValidationException::withMessages([
                 'pin' => 'Hosts cannot join their own session as a player.',
             ]);
         }
 
-        $player = QuizSessionPlayer::firstOrCreate(
-            [
-                'quiz_session_id' => $session->id,
-                'user_id' => $user->id,
-            ],
-            [
-                'display_name' => $user->displayName(),
-                'score' => 0,
-                'streak' => 0,
-                'joined_at' => now(),
-            ]
-        );
+        $existing = QuizSessionPlayer::query()
+            ->where('quiz_session_id', $session->id)
+            ->where('user_id', $user->id)
+            ->first();
 
-        if ($player->wasRecentlyCreated) {
-            $this->seedPowerUps($session, $user);
+        if ($existing) {
+            return $this->hydrateLiveSession($session)->fresh($this->defaultRelations());
+        }
+
+        $joinedEvent = false;
+        try {
+            $session = DB::transaction(function () use ($session, $user, &$joinedEvent) {
+                $locked = $this->lockSession($session);
+                $this->applyLazyEffects($locked);
+
+                if ($locked->status !== QuizSession::STATUS_LOBBY) {
+                    throw ValidationException::withMessages([
+                        'pin' => 'This game has already started. Joining is closed.',
+                    ]);
+                }
+
+                $player = QuizSessionPlayer::firstOrCreate(
+                    [
+                        'quiz_session_id' => $locked->id,
+                        'user_id' => $user->id,
+                    ],
+                    $this->playerIdentitySnapshot($user)
+                );
+
+                if ($player->wasRecentlyCreated) {
+                    $this->seedPowerUps($locked, $user);
+                    $joinedEvent = true;
+                }
+
+                return $locked;
+            });
+        } catch (UniqueConstraintViolationException) {
+            return $this->hydrateLiveSession($session)->fresh($this->defaultRelations());
+        } catch (QueryException $e) {
+            if ($this->isUniqueViolation($e)) {
+                return $this->hydrateLiveSession($session)->fresh($this->defaultRelations());
+            }
+
+            throw $e;
+        }
+
+        if ($joinedEvent) {
             $this->broadcast($session, 'player.joined');
         }
 
-        return $session->fresh(['quiz', 'players', 'host']);
+        return $session->fresh($this->defaultRelations());
     }
 
     public function startSession(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
 
-        if ($session->status !== QuizSession::STATUS_LOBBY) {
-            throw ValidationException::withMessages([
-                'session' => 'Session has already started.',
-            ]);
-        }
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            if ($locked->status !== QuizSession::STATUS_LOBBY) {
+                throw ValidationException::withMessages([
+                    'session' => 'Session has already started.',
+                ]);
+            }
 
-        $first = $session->quiz->questions()->orderBy('sort_order')->orderBy('id')->first();
-        if (! $first) {
-            throw ValidationException::withMessages([
-                'session' => 'Quiz has no questions.',
-            ]);
-        }
+            if ($locked->players()->count() < 1) {
+                throw ValidationException::withMessages([
+                    'session' => 'Wait for at least one player before starting.',
+                ]);
+            }
 
-        $session->update([
-            'status' => QuizSession::STATUS_QUESTION,
-            'current_question_id' => $first->id,
-            'question_started_at' => now(),
-        ]);
+            $first = $locked->quiz->questions()->orderBy('sort_order')->orderBy('id')->first();
+            if (! $first) {
+                throw ValidationException::withMessages([
+                    'session' => 'Quiz has no questions.',
+                ]);
+            }
 
-        $this->broadcast($session, 'question.started');
+            $this->beginQuestion($locked, $first, true);
+            $this->touchHostLastSeen($locked);
 
-        return $session->fresh($this->defaultRelations());
+            return [$locked, 'question.started'];
+        });
     }
 
     public function revealQuestion(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
 
-        if ($session->status !== QuizSession::STATUS_QUESTION) {
-            throw ValidationException::withMessages([
-                'session' => 'Nothing to reveal right now.',
-            ]);
-        }
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            $this->touchHostLastSeen($locked);
 
-        $this->markMissingAnswersAsWrong($session);
+            if (in_array($locked->status, [
+                QuizSession::STATUS_REVEAL,
+                QuizSession::STATUS_LEADERBOARD,
+                QuizSession::STATUS_FINISHED,
+            ], true)) {
+                return [$locked, null];
+            }
 
-        $session->update(['status' => QuizSession::STATUS_REVEAL]);
-        $this->broadcast($session, 'question.revealed');
+            if ($locked->status !== QuizSession::STATUS_QUESTION) {
+                throw ValidationException::withMessages([
+                    'session' => 'Nothing to reveal right now.',
+                ]);
+            }
 
-        return $session->fresh($this->defaultRelations());
+            $this->revealLocked($locked);
+
+            return [$locked, 'question.revealed'];
+        }, false);
     }
 
     public function showLeaderboard(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
 
-        if (! in_array($session->status, [QuizSession::STATUS_REVEAL, QuizSession::STATUS_QUESTION], true)) {
-            throw ValidationException::withMessages([
-                'session' => 'Leaderboard is not available in this state.',
-            ]);
-        }
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            $this->touchHostLastSeen($locked);
 
-        if ($session->status === QuizSession::STATUS_QUESTION) {
-            $this->markMissingAnswersAsWrong($session);
-        }
+            if ($locked->status === QuizSession::STATUS_LEADERBOARD) {
+                return [$locked, null];
+            }
 
-        $session->update(['status' => QuizSession::STATUS_LEADERBOARD]);
-        $this->broadcast($session, 'leaderboard.updated');
+            if (! in_array($locked->status, [QuizSession::STATUS_REVEAL, QuizSession::STATUS_QUESTION], true)) {
+                throw ValidationException::withMessages([
+                    'session' => 'Leaderboard is not available in this state.',
+                ]);
+            }
 
-        return $session->fresh($this->defaultRelations());
+            if ($locked->status === QuizSession::STATUS_QUESTION) {
+                $this->revealLocked($locked);
+            }
+
+            $this->enterLeaderboardLocked($locked);
+
+            return [$locked, 'leaderboard.updated'];
+        }, false);
     }
 
     public function nextQuestion(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
 
-        if (! in_array($session->status, [
-            QuizSession::STATUS_REVEAL,
-            QuizSession::STATUS_LEADERBOARD,
-            QuizSession::STATUS_QUESTION,
-        ], true)) {
-            throw ValidationException::withMessages([
-                'session' => 'Cannot advance from this state.',
-            ]);
-        }
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            $this->touchHostLastSeen($locked);
 
-        if ($session->status === QuizSession::STATUS_QUESTION) {
-            $this->markMissingAnswersAsWrong($session);
-        }
+            if ($locked->isPaused()) {
+                throw ValidationException::withMessages([
+                    'session' => 'The game is paused until the host reconnects.',
+                ]);
+            }
 
-        $next = $this->findNextQuestion($session);
+            if (! in_array($locked->status, [
+                QuizSession::STATUS_REVEAL,
+                QuizSession::STATUS_LEADERBOARD,
+            ], true)) {
+                throw ValidationException::withMessages([
+                    'session' => 'Cannot advance from this state.',
+                ]);
+            }
 
-        if (! $next) {
-            $session->update([
-                'status' => QuizSession::STATUS_FINISHED,
-                'current_question_id' => $session->current_question_id,
-                'question_started_at' => null,
-                'pin' => null,
-            ]);
-            $this->broadcast($session, 'session.finished');
+            if ($locked->status === QuizSession::STATUS_REVEAL) {
+                $this->enterLeaderboardLocked($locked);
 
-            return $session->fresh($this->defaultRelations());
-        }
+                return [$locked, 'leaderboard.updated'];
+            }
 
-        $session->update([
-            'status' => QuizSession::STATUS_QUESTION,
-            'current_question_id' => $next->id,
-            'question_started_at' => now(),
-        ]);
-
-        $this->broadcast($session, 'question.started');
-
-        return $session->fresh($this->defaultRelations());
+            return $this->advanceFromLeaderboardLocked($locked);
+        }, false);
     }
 
     public function endSession(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
 
-        $session->update([
-            'status' => QuizSession::STATUS_FINISHED,
-            'pin' => null,
-            'question_started_at' => null,
-        ]);
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            $this->touchHostLastSeen($locked);
 
-        $this->broadcast($session, 'session.finished');
+            if ($locked->status === QuizSession::STATUS_FINISHED) {
+                return [$locked, null];
+            }
 
-        return $session->fresh($this->defaultRelations());
+            if ($locked->status !== QuizSession::STATUS_LOBBY) {
+                throw ValidationException::withMessages([
+                    'session' => 'The live game cannot be ended after it has started.',
+                ]);
+            }
+
+            $this->finishLocked($locked);
+
+            return [$locked, 'session.finished'];
+        });
     }
 
-    public function setMusicEnabled(QuizSession $session, User $host, bool $enabled): QuizSession
+    public function leaveLiveSession(QuizSession $session, User $user): QuizSession
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE) {
+            throw ValidationException::withMessages([
+                'session' => 'Only live games can be left.',
+            ]);
+        }
+
+        if ((int) $session->host_user_id === (int) $user->id) {
+            throw ValidationException::withMessages([
+                'session' => 'Hosts cannot leave as a player. End the live game instead.',
+            ]);
+        }
+
+        return $this->mutateLockedSession($session, function (QuizSession $locked) use ($user) {
+            if ($locked->status !== QuizSession::STATUS_LOBBY) {
+                throw ValidationException::withMessages([
+                    'session' => 'You cannot leave after the game has started.',
+                ]);
+            }
+
+            $player = $locked->players()->where('user_id', $user->id)->first();
+            if (! $player) {
+                throw ValidationException::withMessages([
+                    'session' => 'You are not in this game.',
+                ]);
+            }
+
+            $locked->powerUps()->where('user_id', $user->id)->delete();
+            $player->delete();
+
+            return [$locked, 'player.left'];
+        });
+    }
+
+    public function touchHostPresence(QuizSession $session, User $host): QuizSession
     {
         $this->assertHost($session, $host);
-        $session->update(['music_enabled' => $enabled]);
-        $this->broadcast($session, 'music.updated');
 
-        return $session->fresh($this->defaultRelations());
+        return $this->mutateLockedSession($session, function (QuizSession $locked) {
+            $event = null;
+            $wasPaused = $locked->isPaused();
+            $this->touchHostLastSeen($locked);
+            $this->resumeLocked($locked);
+            if ($wasPaused && ! $locked->isPaused()) {
+                $event = 'session.resumed';
+            }
+
+            return [$locked, $event];
+        });
+    }
+
+    public function hydrateLiveSession(QuizSession $session): QuizSession
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE || $session->status === QuizSession::STATUS_FINISHED) {
+            return $session;
+        }
+
+        $needsWork = $this->hostIsStale($session)
+            || ($session->status === QuizSession::STATUS_QUESTION && ! $session->isPaused() && $this->questionDeadlinePassed($session))
+            || ($this->isPostQuestionStatus($session->status) && ! $session->isPaused() && $this->phaseDeadlinePassed($session));
+
+        if (! $needsWork) {
+            return $session;
+        }
+
+        $event = null;
+        $updated = DB::transaction(function () use ($session, &$event) {
+            $locked = $this->lockSession($session);
+            $beforeStatus = $locked->status;
+            $wasPaused = $locked->isPaused();
+            $this->applyLazyEffects($locked);
+            if (! $wasPaused && $locked->isPaused()) {
+                $event = 'session.paused';
+            } elseif ($beforeStatus === QuizSession::STATUS_QUESTION && $locked->status === QuizSession::STATUS_REVEAL) {
+                $event = 'question.revealed';
+            } elseif ($beforeStatus === QuizSession::STATUS_REVEAL && $locked->status === QuizSession::STATUS_LEADERBOARD) {
+                $event = 'leaderboard.updated';
+            } elseif ($beforeStatus === QuizSession::STATUS_LEADERBOARD && $locked->status === QuizSession::STATUS_QUESTION) {
+                $event = 'question.started';
+            } elseif ($beforeStatus === QuizSession::STATUS_LEADERBOARD && $locked->status === QuizSession::STATUS_FINISHED) {
+                $event = 'session.finished';
+            }
+
+            return $locked;
+        });
+
+        if ($event === 'session.finished') {
+            $this->awardQuizCompletionExp($updated->fresh($this->defaultRelations()));
+        }
+
+        if ($event) {
+            $this->broadcast($updated, $event);
+        }
+
+        return $updated;
     }
 
     public function setAudioSettings(QuizSession $session, User $host, array $settings): QuizSession
@@ -264,12 +433,6 @@ class QuizGameService
      */
     public function submitAnswer(QuizSession $session, User $user, int $optionId): array
     {
-        if ($session->status !== QuizSession::STATUS_QUESTION || ! $session->current_question_id) {
-            throw ValidationException::withMessages([
-                'session' => 'Answers are not open right now.',
-            ]);
-        }
-
         $player = QuizSessionPlayer::query()
             ->where('quiz_session_id', $session->id)
             ->where('user_id', $user->id)
@@ -281,91 +444,152 @@ class QuizGameService
             ]);
         }
 
-        $existing = QuizSessionAnswer::query()
-            ->where('quiz_session_id', $session->id)
-            ->where('quiz_question_id', $session->current_question_id)
-            ->where('user_id', $user->id)
-            ->first();
+        $erasedIds = [];
+        $powerUpUsed = null;
+        $points = 0;
 
-        if ($existing) {
+        try {
+            $answer = DB::transaction(function () use ($session, $player, $user, $optionId, &$erasedIds, &$powerUpUsed, &$points) {
+                $lockedSession = $this->lockSession($session);
+                $this->applyLazyEffects($lockedSession);
+
+                if ($lockedSession->mode === QuizSession::MODE_LIVE && $lockedSession->isPaused()) {
+                    throw ValidationException::withMessages([
+                        'session' => 'The game is paused until the host reconnects.',
+                    ]);
+                }
+
+                if (! $this->isAnsweringOpen($lockedSession)) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Answers are not open right now.',
+                    ]);
+                }
+
+                $already = QuizSessionAnswer::query()
+                    ->where('quiz_session_id', $lockedSession->id)
+                    ->where('quiz_question_id', $lockedSession->current_question_id)
+                    ->where('user_id', $user->id)
+                    ->exists();
+
+                if ($already) {
+                    throw ValidationException::withMessages([
+                        'answer' => 'You already answered this question.',
+                    ]);
+                }
+
+                $question = QuizQuestion::with('options')->findOrFail($lockedSession->current_question_id);
+                $option = $question->options->first(fn (QuizOption $o) => (int) $o->id === $optionId);
+
+                if (! $option) {
+                    throw ValidationException::withMessages([
+                        'option_id' => 'Invalid option for this question.',
+                    ]);
+                }
+
+                $erasedIds = $this->erasedOptionIdsForPlayer($lockedSession, $user, $question);
+                if (in_array($optionId, $erasedIds, true)) {
+                    throw ValidationException::withMessages([
+                        'option_id' => 'That option was removed by Eraser.',
+                    ]);
+                }
+
+                [$elapsedMs, $remainingMs, $limitMs, $timedOut] = $this->timingForQuestion($lockedSession, $question);
+
+                if ($timedOut && $lockedSession->mode === QuizSession::MODE_LIVE) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Time is up for this question.',
+                    ]);
+                }
+
+                $isCorrect = ! $timedOut && (bool) $option->is_correct;
+
+                $lockedPlayer = QuizSessionPlayer::query()
+                    ->whereKey($player->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $double = $this->pendingPowerUp($lockedSession, $user, QuizSessionPowerUp::TYPE_DOUBLE);
+                $bonus = $this->pendingPowerUp($lockedSession, $user, QuizSessionPowerUp::TYPE_BONUS);
+                $freeze = $this->pendingPowerUp($lockedSession, $user, QuizSessionPowerUp::TYPE_STREAK_FREEZE);
+                $normalPoints = $this->normalAnswerPoints($question, $remainingMs, $limitMs, (int) $lockedPlayer->streak);
+
+                if ($isCorrect) {
+                    $points = $normalPoints;
+
+                    if ($double) {
+                        $points *= 2;
+                        $powerUpUsed = QuizSessionPowerUp::TYPE_DOUBLE;
+                        $this->consumePowerUp($double);
+                    }
+
+                    if ($bonus) {
+                        $points += QuizSessionPowerUp::BONUS_POINTS;
+                        $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_BONUS;
+                        $this->consumePowerUp($bonus);
+                    }
+
+                    if ($freeze) {
+                        $this->consumePowerUp($freeze);
+                        $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_STREAK_FREEZE;
+                    }
+
+                    $lockedPlayer->score += $points;
+                    $lockedPlayer->streak = $lockedPlayer->streak + 1;
+                } else {
+                    $points = 0;
+
+                    if ($double && $normalPoints > 0) {
+                        $points = -$normalPoints;
+                        $powerUpUsed = QuizSessionPowerUp::TYPE_DOUBLE;
+                        $this->consumePowerUp($double);
+                    } elseif ($double) {
+                        $this->consumePowerUp($double);
+                        $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_DOUBLE;
+                    }
+
+                    if ($bonus) {
+                        $this->consumePowerUp($bonus);
+                        $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_BONUS;
+                    }
+
+                    if ($freeze) {
+                        $powerUpUsed = QuizSessionPowerUp::TYPE_STREAK_FREEZE;
+                        $this->consumePowerUp($freeze);
+                    } else {
+                        $lockedPlayer->streak = 0;
+                    }
+
+                    $lockedPlayer->score += $points;
+                }
+
+                $lockedPlayer->save();
+
+                return QuizSessionAnswer::create([
+                    'quiz_session_id' => $lockedSession->id,
+                    'quiz_question_id' => $question->id,
+                    'user_id' => $user->id,
+                    'quiz_option_id' => $option->id,
+                    'is_correct' => $isCorrect,
+                    'points_awarded' => $points,
+                    'streak_after' => $lockedPlayer->streak,
+                    'power_up_used' => $powerUpUsed,
+                    'answered_at' => now(),
+                    'response_ms' => min($elapsedMs, $limitMs),
+                ]);
+            });
+        } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages([
                 'answer' => 'You already answered this question.',
             ]);
-        }
-
-        $question = QuizQuestion::with('options')->findOrFail($session->current_question_id);
-        $option = $question->options->firstWhere('id', $optionId);
-
-        if (! $option) {
-            throw ValidationException::withMessages([
-                'option_id' => 'Invalid option for this question.',
-            ]);
-        }
-
-        $erasedIds = $this->erasedOptionIdsForPlayer($session, $user, $question);
-        if (in_array($optionId, $erasedIds, true)) {
-            throw ValidationException::withMessages([
-                'option_id' => 'That option was removed by Eraser.',
-            ]);
-        }
-
-        $startedAt = $session->question_started_at;
-        $limitMs = max(1, $question->time_limit_seconds * 1000);
-        $elapsedMs = $startedAt ? (int) max(0, now()->diffInMilliseconds($startedAt)) : $limitMs;
-        $remainingMs = max(0, $limitMs - $elapsedMs);
-        $timedOut = $elapsedMs >= $limitMs;
-
-        $isCorrect = ! $timedOut && (bool) $option->is_correct;
-        $powerUpUsed = null;
-
-        $double = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_DOUBLE);
-        $freeze = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_STREAK_FREEZE);
-
-        if ($isCorrect) {
-            $base = $this->basePoints($question->points_base, $remainingMs, $limitMs);
-            $newStreak = $player->streak + 1;
-            $multiplier = $this->streakMultiplier($newStreak);
-            $points = (int) round($base * $multiplier);
-
-            if ($double) {
-                $points *= 2;
-                $powerUpUsed = QuizSessionPowerUp::TYPE_DOUBLE;
-                $double->update(['active_until_question_id' => null]);
+        } catch (QueryException $e) {
+            if ($this->isUniqueViolation($e)) {
+                throw ValidationException::withMessages([
+                    'answer' => 'You already answered this question.',
+                ]);
             }
 
-            $player->score += $points;
-            $player->streak = $newStreak;
-        } else {
-            $points = 0;
-
-            if ($freeze) {
-                $powerUpUsed = QuizSessionPowerUp::TYPE_STREAK_FREEZE;
-                $freeze->update(['active_until_question_id' => null]);
-            } else {
-                $player->streak = 0;
-            }
-
-            // Consume pending double even on wrong answers
-            if ($double) {
-                $double->update(['active_until_question_id' => null]);
-                $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_DOUBLE;
-            }
+            throw $e;
         }
-
-        $player->save();
-
-        $answer = QuizSessionAnswer::create([
-            'quiz_session_id' => $session->id,
-            'quiz_question_id' => $question->id,
-            'user_id' => $user->id,
-            'quiz_option_id' => $option->id,
-            'is_correct' => $isCorrect,
-            'points_awarded' => $points,
-            'streak_after' => $player->streak,
-            'power_up_used' => $powerUpUsed,
-            'answered_at' => now(),
-            'response_ms' => min($elapsedMs, $limitMs),
-        ]);
 
         $this->broadcast($session, 'answer.received');
 
@@ -387,12 +611,6 @@ class QuizGameService
             ]);
         }
 
-        if ($session->status !== QuizSession::STATUS_QUESTION || ! $session->current_question_id) {
-            throw ValidationException::withMessages([
-                'session' => 'Power-ups can only be used during a question.',
-            ]);
-        }
-
         $player = QuizSessionPlayer::query()
             ->where('quiz_session_id', $session->id)
             ->where('user_id', $user->id)
@@ -404,46 +622,97 @@ class QuizGameService
             ]);
         }
 
-        $powerUp = QuizSessionPowerUp::query()
-            ->where('quiz_session_id', $session->id)
-            ->where('user_id', $user->id)
-            ->where('type', $type)
-            ->first();
-
-        if (! $powerUp || $powerUp->uses_remaining < 1) {
-            throw ValidationException::withMessages([
-                'type' => 'No uses remaining for that power-up.',
-            ]);
-        }
-
-        if ($powerUp->active_until_question_id) {
-            throw ValidationException::withMessages([
-                'type' => 'That power-up is already active.',
-            ]);
-        }
-
-        $alreadyAnswered = QuizSessionAnswer::query()
-            ->where('quiz_session_id', $session->id)
-            ->where('quiz_question_id', $session->current_question_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if ($alreadyAnswered) {
-            throw ValidationException::withMessages([
-                'type' => 'You already answered this question.',
-            ]);
-        }
-
         $erasedIds = [];
 
-        DB::transaction(function () use ($powerUp, $session, $type, &$erasedIds) {
-            $powerUp->uses_remaining = 0;
-            $powerUp->active_until_question_id = $session->current_question_id;
-            $powerUp->save();
+        $powerUp = DB::transaction(function () use ($session, $user, $type, &$erasedIds) {
+            $lockedSession = $this->lockSession($session);
+            $this->applyLazyEffects($lockedSession);
+
+            if ($lockedSession->mode !== QuizSession::MODE_LIVE) {
+                throw ValidationException::withMessages([
+                    'session' => 'Power-ups are only available in live games.',
+                ]);
+            }
+
+            if ($lockedSession->isPaused()) {
+                throw ValidationException::withMessages([
+                    'session' => 'The game is paused until the host reconnects.',
+                ]);
+            }
+
+            if (! $this->isAnsweringOpen($lockedSession)) {
+                throw ValidationException::withMessages([
+                    'session' => 'Power-ups can only be used during a question.',
+                ]);
+            }
+
+            if ($this->remainingMs($lockedSession) <= 0) {
+                throw ValidationException::withMessages([
+                    'session' => 'Time is up for this question.',
+                ]);
+            }
+
+            $alreadyAnswered = QuizSessionAnswer::query()
+                ->where('quiz_session_id', $lockedSession->id)
+                ->where('quiz_question_id', $lockedSession->current_question_id)
+                ->where('user_id', $user->id)
+                ->exists();
+
+            if ($alreadyAnswered) {
+                throw ValidationException::withMessages([
+                    'type' => 'You already answered this question.',
+                ]);
+            }
+
+            $powerUp = QuizSessionPowerUp::query()
+                ->where('quiz_session_id', $lockedSession->id)
+                ->where('user_id', $user->id)
+                ->where('type', $type)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $powerUp || $powerUp->uses_remaining < 1) {
+                throw ValidationException::withMessages([
+                    'type' => 'No uses remaining for that power-up.',
+                ]);
+            }
+
+            if ($powerUp->active_until_question_id) {
+                throw ValidationException::withMessages([
+                    'type' => 'That power-up is already active.',
+                ]);
+            }
+
+            if (in_array($type, QuizSessionPowerUp::SCORING_TYPES, true)) {
+                $otherScoringArmed = QuizSessionPowerUp::query()
+                    ->where('quiz_session_id', $lockedSession->id)
+                    ->where('user_id', $user->id)
+                    ->whereIn('type', QuizSessionPowerUp::SCORING_TYPES)
+                    ->where('type', '!=', $type)
+                    ->where('active_until_question_id', $lockedSession->current_question_id)
+                    ->exists();
+
+                if ($otherScoringArmed) {
+                    throw ValidationException::withMessages([
+                        'type' => 'Double and Bonus cannot be used on the same question.',
+                    ]);
+                }
+            }
 
             if ($type === QuizSessionPowerUp::TYPE_ERASER) {
-                $erasedIds = $this->applyEraser($session, $powerUp->user_id);
+                $erasedIds = $this->applyEraser($lockedSession, $powerUp);
+                if ($erasedIds === []) {
+                    throw ValidationException::withMessages([
+                        'type' => 'Eraser needs at least two incorrect options.',
+                    ]);
+                }
             }
+
+            $powerUp->uses_remaining = 0;
+            $powerUp->active_until_question_id = $lockedSession->current_question_id;
+            $powerUp->save();
+
+            return $powerUp;
         });
 
         $this->broadcast($session, 'powerup.used');
@@ -482,13 +751,9 @@ class QuizGameService
             'music_enabled' => false,
         ]);
 
-        QuizSessionPlayer::create([
+        QuizSessionPlayer::create($this->playerIdentitySnapshot($user) + [
             'quiz_session_id' => $session->id,
             'user_id' => $user->id,
-            'display_name' => $user->displayName(),
-            'score' => 0,
-            'streak' => 0,
-            'joined_at' => now(),
         ]);
 
         return $session->fresh($this->defaultRelations());
@@ -533,6 +798,371 @@ class QuizGameService
     }
 
     /**
+     * @param  callable(QuizSession): array{0: QuizSession, 1: ?string}  $callback
+     */
+    protected function mutateLockedSession(QuizSession $session, callable $callback, bool $lazyPostQuestion = true): QuizSession
+    {
+        $event = null;
+        $updated = DB::transaction(function () use ($session, $callback, $lazyPostQuestion, &$event) {
+            $locked = $this->lockSession($session);
+            $this->applyLazyEffects($locked, $lazyPostQuestion);
+            [$locked, $event] = $callback($locked);
+
+            return $locked;
+        });
+
+        if ($event === 'session.finished') {
+            $this->awardQuizCompletionExp($updated->fresh($this->defaultRelations()));
+        }
+
+        if ($event) {
+            $this->broadcast($updated, $event);
+        }
+
+        return $updated->fresh($this->defaultRelations());
+    }
+
+    protected function lockSession(QuizSession $session): QuizSession
+    {
+        return QuizSession::query()
+            ->whereKey($session->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    protected function applyLazyEffects(QuizSession $session, bool $lazyPostQuestion = true): void
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE || $session->status === QuizSession::STATUS_FINISHED) {
+            return;
+        }
+
+        $stale = $this->hostIsStale($session);
+
+        if ($stale && $this->isPausableStatus($session->status) && ! $session->isPaused()) {
+            // Expired questions still reveal once so clients are not stuck at 0s.
+            // Do not auto-advance reveal/leaderboard while the host is gone.
+            if ($session->status === QuizSession::STATUS_QUESTION && $this->questionDeadlinePassed($session)) {
+                $this->revealLocked($session);
+            }
+
+            if ($this->isPausableStatus($session->status) && $session->status !== QuizSession::STATUS_FINISHED) {
+                $this->pauseLocked($session);
+            }
+
+            return;
+        }
+
+        if ($session->isPaused()) {
+            return;
+        }
+
+        if ($session->status === QuizSession::STATUS_QUESTION && $this->questionDeadlinePassed($session)) {
+            $this->revealLocked($session);
+
+            return;
+        }
+
+        if (! $lazyPostQuestion) {
+            return;
+        }
+
+        if ($session->status === QuizSession::STATUS_REVEAL && $this->phaseDeadlinePassed($session)) {
+            $this->enterLeaderboardLocked($session);
+
+            return;
+        }
+
+        if ($session->status === QuizSession::STATUS_LEADERBOARD && $this->phaseDeadlinePassed($session)) {
+            $this->advanceFromLeaderboardLocked($session);
+        }
+    }
+
+    protected function beginQuestion(QuizSession $session, QuizQuestion $question, bool $withCountdown = false): void
+    {
+        $countdown = 0;
+        if ($withCountdown && $session->mode === QuizSession::MODE_LIVE) {
+            $countdown = max(0, (int) config('quiz.first_question_countdown_seconds', 3));
+        }
+
+        $started = now()->addSeconds($countdown);
+        $session->update([
+            'status' => QuizSession::STATUS_QUESTION,
+            'current_question_id' => $question->id,
+            'question_started_at' => $started,
+            'question_ends_at' => $started->copy()->addSeconds(max(1, (int) $question->time_limit_seconds)),
+            'phase_ends_at' => null,
+            'paused_at' => null,
+            'pause_remaining_ms' => null,
+        ]);
+        $session->unsetRelation('currentQuestion');
+    }
+
+    protected function revealLocked(QuizSession $session): void
+    {
+        if ($session->status !== QuizSession::STATUS_QUESTION || ! $session->current_question_id) {
+            return;
+        }
+
+        $this->markMissingAnswersAsWrong($session);
+
+        $seconds = max(1, (int) config('quiz.distribution_seconds', 4));
+        $session->update([
+            'status' => QuizSession::STATUS_REVEAL,
+            'phase_ends_at' => now()->addSeconds($seconds),
+        ]);
+    }
+
+    protected function enterLeaderboardLocked(QuizSession $session): void
+    {
+        if ($session->status === QuizSession::STATUS_LEADERBOARD) {
+            return;
+        }
+
+        $seconds = max(1, (int) config('quiz.recap_seconds', 5));
+        $session->update([
+            'status' => QuizSession::STATUS_LEADERBOARD,
+            'phase_ends_at' => now()->addSeconds($seconds),
+        ]);
+    }
+
+    /**
+     * @return array{0: QuizSession, 1: string}
+     */
+    protected function advanceFromLeaderboardLocked(QuizSession $session): array
+    {
+        $next = $this->findNextQuestion($session);
+
+        if (! $next) {
+            $this->finishLocked($session);
+
+            return [$session, 'session.finished'];
+        }
+
+        $this->beginQuestion($session, $next);
+
+        return [$session, 'question.started'];
+    }
+
+    protected function finishLocked(QuizSession $session): void
+    {
+        $session->update([
+            'status' => QuizSession::STATUS_FINISHED,
+            'pin' => null,
+            'question_started_at' => null,
+            'question_ends_at' => null,
+            'phase_ends_at' => null,
+            'paused_at' => null,
+            'pause_remaining_ms' => null,
+        ]);
+    }
+
+    protected function pauseLocked(QuizSession $session): void
+    {
+        if ($session->isPaused() || ! $this->isPausableStatus($session->status)) {
+            return;
+        }
+
+        $remaining = null;
+        if ($session->status === QuizSession::STATUS_QUESTION) {
+            if ($this->questionDeadlinePassed($session)) {
+                $this->revealLocked($session);
+
+                return;
+            }
+
+            $remaining = $this->remainingQuestionMs($session);
+            if ($remaining <= 0) {
+                $this->revealLocked($session);
+
+                return;
+            }
+        } elseif ($this->isPostQuestionStatus($session->status)) {
+            $remaining = $this->remainingPhaseMs($session);
+        }
+
+        $session->update([
+            'paused_at' => now(),
+            'pause_remaining_ms' => $remaining,
+            'question_ends_at' => $session->status === QuizSession::STATUS_QUESTION ? null : $session->question_ends_at,
+            'phase_ends_at' => $this->isPostQuestionStatus($session->status) ? null : $session->phase_ends_at,
+        ]);
+    }
+
+    protected function resumeLocked(QuizSession $session): void
+    {
+        if (! $session->isPaused()) {
+            return;
+        }
+
+        $remaining = max(0, (int) ($session->pause_remaining_ms ?? 0));
+        $questionEndsAt = $session->question_ends_at;
+        $questionStartedAt = $session->question_started_at;
+        $phaseEndsAt = $session->phase_ends_at;
+
+        if ($session->status === QuizSession::STATUS_QUESTION) {
+            $questionEndsAt = now()->addMilliseconds($remaining);
+            $session->loadMissing('currentQuestion');
+            $limitMs = max(1, (int) ($session->currentQuestion?->time_limit_seconds ?? 20) * 1000);
+            $questionStartedAt = $questionEndsAt->copy()->subMilliseconds($limitMs);
+        } elseif ($this->isPostQuestionStatus($session->status)) {
+            $phaseEndsAt = now()->addMilliseconds($remaining);
+        }
+
+        $session->update([
+            'paused_at' => null,
+            'pause_remaining_ms' => null,
+            'question_started_at' => $questionStartedAt,
+            'question_ends_at' => $questionEndsAt,
+            'phase_ends_at' => $phaseEndsAt,
+        ]);
+    }
+
+    protected function touchHostLastSeen(QuizSession $session): void
+    {
+        $session->update(['host_last_seen_at' => now()]);
+    }
+
+    protected function hostIsStale(QuizSession $session): bool
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE || $session->status === QuizSession::STATUS_LOBBY) {
+            return false;
+        }
+
+        if (! $session->host_last_seen_at) {
+            return false;
+        }
+
+        $grace = max(1, (int) config('quiz.host_heartbeat_grace_seconds', 12));
+
+        return $session->host_last_seen_at->lte(now()->subSeconds($grace));
+    }
+
+    protected function isAnsweringOpen(QuizSession $session): bool
+    {
+        if ($session->status !== QuizSession::STATUS_QUESTION || ! $session->current_question_id) {
+            return false;
+        }
+
+        if ($session->isPaused()) {
+            return false;
+        }
+
+        if (
+            $session->mode === QuizSession::MODE_LIVE
+            && $session->question_started_at
+            && $session->question_started_at->gt(now())
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function questionDeadlinePassed(QuizSession $session): bool
+    {
+        if ($session->isPaused() || ! $session->question_ends_at) {
+            return false;
+        }
+
+        return $session->question_ends_at->lte(now());
+    }
+
+    protected function phaseDeadlinePassed(QuizSession $session): bool
+    {
+        if ($session->isPaused() || ! $session->phase_ends_at) {
+            return false;
+        }
+
+        return $session->phase_ends_at->lte(now());
+    }
+
+    protected function remainingQuestionMs(QuizSession $session): int
+    {
+        if ($session->isPaused()) {
+            return max(0, (int) ($session->pause_remaining_ms ?? 0));
+        }
+
+        if ($session->question_ends_at) {
+            return (int) max(0, $session->question_ends_at->getTimestampMs() - now()->getTimestampMs());
+        }
+
+        return 0;
+    }
+
+    protected function remainingPhaseMs(QuizSession $session): int
+    {
+        if ($session->isPaused()) {
+            return max(0, (int) ($session->pause_remaining_ms ?? 0));
+        }
+
+        if ($session->phase_ends_at) {
+            return (int) max(0, $session->phase_ends_at->getTimestampMs() - now()->getTimestampMs());
+        }
+
+        return 0;
+    }
+
+    protected function remainingMs(QuizSession $session): int
+    {
+        if ($session->status === QuizSession::STATUS_QUESTION) {
+            return $this->remainingQuestionMs($session);
+        }
+
+        if ($this->isPostQuestionStatus($session->status)) {
+            return $this->remainingPhaseMs($session);
+        }
+
+        return 0;
+    }
+
+    protected function isPostQuestionStatus(string $status): bool
+    {
+        return in_array($status, [
+            QuizSession::STATUS_REVEAL,
+            QuizSession::STATUS_LEADERBOARD,
+        ], true);
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int, 3: bool}
+     */
+    protected function timingForQuestion(QuizSession $session, QuizQuestion $question): array
+    {
+        $limitMs = max(1, (int) $question->time_limit_seconds * 1000);
+
+        if ($session->mode === QuizSession::MODE_LIVE) {
+            $remainingMs = $this->remainingMs($session);
+            $elapsedMs = min($limitMs, max(0, $limitMs - $remainingMs));
+
+            return [$elapsedMs, $remainingMs, $limitMs, $remainingMs <= 0];
+        }
+
+        $startedAt = $session->question_started_at;
+        $elapsedMs = $startedAt
+            ? (int) max(0, now()->getTimestampMs() - $startedAt->getTimestampMs())
+            : $limitMs;
+        $remainingMs = max(0, $limitMs - $elapsedMs);
+
+        return [$elapsedMs, $remainingMs, $limitMs, $elapsedMs >= $limitMs];
+    }
+
+    protected function isPausableStatus(string $status): bool
+    {
+        return in_array($status, [
+            QuizSession::STATUS_QUESTION,
+            QuizSession::STATUS_REVEAL,
+            QuizSession::STATUS_LEADERBOARD,
+        ], true);
+    }
+
+    protected function isUniqueViolation(QueryException $e): bool
+    {
+        $sqlState = $e->errorInfo[0] ?? null;
+
+        return $sqlState === '23000' || str_contains($e->getMessage(), 'UNIQUE constraint');
+    }
+
+    /**
      * Build a player-safe or host-safe payload for the session.
      *
      * @return array<string, mixed>
@@ -550,13 +1180,32 @@ class QuizGameService
 
         $isHost = $viewer && (int) $viewer->id === (int) $session->host_user_id;
         $isPlayer = $viewer && $session->players->contains(fn ($p) => (int) $p->user_id === (int) $viewer->id);
-        $showCorrect = $isHost || in_array($session->status, [
+        $revealed = in_array($session->status, [
             QuizSession::STATUS_REVEAL,
             QuizSession::STATUS_LEADERBOARD,
             QuizSession::STATUS_FINISHED,
         ], true);
+        // Live hosts authored the quiz so they may see keys. Async "host" is the
+        // quiz owner, who might also be the player — never leak answers then.
+        $showCorrect = $revealed || ($isHost && $session->mode === QuizSession::MODE_LIVE);
+        $hideLiveScores = $session->mode === QuizSession::MODE_LIVE
+            && $session->status === QuizSession::STATUS_QUESTION;
 
-        $questions = $session->quiz->questions->map(function (QuizQuestion $q) use ($showCorrect, $session, $viewer, $isHost) {
+        if (
+            $viewer
+            && $isPlayer
+            && $session->mode === QuizSession::MODE_LIVE
+            && $session->status !== QuizSession::STATUS_FINISHED
+        ) {
+            $this->touchPlayerLastSeen($session, $viewer);
+        }
+
+        $livePlayerQuestionFilter = $session->mode === QuizSession::MODE_LIVE && ! $isHost;
+        $questionModels = $livePlayerQuestionFilter
+            ? $session->quiz->questions->filter(fn (QuizQuestion $q) => (int) $q->id === (int) $session->current_question_id)->values()
+            : $session->quiz->questions;
+
+        $questions = $questionModels->map(function (QuizQuestion $q) use ($showCorrect, $session, $viewer, $isHost) {
             $erased = ($viewer && ! $isHost)
                 ? $this->erasedOptionIdsForPlayer($session, $viewer, $q)
                 : [];
@@ -564,11 +1213,13 @@ class QuizGameService
             return [
                 'id' => $q->id,
                 'prompt' => $q->prompt,
+                'image_url' => $q->image_url,
+                'question_type' => $q->question_type ?: QuizQuestion::TYPE_MULTIPLE_CHOICE,
                 'time_limit_seconds' => $q->time_limit_seconds,
                 'points_base' => $q->points_base,
                 'sort_order' => $q->sort_order,
                 'options' => $q->options
-                    ->reject(fn (QuizOption $o) => in_array($o->id, $erased, true) && (int) $q->id === (int) $session->current_question_id && $session->status === QuizSession::STATUS_QUESTION)
+                    ->reject(fn (QuizOption $o) => in_array((int) $o->id, $erased, true) && (int) $q->id === (int) $session->current_question_id && $session->status === QuizSession::STATUS_QUESTION)
                     ->values()
                     ->map(fn (QuizOption $o) => [
                         'id' => $o->id,
@@ -595,7 +1246,7 @@ class QuizGameService
                 ->map(fn (QuizSessionPowerUp $p) => [
                     'type' => $p->type,
                     'uses_remaining' => $p->uses_remaining,
-                    'active' => $p->active_until_question_id === $session->current_question_id,
+                    'active' => (int) $p->active_until_question_id === (int) $session->current_question_id,
                 ])
                 ->all();
 
@@ -607,6 +1258,68 @@ class QuizGameService
         $answerCount = $session->current_question_id
             ? $session->answers->where('quiz_question_id', $session->current_question_id)->count()
             : 0;
+
+        $ranked = $this->rankLivePlayers($session, $hideLiveScores);
+        $playersPayload = collect($ranked)
+            ->map(function (array $row) {
+                return [
+                    'user_id' => $row['user_id'],
+                    'display_name' => $row['display_name'],
+                    'profile_picture' => $row['profile_picture'],
+                    'profile_picture_crop' => $row['profile_picture_crop'],
+                    'accessory_id' => $row['accessory_id'],
+                    'score' => $row['score'],
+                    'streak' => $row['streak'],
+                    'joined_at' => $row['joined_at'],
+                    'rank' => $row['rank'],
+                    'previous_rank' => $row['previous_rank'],
+                    'rank_delta' => $row['rank_delta'],
+                ];
+            })
+            ->values();
+
+        $optionStats = null;
+        $unansweredCount = null;
+        if ($revealed && $session->mode === QuizSession::MODE_LIVE && $session->currentQuestion) {
+            [$optionStats, $unansweredCount] = $this->optionStatsForCurrentQuestion($session);
+        }
+
+        $myAnswerPayload = null;
+        $resultContext = null;
+        if ($myAnswer) {
+            $myAnswerPayload = [
+                'quiz_option_id' => $myAnswer->quiz_option_id,
+                'is_correct' => $showCorrect ? (bool) $myAnswer->is_correct : null,
+                'points_awarded' => $showCorrect ? $myAnswer->points_awarded : null,
+                'streak_after' => $showCorrect ? $myAnswer->streak_after : null,
+                'response_ms' => $showCorrect ? $myAnswer->response_ms : null,
+            ];
+
+            if ($showCorrect && $session->mode === QuizSession::MODE_LIVE) {
+                $mine = collect($ranked)->firstWhere('user_id', (int) $viewer->id);
+                if ($mine) {
+                    $myAnswerPayload = array_merge($myAnswerPayload, [
+                        'score' => $mine['score'],
+                        'previous_score' => $mine['previous_score'],
+                        'rank' => $mine['rank'],
+                        'previous_rank' => $mine['previous_rank'],
+                        'rank_delta' => $mine['rank_delta'],
+                        'points_ahead' => $mine['points_ahead'],
+                        'points_behind' => $mine['points_behind'],
+                        'ahead_display_name' => $mine['ahead_display_name'],
+                    ]);
+                    $resultContext = $this->resultContextForPlayer(
+                        $session,
+                        $myAnswer,
+                        $mine,
+                    );
+                }
+            }
+        }
+
+        $expReward = ($isPlayer && $session->status === QuizSession::STATUS_FINISHED)
+            ? $this->viewerExpReward($session, $viewer)
+            : null;
 
         return [
             'id' => $session->id,
@@ -627,34 +1340,327 @@ class QuizGameService
             ],
             'mode' => $session->mode,
             'pin' => $isHost || $session->status === QuizSession::STATUS_LOBBY ? $session->pin : null,
-            'join_token' => $session->join_token,
+            'join_token' => $isHost ? $session->join_token : null,
             'status' => $session->status,
             'current_question_id' => $session->current_question_id,
             'question_started_at' => $session->question_started_at?->toIso8601String(),
+            'question_ends_at' => $session->question_ends_at?->toIso8601String(),
+            'phase_ends_at' => $session->phase_ends_at?->toIso8601String(),
+            'answering_open' => $this->isAnsweringOpen($session),
+            'paused' => $session->isPaused(),
+            'paused_at' => $session->paused_at?->toIso8601String(),
+            'pause_remaining_ms' => $session->pause_remaining_ms,
+            'heartbeat_interval_seconds' => (int) config('quiz.host_heartbeat_interval_seconds', 5),
+            'distribution_seconds' => (int) config('quiz.distribution_seconds', 4),
+            'recap_seconds' => (int) config('quiz.recap_seconds', 5),
             'music_enabled' => (bool) $session->music_enabled,
             'bgm_theme' => $session->bgm_theme ?: 'party',
-            'sfx_pack' => $session->sfx_pack ?: 'soft',
-            'players' => $session->players->values()->map(fn (QuizSessionPlayer $p, int $i) => [
-                'user_id' => $p->user_id,
-                'display_name' => $p->display_name,
-                'score' => $p->score,
-                'streak' => $p->streak,
-                'rank' => $i + 1,
-                'joined_at' => $p->joined_at?->toIso8601String(),
-            ]),
+            'sfx_pack' => $session->sfx_pack ?: 'classic',
+            'players' => $playersPayload,
+            'option_stats' => $optionStats,
+            'unanswered_count' => $unansweredCount,
             'answer_count' => $answerCount,
             'player_count' => $session->players->count(),
             'is_host' => (bool) $isHost,
             'is_player' => (bool) $isPlayer,
-            'my_answer' => $myAnswer ? [
-                'quiz_option_id' => $myAnswer->quiz_option_id,
-                'is_correct' => $showCorrect ? (bool) $myAnswer->is_correct : null,
-                'points_awarded' => $showCorrect ? $myAnswer->points_awarded : null,
-                'streak_after' => $myAnswer->streak_after,
-            ] : null,
+            'exp_earned' => $expReward['amount'] ?? null,
+            'exp_status' => $expReward['status'] ?? null,
+            'my_answer' => $myAnswerPayload,
+            'result_context' => $resultContext,
             'my_power_ups' => $myPowerUps,
             'erased_option_ids' => $erasedOptionIds,
             'created_at' => $session->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Public answer payload. Live play hides correctness until reveal.
+     *
+     * @return array<string, mixed>
+     */
+    public function presentAnswer(QuizSessionAnswer $answer, QuizSession $session, ?User $viewer = null): array
+    {
+        $isHost = $viewer && (int) $viewer->id === (int) $session->host_user_id;
+        $showCorrect = $session->mode === QuizSession::MODE_ASYNC
+            || in_array($session->status, [
+                QuizSession::STATUS_REVEAL,
+                QuizSession::STATUS_LEADERBOARD,
+                QuizSession::STATUS_FINISHED,
+            ], true)
+            || ($isHost && $session->mode === QuizSession::MODE_LIVE);
+
+        return [
+            'id' => $answer->id,
+            'quiz_option_id' => $answer->quiz_option_id,
+            'is_correct' => $showCorrect ? (bool) $answer->is_correct : null,
+            'points_awarded' => $showCorrect ? $answer->points_awarded : null,
+            'streak_after' => $showCorrect ? $answer->streak_after : null,
+            'answered_at' => $answer->answered_at?->toIso8601String(),
+            'response_ms' => $answer->response_ms,
+        ];
+    }
+
+    /**
+     * Rank players with Phase 2 tie-break: score, current/previous question speed, joined_at.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function rankLivePlayers(QuizSession $session, bool $hideLiveScores): array
+    {
+        $currentQuestionId = $session->current_question_id ? (int) $session->current_question_id : null;
+        $previousQuestionId = $this->previousQuestionId($session);
+
+        $currentRows = [];
+        $previousRows = [];
+
+        foreach ($session->players as $player) {
+            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores);
+            $trueScore = (int) $player->score;
+            $pointsThis = $this->pointsForQuestion($session, (int) $player->user_id, $currentQuestionId);
+            $previousScore = max(0, $trueScore - $pointsThis);
+
+            $currentRows[] = [
+                'player' => $player,
+                'score' => $hideLiveScores ? $visibleScore : $trueScore,
+                'response_ms' => $hideLiveScores
+                    ? $this->responseMsForQuestion($session, (int) $player->user_id, $previousQuestionId)
+                    : $this->responseMsForQuestion($session, (int) $player->user_id, $currentQuestionId),
+                'joined_ts' => $player->joined_at?->getTimestampMs() ?? 0,
+            ];
+
+            $previousRows[] = [
+                'player' => $player,
+                'score' => $previousScore,
+                'response_ms' => $this->responseMsForQuestion($session, (int) $player->user_id, $previousQuestionId),
+                'joined_ts' => $player->joined_at?->getTimestampMs() ?? 0,
+            ];
+        }
+
+        $currentRanked = $this->sortRankRows($currentRows);
+        $previousRanked = $this->sortRankRows($previousRows);
+        $previousByUser = [];
+        foreach ($previousRanked as $row) {
+            $previousByUser[(int) $row['player']->user_id] = $row['rank'];
+        }
+
+        $result = [];
+        foreach ($currentRanked as $index => $row) {
+            /** @var QuizSessionPlayer $player */
+            $player = $row['player'];
+            $userId = (int) $player->user_id;
+            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores);
+            $trueScore = $hideLiveScores ? $visibleScore : (int) $player->score;
+            $pointsThis = $this->pointsForQuestion($session, $userId, $currentQuestionId);
+            $previousScore = $hideLiveScores ? $visibleScore : max(0, (int) $player->score - $pointsThis);
+            $previousRank = $previousByUser[$userId] ?? $row['rank'];
+            $rankDelta = $previousRank - $row['rank'];
+
+            $ahead = $currentRanked[$index - 1] ?? null;
+            $behind = $currentRanked[$index + 1] ?? null;
+            $aheadScore = $ahead ? (int) ($hideLiveScores
+                ? $this->visiblePlayerStats($session, $ahead['player'], true)[0]
+                : $ahead['player']->score) : null;
+            $behindScore = $behind ? (int) ($hideLiveScores
+                ? $this->visiblePlayerStats($session, $behind['player'], true)[0]
+                : $behind['player']->score) : null;
+
+            $result[] = [
+                'user_id' => $userId,
+                'display_name' => $player->display_name,
+                'profile_picture' => PublicStorageUrl::canonicalize($player->profile_picture) ?? $player->profile_picture,
+                'profile_picture_crop' => is_array($player->profile_picture_crop) ? $player->profile_picture_crop : null,
+                'accessory_id' => QuizAccessories::normalize($player->quiz_accessory_id),
+                'score' => $trueScore,
+                'previous_score' => $previousScore,
+                'streak' => $streak,
+                'joined_at' => $player->joined_at?->toIso8601String(),
+                'rank' => $row['rank'],
+                'previous_rank' => $previousRank,
+                'rank_delta' => $rankDelta,
+                'points_ahead' => $aheadScore !== null ? max(0, $aheadScore - $trueScore) : null,
+                'points_behind' => $behindScore !== null ? max(0, $trueScore - $behindScore) : null,
+                'ahead_display_name' => $ahead ? $ahead['player']->display_name : null,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  list<array{player: QuizSessionPlayer, score: int, response_ms: ?int, joined_ts: int}>  $rows
+     * @return list<array{player: QuizSessionPlayer, score: int, response_ms: ?int, joined_ts: int, rank: int}>
+     */
+    public function sortRankRows(array $rows): array
+    {
+        usort($rows, function (array $a, array $b) {
+            if ($a['score'] !== $b['score']) {
+                return $b['score'] <=> $a['score'];
+            }
+
+            $aMs = $a['response_ms'];
+            $bMs = $b['response_ms'];
+            if ($aMs === null && $bMs !== null) {
+                return 1;
+            }
+            if ($aMs !== null && $bMs === null) {
+                return -1;
+            }
+            if ($aMs !== null && $bMs !== null && $aMs !== $bMs) {
+                return $aMs <=> $bMs;
+            }
+
+            return $a['joined_ts'] <=> $b['joined_ts'];
+        });
+
+        foreach ($rows as $i => &$row) {
+            $row['rank'] = $i + 1;
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    protected function previousQuestionId(QuizSession $session): ?int
+    {
+        if (! $session->current_question_id) {
+            return null;
+        }
+
+        $session->loadMissing('quiz.questions');
+        $current = $session->quiz->questions->firstWhere('id', (int) $session->current_question_id);
+        if (! $current) {
+            return null;
+        }
+
+        $previous = $session->quiz->questions
+            ->filter(function (QuizQuestion $q) use ($current) {
+                return $q->sort_order < $current->sort_order
+                    || ((int) $q->sort_order === (int) $current->sort_order && (int) $q->id < (int) $current->id);
+            })
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->last();
+
+        return $previous?->id ? (int) $previous->id : null;
+    }
+
+    protected function responseMsForQuestion(QuizSession $session, int $userId, ?int $questionId): ?int
+    {
+        if (! $questionId) {
+            return null;
+        }
+
+        $answer = $session->answers->first(
+            fn (QuizSessionAnswer $a) => (int) $a->user_id === $userId
+                && (int) $a->quiz_question_id === $questionId
+        );
+
+        if (! $answer || $answer->response_ms === null) {
+            return null;
+        }
+
+        return (int) $answer->response_ms;
+    }
+
+    protected function pointsForQuestion(QuizSession $session, int $userId, ?int $questionId): int
+    {
+        if (! $questionId) {
+            return 0;
+        }
+
+        $answer = $session->answers->first(
+            fn (QuizSessionAnswer $a) => (int) $a->user_id === $userId
+                && (int) $a->quiz_question_id === $questionId
+        );
+
+        return $answer ? (int) $answer->points_awarded : 0;
+    }
+
+    /**
+     * @return array{0: list<array{option_id: int, count: int, is_correct: bool}>, 1: int}
+     */
+    protected function optionStatsForCurrentQuestion(QuizSession $session): array
+    {
+        $question = $session->currentQuestion;
+        $answers = $session->answers->where('quiz_question_id', $session->current_question_id);
+        $counts = [];
+        $unanswered = 0;
+
+        foreach ($answers as $answer) {
+            if ($answer->quiz_option_id === null) {
+                $unanswered++;
+
+                continue;
+            }
+            $id = (int) $answer->quiz_option_id;
+            $counts[$id] = ($counts[$id] ?? 0) + 1;
+        }
+
+        $stats = $question->options
+            ->sortBy('sort_order')
+            ->values()
+            ->map(fn (QuizOption $o) => [
+                'option_id' => (int) $o->id,
+                'count' => $counts[(int) $o->id] ?? 0,
+                'is_correct' => (bool) $o->is_correct,
+            ])
+            ->all();
+
+        return [$stats, $unanswered];
+    }
+
+    /**
+     * @param  array<string, mixed>  $mine
+     * @return array<string, bool>
+     */
+    protected function resultContextForPlayer(QuizSession $session, QuizSessionAnswer $answer, array $mine): array
+    {
+        $limitMs = max(1, (int) ($session->currentQuestion?->time_limit_seconds ?? 20) * 1000);
+        $missed = $answer->quiz_option_id === null;
+        $correct = ! $missed && (bool) $answer->is_correct;
+        $responseMs = $answer->response_ms;
+        $fast = $correct && $responseMs !== null && (int) $responseMs <= (int) floor($limitMs * 0.5);
+        $rankDelta = (int) ($mine['rank_delta'] ?? 0);
+
+        return [
+            'correct' => $correct,
+            'fast' => $fast,
+            'streak' => $correct && (int) $answer->streak_after >= 3,
+            'rank_up' => $rankDelta > 0,
+            'rank_down' => $rankDelta < 0,
+            'big_jump' => $rankDelta >= 3,
+            'missed' => $missed,
+        ];
+    }
+
+    /**
+     * @return array{0: int, 1: int}
+     */
+    protected function visiblePlayerStats(QuizSession $session, QuizSessionPlayer $player, bool $hideLiveScores): array
+    {
+        if (! $hideLiveScores || ! $session->current_question_id) {
+            return [(int) $player->score, (int) $player->streak];
+        }
+
+        $current = $session->answers
+            ->first(fn (QuizSessionAnswer $a) => (int) $a->user_id === (int) $player->user_id
+                && (int) $a->quiz_question_id === (int) $session->current_question_id);
+
+        if (! $current) {
+            return [(int) $player->score, (int) $player->streak];
+        }
+
+        $previous = $session->answers
+            ->filter(fn (QuizSessionAnswer $a) => (int) $a->user_id === (int) $player->user_id
+                && (int) $a->quiz_question_id !== (int) $session->current_question_id)
+            ->sortByDesc('id')
+            ->first();
+
+        return [
+            max(0, (int) $player->score - (int) $current->points_awarded),
+            (int) ($previous?->streak_after ?? 0),
         ];
     }
 
@@ -664,6 +1670,17 @@ class QuizGameService
         $ratio = max(0.5, min(1.0, $ratio));
 
         return (int) round($pointsBase * $ratio);
+    }
+
+    /**
+     * Existing speed + streak result as if this answer were correct.
+     * Double/Bonus wrap this value; they do not replace it.
+     */
+    protected function normalAnswerPoints(QuizQuestion $question, int $remainingMs, int $limitMs, int $currentStreak): int
+    {
+        $base = $this->basePoints((int) $question->points_base, $remainingMs, $limitMs);
+
+        return (int) round($base * $this->streakMultiplier($currentStreak + 1));
     }
 
     public function streakMultiplier(int $streak): float
@@ -683,6 +1700,7 @@ class QuizGameService
 
     protected function findNextQuestion(QuizSession $session): ?QuizQuestion
     {
+        $session->unsetRelation('currentQuestion');
         $current = $session->currentQuestion;
 
         if (! $current) {
@@ -715,7 +1733,7 @@ class QuizGameService
         }
     }
 
-    protected function applyEraser(QuizSession $session, int $userId): array
+    protected function applyEraser(QuizSession $session, QuizSessionPowerUp $powerUp): array
     {
         $question = QuizQuestion::with('options')->find($session->current_question_id);
         if (! $question) {
@@ -727,12 +1745,13 @@ class QuizGameService
             return [];
         }
 
-        $toErase = $wrong->shuffle()->take(2)->pluck('id')->all();
+        $toErase = $wrong->shuffle()->take(2)->map(fn (QuizOption $o) => (int) $o->id)->values()->all();
 
-        // Store erased IDs on the eraser power-up row via a JSON-less approach:
-        // reuse active_until_question_id already set; persist erased IDs in answers table isn't right.
-        // Use cache keyed by session+user+question for the duration of the question.
-        cache()->put($this->eraserCacheKey($session->id, $userId, $question->id), $toErase, now()->addHour());
+        $powerUp->payload = array_merge($powerUp->payload ?? [], [
+            'question_id' => (int) $question->id,
+            'erased_option_ids' => $toErase,
+        ]);
+        $powerUp->save();
 
         return $toErase;
     }
@@ -753,7 +1772,18 @@ class QuizGameService
             return [];
         }
 
-        return cache()->get($this->eraserCacheKey($session->id, $user->id, $question->id), []);
+        $payloadQuestionId = $powerUp->payload['question_id'] ?? null;
+        if ($payloadQuestionId !== null && (int) $payloadQuestionId !== (int) $question->id) {
+            return [];
+        }
+
+        $fromPayload = $powerUp->payload['erased_option_ids'] ?? null;
+        if (is_array($fromPayload) && $fromPayload !== []) {
+            return array_map('intval', $fromPayload);
+        }
+
+        // Legacy sessions stored eraser IDs only in cache.
+        return array_map('intval', cache()->get($this->eraserCacheKey($session->id, (int) $user->id, $question->id), []));
     }
 
     protected function eraserCacheKey(int $sessionId, int $userId, int $questionId): string
@@ -771,6 +1801,11 @@ class QuizGameService
             ->first();
     }
 
+    protected function consumePowerUp(?QuizSessionPowerUp $powerUp): void
+    {
+        $powerUp?->update(['active_until_question_id' => null]);
+    }
+
     protected function markMissingAnswersAsWrong(QuizSession $session): void
     {
         if (! $session->current_question_id) {
@@ -779,16 +1814,19 @@ class QuizGameService
 
         $players = QuizSessionPlayer::query()
             ->where('quiz_session_id', $session->id)
+            ->orderBy('id')
+            ->lockForUpdate()
             ->get();
 
         $answeredUserIds = QuizSessionAnswer::query()
             ->where('quiz_session_id', $session->id)
             ->where('quiz_question_id', $session->current_question_id)
             ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
             ->all();
 
         foreach ($players as $player) {
-            if (in_array($player->user_id, $answeredUserIds, true)) {
+            if (in_array((int) $player->user_id, $answeredUserIds, true)) {
                 continue;
             }
 
@@ -798,13 +1836,15 @@ class QuizGameService
             }
 
             $freeze = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_STREAK_FREEZE);
+            $double = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_DOUBLE);
+            $bonus = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_BONUS);
             $powerUpUsed = null;
             $newStreak = 0;
 
             if ($freeze) {
                 $newStreak = $player->streak;
                 $powerUpUsed = QuizSessionPowerUp::TYPE_STREAK_FREEZE;
-                $freeze->update(['active_until_question_id' => null]);
+                $this->consumePowerUp($freeze);
             } else {
                 $player->streak = 0;
                 $player->save();
@@ -815,21 +1855,32 @@ class QuizGameService
                 $player->save();
             }
 
-            $double = $this->pendingPowerUp($session, $user, QuizSessionPowerUp::TYPE_DOUBLE);
-            $double?->update(['active_until_question_id' => null]);
+            if ($double) {
+                $this->consumePowerUp($double);
+                $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_DOUBLE;
+            }
 
-            QuizSessionAnswer::create([
-                'quiz_session_id' => $session->id,
-                'quiz_question_id' => $session->current_question_id,
-                'user_id' => $player->user_id,
-                'quiz_option_id' => null,
-                'is_correct' => false,
-                'points_awarded' => 0,
-                'streak_after' => $player->streak,
-                'power_up_used' => $powerUpUsed,
-                'answered_at' => now(),
-                'response_ms' => null,
-            ]);
+            if ($bonus) {
+                $this->consumePowerUp($bonus);
+                $powerUpUsed = $powerUpUsed ?? QuizSessionPowerUp::TYPE_BONUS;
+            }
+
+            QuizSessionAnswer::firstOrCreate(
+                [
+                    'quiz_session_id' => $session->id,
+                    'quiz_question_id' => $session->current_question_id,
+                    'user_id' => $player->user_id,
+                ],
+                [
+                    'quiz_option_id' => null,
+                    'is_correct' => false,
+                    'points_awarded' => 0,
+                    'streak_after' => $player->streak,
+                    'power_up_used' => $powerUpUsed,
+                    'answered_at' => now(),
+                    'response_ms' => null,
+                ]
+            );
         }
     }
 
@@ -849,15 +1900,116 @@ class QuizGameService
     protected function assertHost(QuizSession $session, User $host): void
     {
         if ((int) $session->host_user_id !== (int) $host->id) {
-            throw ValidationException::withMessages([
-                'session' => 'Only the host can perform this action.',
-            ]);
+            throw new AuthorizationException('Only the host can perform this action.');
         }
     }
 
     /**
-     * @return list<string>
+     * Frozen identity for a session player. Later profile edits do not change this.
+     *
+     * @return array<string, mixed>
      */
+    protected function playerIdentitySnapshot(User $user): array
+    {
+        return [
+            'display_name' => $user->displayName(),
+            'profile_picture' => PublicStorageUrl::canonicalize($user->profile_picture),
+            'profile_picture_crop' => MediaCropNormalizer::normalize(
+                is_array($user->profile_picture_crop) ? $user->profile_picture_crop : null
+            ),
+            'quiz_accessory_id' => QuizAccessories::normalize($user->quiz_accessory_id),
+            'score' => 0,
+            'streak' => 0,
+            'joined_at' => now(),
+            'last_seen_at' => now(),
+        ];
+    }
+
+    protected function touchPlayerLastSeen(QuizSession $session, User $user): void
+    {
+        QuizSessionPlayer::query()
+            ->where('quiz_session_id', $session->id)
+            ->where('user_id', $user->id)
+            ->update(['last_seen_at' => now()]);
+    }
+
+    protected function playerWasPresentAtFinish(?QuizSessionPlayer $player): bool
+    {
+        if (! $player?->last_seen_at) {
+            return false;
+        }
+
+        $grace = max(1, (int) config('quiz.player_presence_grace_seconds', 20));
+
+        return $player->last_seen_at->gte(now()->subSeconds($grace));
+    }
+
+    protected function awardQuizCompletionExp(QuizSession $session): void
+    {
+        $session->loadMissing(['players', 'answers', 'quiz.questions']);
+
+        if ($session->mode !== QuizSession::MODE_LIVE) {
+            return;
+        }
+
+        if ($session->status !== QuizSession::STATUS_FINISHED) {
+            return;
+        }
+
+        if ($session->players->isEmpty() || ! $session->current_question_id) {
+            return;
+        }
+
+        $ranked = $this->rankLivePlayers($session, false);
+        $playersByUserId = $session->players->keyBy(fn (QuizSessionPlayer $player) => (int) $player->user_id);
+        $userIds = collect($ranked)->pluck('user_id')->filter()->unique()->all();
+        $users = User::query()->whereIn('id', $userIds)->get()->keyBy('id');
+
+        foreach ($ranked as $row) {
+            $user = $users->get($row['user_id']);
+            $player = $playersByUserId->get((int) $row['user_id']);
+            if (! $user || ! $this->playerWasPresentAtFinish($player)) {
+                continue;
+            }
+
+            $amount = self::completionExpForRank((int) $row['rank']);
+            if ($amount < 1) {
+                continue;
+            }
+
+            $this->gamification->offer(
+                $user,
+                self::COMPLETION_EXP_ACTION,
+                self::COMPLETION_EXP_SOURCE,
+                (string) $session->id,
+                ['rank' => (int) $row['rank']],
+                $amount,
+            );
+        }
+    }
+
+    /**
+     * @return array{amount: int, status: string}|null
+     */
+    protected function viewerExpReward(QuizSession $session, User $viewer): ?array
+    {
+        $reward = ExpReward::query()
+            ->where('user_id', $viewer->id)
+            ->where('action_key', self::COMPLETION_EXP_ACTION)
+            ->where('source_type', self::COMPLETION_EXP_SOURCE)
+            ->where('source_id', (string) $session->id)
+            ->first();
+
+        if (! $reward) {
+            return null;
+        }
+
+        return [
+            'amount' => (int) $reward->amount,
+            'status' => $reward->status,
+        ];
+    }
+
     protected function defaultRelations(): array
     {
         return ['quiz.questions.options', 'players', 'host', 'currentQuestion.options', 'answers', 'powerUps'];

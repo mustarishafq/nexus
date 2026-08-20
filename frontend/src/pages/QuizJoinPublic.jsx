@@ -34,7 +34,10 @@ export default function QuizJoinPublic() {
       await unlockAudio();
       navigate(`/games/play/${session.id}`);
     },
-    onError: (err) => toast.error(err?.data?.message || err.message || 'Could not join'),
+    onError: (err) => {
+      const first = err?.data?.errors ? Object.values(err.data.errors).flat().find(Boolean) : null;
+      toast.error(first || err?.data?.message || err.message || 'Could not join');
+    },
   });
 
   if (isLoadingAuth || metaQuery.isLoading) return <PageLoader />;
@@ -55,7 +58,7 @@ export default function QuizJoinPublic() {
             <>
               <h1 className="text-xl font-bold">Game not found</h1>
               <p className="text-sm text-muted-foreground">This join link is invalid or the session has ended.</p>
-              <Button asChild><Link to="/games">Go to Games</Link></Button>
+              <Button asChild className="shadow-md shadow-primary/20"><Link to="/games">Go to Games</Link></Button>
             </>
           ) : (
             <>
@@ -69,19 +72,26 @@ export default function QuizJoinPublic() {
               {!isAuthenticated || !user?.is_approved ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Sign in with your Nexus account to join.</p>
-                  <Button asChild className="w-full">
+                  <Button asChild className="w-full shadow-md shadow-primary/20">
                     <Link to={`/login?redirect=${encodeURIComponent(`/quiz-join/${token}`)}`}>Sign in</Link>
                   </Button>
                 </div>
               ) : (
-                <Button
-                  className="w-full"
-                  size="lg"
-                  disabled={joinMutation.isPending}
-                  onClick={() => joinMutation.mutate()}
-                >
-                  {joinMutation.isPending ? 'Joining…' : 'Join game'}
-                </Button>
+                <div className="space-y-3">
+                  {meta.status && meta.status !== 'lobby' && (
+                    <p className="text-sm text-muted-foreground">
+                      This game has already started. New players cannot join, but you can reconnect if you were already in the lobby.
+                    </p>
+                  )}
+                  <Button
+                    className="w-full shadow-md shadow-primary/20"
+                    size="lg"
+                    disabled={joinMutation.isPending}
+                    onClick={() => joinMutation.mutate()}
+                  >
+                    {joinMutation.isPending ? 'Joining…' : (meta.status && meta.status !== 'lobby' ? 'Reconnect' : 'Join game')}
+                  </Button>
+                </div>
               )}
             </>
           )}

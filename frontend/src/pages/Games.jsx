@@ -15,13 +15,23 @@ import { unlockAudio } from '@/lib/gameAudio';
 import PageLoader from '@/components/PageLoader';
 import { GlassCard } from '@/components/games/GameUi';
 import { glassDialogMutedText, glassDialogTitleText } from '@/components/layout/glassStyles';
+import { useAuth } from '@/lib/AuthContext';
+import QuizAccessoryPicker from '@/components/games/QuizAccessoryPicker';
+import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
+
+function joinErrorMessage(err) {
+  const first = err?.data?.errors ? Object.values(err.data.errors).flat().find(Boolean) : null;
+  return first || err?.data?.message || err.message || 'Could not join';
+}
 
 export default function Games() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, updateAuthUser } = useAuth();
   const [pin, setPin] = useState('');
   const [tab, setTab] = useState('mine');
+  const [accessorySaving, setAccessorySaving] = useState(false);
 
   const mineQuery = useQuery({
     queryKey: ['quizzes', 'mine'],
@@ -40,7 +50,7 @@ export default function Games() {
       queryClient.invalidateQueries({ queryKey: ['quizzes'] });
       toast.success('Quiz deleted');
     },
-    onError: (err) => toast.error(err.message || 'Failed to delete'),
+    onError: (err) => toast.error(err?.data?.message || err.message || 'Failed to delete'),
   });
 
   const startLiveMutation = useMutation({
@@ -67,7 +77,7 @@ export default function Games() {
       await unlockAudio();
       navigate(`/games/play/${session.id}`);
     },
-    onError: (err) => toast.error(err?.data?.message || err.message || 'Could not join'),
+    onError: (err) => toast.error(joinErrorMessage(err)),
   });
 
   const quizzes = tab === 'mine' ? (mineQuery.data || []) : (publishedQuery.data || []);
@@ -92,6 +102,29 @@ export default function Games() {
           </Link>
         </Button>
       </div>
+
+      <GlassCard>
+        <QuizAccessoryPicker
+          profileImage={user?.profile_picture}
+          profileImageCrop={user?.profile_picture_crop}
+          name={getDisplayName(user, '')}
+          accessoryId={user?.quiz_accessory_id}
+          disabled={accessorySaving}
+          compact
+          onSelect={async (id) => {
+            setAccessorySaving(true);
+            try {
+              const updated = await db.auth.updateMe({ quiz_accessory_id: id });
+              updateAuthUser(updated);
+              toast.success('Quiz look saved');
+            } catch (err) {
+              toast.error(err?.message || 'Could not save accessory');
+            } finally {
+              setAccessorySaving(false);
+            }
+          }}
+        />
+      </GlassCard>
 
       <GlassCard>
         <div className={cn('flex items-center gap-2 text-sm font-medium mb-3', glassDialogTitleText)}>

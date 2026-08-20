@@ -102,6 +102,10 @@ class GamificationSettings
         $rows = [];
 
         foreach ($defaults as $actionKey => $definition) {
+            if (($definition['listed'] ?? true) === false) {
+                continue;
+            }
+
             $rows[] = [
                 'action_key' => $actionKey,
                 'title' => $definition['title'],
@@ -176,6 +180,9 @@ class GamificationSettings
 
         foreach ($value as $actionKey => $override) {
             if (! is_string($actionKey) || ! isset($allowed[$actionKey]) || ! is_array($override)) {
+                continue;
+            }
+            if (($allowed[$actionKey]['listed'] ?? true) === false) {
                 continue;
             }
 

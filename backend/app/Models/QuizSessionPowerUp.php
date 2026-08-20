@@ -12,10 +12,21 @@ class QuizSessionPowerUp extends Model
 
     public const TYPE_STREAK_FREEZE = 'streak_freeze';
 
+    public const TYPE_BONUS = 'bonus';
+
+    public const BONUS_POINTS = 500;
+
     public const TYPES = [
         self::TYPE_ERASER,
         self::TYPE_DOUBLE,
         self::TYPE_STREAK_FREEZE,
+        self::TYPE_BONUS,
+    ];
+
+    /** Scoring power-ups cannot be armed together on the same question. */
+    public const SCORING_TYPES = [
+        self::TYPE_DOUBLE,
+        self::TYPE_BONUS,
     ];
 
     protected $fillable = [
@@ -24,12 +35,14 @@ class QuizSessionPowerUp extends Model
         'type',
         'uses_remaining',
         'active_until_question_id',
+        'payload',
     ];
 
     protected function casts(): array
     {
         return [
             'uses_remaining' => 'integer',
+            'payload' => 'array',
         ];
     }
 

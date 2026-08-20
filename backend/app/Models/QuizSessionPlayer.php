@@ -10,9 +10,13 @@ class QuizSessionPlayer extends Model
         'quiz_session_id',
         'user_id',
         'display_name',
+        'profile_picture',
+        'profile_picture_crop',
+        'quiz_accessory_id',
         'score',
         'streak',
         'joined_at',
+        'last_seen_at',
     ];
 
     protected function casts(): array
@@ -21,6 +25,8 @@ class QuizSessionPlayer extends Model
             'score' => 'integer',
             'streak' => 'integer',
             'joined_at' => 'datetime',
+            'last_seen_at' => 'datetime',
+            'profile_picture_crop' => 'array',
         ];
     }
 

@@ -13,7 +13,7 @@ import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { flattenCommentReplies } from '@/lib/comments';
-import { toAbsoluteUrl } from '@/lib/media';
+import { toPublicFileUrl } from '@/lib/media';
 import { buildMentionToken } from '@/lib/mentions';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import { getDisplayName } from '@/lib/profile';
@@ -264,8 +264,8 @@ export default function ProfileMediaViewer({
   });
 
   const item = data?.item;
-  const remoteUrl = toAbsoluteUrl(item?.image_url);
-  const localFallback = toAbsoluteUrl(fallbackImageUrl);
+  const remoteUrl = toPublicFileUrl(item?.image_url);
+  const localFallback = toPublicFileUrl(fallbackImageUrl);
   const imageUrl =
     remoteUrl ||
     localFallback ||

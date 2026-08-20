@@ -7,13 +7,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, XCircle, RotateCcw, Play, Headphones } from 'lucide-react';
 import PageLoader from '@/components/PageLoader';
 import {
-  GlassCard, AnswerButton, ScorePill, TimerRing, QuestionTitle,
+  GlassCard, AnswerButton, ScorePill, TimerRing, QuestionTitle, QuestionMedia,
   GameStage, GameActionButton, PodiumLeaderboard, FullscreenButton, GameIconButton,
 } from '@/components/games/GameUi';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
+import { answerGridClass, isTrueFalseQuestion } from '@/lib/quizQuestion';
 import {
-  unlockAudio, playSfx, setSessionAudio, setStoredBgmTheme, setStoredSfxPack,
-  getStoredBgmTheme, getStoredSfxPack, stopLobby, syncGameMusic,
+  unlockAudio, playSfx, playSfxOnce, emitTimerTick, setSessionAudio, setStoredBgmTheme,
+  getStoredBgmTheme, stopLobby, syncGameMusic, isSfxMuted, armUnlockOnGesture,
+  resetAudioGates,
 } from '@/lib/gameAudio';
 import {
   fireCorrectConfetti, fireStreakConfetti, fireWinnerConfetti,
@@ -29,13 +31,13 @@ export default function QuizPreview() {
   const [secondsLeft, setSecondsLeft] = useState(20);
   const [finished, setFinished] = useState(false);
   const [bgmTheme, setBgmTheme] = useState(getStoredBgmTheme());
-  const [sfxPack, setSfxPack] = useState(getStoredSfxPack());
+  const [muteSfx, setMuteSfxLocal] = useState(isSfxMuted());
   const [showAudio, setShowAudio] = useState(false);
   const [started, setStarted] = useState(false);
   const stageRef = useRef(null);
 
   const quizQuery = useQuery({
-    queryKey: ['quiz', id],
+    queryKey: ['quiz', String(id)],
     queryFn: () => db.quizzes.get(id),
   });
 
@@ -46,22 +48,25 @@ export default function QuizPreview() {
   useEffect(() => {
     if (quiz?.bgm_theme) {
       setBgmTheme(quiz.bgm_theme);
-      setSessionAudio({ bgmTheme: quiz.bgm_theme, sfxPack: quiz.sfx_pack || 'soft' });
+      setSessionAudio({ bgmTheme: quiz.bgm_theme });
     }
-    if (quiz?.sfx_pack) setSfxPack(quiz.sfx_pack);
-  }, [quiz?.bgm_theme, quiz?.sfx_pack]);
+  }, [quiz?.bgm_theme]);
 
-  useEffect(() => () => stopLobby(), []);
+  useEffect(() => {
+    armUnlockOnGesture();
+    resetAudioGates();
+    return () => {
+      stopLobby();
+      resetAudioGates();
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!started || finished) {
       if (finished) syncGameMusic(false, bgmTheme, 'off');
-      return undefined;
+      return;
     }
-    unlockAudio().then(() => {
-      syncGameMusic(true, bgmTheme, 'game');
-    });
-    return undefined;
+    syncGameMusic(true, bgmTheme, 'game');
   }, [started, finished, bgmTheme]);
 
   useEffect(() => {
@@ -72,11 +77,11 @@ export default function QuizPreview() {
     const tick = () => {
       const left = Math.max(0, Math.ceil((startedAt + limit - Date.now()) / 1000));
       setSecondsLeft(left);
-      if (left > 0 && left <= 5) playSfx('timer-tick');
+      if (left > 0 && left <= 5) emitTimerTick(question.id, left);
       if (left <= 0) {
         setRevealed(true);
         setStreak(0);
-        playSfx('wrong');
+        playSfxOnce(`preview:${index}:timeout`, 'timeout');
       }
     };
     tick();
@@ -181,26 +186,23 @@ export default function QuizPreview() {
             <GameAudioPicker
               surface="stage"
               bgmTheme={bgmTheme}
-              sfxPack={sfxPack}
+              sfxOn={!muteSfx}
               onBgmChange={(themeId) => {
                 setBgmTheme(themeId);
                 setStoredBgmTheme(themeId);
                 setSessionAudio({ bgmTheme: themeId });
               }}
-              onSfxChange={(packId) => {
-                setSfxPack(packId);
-                setStoredSfxPack(packId);
-                setSessionAudio({ sfxPack: packId });
-              }}
+              onSfxEnabledChange={(enabled) => setMuteSfxLocal(!enabled)}
             />
             <GameActionButton
               className="w-full"
               disabled={questions.length === 0}
               onClick={async () => {
                 await unlockAudio();
-                setSessionAudio({ bgmTheme, sfxPack });
+                setSessionAudio({ bgmTheme });
                 syncGameMusic(true, bgmTheme, 'game');
                 setStarted(true);
+                playSfx('game-start');
                 playSfx('question-start');
               }}
             >
@@ -246,17 +248,13 @@ export default function QuizPreview() {
                       compact
                       surface="stage"
                       bgmTheme={bgmTheme}
-                      sfxPack={sfxPack}
+                      sfxOn={!muteSfx}
                       onBgmChange={(themeId) => {
                         setBgmTheme(themeId);
                         setStoredBgmTheme(themeId);
                         setSessionAudio({ bgmTheme: themeId });
                       }}
-                      onSfxChange={(packId) => {
-                        setSfxPack(packId);
-                        setStoredSfxPack(packId);
-                        setSessionAudio({ sfxPack: packId });
-                      }}
+                      onSfxEnabledChange={(enabled) => setMuteSfxLocal(!enabled)}
                     />
                   </GlassCard>
                 </motion.div>
@@ -264,13 +262,15 @@ export default function QuizPreview() {
             </AnimatePresence>
 
             <QuestionTitle key={question.id}>{question.prompt}</QuestionTitle>
+            <QuestionMedia src={question.image_url} />
 
-            <div className="grid gap-3">
+            <div className={answerGridClass(question)}>
               {(question.options || []).map((opt, i) => (
                 <AnswerButton
                   key={opt.id}
                   index={i}
                   label={opt.label}
+                  large={isTrueFalseQuestion(question)}
                   selected={selected === opt.id}
                   revealed={revealed}
                   isCorrect={opt.is_correct}

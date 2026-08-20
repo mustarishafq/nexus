@@ -55,12 +55,20 @@ class QuizController extends Controller
             'sfx_pack' => ['sometimes', Rule::in(Quiz::SFX_PACKS)],
             'questions' => ['sometimes', 'array'],
             'questions.*.prompt' => ['required_with:questions', 'string', 'max:2000'],
+            'questions.*.image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'questions.*.question_type' => ['sometimes', 'nullable', 'string', Rule::in(QuizQuestion::TYPES)],
             'questions.*.time_limit_seconds' => ['sometimes', 'integer', 'min:5', 'max:120'],
             'questions.*.points_base' => ['sometimes', 'integer', 'min:100', 'max:5000'],
             'questions.*.options' => ['required_with:questions', 'array', 'min:2', 'max:4'],
             'questions.*.options.*.label' => ['required', 'string', 'max:500'],
             'questions.*.options.*.is_correct' => ['required', 'boolean'],
         ]);
+
+        if (! empty($validated['questions'])) {
+            $validated['questions'] = $this->prepareQuestions($validated['questions']);
+        }
+
+        $this->assertPublishableQuestionSet($validated['questions'] ?? []);
 
         $quiz = DB::transaction(function () use ($validated, $user) {
             $quiz = Quiz::create([
@@ -69,7 +77,7 @@ class QuizController extends Controller
                 'description' => $validated['description'] ?? null,
                 'status' => $validated['status'] ?? Quiz::STATUS_DRAFT,
                 'bgm_theme' => $validated['bgm_theme'] ?? 'party',
-                'sfx_pack' => $validated['sfx_pack'] ?? 'soft',
+                'sfx_pack' => $validated['sfx_pack'] ?? 'classic',
             ]);
 
             if (! empty($validated['questions'])) {
@@ -107,6 +115,12 @@ class QuizController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($quiz->hasActiveLiveSession()) {
+            return response()->json([
+                'message' => 'This quiz has a live session in progress. End the game before editing.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
@@ -115,12 +129,21 @@ class QuizController extends Controller
             'sfx_pack' => ['sometimes', Rule::in(Quiz::SFX_PACKS)],
             'questions' => ['sometimes', 'array'],
             'questions.*.prompt' => ['required_with:questions', 'string', 'max:2000'],
+            'questions.*.image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'questions.*.question_type' => ['sometimes', 'nullable', 'string', Rule::in(QuizQuestion::TYPES)],
             'questions.*.time_limit_seconds' => ['sometimes', 'integer', 'min:5', 'max:120'],
             'questions.*.points_base' => ['sometimes', 'integer', 'min:100', 'max:5000'],
             'questions.*.options' => ['required_with:questions', 'array', 'min:2', 'max:4'],
             'questions.*.options.*.label' => ['required', 'string', 'max:500'],
             'questions.*.options.*.is_correct' => ['required', 'boolean'],
         ]);
+
+        if (array_key_exists('questions', $validated)) {
+            $validated['questions'] = $this->prepareQuestions($validated['questions']);
+        }
+
+        $questionPayload = $validated['questions'] ?? $this->questionPayloadFromQuiz($quiz);
+        $this->assertPublishableQuestionSet($questionPayload);
 
         DB::transaction(function () use ($quiz, $validated) {
             $quiz->fill(collect($validated)->only(['title', 'description', 'status', 'bgm_theme', 'sfx_pack'])->all());
@@ -149,7 +172,24 @@ class QuizController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $quiz->delete();
+        $blocked = false;
+        DB::transaction(function () use ($quiz, &$blocked) {
+            $quiz->sessions()->lockForUpdate()->get();
+
+            if ($quiz->hasActiveLiveSession()) {
+                $blocked = true;
+
+                return;
+            }
+
+            $quiz->delete();
+        });
+
+        if ($blocked) {
+            return response()->json([
+                'message' => 'This quiz cannot be deleted while a live game is in progress.',
+            ], 422);
+        }
 
         return response()->json(['message' => 'Deleted']);
     }
@@ -165,8 +205,16 @@ class QuizController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($quiz->hasActiveLiveSession()) {
+            return response()->json([
+                'message' => 'This quiz has a live session in progress. End the game before editing questions.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'prompt' => ['required', 'string', 'max:2000'],
+            'image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'question_type' => ['sometimes', 'nullable', 'string', Rule::in(QuizQuestion::TYPES)],
             'time_limit_seconds' => ['sometimes', 'integer', 'min:5', 'max:120'],
             'points_base' => ['sometimes', 'integer', 'min:100', 'max:5000'],
             'options' => ['required', 'array', 'min:2', 'max:4'],
@@ -174,7 +222,19 @@ class QuizController extends Controller
             'options.*.is_correct' => ['required', 'boolean'],
         ]);
 
+        $prepared = $this->prepareQuestion($validated);
+        $validated = array_merge($validated, $prepared);
+
         $this->assertExactlyOneCorrect($validated['options']);
+
+        $pending = $this->questionPayloadFromQuiz($quiz);
+        $pending[] = [
+            'prompt' => $validated['prompt'],
+            'image_url' => $this->normalizedImageUrl($validated['image_url'] ?? null),
+            'question_type' => $this->normalizedQuestionType($validated['question_type'] ?? null),
+            'options' => $validated['options'],
+        ];
+        $this->assertPublishableQuestionSet($pending);
 
         $maxOrder = (int) $quiz->questions()->max('sort_order');
 
@@ -182,6 +242,8 @@ class QuizController extends Controller
             $question = QuizQuestion::create([
                 'quiz_id' => $quiz->id,
                 'prompt' => $validated['prompt'],
+                'image_url' => $this->normalizedImageUrl($validated['image_url'] ?? null),
+                'question_type' => $this->normalizedQuestionType($validated['question_type'] ?? null),
                 'time_limit_seconds' => $validated['time_limit_seconds'] ?? 20,
                 'points_base' => $validated['points_base'] ?? 1000,
                 'sort_order' => $maxOrder + 1,
@@ -191,7 +253,7 @@ class QuizController extends Controller
                 QuizOption::create([
                     'quiz_question_id' => $question->id,
                     'label' => $option['label'],
-                    'is_correct' => (bool) $option['is_correct'],
+                    'is_correct' => $this->optionIsCorrect($option),
                     'sort_order' => $i,
                 ]);
             }
@@ -213,8 +275,16 @@ class QuizController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($quiz->hasActiveLiveSession()) {
+            return response()->json([
+                'message' => 'This quiz has a live session in progress. End the game before editing questions.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'prompt' => ['sometimes', 'string', 'max:2000'],
+            'image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'question_type' => ['sometimes', 'nullable', 'string', Rule::in(QuizQuestion::TYPES)],
             'time_limit_seconds' => ['sometimes', 'integer', 'min:5', 'max:120'],
             'points_base' => ['sometimes', 'integer', 'min:100', 'max:5000'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
@@ -223,20 +293,51 @@ class QuizController extends Controller
             'options.*.is_correct' => ['required_with:options', 'boolean'],
         ]);
 
+        if (array_key_exists('question_type', $validated) || array_key_exists('options', $validated)) {
+            $projectedType = array_key_exists('question_type', $validated)
+                ? $this->normalizedQuestionType($validated['question_type'])
+                : $this->normalizedQuestionType($question->question_type);
+            $projectedOptions = $validated['options'] ?? $question->options->map(fn (QuizOption $option) => [
+                'label' => $option->label,
+                'is_correct' => (bool) $option->is_correct,
+            ])->all();
+            $prepared = $this->prepareQuestion([
+                'question_type' => $projectedType,
+                'options' => $projectedOptions,
+            ]);
+            $validated['question_type'] = $prepared['question_type'];
+            if (array_key_exists('options', $validated) || QuizQuestion::isTrueFalse($projectedType)) {
+                $validated['options'] = $prepared['options'];
+            }
+        }
+
+        if (array_key_exists('options', $validated)) {
+            $this->assertExactlyOneCorrect($validated['options']);
+        }
+
+        $this->assertPublishableQuestionSet(
+            $this->projectedQuestionPayloadAfterUpdate($quiz, $question, $validated),
+        );
+
         DB::transaction(function () use ($question, $validated) {
             $question->fill(collect($validated)->only([
-                'prompt', 'time_limit_seconds', 'points_base', 'sort_order',
+                'prompt', 'time_limit_seconds', 'points_base', 'sort_order', 'question_type',
             ])->all());
+            if (array_key_exists('question_type', $validated)) {
+                $question->question_type = $this->normalizedQuestionType($validated['question_type']);
+            }
+            if (array_key_exists('image_url', $validated)) {
+                $question->image_url = $this->normalizedImageUrl($validated['image_url']);
+            }
             $question->save();
 
             if (array_key_exists('options', $validated)) {
-                $this->assertExactlyOneCorrect($validated['options']);
                 $question->options()->delete();
                 foreach (array_values($validated['options']) as $i => $option) {
                     QuizOption::create([
                         'quiz_question_id' => $question->id,
                         'label' => $option['label'],
-                        'is_correct' => (bool) $option['is_correct'],
+                        'is_correct' => $this->optionIsCorrect($option),
                         'sort_order' => $i,
                     ]);
                 }
@@ -255,6 +356,12 @@ class QuizController extends Controller
 
         if (! $this->canEditQuiz($user, $quiz) || (int) $question->quiz_id !== (int) $quiz->id) {
             return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($quiz->hasActiveLiveSession()) {
+            return response()->json([
+                'message' => 'This quiz has a live session in progress. End the game before editing questions.',
+            ], 422);
         }
 
         $question->options()->delete();
@@ -291,16 +398,86 @@ class QuizController extends Controller
     }
 
     /**
+     * @param  list<array<string, mixed>>  $questions
+     * @return list<array<string, mixed>>
+     */
+    protected function prepareQuestions(array $questions): array
+    {
+        return array_map(fn (array $question) => $this->prepareQuestion($question), array_values($questions));
+    }
+
+    /**
+     * @param  array<string, mixed>  $question
+     * @return array<string, mixed>
+     */
+    protected function prepareQuestion(array $question): array
+    {
+        $question['question_type'] = $this->normalizedQuestionType($question['question_type'] ?? null);
+
+        if (array_key_exists('options', $question) && is_array($question['options'])) {
+            if (QuizQuestion::isTrueFalse($question['question_type'])) {
+                $question['options'] = $this->canonicalTrueFalseOptions($question['options']);
+            }
+            $this->assertExactlyOneCorrect($question['options']);
+        }
+
+        return $question;
+    }
+
+    /**
+     * @param  list<array{label?: mixed, is_correct?: mixed}>  $options
+     * @return list<array{label: string, is_correct: bool}>
+     */
+    protected function canonicalTrueFalseOptions(array $options): array
+    {
+        if (count($options) !== 2) {
+            throw ValidationException::withMessages([
+                'options' => ['True / False questions must have exactly two options: True and False.'],
+            ]);
+        }
+
+        $normalized = [];
+        foreach (array_values($options) as $option) {
+            $label = $this->normalizeQuestionText((string) ($option['label'] ?? ''));
+            if (! in_array($label, ['true', 'false'], true)) {
+                throw ValidationException::withMessages([
+                    'options' => ['True / False questions must use the labels True and False.'],
+                ]);
+            }
+            if (isset($normalized[$label])) {
+                throw ValidationException::withMessages([
+                    'options' => ['True / False questions must have one True option and one False option.'],
+                ]);
+            }
+            $normalized[$label] = $this->optionIsCorrect($option);
+        }
+
+        if (! isset($normalized['true'], $normalized['false'])) {
+            throw ValidationException::withMessages([
+                'options' => ['True / False questions must have one True option and one False option.'],
+            ]);
+        }
+
+        return [
+            ['label' => QuizQuestion::TRUE_LABEL, 'is_correct' => $normalized['true']],
+            ['label' => QuizQuestion::FALSE_LABEL, 'is_correct' => $normalized['false']],
+        ];
+    }
+
+    /**
      * @param  list<array{prompt: string, time_limit_seconds?: int, points_base?: int, options: list<array{label: string, is_correct: bool}>}>  $questions
      */
     protected function syncQuestions(Quiz $quiz, array $questions): void
     {
         foreach (array_values($questions) as $i => $payload) {
+            $payload = $this->prepareQuestion($payload);
             $this->assertExactlyOneCorrect($payload['options']);
 
             $question = QuizQuestion::create([
                 'quiz_id' => $quiz->id,
                 'prompt' => $payload['prompt'],
+                'image_url' => $this->normalizedImageUrl($payload['image_url'] ?? null),
+                'question_type' => $this->normalizedQuestionType($payload['question_type'] ?? null),
                 'time_limit_seconds' => $payload['time_limit_seconds'] ?? 20,
                 'points_base' => $payload['points_base'] ?? 1000,
                 'sort_order' => $i,
@@ -310,7 +487,7 @@ class QuizController extends Controller
                 QuizOption::create([
                     'quiz_question_id' => $question->id,
                     'label' => $option['label'],
-                    'is_correct' => (bool) $option['is_correct'],
+                    'is_correct' => $this->optionIsCorrect($option),
                     'sort_order' => $j,
                 ]);
             }
@@ -322,12 +499,162 @@ class QuizController extends Controller
      */
     protected function assertExactlyOneCorrect(array $options): void
     {
-        $correct = collect($options)->where('is_correct', true)->count();
+        $correct = collect($options)->filter(fn (array $option) => $this->optionIsCorrect($option))->count();
         if ($correct !== 1) {
             throw ValidationException::withMessages([
                 'options' => ['Each question must have exactly one correct option.'],
             ]);
         }
+    }
+
+    /**
+     * @param  list<array{prompt?: string, image_url?: ?string, options?: list<array{label: string, is_correct: bool}>}>  $questions
+     */
+    protected function assertPublishableQuestionSet(array $questions): void
+    {
+        $fingerprints = [];
+        foreach (array_values($questions) as $index => $question) {
+            $key = $this->questionContentFingerprint($question);
+            if (isset($fingerprints[$key])) {
+                $first = $fingerprints[$key] + 1;
+                $second = $index + 1;
+                throw ValidationException::withMessages([
+                    'questions' => ["Questions {$first} and {$second} are identical. Change the prompt, an option, or the correct answer before saving."],
+                ]);
+            }
+            $fingerprints[$key] = $index;
+        }
+    }
+
+    /**
+     * @param  array{prompt?: string, image_url?: ?string, options?: list<array{label: string, is_correct: bool}>}  $question
+     */
+    protected function questionContentFingerprint(array $question): string
+    {
+        $type = $this->normalizedQuestionType($question['question_type'] ?? null);
+        $prompt = $this->normalizeQuestionText((string) ($question['prompt'] ?? ''));
+        $image = $this->normalizedImageUrl($question['image_url'] ?? null) ?? '';
+        $options = collect($question['options'] ?? [])
+            ->values()
+            ->map(function (array $option) {
+                $label = $this->normalizeQuestionText((string) ($option['label'] ?? ''));
+                $correct = $this->optionIsCorrect($option) ? '1' : '0';
+
+                return $label.'|'.$correct;
+            })
+            ->implode("\n");
+
+        return $type."\n".$prompt."\n".$image."\n".$options;
+    }
+
+    protected function normalizeQuestionText(string $value): string
+    {
+        $stripped = preg_replace('/[\x{00A0}\x{200B}\x{FEFF}]/u', ' ', $value) ?? $value;
+        $collapsed = preg_replace('/\s+/u', ' ', trim($stripped)) ?? trim($stripped);
+
+        return mb_strtolower($collapsed);
+    }
+
+    protected function normalizedQuestionType(mixed $type): string
+    {
+        if (! is_string($type) || trim($type) === '') {
+            return QuizQuestion::TYPE_MULTIPLE_CHOICE;
+        }
+
+        return trim($type);
+    }
+
+    /**
+     * @param  array{is_correct?: mixed}  $option
+     */
+    protected function optionIsCorrect(array $option): bool
+    {
+        $value = $option['is_correct'] ?? false;
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (int) $value === 1;
+        }
+
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+
+            if (in_array($normalized, ['1', 'true', 'on', 'yes'], true)) {
+                return true;
+            }
+
+            if (in_array($normalized, ['0', 'false', 'off', 'no', ''], true)) {
+                return false;
+            }
+        }
+
+        return (bool) filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    protected function normalizedImageUrl(mixed $url): ?string
+    {
+        return QuizQuestion::canonicalImageUrl($url);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return list<array{prompt: string, image_url: ?string, options: list<array{label: string, is_correct: mixed}>}>
+     */
+    protected function projectedQuestionPayloadAfterUpdate(Quiz $quiz, QuizQuestion $target, array $validated): array
+    {
+        $quiz->load('questions.options');
+
+        return $quiz->questions->map(function (QuizQuestion $question) use ($target, $validated) {
+            $payload = [
+                'prompt' => $question->prompt,
+                'image_url' => $question->image_url,
+                'question_type' => $this->normalizedQuestionType($question->question_type),
+                'options' => $question->options->map(fn (QuizOption $option) => [
+                    'label' => $option->label,
+                    'is_correct' => (bool) $option->is_correct,
+                ])->all(),
+            ];
+
+            if ((int) $question->id !== (int) $target->id) {
+                return $payload;
+            }
+
+            if (array_key_exists('prompt', $validated)) {
+                $payload['prompt'] = $validated['prompt'];
+            }
+            if (array_key_exists('question_type', $validated)) {
+                $payload['question_type'] = $this->normalizedQuestionType($validated['question_type']);
+            }
+            if (array_key_exists('image_url', $validated)) {
+                $payload['image_url'] = $this->normalizedImageUrl($validated['image_url']);
+            }
+            if (array_key_exists('options', $validated)) {
+                $payload['options'] = array_values($validated['options']);
+            }
+
+            return $payload;
+        })->all();
+    }
+
+    /**
+     * @return list<array{prompt: string, image_url: ?string, options: list<array{label: string, is_correct: bool}>}>
+     */
+    protected function questionPayloadFromQuiz(Quiz $quiz): array
+    {
+        return $quiz->questions()->with('options')->get()->map(function (QuizQuestion $question) {
+            return [
+                'prompt' => $question->prompt,
+                'image_url' => $question->image_url,
+                'question_type' => $this->normalizedQuestionType($question->question_type),
+                'options' => $question->options->map(fn (QuizOption $option) => [
+                    'label' => $option->label,
+                    'is_correct' => (bool) $option->is_correct,
+                ])->all(),
+            ];
+        })->all();
     }
 
     protected function canViewQuiz(User $user, Quiz $quiz): bool

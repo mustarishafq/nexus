@@ -5,15 +5,19 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
+use App\Services\ResourceEmployeeForwarder;
+use App\Services\UserPresenceService;
 use App\Support\ApiTokenAuth;
 use App\Support\MediaCropNormalizer;
 use App\Support\ProfileMediaInteractions;
+use App\Support\PublicStorageUrl;
+use App\Support\QuizAccessories;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserProfileSerializer;
-use App\Services\UserPresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class MeController extends Controller
@@ -73,6 +77,7 @@ class MeController extends Controller
             'profile_picture_crop.y' => ['required_with:profile_picture_crop', 'numeric', 'min:-100', 'max:200'],
             'profile_picture_crop.width' => ['required_with:profile_picture_crop', 'numeric', 'min:0.01', 'max:200'],
             'profile_picture_crop.height' => ['required_with:profile_picture_crop', 'numeric', 'min:0.01', 'max:200'],
+            'quiz_accessory_id' => ['sometimes', 'nullable', 'string', Rule::in(QuizAccessories::acceptedInputIds())],
             'cover_picture' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'cover_picture_crops' => ['sometimes', 'nullable', 'array'],
             'cover_picture_crops.desktop' => ['sometimes', 'nullable', 'array'],
@@ -144,6 +149,18 @@ class MeController extends Controller
         $profileData = $this->normalizeHrProfilePayload($profileData);
         $profileData = $this->resolveDepartmentFields($profileData);
 
+        if (array_key_exists('quiz_accessory_id', $profileData)) {
+            $profileData['quiz_accessory_id'] = QuizAccessories::normalize($profileData['quiz_accessory_id']);
+        }
+
+        if (array_key_exists('profile_picture', $profileData) && $profileData['profile_picture'] !== null) {
+            $profileData['profile_picture'] = PublicStorageUrl::canonicalize($profileData['profile_picture']);
+        }
+
+        if (array_key_exists('cover_picture', $profileData) && $profileData['cover_picture'] !== null) {
+            $profileData['cover_picture'] = PublicStorageUrl::canonicalize($profileData['cover_picture']);
+        }
+
         if (array_key_exists('cover_picture', $profileData) && $profileData['cover_picture'] === null) {
             $profileData['cover_picture_crops'] = null;
         }
@@ -188,7 +205,7 @@ class MeController extends Controller
             SyncUserProfileRecords::syncSkills($user, $validated['skills']);
         }
 
-        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+        app(ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
 
         return response()->json(UserProfileSerializer::privateProfile($this->loadProfile($user->fresh())));
     }

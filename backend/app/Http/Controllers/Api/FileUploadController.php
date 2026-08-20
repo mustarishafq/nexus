@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
-use App\Support\ApiTokenAuth;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +20,7 @@ class FileUploadController extends Controller
         'cover-pictures-new',
         'post-images',
         'attendance-photos',
+        'quiz-question-images',
     ];
 
     public function store(Request $request): JsonResponse
@@ -66,7 +67,8 @@ class FileUploadController extends Controller
 
         $file = $request->file('file');
         $path = $file->store($folder, 'public');
-        $url = Storage::url($path);
+        $url = PublicStorageUrl::canonicalize(Storage::disk('public')->url($path))
+            ?: '/storage/'.$path;
         $mime = (string) $file->getMimeType();
 
         return response()->json([

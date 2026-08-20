@@ -1,30 +1,34 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Users, Play, Eye, Trophy, SkipForward, Square, Music, Music2, VolumeX, Volume2, Copy, Headphones,
+  Users, Play, Eye, Trophy, SkipForward, Square, Music, Music2, VolumeX, Volume2, Copy, Headphones, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { subscribeQuizSession } from '@/lib/echo';
 import {
-  unlockAudio, playSfx, syncGameMusic, stopLobby, isMusicMuted, isSfxMuted,
-  setMusicMuted, setSfxMuted, setSessionAudio, phaseForSessionStatus,
+  unlockAudio, playSfxOnce, emitTimerTick, syncGameMusic, stopLobby, isMusicMuted, isSfxMuted,
+  setMusicMuted, setSfxMuted, setSessionAudio, phaseForSessionStatus, armUnlockOnGesture,
+  resetAudioGates,
 } from '@/lib/gameAudio';
 import {
-  fireCelebrateConfetti, fireWinnerConfetti,
+  fireCelebrateConfetti,
 } from '@/lib/confettiBurst';
 import PageLoader from '@/components/PageLoader';
 import {
   GlassCard, AnswerButton, TimerRing, PulsingPin, LobbyPlayerChip, WaitingDots,
-  AnswerProgress, QuestionTitle, GameStage, PodiumLeaderboard, GameActionButton,
-  GameIconButton, FullscreenButton,
+  AnswerProgress, QuestionTitle, QuestionMedia, GameStage, PodiumLeaderboard, GameActionButton,
+  GameIconButton, FullscreenButton, AnswerDistributionChart, HostTopRanking, QuestionCountdown,
 } from '@/components/games/GameUi';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
-import { cn } from '@/lib/utils';
+import { answerGridClass, isTrueFalseQuestion } from '@/lib/quizQuestion';
+import {
+  questionTimerState, quizCountdownLabel, quizCountdownRemainingMs,
+} from '@/lib/quizCountdown';
 
 function stagePhase(status) {
   if (status === 'lobby') return 'lobby';
@@ -36,6 +40,7 @@ function stagePhase(status) {
 
 export default function QuizHost() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [muteMusic, setMuteMusicLocal] = useState(isMusicMuted());
   const [muteSfx, setMuteSfxLocal] = useState(isSfxMuted());
@@ -55,18 +60,19 @@ export default function QuizHost() {
   const session = sessionQuery.data;
 
   useEffect(() => {
-    unlockAudio();
-  }, []);
+    armUnlockOnGesture();
+    resetAudioGates();
+    return () => {
+      stopLobby();
+      resetAudioGates();
+    };
+  }, [id]);
 
   useEffect(() => {
-    if (!session) return undefined;
-    setSessionAudio({ bgmTheme: session.bgm_theme, sfxPack: session.sfx_pack });
-    const phase = phaseForSessionStatus(session.status);
-    unlockAudio().then(() => {
-      syncGameMusic(session.music_enabled, session.bgm_theme, phase);
-    });
-    return () => stopLobby();
-  }, [session?.status, session?.music_enabled, session?.bgm_theme, session?.sfx_pack]);
+    if (!session) return;
+    setSessionAudio({ bgmTheme: session.bgm_theme });
+    syncGameMusic(session.music_enabled, session.bgm_theme, phaseForSessionStatus(session.status));
+  }, [session?.status, session?.music_enabled, session?.bgm_theme]);
 
   useEffect(() => {
     if (!id) return undefined;
@@ -75,8 +81,22 @@ export default function QuizHost() {
     });
   }, [id, queryClient]);
 
+  useEffect(() => {
+    if (!id || !session || session.status === 'finished' || !session.is_host) return undefined;
+    const intervalSeconds = Math.max(3, Number(session.heartbeat_interval_seconds) || 5);
+    const beat = () => {
+      db.quizSessions.heartbeat(id)
+        .then((data) => queryClient.setQueryData(['quiz-session', id], data))
+        .catch(() => {});
+    };
+    beat();
+    const timerId = setInterval(beat, intervalSeconds * 1000);
+    return () => clearInterval(timerId);
+  }, [id, session?.status, session?.is_host, session?.heartbeat_interval_seconds, queryClient]);
+
   const run = useMutation({
-    mutationFn: async ({ action, ...args }) => {
+    mutationFn: async ({ action, fromTimeout, ...args }) => {
+      void fromTimeout;
       if (action === 'start') return db.quizSessions.start(id);
       if (action === 'reveal') return db.quizSessions.reveal(id);
       if (action === 'leaderboard') return db.quizSessions.leaderboard(id);
@@ -85,34 +105,50 @@ export default function QuizHost() {
       if (action === 'music') return db.quizSessions.music(id, args);
       throw new Error('Unknown action');
     },
-    onSuccess: async (data, vars) => {
+    onSuccess: (data, vars) => {
       queryClient.setQueryData(['quiz-session', id], data);
-      await unlockAudio();
-      const phase = phaseForSessionStatus(data?.status);
-      if (data?.music_enabled !== false && phase !== 'off') {
-        syncGameMusic(true, data.bgm_theme, phase);
+      const qid = data?.current_question_id;
+      if (vars.action === 'start') {
+        playSfxOnce('game-start', 'game-start');
+        playSfxOnce(`q:${qid}:start`, 'question-start');
       }
-      if (vars.action === 'start' || vars.action === 'next') playSfx('question-start');
+      if (vars.action === 'next') playSfxOnce(`q:${qid}:start`, 'question-start');
       if (vars.action === 'reveal') {
-        playSfx('correct');
+        playSfxOnce(`q:${qid}:${vars.fromTimeout ? 'timeout' : 'reveal'}`, vars.fromTimeout ? 'timeout' : 'reveal');
         fireCelebrateConfetti();
       }
       if (vars.action === 'leaderboard') {
-        playSfx('leaderboard');
+        playSfxOnce(`q:${qid}:board`, 'leaderboard');
         fireCelebrateConfetti();
       }
       if (vars.action === 'end') {
-        playSfx('winner');
-        fireWinnerConfetti();
-        syncGameMusic(false, data?.bgm_theme, 'off');
+        toast.success('Live game ended');
+        navigate('/games', { replace: true });
       }
     },
-    onError: (err) => toast.error(err?.data?.message || err.message || 'Action failed'),
+    onError: (err) => toast.error(err.message || err?.data?.message || 'Action failed'),
   });
+
+  const act = (vars) => {
+    void unlockAudio();
+    run.mutate(vars);
+  };
+
+  useEffect(() => {
+    if (!session) return undefined;
+    const locked = ['question', 'reveal', 'leaderboard'].includes(session.status);
+    if (!locked) return undefined;
+    const onLeave = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, [session?.status]);
 
   const currentQuestion = useMemo(() => {
     if (!session?.current_question_id) return null;
-    return session.quiz?.questions?.find((q) => q.id === session.current_question_id) || null;
+    return session.quiz?.questions?.find((q) => Number(q.id) === Number(session.current_question_id)) || null;
   }, [session]);
 
   const joinUrl = useMemo(() => {
@@ -120,7 +156,32 @@ export default function QuizHost() {
     return `${window.location.origin}/quiz-join/${session.join_token}`;
   }, [session?.join_token]);
 
-  const remainingSeconds = useQuestionTimer(session, currentQuestion);
+  const { remaining: remainingSeconds, timedOut } = useQuestionTimer(session, currentQuestion);
+  const { remaining: phaseSeconds } = usePhaseTimer(session);
+  const autoRevealedFor = useRef(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (session?.status !== 'question' || session?.paused) return undefined;
+    if (quizCountdownRemainingMs(session) <= 0) return undefined;
+    const timerId = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(timerId);
+  }, [session?.status, session?.question_started_at, session?.answering_open, session?.paused]);
+
+  const countdownLabel = quizCountdownLabel(quizCountdownRemainingMs(session, now));
+
+  useEffect(() => {
+    if (!countdownLabel || countdownLabel === 'GO!') return;
+    playSfxOnce(`countdown:${id}:${countdownLabel}`, 'timer-tick');
+  }, [countdownLabel, id]);
+
+  useEffect(() => {
+    if (session?.paused || session?.status !== 'question' || !timedOut || !session.current_question_id) return;
+    if (autoRevealedFor.current === session.current_question_id || run.isPending) return;
+    autoRevealedFor.current = session.current_question_id;
+    run.mutate({ action: 'reveal', fromTimeout: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutate once per question timeout
+  }, [timedOut, session?.status, session?.current_question_id, session?.paused]);
 
   if (sessionQuery.isLoading) return <PageLoader />;
   if (!session) {
@@ -154,11 +215,10 @@ export default function QuizHost() {
           <GameIconButton
             title={muteMusic ? 'Unmute music' : 'Mute music'}
             onClick={() => {
+              void unlockAudio();
               const next = !muteMusic;
               setMuteMusicLocal(next);
               setMusicMuted(next);
-              if (next) stopLobby();
-              else syncGameMusic(session.music_enabled, session.bgm_theme, phaseForSessionStatus(session.status));
             }}
           >
             {muteMusic ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -166,6 +226,7 @@ export default function QuizHost() {
           <GameIconButton
             title={muteSfx ? 'Unmute SFX' : 'Mute SFX'}
             onClick={() => {
+              void unlockAudio();
               const next = !muteSfx;
               setMuteSfxLocal(next);
               setSfxMuted(next);
@@ -179,6 +240,12 @@ export default function QuizHost() {
           <FullscreenButton targetRef={stageRef} />
         </div>
       </header>
+
+      {session.paused && session.status !== 'lobby' && (
+        <div className="mb-5 rounded-2xl border border-amber-300/40 bg-amber-400/20 px-4 py-3 text-center text-sm font-bold text-white">
+          Game paused — waiting for the host connection to recover.
+        </div>
+      )}
 
       <AnimatePresence>
         {showAudio && (
@@ -194,7 +261,7 @@ export default function QuizHost() {
                 <GameActionButton
                   variant="ghost"
                   className="!text-violet-800 !bg-violet-100 !shadow-none !border-0 py-2 px-3 text-xs dark:!text-violet-200 dark:!bg-violet-500/20"
-                  onClick={() => run.mutate({ action: 'music', enabled: !session.music_enabled })}
+                  onClick={() => act({ action: 'music', enabled: !session.music_enabled })}
                 >
                   BGM {session.music_enabled ? 'On' : 'Off'}
                 </GameActionButton>
@@ -203,9 +270,12 @@ export default function QuizHost() {
                 compact
                 surface="stage"
                 bgmTheme={session.bgm_theme || 'party'}
-                sfxPack={session.sfx_pack || 'soft'}
-                onBgmChange={(bgm_theme) => run.mutate({ action: 'music', bgm_theme })}
-                onSfxChange={(sfx_pack) => run.mutate({ action: 'music', sfx_pack })}
+                sfxOn={!muteSfx}
+                onBgmChange={(bgm_theme) => {
+                  void unlockAudio();
+                  run.mutate({ action: 'music', bgm_theme });
+                }}
+                onSfxEnabledChange={(enabled) => setMuteSfxLocal(!enabled)}
               />
             </GlassCard>
           </motion.div>
@@ -243,11 +313,22 @@ export default function QuizHost() {
               </GameActionButton>
               <GameActionButton
                 disabled={session.player_count < 1 || run.isPending}
-                onClick={() => run.mutate({ action: 'start' })}
+                onClick={() => {
+                  void unlockAudio();
+                  run.mutate({ action: 'start' });
+                }}
                 className="sm:min-w-[180px]"
               >
                 <Play className="h-5 w-5" />
                 Start!
+              </GameActionButton>
+              <GameActionButton
+                variant="danger"
+                disabled={run.isPending}
+                onClick={() => act({ action: 'end' })}
+              >
+                <Square className="h-4 w-4" />
+                End live
               </GameActionButton>
             </div>
             {session.quiz_id && (
@@ -282,7 +363,14 @@ export default function QuizHost() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 content-start max-h-[420px] overflow-auto pr-1">
                 <AnimatePresence mode="popLayout">
                   {(session.players || []).map((p, i) => (
-                    <LobbyPlayerChip key={p.user_id} name={p.display_name} index={i} />
+                    <LobbyPlayerChip
+                      key={p.user_id}
+                      name={p.display_name}
+                      index={i}
+                      profilePicture={p.profile_picture}
+                      profilePictureCrop={p.profile_picture_crop}
+                      accessoryId={p.accessory_id}
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -292,7 +380,10 @@ export default function QuizHost() {
       )}
 
       {session.status === 'question' && currentQuestion && (
-        <div className="space-y-5">
+        <div className="relative space-y-5 min-h-[240px]">
+          <QuestionCountdown label={countdownLabel} />
+          {!countdownLabel && (
+          <>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
             <div className="flex-1 min-w-[160px] max-w-xs ml-auto">
@@ -300,21 +391,31 @@ export default function QuizHost() {
             </div>
           </div>
           <QuestionTitle key={currentQuestion.id}>{currentQuestion.prompt}</QuestionTitle>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <QuestionMedia src={currentQuestion.image_url} />
+          <div className={isTrueFalseQuestion(currentQuestion) ? answerGridClass(currentQuestion) : 'grid sm:grid-cols-2 gap-3'}>
             {(currentQuestion.options || []).map((opt, i) => (
-              <AnswerButton key={opt.id} index={i} label={opt.label} disabled delay={i * 0.06} />
+              <AnswerButton
+                key={opt.id}
+                index={i}
+                label={opt.label}
+                large={isTrueFalseQuestion(currentQuestion)}
+                disabled
+                delay={i * 0.06}
+              />
             ))}
           </div>
           <div className="flex flex-wrap gap-3 justify-center pt-2">
-            <GameActionButton onClick={() => run.mutate({ action: 'reveal' })} disabled={run.isPending}>
+            <GameActionButton onClick={() => act({ action: 'reveal' })} disabled={run.isPending}>
               <Eye className="h-4 w-4" />
               Reveal
             </GameActionButton>
-            <GameActionButton variant="secondary" onClick={() => run.mutate({ action: 'leaderboard' })} disabled={run.isPending}>
+            <GameActionButton variant="secondary" onClick={() => act({ action: 'leaderboard' })} disabled={run.isPending}>
               <Trophy className="h-4 w-4" />
               Scores
             </GameActionButton>
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -322,66 +423,54 @@ export default function QuizHost() {
         <div className="space-y-6">
           {session.status === 'reveal' && currentQuestion && (
             <>
-              <QuestionTitle>{currentQuestion.prompt}</QuestionTitle>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {(currentQuestion.options || []).map((opt, i) => (
-                  <AnswerButton
-                    key={opt.id}
-                    index={i}
-                    label={opt.label}
-                    revealed
-                    isCorrect={opt.is_correct}
-                    disabled
-                    delay={i * 0.05}
-                  />
-                ))}
+              <div className="flex justify-center">
+                <TimerRing seconds={phaseSeconds} total={session.distribution_seconds || 4} />
               </div>
+              <QuestionTitle>{currentQuestion.prompt}</QuestionTitle>
+              <QuestionMedia src={currentQuestion.image_url} compact />
+              <AnswerDistributionChart
+                question={currentQuestion}
+                optionStats={session.option_stats}
+                unansweredCount={session.unanswered_count}
+              />
             </>
           )}
 
-          {(session.status === 'leaderboard' || session.status === 'finished') && (
-            <PodiumLeaderboard
-              players={session.players || []}
-              title={session.status === 'finished' ? 'Final scores!' : 'Leaderboard'}
-            />
+          {session.status === 'leaderboard' && (
+            <>
+              <div className="flex justify-center">
+                <TimerRing seconds={phaseSeconds} total={session.recap_seconds || 5} />
+              </div>
+              <HostTopRanking players={session.players || []} limit={6} />
+            </>
           )}
 
-          {session.status === 'reveal' && (
-            <div className="rounded-2xl bg-black/20 border border-white/15 p-3">
-              <p className="text-center text-xs font-bold uppercase tracking-wider text-white/50 mb-2">Quick peek</p>
-              <div className="flex justify-center gap-2 flex-wrap">
-                {(session.players || []).slice(0, 5).map((p, i) => (
-                  <span key={p.user_id} className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">
-                    #{i + 1} {p.display_name} · {p.score}
-                  </span>
-                ))}
-              </div>
-            </div>
+          {session.status === 'finished' && (
+            <PodiumLeaderboard
+              players={session.players || []}
+              title="Final scores!"
+            />
           )}
 
           <div className="flex flex-wrap gap-3 justify-center">
             {session.status !== 'finished' && (
-              <>
-                {session.status === 'reveal' && (
-                  <GameActionButton variant="secondary" onClick={() => run.mutate({ action: 'leaderboard' })} disabled={run.isPending}>
-                    <Trophy className="h-4 w-4" />
-                    Show podium
-                  </GameActionButton>
-                )}
-                <GameActionButton onClick={() => run.mutate({ action: 'next' })} disabled={run.isPending}>
-                  <SkipForward className="h-4 w-4" />
-                  Next
-                </GameActionButton>
-                <GameActionButton variant="danger" onClick={() => run.mutate({ action: 'end' })} disabled={run.isPending}>
-                  <Square className="h-4 w-4" />
-                  End
-                </GameActionButton>
-              </>
+              <GameActionButton onClick={() => act({ action: 'next' })} disabled={run.isPending || session.paused}>
+                <SkipForward className="h-4 w-4" />
+                Next
+              </GameActionButton>
             )}
             {session.status === 'finished' && (
-              <Link to="/games">
-                <GameActionButton variant="secondary">Back to Games</GameActionButton>
-              </Link>
+              <>
+                <Link to={`/games/sessions/${session.id}/analytics`}>
+                  <GameActionButton>
+                    <BarChart3 className="h-4 w-4" />
+                    View Analytics
+                  </GameActionButton>
+                </Link>
+                <Link to="/games">
+                  <GameActionButton variant="secondary">Back to Games</GameActionButton>
+                </Link>
+              </>
             )}
           </div>
         </div>
@@ -392,25 +481,68 @@ export default function QuizHost() {
 
 function useQuestionTimer(session, question) {
   const [remaining, setRemaining] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (!session?.question_started_at || !question || session.status !== 'question') {
+    if (!question || session?.status !== 'question') {
+      setRemaining(0);
+      setTimedOut(false);
+      return undefined;
+    }
+
+    const tick = () => {
+      const state = questionTimerState(session, question, Date.now());
+      setRemaining(state.remainingSeconds);
+      setTimedOut(state.timedOut);
+      if (state.countdownMs > 0 || session?.paused) return;
+      if (state.remainingSeconds > 0 && state.remainingSeconds <= 5) emitTimerTick(question?.id, state.remainingSeconds);
+    };
+
+    tick();
+    if (session?.paused) return undefined;
+    const timerId = setInterval(tick, 250);
+    return () => clearInterval(timerId);
+  }, [
+    session?.question_ends_at,
+    session?.question_started_at,
+    session?.status,
+    session?.paused,
+    session?.pause_remaining_ms,
+    session?.answering_open,
+    question?.id,
+    question?.time_limit_seconds,
+  ]);
+
+  return { remaining, timedOut };
+}
+
+function usePhaseTimer(session) {
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    if (session?.status !== 'reveal' && session?.status !== 'leaderboard') {
       setRemaining(0);
       return undefined;
     }
 
     const tick = () => {
-      const started = new Date(session.question_started_at).getTime();
-      const limit = (question.time_limit_seconds || 20) * 1000;
-      const left = Math.max(0, Math.ceil((started + limit - Date.now()) / 1000));
+      if (session?.paused) {
+        setRemaining(Math.max(0, Math.ceil((session.pause_remaining_ms || 0) / 1000)));
+        return;
+      }
+      if (!session?.phase_ends_at) {
+        setRemaining(0);
+        return;
+      }
+      const left = Math.max(0, Math.ceil((new Date(session.phase_ends_at).getTime() - Date.now()) / 1000));
       setRemaining(left);
-      if (left > 0 && left <= 5) playSfx('timer-tick');
     };
 
     tick();
-    const timerId = setInterval(tick, 1000);
+    if (session?.paused) return undefined;
+    const timerId = setInterval(tick, 250);
     return () => clearInterval(timerId);
-  }, [session?.question_started_at, session?.status, question?.id, question?.time_limit_seconds]);
+  }, [session?.status, session?.phase_ends_at, session?.paused, session?.pause_remaining_ms]);
 
-  return remaining;
+  return { remaining };
 }

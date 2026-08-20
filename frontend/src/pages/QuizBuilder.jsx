@@ -1,9 +1,9 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Trash2, Check, Save, Eye } from 'lucide-react';
+import { ArrowLeft, Copy, ImagePlus, Plus, Trash2, Check, Save, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,11 +14,26 @@ import PageLoader from '@/components/PageLoader';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
 import { GlassCard, ANSWER_COLORS } from '@/components/games/GameUi';
 import { glassDialogMutedText, glassDialogTitleText } from '@/components/layout/glassStyles';
+import { extractPublicStoragePath, toPublicFileUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
+import { isTrueFalseQuestion, trueFalseOptions } from '@/lib/quizQuestion';
+
+const TIME_MIN = 5;
+const TIME_MAX = 120;
+const POINTS_MIN = 100;
+const POINTS_MAX = 5000;
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+function newClientKey() {
+  return `q-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 function emptyQuestion() {
   return {
+    clientKey: newClientKey(),
     prompt: '',
+    image_url: null,
+    question_type: 'multiple_choice',
     time_limit_seconds: 20,
     points_base: 1000,
     options: [
@@ -30,21 +45,82 @@ function emptyQuestion() {
   };
 }
 
+function cloneQuestion(question) {
+  return {
+    clientKey: newClientKey(),
+    prompt: question.prompt,
+    image_url: question.image_url || null,
+    question_type: question.question_type || 'multiple_choice',
+    time_limit_seconds: question.time_limit_seconds,
+    points_base: question.points_base,
+    options: (question.options || []).map((option) => ({
+      label: option.label,
+      is_correct: !!option.is_correct,
+    })),
+  };
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function normalizeQuestionText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function questionContentFingerprint(question) {
+  const prompt = normalizeQuestionText(question.prompt);
+  const type = question.question_type || 'multiple_choice';
+  const rawImage = String(question.image_url || '').trim();
+  const image = extractPublicStoragePath(rawImage) || rawImage;
+  const options = (question.options || [])
+    .map((option) => `${normalizeQuestionText(option.label)}|${option.is_correct ? '1' : '0'}`)
+    .join('\n');
+  return `${type}\n${prompt}\n${image}\n${options}`;
+}
+
+function duplicateQuestionMessage(questions) {
+  const seen = {};
+  for (let i = 0; i < questions.length; i += 1) {
+    const key = questionContentFingerprint(questions[i]);
+    if (seen[key] !== undefined) {
+      return `Questions ${seen[key] + 1} and ${i + 1} are identical. Change the prompt, an option, or the correct answer before saving.`;
+    }
+    seen[key] = i;
+  }
+  return null;
+}
+
+function firstValidationError(err) {
+  if (err?.data?.errors) {
+    const joined = Object.values(err.data.errors).flat().filter(Boolean).join(' ');
+    if (joined) return joined;
+  }
+  return err?.data?.message || err.message || 'Save failed';
+}
+
 export default function QuizBuilder() {
   const { id } = useParams();
   const isNew = !id || id === 'new';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const imageInputRef = useRef(null);
+  const [imageTargetIndex, setImageTargetIndex] = useState(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('draft');
   const [bgmTheme, setBgmTheme] = useState('party');
-  const [sfxPack, setSfxPack] = useState('classic');
   const [questions, setQuestions] = useState([emptyQuestion()]);
+  const mcBackupRef = useRef({});
+  const [bulkTime, setBulkTime] = useState(20);
+  const [bulkPoints, setBulkPoints] = useState(1000);
+  const [uploadingQi, setUploadingQi] = useState(null);
 
   const quizQuery = useQuery({
-    queryKey: ['quiz', id],
+    queryKey: ['quiz', String(id)],
     queryFn: () => db.quizzes.get(id),
     enabled: !isNew,
   });
@@ -56,10 +132,12 @@ export default function QuizBuilder() {
     setDescription(q.description || '');
     setStatus(q.status || 'draft');
     setBgmTheme(q.bgm_theme || 'party');
-    setSfxPack(q.sfx_pack || 'classic');
     setQuestions(
       (q.questions || []).map((question) => ({
+        clientKey: `saved-${question.id}`,
         prompt: question.prompt,
+        image_url: question.image_url || null,
+        question_type: question.question_type || 'multiple_choice',
         time_limit_seconds: question.time_limit_seconds,
         points_base: question.points_base,
         options: (question.options || []).map((o) => ({
@@ -77,15 +155,15 @@ export default function QuizBuilder() {
         description: description.trim() || null,
         status,
         bgm_theme: bgmTheme,
-        sfx_pack: sfxPack,
         questions: questions.map((q) => ({
           prompt: q.prompt.trim(),
-          time_limit_seconds: Number(q.time_limit_seconds) || 20,
-          points_base: Number(q.points_base) || 1000,
-          options: q.options
-            .filter((o) => o.label.trim())
+          image_url: extractPublicStoragePath(q.image_url) || q.image_url || null,
+          question_type: q.question_type || 'multiple_choice',
+          time_limit_seconds: clampInt(q.time_limit_seconds, TIME_MIN, TIME_MAX, 20),
+          points_base: clampInt(q.points_base, POINTS_MIN, POINTS_MAX, 1000),
+          options: (isTrueFalseQuestion(q) ? q.options : q.options.filter((o) => o.label.trim()))
             .map((o) => ({
-              label: o.label.trim(),
+              label: isTrueFalseQuestion(q) ? o.label : o.label.trim(),
               is_correct: !!o.is_correct,
             })),
         })),
@@ -101,21 +179,104 @@ export default function QuizBuilder() {
         }
       }
 
+      const duplicateMessage = duplicateQuestionMessage(payload.questions);
+      if (duplicateMessage) throw new Error(duplicateMessage);
+
       if (isNew) return db.quizzes.create(payload);
       return db.quizzes.update(id, payload);
     },
     onSuccess: (quiz) => {
+      queryClient.setQueryData(['quiz', String(quiz.id)], quiz);
+      queryClient.invalidateQueries({ queryKey: ['quiz', String(quiz.id)] });
       queryClient.invalidateQueries({ queryKey: ['quizzes'] });
       toast.success('Quiz saved');
-      navigate(`/games/${quiz.id}/edit`, { replace: true });
+      navigate('/games', { replace: true });
     },
-    onError: (err) => toast.error(err?.data?.message || err.message || 'Save failed'),
+    onError: (err) => toast.error(firstValidationError(err)),
   });
+
+  const setQuestionType = (qi, type) => {
+    setQuestions((prev) => prev.map((q, i) => {
+      if (i !== qi) return q;
+      if (type === q.question_type) return q;
+      if (type === 'true_false') {
+        if (q.question_type !== 'true_false') {
+          mcBackupRef.current[q.clientKey] = q.options;
+        }
+        const trueCorrect = (q.options || []).some((o) => o.is_correct && normalizeQuestionText(o.label) === 'true');
+        const falseCorrect = (q.options || []).some((o) => o.is_correct && normalizeQuestionText(o.label) === 'false');
+        const trueIsCorrect = trueCorrect || !falseCorrect;
+        return { ...q, question_type: type, options: trueFalseOptions(trueIsCorrect) };
+      }
+      const backup = mcBackupRef.current[q.clientKey];
+      const options = backup && backup.length >= 2 ? backup : emptyQuestion().options;
+      return { ...q, question_type: 'multiple_choice', options };
+    }));
+  };
+
+  const applyTimeToAll = () => {
+    const next = clampInt(bulkTime, TIME_MIN, TIME_MAX, 20);
+    setBulkTime(next);
+    setQuestions((prev) => prev.map((q) => ({ ...q, time_limit_seconds: next })));
+    toast.success(`Applied ${next}s to all questions`);
+  };
+
+  const applyPointsToAll = () => {
+    const next = clampInt(bulkPoints, POINTS_MIN, POINTS_MAX, 1000);
+    setBulkPoints(next);
+    setQuestions((prev) => prev.map((q) => ({ ...q, points_base: next })));
+    toast.success(`Applied ${next} points to all questions`);
+  };
+
+  const duplicateAt = (qi) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      next.splice(qi + 1, 0, cloneQuestion(prev[qi]));
+      return next;
+    });
+  };
+
+  const pickImage = (qi) => {
+    setImageTargetIndex(qi);
+    imageInputRef.current?.click();
+  };
+
+  const onImageSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    const qi = imageTargetIndex;
+    setImageTargetIndex(null);
+    if (!file || qi == null) return;
+    if (file.size > IMAGE_MAX_BYTES) {
+      toast.error('Image must be 10MB or smaller');
+      return;
+    }
+    setUploadingQi(qi);
+    try {
+      const { file_url } = await db.integrations.Core.UploadFile({
+        file,
+        folder: 'quiz-question-images',
+      });
+      const storedUrl = extractPublicStoragePath(file_url) || file_url || null;
+      setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, image_url: storedUrl } : q)));
+    } catch (err) {
+      toast.error(firstValidationError(err) || 'Image upload failed');
+    } finally {
+      setUploadingQi(null);
+    }
+  };
 
   if (!isNew && quizQuery.isLoading) return <PageLoader />;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={onImageSelected}
+      />
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="icon" asChild>
           <Link to="/games"><ArrowLeft className="h-5 w-5" /></Link>
@@ -153,7 +314,12 @@ export default function QuizBuilder() {
         </div>
         <div className="space-y-2">
           <Label>Description</Label>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="(Optional)"
+            rows={2}
+          />
         </div>
         <div className="space-y-2 max-w-xs">
           <Label>Status</Label>
@@ -170,31 +336,107 @@ export default function QuizBuilder() {
       <GlassCard>
         <h2 className={cn('font-semibold mb-1', glassDialogTitleText)}>Sound & music</h2>
         <p className={cn('text-xs mb-3', glassDialogMutedText)}>
-          Tap a card to preview. Saved with the quiz for live sessions.
+          Choose a music theme. Saved with the quiz for live sessions.
         </p>
         <GameAudioPicker
           bgmTheme={bgmTheme}
-          sfxPack={sfxPack}
           onBgmChange={setBgmTheme}
-          onSfxChange={setSfxPack}
+          showSfx={false}
         />
+      </GlassCard>
+
+      <GlassCard className="space-y-4">
+        <div>
+          <h2 className={cn('font-semibold', glassDialogTitleText)}>Quiz settings</h2>
+          <p className={cn('text-xs mt-1', glassDialogMutedText)}>
+            Bulk actions update every question once. You can still change any question afterward.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Time for all</Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={TIME_MIN}
+                max={TIME_MAX}
+                value={bulkTime}
+                onChange={(e) => setBulkTime(e.target.value)}
+              />
+              <Button
+                type="button"
+                className="shrink-0 shadow-md shadow-primary/20"
+                onClick={applyTimeToAll}
+              >
+                Apply
+              </Button>
+            </div>
+            <p className={cn('text-xs', glassDialogMutedText)}>{TIME_MIN}–{TIME_MAX} seconds</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Points for all</Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={POINTS_MIN}
+                max={POINTS_MAX}
+                step={100}
+                value={bulkPoints}
+                onChange={(e) => setBulkPoints(e.target.value)}
+              />
+              <Button
+                type="button"
+                className="shrink-0 shadow-md shadow-primary/20"
+                onClick={applyPointsToAll}
+              >
+                Apply
+              </Button>
+            </div>
+            <p className={cn('text-xs', glassDialogMutedText)}>{POINTS_MIN}–{POINTS_MAX} points</p>
+          </div>
+        </div>
       </GlassCard>
 
       <div className="space-y-4">
         {questions.map((question, qi) => (
-          <GlassCard key={qi} className="space-y-4">
+          <GlassCard key={question.clientKey || qi} className="space-y-4">
             <div className="flex items-start justify-between gap-2">
-              <Label className="text-base">Question {qi + 1}</Label>
-              {questions.length > 1 && (
+              <div className="space-y-2 min-w-0">
+                <Label className="text-base">Question {qi + 1}</Label>
+                <div className="max-w-xs">
+                  <Select
+                    value={question.question_type || 'multiple_choice'}
+                    onValueChange={(v) => setQuestionType(qi, v)}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="multiple_choice">Multiple choice</SelectItem>
+                      <SelectItem value="true_false">True / False</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
+                  type="button"
                   variant="ghost"
-                  size="icon"
-                  className="text-destructive"
-                  onClick={() => setQuestions((prev) => prev.filter((_, i) => i !== qi))}
+                  size="sm"
+                  onClick={() => duplicateAt(qi)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Copy className="h-4 w-4 mr-1" />
+                  Duplicate
                 </Button>
-              )}
+                {questions.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    onClick={() => setQuestions((prev) => prev.filter((_, i) => i !== qi))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <Textarea
               value={question.prompt}
@@ -205,13 +447,59 @@ export default function QuizBuilder() {
               placeholder="Ask something…"
               rows={2}
             />
+            <div className="flex flex-col gap-3">
+              <Label className="text-xs">Optional image</Label>
+              {question.image_url ? (
+                <div className="space-y-2">
+                  <div className="overflow-hidden rounded-xl border border-border bg-muted/40">
+                    <img
+                      src={toPublicFileUrl(question.image_url)}
+                      alt=""
+                      className="mx-auto max-h-48 w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingQi === qi}
+                      onClick={() => pickImage(qi)}
+                    >
+                      Replace image
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, image_url: null } : q)))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  disabled={uploadingQi === qi}
+                  onClick={() => pickImage(qi)}
+                >
+                  <ImagePlus className="h-4 w-4 mr-2" />
+                  {uploadingQi === qi ? 'Uploading…' : 'Add image'}
+                </Button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Time (seconds)</Label>
                 <Input
                   type="number"
-                  min={5}
-                  max={120}
+                  min={TIME_MIN}
+                  max={TIME_MAX}
                   value={question.time_limit_seconds}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -223,8 +511,8 @@ export default function QuizBuilder() {
                 <Label className="text-xs">Base points</Label>
                 <Input
                   type="number"
-                  min={100}
-                  max={5000}
+                  min={POINTS_MIN}
+                  max={POINTS_MAX}
                   step={100}
                   value={question.points_base}
                   onChange={(e) => {
@@ -235,7 +523,9 @@ export default function QuizBuilder() {
               </div>
             </div>
             <div className="grid gap-2">
-              {question.options.map((option, oi) => (
+              {question.options.map((option, oi) => {
+                const tf = isTrueFalseQuestion(question);
+                return (
                 <div
                   key={oi}
                   className={cn('flex items-center gap-2 rounded-xl border p-2', ANSWER_COLORS[oi % 4].soft)}
@@ -263,7 +553,9 @@ export default function QuizBuilder() {
                     value={option.label}
                     placeholder={`Option ${String.fromCharCode(65 + oi)}`}
                     className="bg-background/60"
+                    readOnly={tf}
                     onChange={(e) => {
+                      if (tf) return;
                       const v = e.target.value;
                       setQuestions((prev) => prev.map((q, i) => {
                         if (i !== qi) return q;
@@ -275,7 +567,8 @@ export default function QuizBuilder() {
                     }}
                   />
                 </div>
-              ))}
+                );
+              })}
             </div>
           </GlassCard>
         ))}

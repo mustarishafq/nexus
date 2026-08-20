@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\ApplicationEventWebhookController;
 use App\Http\Controllers\Api\ApplicationHealthController;
 use App\Http\Controllers\Api\ApplicationMcpCatalogController;
 use App\Http\Controllers\Api\ApplicationReleaseNoteController;
-use App\Http\Controllers\Api\PlatformReleaseNoteController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialAdminController;
 use App\Http\Controllers\Api\ApplicationSsoCredentialController;
 use App\Http\Controllers\Api\AppSettingController;
@@ -20,12 +19,12 @@ use App\Http\Controllers\Api\AttendanceLocationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastAuthController;
 use App\Http\Controllers\Api\BroadcastController;
-use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\CalendarEventCheckInController;
+use App\Http\Controllers\Api\CalendarEventController;
+use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentAttendanceController;
-use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\FileUploadController;
@@ -42,6 +41,7 @@ use App\Http\Controllers\Api\Nexus\V1\AttendancePolicyController as NexusV1Atten
 use App\Http\Controllers\Api\Nexus\V1\EmployeeController as NexusV1EmployeeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
+use App\Http\Controllers\Api\PlatformReleaseNoteController;
 use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\PostCommentReactionController;
 use App\Http\Controllers\Api\PostController;
@@ -57,6 +57,8 @@ use App\Http\Controllers\Api\SystemEventController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSystemAccessController;
 use App\Http\Controllers\Api\UserTodoController;
+use App\Http\Controllers\PostShareOgImageController;
+use App\Http\Controllers\PostSharePreviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -87,9 +89,9 @@ Route::post('/oauth/token', [OAuthController::class, 'token']);
 
 Route::get('/app-settings', [AppSettingController::class, 'publicShow']);
 Route::get('/pwa/manifest', [PwaController::class, 'manifest']);
-Route::get('/share/posts/{post}', \App\Http\Controllers\PostSharePreviewController::class)
+Route::get('/share/posts/{post}', PostSharePreviewController::class)
     ->whereNumber('post');
-Route::get('/share/posts/{post}/og-image', \App\Http\Controllers\PostShareOgImageController::class)
+Route::get('/share/posts/{post}/og-image', PostShareOgImageController::class)
     ->whereNumber('post');
 
 Route::get('/me', [MeController::class, 'show']);
@@ -290,8 +292,11 @@ Route::post('quiz-sessions/{quizSession}/reveal', [QuizSessionController::class,
 Route::post('quiz-sessions/{quizSession}/leaderboard', [QuizSessionController::class, 'leaderboard']);
 Route::post('quiz-sessions/{quizSession}/next', [QuizSessionController::class, 'next']);
 Route::post('quiz-sessions/{quizSession}/end', [QuizSessionController::class, 'end']);
+Route::post('quiz-sessions/{quizSession}/leave', [QuizSessionController::class, 'leave']);
+Route::post('quiz-sessions/{quizSession}/heartbeat', [QuizSessionController::class, 'heartbeat']);
 Route::post('quiz-sessions/{quizSession}/answer', [QuizSessionController::class, 'answer']);
 Route::post('quiz-sessions/{quizSession}/power-ups', [QuizSessionController::class, 'powerUp']);
+Route::get('quiz-sessions/{quizSession}/analytics', [QuizSessionController::class, 'analytics']);
 Route::post('quiz-sessions/{quizSession}/music', [QuizSessionController::class, 'music']);
 Route::get('quiz-join/{token}', [QuizSessionController::class, 'showByToken']);
 Route::get('event-check-in/{token}', [CalendarEventCheckInController::class, 'show']);

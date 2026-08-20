@@ -573,6 +573,14 @@ export const db = {
 			return request(`/quiz-sessions/${id}/end`, { method: 'POST' });
 		},
 
+		async leave(id) {
+			return request(`/quiz-sessions/${id}/leave`, { method: 'POST' });
+		},
+
+		async heartbeat(id) {
+			return request(`/quiz-sessions/${id}/heartbeat`, { method: 'POST' });
+		},
+
 		async answer(id, optionId) {
 			return request(`/quiz-sessions/${id}/answer`, {
 				method: 'POST',
@@ -595,6 +603,10 @@ export const db = {
 				method: 'POST',
 				body,
 			});
+		},
+
+		async analytics(id) {
+			return request(`/quiz-sessions/${id}/analytics`);
 		},
 
 		async showByToken(token) {

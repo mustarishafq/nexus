@@ -30,15 +30,25 @@ class QuizSession extends Model
         'status',
         'current_question_id',
         'question_started_at',
+        'question_ends_at',
+        'phase_ends_at',
         'music_enabled',
         'bgm_theme',
         'sfx_pack',
+        'host_last_seen_at',
+        'paused_at',
+        'pause_remaining_ms',
     ];
 
     protected function casts(): array
     {
         return [
             'question_started_at' => 'datetime',
+            'question_ends_at' => 'datetime',
+            'phase_ends_at' => 'datetime',
+            'host_last_seen_at' => 'datetime',
+            'paused_at' => 'datetime',
+            'pause_remaining_ms' => 'integer',
             'music_enabled' => 'boolean',
         ];
     }
@@ -76,6 +86,11 @@ class QuizSession extends Model
     public function isOpenForJoin(): bool
     {
         return $this->mode === self::MODE_LIVE
-            && in_array($this->status, [self::STATUS_LOBBY, self::STATUS_QUESTION, self::STATUS_REVEAL, self::STATUS_LEADERBOARD], true);
+            && $this->status === self::STATUS_LOBBY;
+    }
+
+    public function isPaused(): bool
+    {
+        return $this->paused_at !== null;
     }
 }

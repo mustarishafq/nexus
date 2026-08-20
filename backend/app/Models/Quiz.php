@@ -38,4 +38,25 @@ class Quiz extends Model
     {
         return $this->hasMany(QuizSession::class);
     }
+
+    public function hasActiveLiveSession(): bool
+    {
+        $cutoff = now()->subMinutes(max(1, (int) config('quiz.live_session_lock_minutes', 20)));
+
+        return $this->sessions()
+            ->where('mode', QuizSession::MODE_LIVE)
+            ->whereIn('status', [
+                QuizSession::STATUS_QUESTION,
+                QuizSession::STATUS_REVEAL,
+                QuizSession::STATUS_LEADERBOARD,
+            ])
+            ->where(function ($query) use ($cutoff) {
+                $query->where('host_last_seen_at', '>=', $cutoff)
+                    ->orWhere(function ($legacy) use ($cutoff) {
+                        $legacy->whereNull('host_last_seen_at')
+                            ->where('updated_at', '>=', $cutoff);
+                    });
+            })
+            ->exists();
+    }
 }

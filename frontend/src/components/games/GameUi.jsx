@@ -4,6 +4,9 @@ import { motion } from 'framer-motion';
 import { Crown, Medal, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { glassDialogPanelStyles } from '@/components/layout/glassStyles';
+import { toPublicFileUrl } from '@/lib/media';
+import QuizAvatar from '@/components/games/QuizAvatar';
+import { isSelectedQuizOption, QUIZ_GOLD_OUTLINE_CLASS } from '@/lib/quizQuestion';
 
 /** Kahoot-classic answer palette + geometry (soft = builder, works light+dark) */
 export const ANSWER_COLORS = [
@@ -223,6 +226,8 @@ export function AnswerButton({
 	disabled,
 	onClick,
 	delay = 0,
+	large = false,
+	className,
 }) {
 	const colors = ANSWER_COLORS[index % ANSWER_COLORS.length];
 	const showResult = revealed && isCorrect != null;
@@ -240,13 +245,16 @@ export function AnswerButton({
 			className={cn(
 				'relative flex items-center gap-3 rounded-xl px-4 py-5 sm:py-6 text-left font-bold text-base sm:text-xl text-white',
 				'disabled:cursor-default min-h-[72px] transition-transform',
+				large && 'min-h-[96px] sm:min-h-[112px] justify-center text-2xl sm:text-3xl',
 				showResult && isCorrect && 'bg-[#26890C] shadow-[0_6px_0_#1a5f08] ring-4 ring-white/50',
-				showResult && !isCorrect && selected && 'bg-slate-500 opacity-50 grayscale',
+				showResult && !isCorrect && selected && 'bg-slate-500 opacity-80 grayscale-[0.35]',
 				showResult && !isCorrect && !selected && 'opacity-40 grayscale',
 				!showResult && colors.bg,
 				!showResult && colors.shadow,
 				!showResult && !disabled && colors.active,
 				selected && !revealed && 'ring-4 ring-white scale-[1.02]',
+				selected && revealed && 'ring-4 ring-[#D89E00] ring-offset-2 ring-offset-black/50',
+				className,
 			)}
 		>
 			<span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-black/20">
@@ -266,6 +274,50 @@ export function AnswerButton({
 				</motion.span>
 			)}
 		</motion.button>
+	);
+}
+
+export function QuestionCountdown({ label }) {
+	if (!label) return null;
+
+	return (
+		<div
+			className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 px-4"
+			style={{
+				paddingTop: 'env(safe-area-inset-top)',
+				paddingBottom: 'env(safe-area-inset-bottom)',
+			}}
+		>
+			<motion.p
+				key={label}
+				initial={{ scale: 0.35, opacity: 0 }}
+				animate={{ scale: 1, opacity: 1 }}
+				transition={{ type: 'spring', stiffness: 380, damping: 16 }}
+				className={cn(
+					'font-black text-white text-center drop-shadow-[0_10px_28px_rgba(0,0,0,0.55)]',
+					label === 'GO!' ? 'text-6xl sm:text-8xl tracking-[0.12em]' : 'text-8xl sm:text-[9rem] leading-none',
+				)}
+			>
+				{label}
+			</motion.p>
+		</div>
+	);
+}
+
+export function ExpEarnedBadge({ amount, status, className }) {
+	const n = Number(amount);
+	if (!Number.isFinite(n) || n <= 0) return null;
+	const pending = status === 'pending' || status == null;
+
+	return (
+		<div className={cn('text-center', className)}>
+			<p className="font-black text-[#D89E00] drop-shadow">+{n} EXP</p>
+			{pending ? (
+				<p className="mt-1 text-xs font-bold uppercase tracking-wider text-white/70">
+					Pending · claim from Missions
+				</p>
+			) : null}
+		</div>
 	);
 }
 
@@ -364,7 +416,7 @@ export function PulsingPin({ pin }) {
 	);
 }
 
-export function LobbyPlayerChip({ name, index = 0 }) {
+export function LobbyPlayerChip({ name, index = 0, profilePicture, profilePictureCrop = null, accessoryId }) {
 	const color = CHIP_COLORS[index % CHIP_COLORS.length];
 
 	return (
@@ -376,15 +428,16 @@ export function LobbyPlayerChip({ name, index = 0 }) {
 			transition={{ type: 'spring', stiffness: 480, damping: 16 }}
 			whileHover={{ y: -6, scale: 1.08, rotate: 2 }}
 			className={cn(
-				'rounded-2xl px-3 py-3 text-center text-sm sm:text-base font-black text-white shadow-lg',
-				'shadow-black/20',
+				'rounded-2xl px-3 pt-4 pb-3 text-center text-sm sm:text-base font-black text-white shadow-lg',
+				'shadow-black/20 flex flex-col items-center gap-2',
 				color,
 			)}
 		>
+			<QuizAvatar profileImage={profilePicture} profileImageCrop={profilePictureCrop} accessoryId={accessoryId} name={name} size="md" />
 			<motion.span
 				animate={{ y: [0, -3, 0] }}
 				transition={{ repeat: Infinity, duration: 1.8 + (index % 4) * 0.25, ease: 'easeInOut' }}
-				className="inline-block drop-shadow"
+				className="inline-block drop-shadow truncate max-w-full px-1"
 			>
 				{name}
 			</motion.span>
@@ -451,12 +504,37 @@ export function QuestionTitle({ children }) {
 	);
 }
 
+export function QuestionMedia({ src, compact = false }) {
+	const url = toPublicFileUrl(src);
+	if (!url) return null;
+
+	return (
+		<div
+			className={cn(
+				'overflow-hidden rounded-2xl border border-white/20 bg-black/25',
+				compact ? 'max-h-44' : 'max-h-72',
+			)}
+		>
+			<img
+				src={url}
+				alt=""
+				className={cn('mx-auto w-full object-contain', compact ? 'max-h-44' : 'max-h-72')}
+			/>
+		</div>
+	);
+}
+
 /**
  * Kahoot-style podium: 2nd · 1st · 3rd bars, then remaining ranks.
  * players: [{ user_id, display_name, score, streak? }]
  */
 export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlightUserId = null }) {
-	const sorted = [...players];
+	const sorted = [...players].sort((a, b) => {
+		const ra = Number(a.rank);
+		const rb = Number(b.rank);
+		if (Number.isFinite(ra) && Number.isFinite(rb) && ra !== rb) return ra - rb;
+		return (Number(b.score) || 0) - (Number(a.score) || 0);
+	});
 	const top = sorted.slice(0, 3);
 	const rest = sorted.slice(3);
 	const first = top[0];
@@ -486,7 +564,7 @@ export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlig
 					if (!player) {
 						return <div key={place} className="w-24 sm:w-36" />;
 					}
-					const isMe = highlightUserId && player.user_id === highlightUserId;
+					const isMe = highlightUserId != null && Number(player.user_id) === Number(highlightUserId);
 					return (
 						<div key={player.user_id || place} className="flex flex-col items-center w-24 sm:w-36">
 							<motion.div
@@ -496,6 +574,15 @@ export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlig
 								className="mb-2 text-center px-1"
 							>
 								<div className="text-2xl sm:text-3xl mb-1">{medal}</div>
+								<div className="flex justify-center mb-1">
+									<QuizAvatar
+										profileImage={player.profile_picture}
+										profileImageCrop={player.profile_picture_crop}
+										accessoryId={player.accessory_id}
+										name={player.display_name}
+										size="md"
+									/>
+								</div>
 								<p className={cn(
 									'font-black text-sm sm:text-base text-white truncate max-w-full drop-shadow',
 									isMe && 'text-amber-200',
@@ -532,8 +619,8 @@ export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlig
 			{rest.length > 0 && (
 				<div className="rounded-2xl bg-black/25 backdrop-blur-md border border-white/15 overflow-hidden divide-y divide-white/10">
 					{rest.map((p, i) => {
-						const rank = i + 4;
-						const isMe = highlightUserId && p.user_id === highlightUserId;
+						const rank = Number(p.rank) || 0;
+						const isMe = highlightUserId != null && Number(p.user_id) === Number(highlightUserId);
 						return (
 							<motion.div
 								key={p.user_id}
@@ -549,6 +636,13 @@ export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlig
 									<span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm tabular-nums shrink-0">
 										{rank}
 									</span>
+									<QuizAvatar
+										profileImage={p.profile_picture}
+										profileImageCrop={p.profile_picture_crop}
+										accessoryId={p.accessory_id}
+										name={p.display_name}
+										size="sm"
+									/>
 									<span className="truncate">{p.display_name}</span>
 									{p.streak > 1 && <span className="text-xs text-[#FF8B2D]">🔥{p.streak}</span>}
 								</span>
@@ -568,6 +662,134 @@ export function PodiumLeaderboard({ players = [], title = 'Leaderboard', highlig
 					<Medal className="h-5 w-5 text-white/40" />
 				</div>
 			)}
+		</div>
+	);
+}
+
+export function AnswerDistributionChart({ question, optionStats = [], unansweredCount = 0, selectedOptionId = null }) {
+	const options = question?.options || [];
+	const byId = new Map((optionStats || []).map((s) => [Number(s.option_id), s]));
+	const bars = options.map((opt, index) => {
+		const stat = byId.get(Number(opt.id));
+		return {
+			id: opt.id,
+			label: opt.label,
+			count: Number(stat?.count) || 0,
+			isCorrect: !!(stat?.is_correct ?? opt.is_correct),
+			selected: isSelectedQuizOption(opt.id, selectedOptionId),
+			color: ANSWER_COLORS[index % ANSWER_COLORS.length],
+		};
+	});
+	const max = Math.max(1, ...bars.map((b) => b.count), Number(unansweredCount) || 0);
+
+	return (
+		<div className="space-y-4">
+			<div className="flex items-end justify-center gap-2 sm:gap-4 min-h-[180px] sm:min-h-[240px] px-2 overflow-visible">
+				{bars.map((bar, i) => {
+					const heightPct = Math.max(8, Math.round((bar.count / max) * 100));
+					return (
+						<div key={bar.id} className="flex-1 max-w-[140px] flex flex-col items-center gap-2 overflow-visible">
+							<motion.p
+								initial={{ opacity: 0, y: 8 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ delay: 0.15 + i * 0.06 }}
+								className="text-2xl sm:text-3xl font-black tabular-nums text-white drop-shadow"
+							>
+								{bar.count}
+							</motion.p>
+							<div className="w-full h-40 sm:h-52 flex items-end overflow-visible">
+								<motion.div
+									initial={{ height: 0 }}
+									animate={{ height: `${heightPct}%` }}
+									transition={{ type: 'spring', stiffness: 160, damping: 18, delay: i * 0.08 }}
+									className={cn(
+										'w-full rounded-t-2xl border border-white/30 shadow-lg',
+										bar.color.bg,
+										bar.isCorrect && 'ring-4 ring-white',
+										bar.selected && QUIZ_GOLD_OUTLINE_CLASS,
+									)}
+								/>
+							</div>
+							<p className={cn(
+								'text-center text-xs sm:text-sm font-bold leading-snug line-clamp-2 min-h-[2.5rem]',
+								bar.isCorrect ? 'text-white' : 'text-white/80',
+							)}>
+								{bar.color.label}. {bar.label}
+							</p>
+							{bar.isCorrect && (
+								<span className="rounded-full bg-[#26890C] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
+									Correct
+								</span>
+							)}
+						</div>
+					);
+				})}
+			</div>
+			{(Number(unansweredCount) || 0) > 0 && (
+				<p className="text-center text-sm font-bold text-white/70">
+					{unansweredCount} missed / did not answer
+				</p>
+			)}
+		</div>
+	);
+}
+
+export function HostTopRanking({ players = [], limit = 6 }) {
+	const sorted = [...players]
+		.sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99))
+		.slice(0, limit);
+
+	return (
+		<div className="space-y-4">
+			<h2 className="text-center text-3xl sm:text-4xl font-black text-white drop-shadow-lg flex items-center justify-center gap-2">
+				<Crown className="h-8 w-8 text-amber-300" />
+				Top {limit}
+			</h2>
+			<div className="rounded-3xl bg-black/25 border border-white/15 overflow-hidden divide-y divide-white/10">
+				{sorted.map((p, i) => {
+					const delta = Number(p.rank_delta) || 0;
+					return (
+						<motion.div
+							key={p.user_id}
+							initial={{ opacity: 0, x: -20 }}
+							animate={{ opacity: 1, x: 0 }}
+							transition={{ delay: i * 0.07 }}
+							className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 sm:py-5"
+						>
+							<div className="flex items-center gap-4 min-w-0">
+								<span className={cn(
+									'w-12 h-12 rounded-2xl flex items-center justify-center text-2xl font-black tabular-nums shrink-0',
+									i === 0 && 'bg-amber-300 text-amber-950',
+									i === 1 && 'bg-slate-300 text-slate-800',
+									i === 2 && 'bg-orange-400 text-orange-950',
+									i > 2 && 'bg-white/20 text-white',
+								)}>
+									{p.rank}
+								</span>
+								<QuizAvatar
+									profileImage={p.profile_picture}
+									profileImageCrop={p.profile_picture_crop}
+									accessoryId={p.accessory_id}
+									name={p.display_name}
+									size="md"
+								/>
+								<div className="min-w-0">
+									<p className="text-xl sm:text-2xl font-black text-white truncate">{p.display_name}</p>
+									{delta !== 0 && (
+										<p className={cn('text-sm font-bold', delta > 0 ? 'text-emerald-300' : 'text-rose-300')}>
+											{delta > 0 ? `↑ ${delta}` : `↓ ${Math.abs(delta)}`}
+										</p>
+									)}
+								</div>
+							</div>
+							<p className="text-xl sm:text-2xl font-black tabular-nums text-white shrink-0">{p.score}</p>
+						</motion.div>
+					);
+				})}
+				{sorted.length === 0 && (
+					<p className="text-center text-white/70 font-semibold py-8">No players yet</p>
+				)}
+			</div>
 		</div>
 	);
 }

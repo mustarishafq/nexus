@@ -16,12 +16,13 @@ import {
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import {
+  extractPublicStoragePath,
   getCenteredCoverCrop,
   getCoverCropBackgroundStyle,
   getResizedImageBlob,
   normalizeMediaCropArea,
   PROFILE_PHOTO_MAX_SIZE,
-  toAbsoluteUrl,
+  toPublicFileUrl,
 } from '@/lib/media';
 import RoleAvatarRing from '@/components/users/RoleAvatarRing';
 import AvatarStarBadge from '@/components/gamification/AvatarStarBadge';
@@ -68,7 +69,7 @@ export default function ProfilePictureUploader({
   const [removing, setRemoving] = useState(false);
 
   const initial = displayName?.[0]?.toUpperCase() || 'U';
-  const avatarUrl = toAbsoluteUrl(profilePicture);
+  const avatarUrl = toPublicFileUrl(profilePicture);
 
   const onCropAreaChange = useCallback((croppedArea) => {
     setCroppedAreaPercent(croppedArea);
@@ -139,7 +140,7 @@ export default function ProfilePictureUploader({
         folder: 'profile-pictures',
       });
       await db.auth.updateMe({
-        profile_picture: file_url,
+        profile_picture: extractPublicStoragePath(file_url) || file_url,
         profile_picture_crop: cropArea,
       });
       await onUpdated?.();

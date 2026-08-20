@@ -179,6 +179,7 @@ class GamificationService
         string $sourceType,
         int|string $sourceId,
         array $meta = [],
+        ?int $amountOverride = null,
     ): ?ExpReward {
         $definition = GamificationCatalog::action($actionKey);
         if ($definition === null) {
@@ -216,7 +217,7 @@ class GamificationService
             }
         }
 
-        $amount = (int) $definition['base'];
+        $amount = $amountOverride !== null ? max(0, $amountOverride) : (int) $definition['base'];
         $streakCount = null;
         $metadata = $meta;
 

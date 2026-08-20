@@ -1,9 +1,10 @@
 // @ts-nocheck
 import React from 'react';
-import { Headphones, Volume2 } from 'lucide-react';
+import { Headphones, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
-	BGM_THEMES, SFX_PACKS, previewBgmTheme, previewSfxPack, unlockAudio,
+	BGM_THEMES, previewBgmTheme, previewSfx, unlockAudio, isSfxMuted, setSfxMuted,
 } from '@/lib/gameAudio';
 
 /**
@@ -13,14 +14,16 @@ import {
  */
 export default function GameAudioPicker({
 	bgmTheme = 'party',
-	sfxPack = 'classic',
+	sfxOn,
 	onBgmChange,
-	onSfxChange,
+	onSfxEnabledChange,
 	compact = false,
 	surface = 'theme',
+	showSfx = true,
 	className,
 }) {
 	const onStage = surface === 'stage';
+	const sfxEnabled = typeof sfxOn === 'boolean' ? sfxOn : !isSfxMuted();
 
 	const sectionLabel = cn(
 		'flex items-center gap-2 mb-2 text-sm font-semibold',
@@ -54,20 +57,23 @@ export default function GameAudioPicker({
 		? 'text-[11px] mt-0.5 text-slate-500 dark:text-slate-400'
 		: 'text-[11px] mt-0.5 text-muted-foreground';
 
-	const linkCls = onStage
-		? 'text-[10px] font-semibold text-violet-700 hover:underline dark:text-violet-300'
-		: 'text-[10px] font-medium text-primary hover:underline';
-
 	const iconCls = onStage
 		? 'h-4 w-4 text-violet-600 dark:text-violet-300'
 		: 'h-4 w-4 text-primary';
+
+	const setSfx = async (enabled) => {
+		await unlockAudio();
+		setSfxMuted(!enabled);
+		onSfxEnabledChange?.(enabled);
+		if (enabled) previewSfx('correct');
+	};
 
 	return (
 		<div className={cn('space-y-4', className)}>
 			<div>
 				<div className={sectionLabel}>
 					<Headphones className={iconCls} />
-					Background music
+					Music
 				</div>
 				<div className={cn('grid gap-2', compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4')}>
 					{BGM_THEMES.map((theme) => {
@@ -88,69 +94,48 @@ export default function GameAudioPicker({
 								{!compact && (
 									<div className={hintCls}>{theme.hint}</div>
 								)}
-								{!compact && (
-									<div className="mt-1.5 flex gap-2">
-										<button
-											type="button"
-											className={linkCls}
-											onClick={async (e) => {
-												e.stopPropagation();
-												await unlockAudio();
-												onBgmChange?.(theme.id);
-												previewBgmTheme(theme.id, 'lobby');
-											}}
-										>
-											Lobby
-										</button>
-										<button
-											type="button"
-											className={linkCls}
-											onClick={async (e) => {
-												e.stopPropagation();
-												await unlockAudio();
-												onBgmChange?.(theme.id);
-												previewBgmTheme(theme.id, 'game');
-											}}
-										>
-											In-game
-										</button>
-									</div>
-								)}
 							</button>
 						);
 					})}
 				</div>
 			</div>
 
+			{showSfx && (
 			<div>
 				<div className={sectionLabel}>
 					<Volume2 className={iconCls} />
 					Sound effects
 				</div>
-				<div className={cn('grid gap-2', compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4')}>
-					{SFX_PACKS.map((pack) => {
-						const selected = sfxPack === pack.id;
-						return (
-							<button
-								key={pack.id}
-								type="button"
-								onClick={async () => {
-									await unlockAudio();
-									onSfxChange?.(pack.id);
-									previewSfxPack(pack.id);
-								}}
-								className={cn(chipBase, selected && chipSelected)}
-							>
-								<div className="text-base leading-none mb-1">{pack.emoji}</div>
-								<div className={titleCls}>{pack.label}</div>
-								{!compact && (
-									<div className={hintCls}>{pack.hint}</div>
-								)}
-							</button>
-						);
-					})}
+				<div className="flex flex-wrap gap-2">
+					<Button
+						type="button"
+						size="sm"
+						className={cn(
+							'shadow-md shadow-primary/20',
+							!sfxEnabled && 'opacity-60',
+						)}
+						variant={sfxEnabled ? 'default' : 'outline'}
+						onClick={() => setSfx(true)}
+					>
+						<Volume2 className="h-4 w-4 mr-1" />
+						On
+					</Button>
+					<Button
+						type="button"
+						size="sm"
+						variant={!sfxEnabled ? 'default' : 'outline'}
+						className={cn(!sfxEnabled && 'shadow-md shadow-primary/20')}
+						onClick={() => setSfx(false)}
+					>
+						<VolumeX className="h-4 w-4 mr-1" />
+						Off
+					</Button>
 				</div>
+				<p className={cn('text-[11px] mt-2', hintCls)}>
+					SFX on/off is only for this device. It is not saved on the quiz.
+				</p>
 			</div>
+			)}
 		</div>
 	);
 }

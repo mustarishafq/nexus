@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Quiz;
 use App\Models\QuizSession;
+use App\Models\QuizSessionPowerUp;
 use App\Models\User;
+use App\Services\QuizAnalyticsService;
 use App\Services\QuizGameService;
 use App\Support\ApiTokenAuth;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,6 +19,7 @@ class QuizSessionController extends Controller
 {
     public function __construct(
         protected QuizGameService $game,
+        protected QuizAnalyticsService $analytics,
     ) {}
 
     public function store(Request $request, Quiz $quiz): JsonResponse
@@ -73,7 +77,25 @@ class QuizSessionController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        $quizSession = $this->game->hydrateLiveSession($quizSession);
+
+        if ((int) $quizSession->host_user_id === (int) $user->id) {
+            $quizSession = $this->game->touchHostPresence($quizSession, $user);
+        }
+
         return response()->json($this->game->serializeSession($quizSession, $user));
+    }
+
+    public function heartbeat(Request $request, QuizSession $quizSession): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $session = $this->game->touchHostPresence($quizSession, $user);
+
+        return response()->json($this->game->serializeSession($session, $user));
     }
 
     public function start(Request $request, QuizSession $quizSession): JsonResponse
@@ -136,6 +158,18 @@ class QuizSessionController extends Controller
         return response()->json($this->game->serializeSession($session, $user));
     }
 
+    public function leave(Request $request, QuizSession $quizSession): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $session = $this->game->leaveLiveSession($quizSession, $user);
+
+        return response()->json($this->game->serializeSession($session, $user));
+    }
+
     public function answer(Request $request, QuizSession $quizSession): JsonResponse
     {
         $user = $this->requireApprovedUser($request);
@@ -149,20 +183,23 @@ class QuizSessionController extends Controller
 
         if ($quizSession->mode === QuizSession::MODE_ASYNC) {
             $result = $this->game->submitAsyncAnswer($quizSession, $user, (int) $validated['option_id']);
+            $sessionPayload = $this->game->serializeSession($result['session'], $user);
 
             return response()->json([
-                'answer' => $result['answer'],
-                'player' => $result['player'],
-                'session' => $this->game->serializeSession($result['session'], $user),
+                'answer' => $this->game->presentAnswer($result['answer'], $result['session'], $user),
+                'player' => $this->playerFromPayload($sessionPayload, $user),
+                'session' => $sessionPayload,
             ]);
         }
 
         $result = $this->game->submitAnswer($quizSession, $user, (int) $validated['option_id']);
+        $fresh = $quizSession->fresh();
+        $sessionPayload = $this->game->serializeSession($fresh, $user);
 
         return response()->json([
-            'answer' => $result['answer'],
-            'player' => $result['player'],
-            'session' => $this->game->serializeSession($quizSession->fresh(), $user),
+            'answer' => $this->game->presentAnswer($result['answer'], $fresh, $user),
+            'player' => $this->playerFromPayload($sessionPayload, $user),
+            'session' => $sessionPayload,
         ]);
     }
 
@@ -174,7 +211,7 @@ class QuizSessionController extends Controller
         }
 
         $validated = $request->validate([
-            'type' => ['required', Rule::in(\App\Models\QuizSessionPowerUp::TYPES)],
+            'type' => ['required', Rule::in(QuizSessionPowerUp::TYPES)],
         ]);
 
         $result = $this->game->usePowerUp($quizSession, $user, $validated['type']);
@@ -184,6 +221,22 @@ class QuizSessionController extends Controller
             'erased_option_ids' => $result['erased_option_ids'],
             'session' => $this->game->serializeSession($quizSession->fresh(), $user),
         ]);
+    }
+
+    public function analytics(Request $request, QuizSession $quizSession): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        try {
+            $payload = $this->analytics->forSession($quizSession, $user);
+        } catch (AuthorizationException $e) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return response()->json($payload);
     }
 
     public function music(Request $request, QuizSession $quizSession): JsonResponse
@@ -196,8 +249,8 @@ class QuizSessionController extends Controller
         $validated = $request->validate([
             'enabled' => ['sometimes', 'boolean'],
             'music_enabled' => ['sometimes', 'boolean'],
-            'bgm_theme' => ['sometimes', Rule::in(\App\Models\Quiz::BGM_THEMES)],
-            'sfx_pack' => ['sometimes', Rule::in(\App\Models\Quiz::SFX_PACKS)],
+            'bgm_theme' => ['sometimes', Rule::in(Quiz::BGM_THEMES)],
+            'sfx_pack' => ['sometimes', Rule::in(Quiz::SFX_PACKS)],
         ]);
 
         $settings = [
@@ -251,6 +304,21 @@ class QuizSessionController extends Controller
         }
 
         return $session->players()->where('user_id', $user->id)->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>  $sessionPayload
+     * @return array<string, mixed>|null
+     */
+    protected function playerFromPayload(array $sessionPayload, User $user): ?array
+    {
+        foreach ($sessionPayload['players'] ?? [] as $player) {
+            if ((int) ($player['user_id'] ?? 0) === (int) $user->id) {
+                return $player;
+            }
+        }
+
+        return null;
     }
 
     protected function requireApprovedUser(Request $request): User|JsonResponse

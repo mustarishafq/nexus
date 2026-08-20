@@ -223,6 +223,17 @@ class GamificationCatalog
                 'daily_cap' => 10,
                 'streak_key' => null,
             ],
+            // Rank-based quiz completion EXP. Amount is awarded by QuizGameService,
+            // not this catalog base. Hidden from the missions board.
+            'quiz_complete' => [
+                'base' => 20,
+                'title' => 'Quiz complete',
+                'description' => 'Finish a quiz game.',
+                'href' => '/games',
+                'daily_cap' => null,
+                'streak_key' => null,
+                'listed' => false,
+            ],
         ];
     }
 
@@ -278,6 +289,10 @@ class GamificationCatalog
         $items = [];
 
         foreach (self::actions() as $actionKey => $definition) {
+            if (($definition['listed'] ?? true) === false) {
+                continue;
+            }
+
             $items[] = [
                 'action_key' => $actionKey,
                 'title' => $definition['title'],

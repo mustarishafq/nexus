@@ -50,7 +50,7 @@ import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
 import { useAuth } from '@/lib/AuthContext';
-import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS, ROLES } from '@/lib/roles';
+import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS } from '@/lib/roles';
 import RoleBadge from '@/components/users/RoleBadge';
 
 const MCP_ACCESS_OPTIONS = [

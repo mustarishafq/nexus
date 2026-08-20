@@ -81,29 +81,25 @@ export default function PostPoll({ postId, poll, disabled = false, isAuthor = fa
     },
   }));
 
-  if (!poll?.id || !Array.isArray(poll.options) || poll.options.length === 0) {
-    return null;
-  }
-
-  const isQna = Boolean(poll.is_qna);
-  const allowMultiple = Boolean(poll.allow_multiple);
-  const hasVoted = Boolean(poll.has_voted);
+  const isQna = Boolean(poll?.is_qna);
+  const allowMultiple = Boolean(poll?.allow_multiple);
+  const hasVoted = Boolean(poll?.has_voted);
   const voteLocked = isQna && hasVoted;
-  const showCorrect = poll.correct_option_id != null;
-  const myOptionId = poll.my_option_id != null ? Number(poll.my_option_id) : null;
-  const correctOptionId = poll.correct_option_id != null ? Number(poll.correct_option_id) : null;
+  const showCorrect = poll?.correct_option_id != null;
+  const myOptionId = poll?.my_option_id != null ? Number(poll.my_option_id) : null;
+  const correctOptionId = poll?.correct_option_id != null ? Number(poll.correct_option_id) : null;
   // Authors can monitor results without voting; others must vote first.
   const showResults = hasVoted || Boolean(isAuthor);
   const canPreviewGrading = isQna && Boolean(isAuthor) && !hasVoted && showCorrect;
   const showGrading = isQna && showCorrect && (hasVoted || (Boolean(isAuthor) && previewGrading));
-  const totalVotes = Number(poll.total_votes) || 0;
+  const totalVotes = Number(poll?.total_votes) || 0;
   const busy = voteMutation.isPending || addOptionMutation.isPending || disabled;
-  const canAddOptions = Boolean(poll.can_add_options) && !disabled && !isQna;
+  const canAddOptions = Boolean(poll?.can_add_options) && !disabled && !isQna;
 
   useEffect(() => {
     setPreviewGrading(false);
     pendingClickEffectRef.current = false;
-  }, [poll.id]);
+  }, [poll?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -146,6 +142,10 @@ export default function PostPoll({ postId, poll, disabled = false, isAuthor = fa
       );
     }
   }, [correctOptionId, hasVoted, isQna, myOptionId, reduceMotion, showGrading]);
+
+  if (!poll?.id || !Array.isArray(poll.options) || poll.options.length === 0) {
+    return null;
+  }
 
   const handleAddOption = () => {
     const label = draftOption.trim();

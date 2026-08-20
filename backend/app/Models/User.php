@@ -4,7 +4,10 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\UsesAppTimezone;
+use App\Support\PublicStorageUrl;
+use App\Support\QuizAccessories;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -27,6 +30,7 @@ class User extends Authenticatable
         'full_name',
         'profile_picture',
         'profile_picture_crop',
+        'quiz_accessory_id',
         'cover_picture',
         'cover_picture_crops',
         'bio',
@@ -128,6 +132,30 @@ class User extends Authenticatable
         $name = trim((string) ($this->name ?: $this->full_name ?: $this->email ?: ''));
 
         return $name !== '' ? $name : 'User';
+    }
+
+    protected function profilePicture(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => PublicStorageUrl::canonicalize($value),
+            set: fn (mixed $value) => PublicStorageUrl::canonicalize($value),
+        );
+    }
+
+    protected function coverPicture(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => PublicStorageUrl::canonicalize($value),
+            set: fn (mixed $value) => PublicStorageUrl::canonicalize($value),
+        );
+    }
+
+    protected function quizAccessoryId(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => QuizAccessories::normalize($value),
+            set: fn (mixed $value) => QuizAccessories::normalize($value),
+        );
     }
 
     /**
