@@ -17,7 +17,7 @@ import UserSearchCombobox from '@/components/users/UserSearchCombobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
-import { canManageAttendance } from '@/lib/roles';
+import { canViewAllAttendance } from '@/lib/roles';
 import { formatDurationMinutes } from '@/lib/formatDuration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -403,7 +403,7 @@ function MyAttendanceHistory() {
 function AttendanceAdminReport() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const canViewAllRecords = canManageAttendance(user);
+  const canViewAllRecords = canViewAllAttendance(user);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));

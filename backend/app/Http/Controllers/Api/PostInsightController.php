@@ -8,8 +8,9 @@ use App\Models\Post;
 use App\Models\PostReach;
 use App\Models\PostView;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
-use App\Support\UserRoles;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -182,7 +183,7 @@ class PostInsightController extends Controller
     private function viewerCanViewInsights(User $viewer, Post $post): bool
     {
         return (int) $viewer->id === (int) $post->author_user_id
-            || UserRoles::isHrOrAdmin($viewer);
+            || PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE);
     }
 
     private function authenticatedUser(Request $request): ?User

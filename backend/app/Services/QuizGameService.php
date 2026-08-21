@@ -628,13 +628,26 @@ class QuizGameService
             $lockedSession = $this->lockSession($session);
             $this->applyLazyEffects($lockedSession);
 
-            if ($lockedSession->mode !== QuizSession::MODE_LIVE) {
+            if ($lockedSession->mode === QuizSession::MODE_ASYNC) {
+                $lockedSession->loadMissing('quiz');
+                $this->assertAsyncSessionPlayable($lockedSession, $user);
+                $hasInventory = QuizSessionPowerUp::query()
+                    ->where('quiz_session_id', $lockedSession->id)
+                    ->where('user_id', $user->id)
+                    ->exists();
+
+                if (! $hasInventory) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Power-ups are only available in live games.',
+                    ]);
+                }
+            } elseif ($lockedSession->mode !== QuizSession::MODE_LIVE) {
                 throw ValidationException::withMessages([
                     'session' => 'Power-ups are only available in live games.',
                 ]);
             }
 
-            if ($lockedSession->isPaused()) {
+            if ($lockedSession->mode === QuizSession::MODE_LIVE && $lockedSession->isPaused()) {
                 throw ValidationException::withMessages([
                     'session' => 'The game is paused until the host reconnects.',
                 ]);
@@ -646,10 +659,22 @@ class QuizGameService
                 ]);
             }
 
-            if ($this->remainingMs($lockedSession) <= 0) {
-                throw ValidationException::withMessages([
-                    'session' => 'Time is up for this question.',
-                ]);
+            if ($lockedSession->mode === QuizSession::MODE_LIVE) {
+                if ($this->remainingMs($lockedSession) <= 0) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Time is up for this question.',
+                    ]);
+                }
+            } else {
+                $currentQuestion = QuizQuestion::find($lockedSession->current_question_id);
+                if ($currentQuestion) {
+                    [, , , $timedOut] = $this->timingForQuestion($lockedSession, $currentQuestion);
+                    if ($timedOut) {
+                        throw ValidationException::withMessages([
+                            'session' => 'Time is up for this question.',
+                        ]);
+                    }
+                }
             }
 
             $alreadyAnswered = QuizSessionAnswer::query()
@@ -723,40 +748,99 @@ class QuizGameService
         ];
     }
 
-    public function startAsyncAttempt(Quiz $quiz, User $user): QuizSession
+    /**
+     * @return array{0: QuizSession, 1: bool} session and whether it was newly created
+     */
+    public function startAsyncAttempt(Quiz $quiz, User $user, bool $preview = false): array
     {
-        if ($quiz->status !== Quiz::STATUS_PUBLISHED) {
-            throw ValidationException::withMessages([
-                'quiz' => 'This quiz is not published for self-paced play.',
-            ]);
+        if ($preview) {
+            $this->assertSelfPacedPreviewAllowed($quiz, $user);
+        } else {
+            $this->assertSelfPacedPlayOpen($quiz);
+            $this->assertNotSelfPacedCreator($quiz, $user);
         }
 
-        $quiz->loadMissing('questions.options');
+        $created = false;
+        $session = DB::transaction(function () use ($quiz, $user, $preview, &$created) {
+            $lockedQuiz = Quiz::query()->whereKey($quiz->id)->lockForUpdate()->firstOrFail();
+            if ($preview) {
+                $this->assertSelfPacedPreviewAllowed($lockedQuiz, $user);
+            } else {
+                $this->assertSelfPacedPlayOpen($lockedQuiz);
+                $this->assertNotSelfPacedCreator($lockedQuiz, $user);
+            }
+            $lockedQuiz->load('questions.options');
 
-        if ($quiz->questions->isEmpty()) {
-            throw ValidationException::withMessages([
-                'quiz' => 'This quiz has no questions.',
+            if ($lockedQuiz->questions->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'quiz' => 'This quiz has no questions.',
+                ]);
+            }
+
+            $existingIds = QuizSessionPlayer::query()
+                ->where('user_id', $user->id)
+                ->whereHas('session', function ($query) use ($lockedQuiz, $preview) {
+                    $query->where('quiz_id', $lockedQuiz->id)
+                        ->where('mode', QuizSession::MODE_ASYNC)
+                        ->where('is_preview', $preview);
+                })
+                ->pluck('quiz_session_id');
+
+            $existing = $existingIds->isEmpty()
+                ? null
+                : QuizSession::query()
+                    ->whereIn('id', $existingIds)
+                    ->orderByDesc('id')
+                    ->get();
+
+            if (! $preview && $existing && $existing->contains(fn (QuizSession $session) => $session->status === QuizSession::STATUS_FINISHED)) {
+                throw ValidationException::withMessages([
+                    'quiz' => 'You already completed this quiz.',
+                ]);
+            }
+
+            $inProgress = $existing?->first(fn (QuizSession $session) => $session->status !== QuizSession::STATUS_FINISHED);
+            if ($inProgress) {
+                return $inProgress->fresh($this->defaultRelations());
+            }
+
+            if ($preview && $existing) {
+                QuizSession::query()->whereIn('id', $existing->pluck('id'))->get()->each->delete();
+            }
+
+            $first = $lockedQuiz->questions->first();
+            [$started, $endsAt] = $this->questionWindow($first, true);
+
+            $created = true;
+            $session = QuizSession::create([
+                'quiz_id' => $lockedQuiz->id,
+                'host_user_id' => $lockedQuiz->user_id,
+                'mode' => QuizSession::MODE_ASYNC,
+                'is_preview' => $preview,
+                'pin' => null,
+                'join_token' => Str::random(40),
+                'status' => QuizSession::STATUS_QUESTION,
+                'current_question_id' => $first->id,
+                'question_started_at' => $started,
+                'question_ends_at' => $endsAt,
+                'music_enabled' => false,
+                'bgm_theme' => $lockedQuiz->bgm_theme ?: 'party',
+                'sfx_pack' => $lockedQuiz->sfx_pack ?: 'classic',
             ]);
-        }
 
-        $session = QuizSession::create([
-            'quiz_id' => $quiz->id,
-            'host_user_id' => $quiz->user_id,
-            'mode' => QuizSession::MODE_ASYNC,
-            'pin' => null,
-            'join_token' => Str::random(40),
-            'status' => QuizSession::STATUS_QUESTION,
-            'current_question_id' => $quiz->questions->first()->id,
-            'question_started_at' => now(),
-            'music_enabled' => false,
-        ]);
+            QuizSessionPlayer::create($this->playerIdentitySnapshot($user) + [
+                'quiz_session_id' => $session->id,
+                'user_id' => $user->id,
+            ]);
 
-        QuizSessionPlayer::create($this->playerIdentitySnapshot($user) + [
-            'quiz_session_id' => $session->id,
-            'user_id' => $user->id,
-        ]);
+            if ($lockedQuiz->async_power_ups_enabled) {
+                $this->seedPowerUps($session, $user);
+            }
 
-        return $session->fresh($this->defaultRelations());
+            return $session->fresh($this->defaultRelations());
+        });
+
+        return [$session, $created];
     }
 
     public function submitAsyncAnswer(QuizSession $session, User $user, int $optionId): array
@@ -773,6 +857,9 @@ class QuizGameService
             ]);
         }
 
+        $session->loadMissing('quiz');
+        $this->assertAsyncSessionPlayable($session, $user);
+
         $result = $this->submitAnswer($session, $user, $optionId);
 
         // Auto-advance async to next question or finish
@@ -788,6 +875,7 @@ class QuizGameService
             $session->update([
                 'status' => QuizSession::STATUS_FINISHED,
                 'question_started_at' => null,
+                'finished_at' => $session->finished_at ?? now(),
             ]);
         }
 
@@ -879,22 +967,32 @@ class QuizGameService
 
     protected function beginQuestion(QuizSession $session, QuizQuestion $question, bool $withCountdown = false): void
     {
-        $countdown = 0;
-        if ($withCountdown && $session->mode === QuizSession::MODE_LIVE) {
-            $countdown = max(0, (int) config('quiz.first_question_countdown_seconds', 3));
-        }
-
-        $started = now()->addSeconds($countdown);
+        [$started, $endsAt] = $this->questionWindow($question, $withCountdown);
         $session->update([
             'status' => QuizSession::STATUS_QUESTION,
             'current_question_id' => $question->id,
             'question_started_at' => $started,
-            'question_ends_at' => $started->copy()->addSeconds(max(1, (int) $question->time_limit_seconds)),
+            'question_ends_at' => $endsAt,
             'phase_ends_at' => null,
             'paused_at' => null,
             'pause_remaining_ms' => null,
         ]);
         $session->unsetRelation('currentQuestion');
+    }
+
+    /**
+     * @return array{0: \Carbon\CarbonInterface, 1: \Carbon\CarbonInterface}
+     */
+    protected function questionWindow(QuizQuestion $question, bool $withCountdown = false): array
+    {
+        $countdown = 0;
+        if ($withCountdown) {
+            $countdown = max(0, (int) config('quiz.first_question_countdown_seconds', 3));
+        }
+
+        $started = now()->addSeconds($countdown);
+
+        return [$started, $started->copy()->addSeconds(max(1, (int) $question->time_limit_seconds))];
     }
 
     protected function revealLocked(QuizSession $session): void
@@ -953,6 +1051,7 @@ class QuizGameService
             'phase_ends_at' => null,
             'paused_at' => null,
             'pause_remaining_ms' => null,
+            'finished_at' => $session->finished_at ?? now(),
         ]);
     }
 
@@ -1048,8 +1147,7 @@ class QuizGameService
         }
 
         if (
-            $session->mode === QuizSession::MODE_LIVE
-            && $session->question_started_at
+            $session->question_started_at
             && $session->question_started_at->gt(now())
         ) {
             return false;
@@ -1339,6 +1437,7 @@ class QuizGameService
                 'name' => $session->host?->displayName(),
             ],
             'mode' => $session->mode,
+            'is_preview' => (bool) $session->is_preview,
             'pin' => $isHost || $session->status === QuizSession::STATUS_LOBBY ? $session->pin : null,
             'join_token' => $isHost ? $session->join_token : null,
             'status' => $session->status,
@@ -2008,6 +2107,62 @@ class QuizGameService
             'amount' => (int) $reward->amount,
             'status' => $reward->status,
         ];
+    }
+
+    protected function assertAsyncSessionPlayable(QuizSession $session, User $user): void
+    {
+        $session->loadMissing('quiz');
+        if ($session->is_preview) {
+            if ((int) $session->quiz->user_id !== (int) $user->id) {
+                throw ValidationException::withMessages([
+                    'quiz' => 'Only the quiz creator can play this preview.',
+                ]);
+            }
+
+            return;
+        }
+
+        $this->assertSelfPacedPlayOpen($session->quiz);
+        $this->assertNotSelfPacedCreator($session->quiz, $user);
+    }
+
+    protected function assertSelfPacedPreviewAllowed(Quiz $quiz, User $user): void
+    {
+        if ((int) $quiz->user_id !== (int) $user->id) {
+            throw ValidationException::withMessages([
+                'quiz' => 'Only the quiz creator can start a self-paced preview.',
+            ]);
+        }
+
+        if ($quiz->status !== Quiz::STATUS_PUBLISHED) {
+            throw ValidationException::withMessages([
+                'quiz' => 'This quiz is not published for self-paced play.',
+            ]);
+        }
+    }
+
+    protected function assertNotSelfPacedCreator(Quiz $quiz, User $user): void
+    {
+        if ((int) $quiz->user_id === (int) $user->id) {
+            throw ValidationException::withMessages([
+                'quiz' => 'The quiz creator cannot play this as a self-paced attempt. Use Preview instead.',
+            ]);
+        }
+    }
+
+    protected function assertSelfPacedPlayOpen(Quiz $quiz): void
+    {
+        if ($quiz->status !== Quiz::STATUS_PUBLISHED) {
+            throw ValidationException::withMessages([
+                'quiz' => 'This quiz is not published for self-paced play.',
+            ]);
+        }
+
+        if ($quiz->selfPacedDeadlineHasPassed()) {
+            throw ValidationException::withMessages([
+                'quiz' => 'The self-paced deadline for this quiz has passed.',
+            ]);
+        }
     }
 
     protected function defaultRelations(): array

@@ -7,7 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Application;
 use App\Models\ApplicationReleaseNote;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
 use App\Support\UserApplicationAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -364,7 +366,7 @@ class ApplicationReleaseNoteController extends Controller
     {
         $query = Application::query();
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return $query->pluck('id')->map(fn ($id) => (int) $id)->all();
         }
 
@@ -396,7 +398,7 @@ class ApplicationReleaseNoteController extends Controller
 
     private function canEditSystem(User $user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 
@@ -405,7 +407,7 @@ class ApplicationReleaseNoteController extends Controller
 
     private function canViewSystem(User $user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 

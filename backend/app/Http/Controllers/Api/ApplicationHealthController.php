@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Application;
 use App\Services\ApplicationHealthCheckerService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -66,7 +68,7 @@ class ApplicationHealthController extends Controller
 
     private function canEditSystem($user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 

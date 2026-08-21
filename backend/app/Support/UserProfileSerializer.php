@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\User;
 use App\Services\GamificationService;
+use App\Services\PermissionService;
 
 class UserProfileSerializer
 {
@@ -120,6 +121,8 @@ class UserProfileSerializer
         $array['feed_post_requires_approval'] = AppSettings::userRequiresFeedPostApproval($user);
         $array['profile_completeness'] = $completeness;
         $array = array_merge($array, self::expPublicFields($user));
+        $array['access_role'] = PermissionService::rolePayload($user);
+        $array['permissions'] = PermissionService::permissionsFor($user);
 
         return $array;
     }

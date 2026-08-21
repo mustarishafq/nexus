@@ -14,7 +14,7 @@ import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNot
 import { cn } from '@/lib/utils';
 import { isRunningStandalone } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
-import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
 import AppsOrbNavItem from './AppsOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
@@ -80,13 +80,15 @@ export default function BottomNav() {
   const navItems = useMemo(() => {
     if (isMobile) return MOBILE_BOTTOM_NAV_ITEMS;
 
-    const showAnalytics = userIsAdmin(user) || metabaseDashboards.length > 0;
+    const showAnalytics = can(user, 'analytics.manage') || metabaseDashboards.length > 0;
     return buildDesktopNavItems({
       showAnalytics,
       isAdmin: userIsAdmin(user),
       canManageUsers: canManageUsers(user),
+      canBroadcast: can(user, 'broadcast.manage'),
+      canViewNetwork: canViewNetworkHealth(user),
     });
-  }, [isMobile, user?.role, metabaseDashboards.length]);
+  }, [isMobile, user, metabaseDashboards.length]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({

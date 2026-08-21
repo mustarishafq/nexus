@@ -32,14 +32,14 @@ const ROLE_ICONS = {
   [ROLES.USER]: UserRound,
 };
 
-export default function RoleBadge({ role, className, size = 'md', showIcon = true }) {
+export default function RoleBadge({ role, label, className, size = 'md', showIcon = true }) {
   const resolvedRole = resolveRole(role);
   const Icon = ROLE_ICONS[resolvedRole];
 
   return (
     <span className={cn(roleBadgeVariants({ role: resolvedRole, size }), className)}>
       {showIcon ? <Icon className="shrink-0" aria-hidden /> : null}
-      {getRoleLabel(role)}
+      {getRoleLabel(role, label)}
     </span>
   );
 }

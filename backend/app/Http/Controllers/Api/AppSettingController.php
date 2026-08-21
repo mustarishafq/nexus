@@ -5,14 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Services\ResourceAttendancePolicyForwarder;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\FeedModerationSettings;
 use App\Support\GamificationSettings;
+use App\Support\PermissionCatalog;
 use App\Support\SplashAnimationSettings;
-use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,15 +36,16 @@ class AppSettingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (UserRoles::isHr($user) && ! UserRoles::isAdmin($user)) {
+        if (PermissionService::can($user, PermissionCatalog::SETTINGS_MANAGE)) {
+            return response()->json($this->adminPayload());
+        }
+
+        if (PermissionService::can($user, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)
+            || PermissionService::can($user, PermissionCatalog::FEED_MODERATE)) {
             return response()->json($this->hrAttendancePayload());
         }
 
-        if ($response = $this->authorizeAdmin($request)) {
-            return $response;
-        }
-
-        return response()->json($this->adminPayload());
+        return response()->json(['message' => 'Forbidden'], 403);
     }
 
     public function update(Request $request): JsonResponse
@@ -54,14 +56,20 @@ class AppSettingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (UserRoles::isHr($user) && ! UserRoles::isAdmin($user)) {
+        if (PermissionService::can($user, PermissionCatalog::SETTINGS_MANAGE)) {
+            return $this->updateAdminSettings($request);
+        }
+
+        if (PermissionService::can($user, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)
+            || PermissionService::can($user, PermissionCatalog::FEED_MODERATE)) {
             return $this->updateHrSettings($request);
         }
 
-        if ($response = $this->authorizeAdmin($request)) {
-            return $response;
-        }
+        return response()->json(['message' => 'Forbidden'], 403);
+    }
 
+    private function updateAdminSettings(Request $request): JsonResponse
+    {
         $validated = $request->validate(array_merge([
             'system_name' => ['required', 'string', 'max:255'],
             'smtp_host' => ['nullable', 'string', 'max:255'],

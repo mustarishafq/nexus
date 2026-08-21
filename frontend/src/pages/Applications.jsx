@@ -42,6 +42,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 import { canViewApplicationUsage } from '@/lib/applicationUsage';
+import { canManageApplications } from '@/lib/roles';
 import { applicationNotificationsEnabled, normalizeNotificationEventMapping } from '@/lib/notificationEventMapping';
 import { applicationCalendarSyncEnabled, normalizeCalendarEventMapping } from '@/lib/calendarEventMapping';
 import ApplicationsCatalogGrid from '@/components/applications/ApplicationsCatalogGrid';
@@ -256,7 +257,7 @@ export default function Applications() {
   };
 
   const openDialog = (system = null) => {
-    const admin = currentUser?.role === 'admin';
+    const admin = canManageApplications(currentUser);
     setEditSystem(system);
     setName(system?.name || '');
     setSlug(system?.slug || '');
@@ -297,7 +298,7 @@ export default function Applications() {
     queryFn: () => db.entities.Application.list('sort_order', 50),
   });
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = canManageApplications(currentUser);
   const showUsage = canViewApplicationUsage(currentUser, systems);
 
   useMetaTags({
@@ -365,11 +366,11 @@ export default function Applications() {
     setHealthCheckEnabled(true);
     setHealthCheckPath('/api/health');
     setHealthCheckMode('json_ok');
-    setAuthMode(currentUser?.role === 'admin' ? 'jwt' : 'redirect');
+    setAuthMode(canManageApplications(currentUser) ? 'jwt' : 'redirect');
     setOpenMode('same_window');
     setStatus('online');
     setEnvironment('production');
-    setVisibility(currentUser?.role === 'admin' ? 'public' : 'private');
+    setVisibility(canManageApplications(currentUser) ? 'public' : 'private');
     setPrivateAllowedEmails([]);
     setPrivateUsersPickerOpen(false);
     setNotificationConfig(normalizeNotificationEventMapping());
@@ -1038,7 +1039,7 @@ export default function Applications() {
         }}
         canManage={Boolean(
           whatsNewSystem
-          && (currentUser?.role === 'admin' || Number(whatsNewSystem.created_by_user_id) === Number(currentUser?.id))
+          && (canManageApplications(currentUser) || Number(whatsNewSystem.created_by_user_id) === Number(currentUser?.id))
         )}
       />
     </div>

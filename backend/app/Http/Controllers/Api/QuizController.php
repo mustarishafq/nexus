@@ -6,8 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
+use App\Models\QuizSession;
 use App\Models\User;
+use App\Services\QuizAnalyticsService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +21,10 @@ use Illuminate\Validation\ValidationException;
 
 class QuizController extends Controller
 {
+    public function __construct(
+        protected QuizAnalyticsService $analytics,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $this->requireApprovedUser($request);
@@ -29,13 +38,21 @@ class QuizController extends Controller
 
         if ($scope === 'published') {
             $query->where('status', Quiz::STATUS_PUBLISHED);
-        } elseif ($scope === 'all' && $user->role === 'admin') {
+        } elseif ($scope === 'all' && PermissionService::can($user, PermissionCatalog::QUIZ_MANAGE)) {
             // admins see everything
         } else {
             $query->where('user_id', $user->id);
         }
 
         $items = $query->orderByDesc('updated_at')->get();
+
+        if ($scope === 'published') {
+            return response()->json($this->serializePublishedIndex($items, $user));
+        }
+
+        if ($scope !== 'all') {
+            return response()->json($this->serializeMineIndex($items));
+        }
 
         return response()->json($items);
     }
@@ -47,12 +64,18 @@ class QuizController extends Controller
             return $user;
         }
 
+        if (! PermissionService::can($user, PermissionCatalog::QUIZ_CREATE)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'status' => ['sometimes', Rule::in([Quiz::STATUS_DRAFT, Quiz::STATUS_PUBLISHED])],
             'bgm_theme' => ['sometimes', Rule::in(Quiz::BGM_THEMES)],
             'sfx_pack' => ['sometimes', Rule::in(Quiz::SFX_PACKS)],
+            'async_power_ups_enabled' => ['sometimes', 'boolean'],
+            'async_deadline_at' => ['sometimes', 'nullable', 'date'],
             'questions' => ['sometimes', 'array'],
             'questions.*.prompt' => ['required_with:questions', 'string', 'max:2000'],
             'questions.*.image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
@@ -70,15 +93,17 @@ class QuizController extends Controller
 
         $this->assertPublishableQuestionSet($validated['questions'] ?? []);
 
-        $quiz = DB::transaction(function () use ($validated, $user) {
-            $quiz = Quiz::create([
+        $status = $validated['status'] ?? Quiz::STATUS_DRAFT;
+
+        $quiz = DB::transaction(function () use ($validated, $user, $status) {
+            $quiz = Quiz::create(array_merge([
                 'user_id' => $user->id,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
-                'status' => $validated['status'] ?? Quiz::STATUS_DRAFT,
+                'status' => $status,
                 'bgm_theme' => $validated['bgm_theme'] ?? 'party',
                 'sfx_pack' => $validated['sfx_pack'] ?? 'classic',
-            ]);
+            ], $this->selfPacedAttributes($validated, $status, true)));
 
             if (! empty($validated['questions'])) {
                 $this->syncQuestions($quiz, $validated['questions']);
@@ -127,6 +152,8 @@ class QuizController extends Controller
             'status' => ['sometimes', Rule::in([Quiz::STATUS_DRAFT, Quiz::STATUS_PUBLISHED])],
             'bgm_theme' => ['sometimes', Rule::in(Quiz::BGM_THEMES)],
             'sfx_pack' => ['sometimes', Rule::in(Quiz::SFX_PACKS)],
+            'async_power_ups_enabled' => ['sometimes', 'boolean'],
+            'async_deadline_at' => ['sometimes', 'nullable', 'date'],
             'questions' => ['sometimes', 'array'],
             'questions.*.prompt' => ['required_with:questions', 'string', 'max:2000'],
             'questions.*.image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
@@ -147,6 +174,8 @@ class QuizController extends Controller
 
         DB::transaction(function () use ($quiz, $validated) {
             $quiz->fill(collect($validated)->only(['title', 'description', 'status', 'bgm_theme', 'sfx_pack'])->all());
+            $nextStatus = $validated['status'] ?? $quiz->status;
+            $quiz->fill($this->selfPacedAttributes($validated, $nextStatus, false));
             $quiz->save();
 
             if (array_key_exists('questions', $validated)) {
@@ -382,7 +411,7 @@ class QuizController extends Controller
         }
 
         $sessions = $quiz->sessions()
-            ->where('mode', 'async')
+            ->selfPaced()
             ->with(['players'])
             ->orderByDesc('created_at')
             ->limit(100)
@@ -391,10 +420,101 @@ class QuizController extends Controller
                 'id' => $session->id,
                 'status' => $session->status,
                 'created_at' => $session->created_at?->toIso8601String(),
+                'finished_at' => $session->finished_at?->toIso8601String()
+                    ?? ($session->status === QuizSession::STATUS_FINISHED ? $session->updated_at?->toIso8601String() : null),
                 'player' => $session->players->first()?->only(['user_id', 'display_name', 'score', 'streak']),
             ]);
 
         return response()->json($sessions);
+    }
+
+    public function history(Request $request, Quiz $quiz): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        try {
+            return response()->json($this->analytics->historyForQuiz($quiz, $user));
+        } catch (AuthorizationException $e) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+    }
+
+    public function selfPacedAnalytics(Request $request, Quiz $quiz): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        try {
+            return response()->json($this->analytics->selfPacedForQuiz($quiz, $user));
+        } catch (AuthorizationException $e) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, Quiz>  $items
+     * @return list<array<string, mixed>>
+     */
+    protected function serializeMineIndex($items): array
+    {
+        $quizIds = $items->pluck('id');
+        $liveByQuiz = QuizSession::query()
+            ->whereIn('quiz_id', $quizIds)
+            ->where('mode', QuizSession::MODE_LIVE)
+            ->with(['host:id,name,full_name', 'players'])
+            ->withCount('players')
+            ->orderByDesc('created_at')
+            ->get()
+            ->groupBy('quiz_id');
+
+        $asyncByQuiz = QuizSession::query()
+            ->whereIn('quiz_id', $quizIds)
+            ->selfPaced()
+            ->get(['id', 'quiz_id', 'status'])
+            ->groupBy('quiz_id');
+
+        return $items->map(function (Quiz $quiz) use ($liveByQuiz, $asyncByQuiz) {
+            $live = ($liveByQuiz->get($quiz->id) ?? collect())->all();
+            $async = $asyncByQuiz->get($quiz->id) ?? collect();
+
+            return array_merge($quiz->toArray(), $this->analytics->serializeMineIndexExtras(
+                $quiz,
+                $live,
+                $async->where('status', QuizSession::STATUS_FINISHED)->count(),
+                $async->where('status', '!=', QuizSession::STATUS_FINISHED)->count(),
+            ));
+        })->all();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, Quiz>  $items
+     * @return list<array<string, mixed>>
+     */
+    protected function serializePublishedIndex($items, User $user): array
+    {
+        $quizIds = $items->pluck('id');
+        $attempts = QuizSession::query()
+            ->whereIn('quiz_id', $quizIds)
+            ->selfPaced()
+            ->whereHas('players', fn ($query) => $query->where('user_id', $user->id))
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('quiz_id');
+
+        return $items->map(function (Quiz $quiz) use ($attempts) {
+            $mine = $attempts->get($quiz->id) ?? collect();
+            $finished = $mine->firstWhere('status', QuizSession::STATUS_FINISHED);
+            $latest = $finished ?: $mine->first();
+
+            return array_merge($quiz->toArray(), [
+                'viewer_attempt' => $this->analytics->serializeViewerAttempt($latest),
+            ]);
+        })->all();
     }
 
     /**
@@ -662,9 +782,34 @@ class QuizController extends Controller
         return $this->canEditQuiz($user, $quiz) || $quiz->status === Quiz::STATUS_PUBLISHED;
     }
 
+    /**
+     * Drafts do not keep self-paced settings. Published quizzes may omit either field.
+     *
+     * @return array<string, mixed>
+     */
+    protected function selfPacedAttributes(array $validated, string $status, bool $creating): array
+    {
+        if ($status !== Quiz::STATUS_PUBLISHED) {
+            return [
+                'async_power_ups_enabled' => false,
+                'async_deadline_at' => null,
+            ];
+        }
+
+        $attrs = [];
+        if ($creating || array_key_exists('async_power_ups_enabled', $validated)) {
+            $attrs['async_power_ups_enabled'] = (bool) ($validated['async_power_ups_enabled'] ?? false);
+        }
+        if ($creating || array_key_exists('async_deadline_at', $validated)) {
+            $attrs['async_deadline_at'] = $validated['async_deadline_at'] ?? null;
+        }
+
+        return $attrs;
+    }
+
     protected function canEditQuiz(User $user, Quiz $quiz): bool
     {
-        return (int) $quiz->user_id === (int) $user->id || $user->role === 'admin';
+        return PermissionService::canManageQuiz($user, $quiz);
     }
 
     protected function requireApprovedUser(Request $request): User|JsonResponse

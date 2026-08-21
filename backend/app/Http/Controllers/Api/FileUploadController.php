@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Support\PublicStorageUrl;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -32,7 +33,7 @@ class FileUploadController extends Controller
         $folder = $validated['folder'] ?? 'uploads';
 
         if ($folder === 'splash-media') {
-            if ($response = $this->authorizeAdmin($request)) {
+            if ($response = $this->authorizePermission($request, PermissionCatalog::SETTINGS_MANAGE)) {
                 return $response;
             }
 
@@ -44,7 +45,7 @@ class FileUploadController extends Controller
                 ],
             ]);
         } elseif ($folder === 'attendance-watermark-logos') {
-            if ($response = $this->authorizeHrOrAdmin($request)) {
+            if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
                 return $response;
             }
 

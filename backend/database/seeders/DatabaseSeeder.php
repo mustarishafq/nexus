@@ -16,6 +16,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(RbacSeeder::class);
+
+        $adminRoleId = \App\Models\Role::query()->where('slug', 'admin')->value('id');
+
         User::query()->updateOrCreate(
             ['email' => 'admin@admin.com'],
             [
@@ -23,6 +27,7 @@ class DatabaseSeeder extends Seeder
                 'full_name' => 'System Admin',
                 'password' => Hash::make('password'),
                 'role' => 'admin',
+                'role_id' => $adminRoleId,
                 'is_approved' => true,
             ]
         );

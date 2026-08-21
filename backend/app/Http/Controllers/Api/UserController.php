@@ -10,11 +10,14 @@ use App\Http\Controllers\Api\Concerns\ValidatesHrProfileFields;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
 use App\Models\Department;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Services\ProfileNudgeService;
 use App\Services\UserPresenceService;
 use App\Support\ApiTokenAuth;
 use App\Support\McpUserAccess;
+use App\Support\PermissionCatalog;
 use App\Support\ProfileCompleteness;
 use App\Support\SyncUserProfileRecords;
 use App\Support\UserHrCsvImporter;
@@ -37,12 +40,12 @@ class UserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
         $validated = $request->validate([
-            'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
+            'role' => ['nullable', 'string', 'max:100', Rule::exists('roles', 'slug')],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
             'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days', 'older_than_14_days', 'older_than_30_days'])],
             'profile' => ['nullable', 'string', Rule::in(['incomplete', 'complete'])],
@@ -57,7 +60,7 @@ class UserController extends Controller
         ]);
 
         $query = User::query()
-            ->with(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences'])
+            ->with(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences', 'assignedRole'])
             ->withExists('pushSubscriptions');
 
         $this->applyAdminUserFilters($query, $validated);
@@ -119,7 +122,14 @@ class UserController extends Controller
     private function applyAdminUserFilters($query, array $filters): void
     {
         if (! empty($filters['role'])) {
-            $query->where('role', $filters['role']);
+            $slug = $filters['role'];
+            $query->where(function ($builder) use ($slug) {
+                $builder
+                    ->whereHas('assignedRole', fn ($roleQuery) => $roleQuery->where('slug', $slug))
+                    ->orWhere(function ($inner) use ($slug) {
+                        $inner->whereNull('role_id')->where('role', $slug);
+                    });
+            });
         }
 
         if (! empty($filters['email'])) {
@@ -250,12 +260,12 @@ class UserController extends Controller
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
         $validated = $request->validate([
-            'role' => ['nullable', 'string', Rule::in(UserRoles::ALL)],
+            'role' => ['nullable', 'string', 'max:100', Rule::exists('roles', 'slug')],
             'status' => ['nullable', 'string', Rule::in(['approved', 'pending'])],
             'login' => ['nullable', 'string', Rule::in(['never', 'has_logged_in', 'last_7_days', 'last_30_days', 'older_than_14_days', 'older_than_30_days'])],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
@@ -336,7 +346,7 @@ class UserController extends Controller
 
     public function profileNudge(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
@@ -367,7 +377,7 @@ class UserController extends Controller
 
     public function nudgeIncompleteProfiles(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
@@ -659,7 +669,7 @@ class UserController extends Controller
 
         $user->load(['accessGroups', 'department', 'company', 'manager.department', 'educations', 'workExperiences', 'userSkills']);
 
-        $payload = UserRoles::isHrOrAdmin($viewer)
+        $payload = PermissionService::can($viewer, PermissionCatalog::PEOPLE_VIEW_SENSITIVE)
             ? $this->privateUserProfile($user)
             : $this->publicUserProfile($user);
 
@@ -675,7 +685,7 @@ class UserController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
@@ -685,7 +695,8 @@ class UserController extends Controller
             'full_name' => ['required', 'string', 'max:255'],
             'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8'],
-            'role'      => ['sometimes', 'string', Rule::in(UserRoles::ALL)],
+            'role'      => ['sometimes', 'string', Rule::exists('roles', 'slug')],
+            'role_id'   => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
@@ -699,11 +710,17 @@ class UserController extends Controller
         $groupIds = $validated['access_group_ids'] ?? null;
         unset($validated['access_group_ids']);
 
-        $role = $validated['role'] ?? UserRoles::USER;
-        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
-            $role = UserRoles::USER;
+        $canAssignRole = $actor && PermissionService::can($actor, PermissionCatalog::PEOPLE_ASSIGN_ROLE);
+        if (! $canAssignRole) {
+            $assignedRole = Role::query()->where('slug', UserRoles::USER)->first();
             $groupIds = null;
             unset($validated['mcp_access']);
+        } else {
+            $assignedRole = $this->resolveRoleFromInput($validated) ?? Role::query()->where('slug', UserRoles::USER)->first();
+        }
+
+        if (! $assignedRole || ! $assignedRole->is_active) {
+            return response()->json(['message' => 'The selected role is not available.'], 422);
         }
 
         $validated = $this->resolveCompanyFields($validated);
@@ -713,7 +730,7 @@ class UserController extends Controller
             'full_name'              => $validated['full_name'],
             'email'                  => $validated['email'] ?? null,
             'password'               => Hash::make($validated['password']),
-            'role'                   => $role,
+            'role_id'                => $assignedRole->id,
             'mcp_access'             => $validated['mcp_access'] ?? McpUserAccess::NONE,
             'is_approved'            => $validated['is_approved'] ?? true,
             'force_password_change'  => true,
@@ -739,7 +756,7 @@ class UserController extends Controller
      */
     public function importCsv(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_ASSIGN_ROLE)) {
             return $response;
         }
 
@@ -862,7 +879,7 @@ class UserController extends Controller
      */
     public function importHrOnboardingCsv(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
@@ -1026,13 +1043,14 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
         $actor = $this->authenticatedUser($request);
+        $canAssignRole = $actor && PermissionService::can($actor, PermissionCatalog::PEOPLE_ASSIGN_ROLE);
 
-        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor) && UserRoles::hasRole($user, [UserRoles::ADMIN, UserRoles::HR])) {
+        if ($actor && ! $canAssignRole && $this->userHoldsProtectedPeopleRole($user)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -1040,7 +1058,8 @@ class UserController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'role' => ['sometimes', 'string', Rule::in(UserRoles::ALL)],
+            'role' => ['sometimes', 'string', Rule::exists('roles', 'slug')],
+            'role_id' => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
@@ -1082,13 +1101,28 @@ class UserController extends Controller
             'work_history.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
         ], $this->hrProfileValidationRules()));
 
-        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
-            unset($validated['role'], $validated['mcp_access']);
+        if (! $canAssignRole) {
+            unset($validated['role'], $validated['role_id'], $validated['mcp_access']);
             if (array_key_exists('role', $request->all()) && $request->input('role') !== UserRoles::USER) {
                 return response()->json([
                     'message' => 'HR users can only manage standard user accounts.',
                 ], 403);
             }
+            if (array_key_exists('role_id', $request->all())) {
+                return response()->json([
+                    'message' => 'HR users can only manage standard user accounts.',
+                ], 403);
+            }
+        } elseif (array_key_exists('role', $validated) || array_key_exists('role_id', $validated)) {
+            $assignedRole = $this->resolveRoleFromInput($validated);
+            if (! $assignedRole || ! $assignedRole->is_active) {
+                return response()->json(['message' => 'The selected role is not available.'], 422);
+            }
+            if ($lock = $this->guardLastAdmin($actor, $user, $assignedRole)) {
+                return $lock;
+            }
+            $validated['role_id'] = $assignedRole->id;
+            unset($validated['role']);
         }
 
         if (array_key_exists('manager_id', $validated) && $this->wouldCreateManagerCycle($user, $validated['manager_id'])) {
@@ -1101,7 +1135,7 @@ class UserController extends Controller
         $groupIds = array_key_exists('access_group_ids', $validated) ? $validated['access_group_ids'] : null;
         unset($validated['access_group_ids']);
 
-        if ($actor && UserRoles::isHr($actor) && ! UserRoles::isAdmin($actor)) {
+        if (! $canAssignRole) {
             $groupIds = null;
         }
 
@@ -1143,7 +1177,7 @@ class UserController extends Controller
 
     public function destroy(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_ASSIGN_ROLE)) {
             return $response;
         }
 
@@ -1320,7 +1354,61 @@ class UserController extends Controller
         return app(UserPresenceService::class)->enrichPayload(array_merge($user->toArray(), [
             'profile_completeness' => ProfileCompleteness::forUser($user),
             'has_push_subscription' => (bool) $user->push_subscriptions_exists,
+            'access_role' => PermissionService::rolePayload($user),
         ]));
+    }
+
+    private function resolveRoleFromInput(array $validated): ?Role
+    {
+        if (! empty($validated['role_id'])) {
+            return Role::query()->whereKey($validated['role_id'])->first();
+        }
+
+        if (! empty($validated['role'])) {
+            return Role::query()->where('slug', $validated['role'])->first();
+        }
+
+        return null;
+    }
+
+    private function userHoldsProtectedPeopleRole(User $user): bool
+    {
+        $slug = $user->assignedRole?->slug ?? $user->role;
+
+        return in_array($slug, [UserRoles::ADMIN, UserRoles::HR], true);
+    }
+
+    private function userIsAdminAccount(User $user): bool
+    {
+        $slug = $user->assignedRole?->slug ?? $user->role;
+
+        return $slug === UserRoles::ADMIN || $user->role === UserRoles::ADMIN;
+    }
+
+    private function guardLastAdmin(?User $actor, User $target, ?Role $newRole): ?JsonResponse
+    {
+        if (! $this->userIsAdminAccount($target)) {
+            return null;
+        }
+
+        if ($newRole && $newRole->slug === UserRoles::ADMIN) {
+            return null;
+        }
+
+        $adminCount = User::query()
+            ->where(function ($query) {
+                $query->where('role', UserRoles::ADMIN)
+                    ->orWhereHas('assignedRole', fn ($roleQuery) => $roleQuery->where('slug', UserRoles::ADMIN));
+            })
+            ->count();
+
+        if ($adminCount <= 1) {
+            return response()->json([
+                'message' => 'The last Admin cannot be assigned a different role.',
+            ], 422);
+        }
+
+        return null;
     }
 
 }

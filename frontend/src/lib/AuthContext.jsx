@@ -95,19 +95,26 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const checkUserAuth = useCallback(async () => {
+  const checkUserAuth = useCallback(async ({ silent = false } = {}) => {
     try {
-      setIsLoadingAuth(true);
+      if (!silent) {
+        setIsLoadingAuth(true);
+      }
       const currentUser = await db.auth.me();
       syncNotificationSettingsCache(currentUser?.notification_settings);
       setUser(currentUser);
       setIsAuthenticated(true);
       setForcePasswordChange(currentUser.force_password_change || false);
       setIsImpersonating(readIsImpersonating());
-      setIsLoadingAuth(false);
+      if (!silent) {
+        setIsLoadingAuth(false);
+      }
       setAuthChecked(true);
       setAuthError(null);
     } catch (error) {
+      if (silent && error?.status !== 401 && error?.data?.code !== 'account_not_approved') {
+        return;
+      }
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setUser(null);
@@ -155,6 +162,21 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAppState();
   }, [checkAppState]);
+
+  useEffect(() => {
+    const refreshPermissions = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (!getAuthToken()) return;
+      checkUserAuth({ silent: true });
+    };
+
+    window.addEventListener('focus', refreshPermissions);
+    document.addEventListener('visibilitychange', refreshPermissions);
+    return () => {
+      window.removeEventListener('focus', refreshPermissions);
+      document.removeEventListener('visibilitychange', refreshPermissions);
+    };
+  }, [checkUserAuth]);
 
   useEffect(() => {
     const handleSettingsUpdated = () => {

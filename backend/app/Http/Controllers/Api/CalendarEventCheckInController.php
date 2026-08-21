@@ -7,8 +7,10 @@ use App\Models\CalendarEvent;
 use App\Models\CalendarEventAttendance;
 use App\Models\User;
 use App\Services\GamificationService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\CalendarEventCheckInForm;
+use App\Support\PermissionCatalog;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -474,7 +476,7 @@ class CalendarEventCheckInController extends Controller
 
     protected function userCanManageEvent(User $user, CalendarEvent $calendarEvent): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::CALENDAR_MANAGE)) {
             return true;
         }
 

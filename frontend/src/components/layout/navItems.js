@@ -18,7 +18,7 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
   { type: 'more', icon: Grip, label: 'More' },
 ];
 
-export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers }) {
+export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork }) {
   return [
     {
       type: 'whats-new',
@@ -42,7 +42,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
       label: 'Analytics',
       match: (path) => path === '/analytics' || path.startsWith('/analytics/'),
     }] : []),
-    { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
+    ...(canViewNetwork ? [{ path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' }] : []),
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
@@ -53,8 +53,10 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers })
     ...(canManageUsers ? [
       { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
     ] : []),
-    ...(isAdmin ? [
+    ...(canBroadcast ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast', match: (path) => path === '/admin/broadcast' },
+    ] : []),
+    ...(isAdmin ? [
       { path: '/admin/events', icon: Shield, label: 'Events', match: (path) => path === '/admin/events' },
     ] : []),
   ];
@@ -64,7 +66,7 @@ export function matchMobileMorePath(pathname, moreItems) {
   return moreItems.some((item) => item.match(pathname));
 }
 
-export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers }) {
+export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork }) {
   return [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', match: (path) => path === '/' },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
@@ -89,7 +91,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
       label: 'Application',
       match: (path) => path === '/applications' || path.startsWith('/applications/'),
     },
-    { path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' },
+    ...(canViewNetwork ? [{ path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' }] : []),
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
@@ -98,8 +100,10 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers })
     ...(canManageUsers ? [
       { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },
     ] : []),
-    ...(isAdmin ? [
+    ...(canBroadcast ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast', match: (path) => path === '/admin/broadcast' },
+    ] : []),
+    ...(isAdmin ? [
       { path: '/admin/events', icon: Shield, label: 'Events', match: (path) => path === '/admin/events' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },

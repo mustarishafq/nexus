@@ -8,7 +8,9 @@ use App\Models\AuthToken;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use App\Support\McpUserAccess;
+use App\Support\PermissionCatalog;
 use App\Support\UserApplicationAccess;
+use App\Services\PermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -198,7 +200,7 @@ class ApiTokenController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin') {
+        if (! PermissionService::can($user, PermissionCatalog::TOKENS_MANAGE)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,7 +15,7 @@ class CompanyController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 
@@ -27,7 +28,7 @@ class CompanyController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
         }
 

@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageAnalytics } from '@/lib/roles';
 import { Link } from 'react-router-dom';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -90,7 +91,7 @@ function getSelectedDashboardId(category, items, selectedByCategory) {
 export default function Analytics() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canManageAnalytics(user);
   const isMobile = useIsMobile();
 
   const { data: metabaseDashboards = [], isLoading } = useQuery({
@@ -386,7 +387,7 @@ export default function Analytics() {
             </p>
             {isAdmin ? (
               <Button asChild variant="outline" className="mt-2 w-full sm:w-auto">
-                <Link to="/admin/users">Manage dashboards</Link>
+                <Link to="/admin/users?section=analytics">Manage dashboards</Link>
               </Button>
             ) : (
               <Button variant="outline" className="mt-2 w-full sm:w-auto" onClick={() => openPersonalDialog()}>

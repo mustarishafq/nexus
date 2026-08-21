@@ -19,9 +19,27 @@ class UserRoles
         self::HR,
     ];
 
+    /** @var array<string, string> */
+    public const LABELS = [
+        self::ADMIN => 'Admin',
+        self::HR => 'Human Resource',
+        self::USER => 'User',
+    ];
+
     public static function isAdmin(User $user): bool
     {
         return $user->role === self::ADMIN;
+    }
+
+    public static function displayName(?string $slug, ?string $storedName = null): string
+    {
+        if ($slug && isset(self::LABELS[$slug])) {
+            return self::LABELS[$slug];
+        }
+
+        $storedName = trim((string) $storedName);
+
+        return $storedName !== '' ? $storedName : ($slug ?: 'User');
     }
 
     public static function isHr(User $user): bool

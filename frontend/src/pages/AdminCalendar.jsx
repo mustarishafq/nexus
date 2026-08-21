@@ -62,6 +62,7 @@ import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageCalendar } from '@/lib/roles';
 import EventQrDialog from '@/components/calendar/EventQrDialog';
 import EventAttendanceList from '@/components/calendar/EventAttendanceList';
 import EventCheckInFormFieldsEditor from '@/components/calendar/EventCheckInFormFieldsEditor';
@@ -87,7 +88,7 @@ function canManageEvent(event, user) {
     return false;
   }
 
-  if (user.role === 'admin') {
+  if (canManageCalendar(user)) {
     return true;
   }
 

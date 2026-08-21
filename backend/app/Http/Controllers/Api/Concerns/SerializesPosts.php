@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Api\Concerns;
 use App\Models\Post;
 use App\Models\PostPoll;
 use App\Models\User;
+use App\Services\PermissionService;
+use App\Support\PermissionCatalog;
 use App\Support\ReactionEmojis;
-use App\Support\UserRoles;
 
 trait SerializesPosts
 {
@@ -37,7 +38,7 @@ trait SerializesPosts
 
         $reactionsCount = array_sum($reactionCounts);
         $isPending = $post->isPending();
-        $canModerate = UserRoles::isHrOrAdmin($viewer);
+        $canModerate = PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE);
         $imageUrls = $post->resolvedImageUrls();
         $isAuthor = (int) $viewer->id === (int) $post->author_user_id;
         $editsCount = (int) ($post->edits_count ?? $post->edits()->count());

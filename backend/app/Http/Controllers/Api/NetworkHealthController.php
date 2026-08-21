@@ -7,8 +7,10 @@ use App\Models\NetworkHealthAlert;
 use App\Models\NetworkHealthLog;
 use App\Models\User;
 use App\Services\NetworkHealthAlertService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\NetworkHealthTimeFilter;
+use App\Support\PermissionCatalog;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -85,11 +87,11 @@ class NetworkHealthController extends Controller
 
     public function storeLog(Request $request): JsonResponse
     {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user || ! $user->is_approved) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        if ($response = $this->authorizeUser($request)) {
+            return $response;
         }
+
+        $user = ApiTokenAuth::userFromRequest($request);
 
         $validated = $request->validate([
             'latency_ms' => ['nullable', 'integer', 'min:0', 'max:60000'],
@@ -141,13 +143,13 @@ class NetworkHealthController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user || ! $user->is_approved) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        if ($response = $this->authorizeUser($request)) {
+            return $response;
         }
 
-        $isAdmin = $user->role === 'admin';
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        $isAdmin = PermissionService::can($user, PermissionCatalog::NETWORK_VIEW_ALL);
 
         $validated = $request->validate([
             'date_from' => ['nullable', 'date'],
@@ -290,13 +292,13 @@ class NetworkHealthController extends Controller
 
     public function userHistory(Request $request, User $user): JsonResponse
     {
-        $authUser = ApiTokenAuth::userFromRequest($request);
-
-        if (! $authUser || ! $authUser->is_approved) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        if ($response = $this->authorizeUser($request)) {
+            return $response;
         }
 
-        if ($authUser->role !== 'admin' && $authUser->id !== $user->id) {
+        $authUser = ApiTokenAuth::userFromRequest($request);
+
+        if (! PermissionService::can($authUser, PermissionCatalog::NETWORK_VIEW_ALL) && $authUser->id !== $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -314,13 +316,13 @@ class NetworkHealthController extends Controller
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user || ! $user->is_approved) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        if ($response = $this->authorizeUser($request)) {
+            return $response;
         }
 
-        $isAdmin = $user->role === 'admin';
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        $isAdmin = PermissionService::can($user, PermissionCatalog::NETWORK_VIEW_ALL);
 
         $validated = $request->validate([
             'date_from' => ['nullable', 'date'],
@@ -514,7 +516,17 @@ class NetworkHealthController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if (! $this->canAccessNetwork($user)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         return null;
+    }
+
+    private function canAccessNetwork(User $user): bool
+    {
+        return PermissionService::can($user, PermissionCatalog::NETWORK_VIEW)
+            || PermissionService::can($user, PermissionCatalog::NETWORK_VIEW_ALL);
     }
 
     private function authorizeAdmin(Request $request): ?JsonResponse
@@ -525,7 +537,7 @@ class NetworkHealthController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin') {
+        if (! PermissionService::can($user, PermissionCatalog::NETWORK_VIEW_ALL)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

@@ -7,11 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Application;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationEligibleUsers;
 use App\Support\ApplicationSsoCredentials;
 use App\Support\CalendarEventMapping;
 use App\Support\NotificationEventMapping;
+use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
@@ -333,7 +335,7 @@ class ApplicationController extends Controller
 
         $applicationsQuery = Application::query()->orderBy('sort_order');
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             $applications = $applicationsQuery->get();
         } else {
             $applications = $applicationsQuery
@@ -857,7 +859,7 @@ class ApplicationController extends Controller
 
     private function canEditSystem(User $user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 
@@ -866,7 +868,7 @@ class ApplicationController extends Controller
 
     private function canViewSystem(User $user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 

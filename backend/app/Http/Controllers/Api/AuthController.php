@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\UserProfileSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -75,7 +76,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful.',
             'token' => $token,
-            'user' => $user->fresh(),
+            'user' => UserProfileSerializer::privateProfile($user->fresh()),
         ]);
     }
 

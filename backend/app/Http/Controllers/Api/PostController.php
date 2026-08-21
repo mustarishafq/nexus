@@ -13,11 +13,12 @@ use App\Models\User;
 use App\Services\FeedNotificationService;
 use App\Services\GamificationService;
 use App\Services\MentionService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
 use App\Support\FeedLinks;
+use App\Support\PermissionCatalog;
 use App\Support\PostPollPayload;
-use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -257,7 +258,7 @@ class PostController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! UserRoles::isHrOrAdmin($viewer)) {
+        if (! PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -303,7 +304,7 @@ class PostController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! UserRoles::isHrOrAdmin($viewer)) {
+        if (! PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -327,7 +328,7 @@ class PostController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($viewer->id !== $post->author_user_id && ! UserRoles::isHrOrAdmin($viewer)) {
+        if ($viewer->id !== $post->author_user_id && ! PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

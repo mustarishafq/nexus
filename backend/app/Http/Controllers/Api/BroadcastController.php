@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\Broadcast;
 use App\Models\Notification;
 use App\Support\ApiTokenAuth;
 use App\Support\BroadcastAudience;
+use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +18,7 @@ use Illuminate\Validation\Rule;
 class BroadcastController extends Controller
 {
     use AppliesIndexQuery;
+    use AuthorizesRoles;
 
     public function index(Request $request): JsonResponse
     {
@@ -23,6 +26,12 @@ class BroadcastController extends Controller
 
         if (! $user?->is_approved) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $request->boolean('active_only')) {
+            if ($response = $this->authorizePermission($request, PermissionCatalog::BROADCAST_MANAGE)) {
+                return $response;
+            }
         }
 
         $query = Broadcast::query()->with(['assignedUsers', 'assignedDepartments']);
@@ -54,6 +63,10 @@ class BroadcastController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::BROADCAST_MANAGE)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
@@ -102,13 +115,21 @@ class BroadcastController extends Controller
         return response()->json($broadcast->fresh()->load(['assignedUsers', 'assignedDepartments']), 201);
     }
 
-    public function show(Broadcast $broadcast): JsonResponse
+    public function show(Request $request, Broadcast $broadcast): JsonResponse
     {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::BROADCAST_MANAGE)) {
+            return $response;
+        }
+
         return response()->json($broadcast->load(['assignedUsers', 'assignedDepartments']));
     }
 
     public function update(Request $request, Broadcast $broadcast): JsonResponse
     {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::BROADCAST_MANAGE)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
@@ -145,8 +166,12 @@ class BroadcastController extends Controller
         return response()->json($broadcast->fresh()->load(['assignedUsers', 'assignedDepartments']));
     }
 
-    public function destroy(Broadcast $broadcast): JsonResponse
+    public function destroy(Request $request, Broadcast $broadcast): JsonResponse
     {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::BROADCAST_MANAGE)) {
+            return $response;
+        }
+
         $broadcast->delete();
 
         return response()->json(null, 204);

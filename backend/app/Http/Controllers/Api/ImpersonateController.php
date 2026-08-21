@@ -8,6 +8,8 @@ use App\Models\ActivityLog;
 use App\Models\AuthToken;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
+use App\Support\UserProfileSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,7 +23,7 @@ class ImpersonateController extends Controller
 
     public function start(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_IMPERSONATE)) {
             return $response;
         }
 
@@ -62,7 +64,7 @@ class ImpersonateController extends Controller
         return response()->json([
             'message' => 'Preview session started.',
             'token' => $token,
-            'user' => $user->fresh(),
+            'user' => UserProfileSerializer::privateProfile($user->fresh()),
         ]);
     }
 

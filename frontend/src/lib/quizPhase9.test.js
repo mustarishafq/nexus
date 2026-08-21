@@ -106,6 +106,10 @@ test('countdown state is Q1-only and does not steal answering time', () => {
 	assert.equal(isQuizAnsweringOpen(session, now), false);
 
 	const afterGo = Date.parse('2026-08-20T03:00:03.000Z');
+	const staleClosed = { ...session, answering_open: false };
+	assert.equal(quizCountdownRemainingMs(staleClosed, afterGo), 0);
+	assert.equal(isQuizAnsweringOpen(staleClosed, afterGo), true);
+
 	const openSession = { ...session, answering_open: true };
 	assert.equal(quizCountdownRemainingMs(openSession, afterGo), 0);
 	assert.equal(quizCountdownLabel(0), null);

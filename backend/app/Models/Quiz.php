@@ -18,6 +18,8 @@ class Quiz extends Model
         'status',
         'bgm_theme',
         'sfx_pack',
+        'async_power_ups_enabled',
+        'async_deadline_at',
     ];
 
     public const BGM_THEMES = ['party', 'arcade', 'chill', 'energy'];
@@ -32,6 +34,24 @@ class Quiz extends Model
     public function questions(): HasMany
     {
         return $this->hasMany(QuizQuestion::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'async_power_ups_enabled' => 'boolean',
+            'async_deadline_at' => 'datetime',
+        ];
+    }
+
+    public function selfPacedDeadlineHasPassed(): bool
+    {
+        return $this->async_deadline_at !== null && $this->async_deadline_at->lte(now());
+    }
+
+    public function isAvailableForSelfPaced(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED && ! $this->selfPacedDeadlineHasPassed();
     }
 
     public function sessions(): HasMany

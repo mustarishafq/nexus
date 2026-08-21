@@ -16,10 +16,10 @@ export function quizCountdownLabel(ms) {
 
 export function isQuizAnsweringOpen(session, now = Date.now()) {
 	if (!session || session.status !== 'question' || session.paused) return false;
-	if (typeof session.answering_open === 'boolean') {
-		return session.answering_open && quizCountdownRemainingMs(session, now) <= 0;
-	}
-	return quizCountdownRemainingMs(session, now) <= 0;
+	if (quizCountdownRemainingMs(session, now) > 0) return false;
+	if (session.answering_open === true) return true;
+	const started = session.question_started_at ? Date.parse(session.question_started_at) : 0;
+	return Number.isFinite(started) && started > 0 && started <= now;
 }
 
 export function questionTimerState(session, question, now = Date.now()) {

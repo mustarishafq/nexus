@@ -1,6 +1,6 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -50,7 +50,8 @@ import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
 import { useAuth } from '@/lib/AuthContext';
-import { isAdmin as userIsAdmin, isHr, ROLE_OPTIONS } from '@/lib/roles';
+import { can, getRoleLabel, isAdmin as userIsAdmin, isHr, ROLE_OPTIONS } from '@/lib/roles';
+import RolesPanel from '@/components/users/RolesPanel';
 import RoleBadge from '@/components/users/RoleBadge';
 
 const MCP_ACCESS_OPTIONS = [
@@ -87,6 +88,8 @@ function useDebouncedValue(value, delay = 300) {
 
   return debounced;
 }
+
+const USER_MANAGEMENT_SECTIONS = ['users', 'roles', 'groups', 'analytics', 'sso-links', 'api-tokens'];
 
 function ProfileStrengthCell({ user, compact = false }) {
   const { percent } = getUserProfileStrength(user);
@@ -322,10 +325,11 @@ function SearchableUserMultiSelect({ users, selectedIds, onToggle, placeholder =
 
 export default function UserManagement() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: currentUser, startImpersonation, isImpersonating } = useAuth();
   const isAdmin = userIsAdmin(currentUser);
   const isHrUser = isHr(currentUser);
+  const canAssignRoles = can(currentUser, 'people.assign_role');
   const [approvingUser, setApprovingUser] = useState(null);
   const [pendingUserApproval, setPendingUserApproval] = useState(null);
   const [pendingPreviewUser, setPendingPreviewUser] = useState(null);
@@ -381,11 +385,39 @@ export default function UserManagement() {
   });
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [pendingDeleteDashboard, setPendingDeleteDashboard] = useState(null);
-  const adminSections = new Set(isAdmin ? ['users', 'groups', 'analytics', 'sso-links', 'api-tokens'] : ['users']);
-  const [activeSection, setActiveSection] = useState(() => {
-    const section = searchParams.get('section');
-    return section && adminSections.has(section) ? section : 'users';
-  });
+  const allowedSections = useMemo(() => {
+    const sections = [];
+    if (can(currentUser, 'people.manage_users')) sections.push('users');
+    if (can(currentUser, 'roles.manage')) sections.push('roles');
+    if (can(currentUser, 'people.manage_groups')) sections.push('groups');
+    if (can(currentUser, 'analytics.manage')) sections.push('analytics');
+    if (can(currentUser, 'tokens.manage')) {
+      sections.push('sso-links', 'api-tokens');
+    }
+    if (sections.length === 0) sections.push('users');
+    return new Set(sections);
+  }, [currentUser]);
+  const requestedSection = USER_MANAGEMENT_SECTIONS.includes(searchParams.get('section'))
+    ? searchParams.get('section')
+    : 'users';
+  const activeSection = allowedSections.has(requestedSection) ? requestedSection : 'users';
+  const setActiveSection = useCallback((section) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!section || section === 'users') {
+        next.delete('section');
+      } else {
+        next.set('section', section);
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (requestedSection !== activeSection) {
+      setActiveSection(activeSection);
+    }
+  }, [requestedSection, activeSection, setActiveSection]);
   const [nudgingUser, setNudgingUser] = useState(null);
   const [bulkNudging, setBulkNudging] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -440,6 +472,23 @@ export default function UserManagement() {
     }),
     placeholderData: (previous) => previous,
   });
+
+  const { data: roleOptionsPayload } = useQuery({
+    queryKey: ['role-options'],
+    queryFn: () => db.roles.options(),
+  });
+  const { data: rolesPayload } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => db.roles.list(),
+    enabled: allowedSections.has('roles'),
+  });
+  const roleCount = Array.isArray(rolesPayload?.data) ? rolesPayload.data.length : 0;
+  const roleOptions = (roleOptionsPayload?.data || []).map((role) => ({
+    value: role.slug,
+    label: getRoleLabel(role.slug, role.name),
+    id: role.id,
+  }));
+  const assignableRoleOptions = roleOptions.length > 0 ? roleOptions : ROLE_OPTIONS;
 
   const { data: pickerUsersRaw = [] } = useQuery({
     queryKey: ['users-picker-roster'],
@@ -686,6 +735,8 @@ export default function UserManagement() {
     onSuccess: async (_data, { id, name }) => {
       removeFromUsersCache(id);
       await queryClient.refetchQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['role-members'] });
       toast.success(`Removed ${name}`);
     },
   });
@@ -1059,7 +1110,7 @@ export default function UserManagement() {
             Send notification
           </DropdownMenuItem>
         ) : null}
-        {(isAdmin || isHrUser) && user.is_approved ? (
+        {can(currentUser, 'gamification.award_manual') && user.is_approved ? (
           <DropdownMenuItem onClick={() => openExpAwardDialog(user)}>
             <Gift className="w-4 h-4 mr-2" />
             Award EXP
@@ -1150,6 +1201,8 @@ export default function UserManagement() {
       });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['access-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['role-members'] });
       setCreateOpen(false);
       setNewUserRole('user');
       setNewUserMcpAccess('none');
@@ -1169,7 +1222,7 @@ export default function UserManagement() {
     setEditForm({
       full_name: user.full_name || '',
       name: user.name || '',
-      role: user.role || 'user',
+      role: user.access_role?.slug || user.role || 'user',
       mcp_access: user.mcp_access || 'none',
       is_approved: Boolean(user.is_approved),
       access_group_ids: new Set(getUserGroupIds(user)),
@@ -1219,6 +1272,8 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['people-directory'] });
       queryClient.invalidateQueries({ queryKey: ['org-chart'] });
       queryClient.invalidateQueries({ queryKey: ['access-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['role-members'] });
       setEditUser(null);
       toast.success('User updated successfully');
     } catch (err) {
@@ -1679,7 +1734,7 @@ export default function UserManagement() {
               <span className="truncate">Send notification</span>
             </Button>
           ) : null}
-          {(isAdmin || isHrUser) ? (
+          {(isAdmin || isHrUser) && can(currentUser, 'gamification.award_manual') ? (
             <Button
               variant="outline"
               size="sm"
@@ -1724,34 +1779,47 @@ export default function UserManagement() {
       </motion.div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
-        <TabsList className={`grid h-auto w-full gap-1 sm:inline-flex sm:h-10 sm:w-auto ${isAdmin ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-1'}`}>
+        <TabsList className={`grid h-auto w-full gap-1 sm:inline-flex sm:h-10 sm:w-auto ${allowedSections.size > 1 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6' : 'grid-cols-1'}`}>
+          {allowedSections.has('users') ? (
           <TabsTrigger value="users" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <UsersIcon className="w-4 h-4 shrink-0" />
             <span className="truncate">Users</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{stats.total}</Badge>
           </TabsTrigger>
-          {isAdmin ? (
-            <>
+          ) : null}
+          {allowedSections.has('roles') ? (
+            <TabsTrigger value="roles" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
+              <Shield className="w-4 h-4 shrink-0" />
+              <span className="truncate">Roles</span>
+              <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{roleCount}</Badge>
+            </TabsTrigger>
+          ) : null}
+          {allowedSections.has('groups') ? (
           <TabsTrigger value="groups" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <Layers className="w-4 h-4 shrink-0" />
             <span className="truncate">Groups</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{accessGroups.length}</Badge>
           </TabsTrigger>
+          ) : null}
+          {allowedSections.has('analytics') ? (
           <TabsTrigger value="analytics" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <BarChart3 className="w-4 h-4 shrink-0" />
             <span className="truncate">Analytics</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{metabaseDashboards.length}</Badge>
           </TabsTrigger>
+          ) : null}
+          {allowedSections.has('sso-links') ? (
           <TabsTrigger value="sso-links" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <KeyRound className="w-4 h-4 shrink-0" />
             <span className="truncate">SSO Links</span>
           </TabsTrigger>
+          ) : null}
+          {allowedSections.has('api-tokens') ? (
           <TabsTrigger value="api-tokens" className="gap-1.5 flex-1 min-h-[40px] px-2 text-xs sm:flex-none sm:min-h-0 sm:px-3 sm:text-sm">
             <Key className="w-4 h-4 shrink-0" />
             <span className="truncate">API Tokens</span>
             <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px] sm:text-xs font-normal">{apiTokenCount}</Badge>
           </TabsTrigger>
-            </>
           ) : null}
         </TabsList>
 
@@ -1765,6 +1833,10 @@ export default function UserManagement() {
             createForUserId={apiTokenCreateUserId}
             createSignal={apiTokenCreateSignal}
           />
+        </TabsContent>
+
+        <TabsContent value="roles" className="mt-0">
+          <RolesPanel />
         </TabsContent>
 
         <TabsContent value="users" className="mt-0">
@@ -1795,7 +1867,7 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All roles</SelectItem>
-                  {ROLE_OPTIONS.map((option) => (
+                  {assignableRoleOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1907,7 +1979,7 @@ export default function UserManagement() {
                       {renderUserActionsMenu(user)}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <RoleBadge role={user.role} size="sm" />
+                      <RoleBadge role={user.access_role?.slug || user.role} label={user.access_role?.name} size="sm" />
                       <Badge
                         variant={user.is_approved ? 'default' : 'outline'}
                         className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
@@ -1964,7 +2036,7 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <RoleBadge role={user.role} size="sm" />
+                        <RoleBadge role={user.access_role?.slug || user.role} label={user.access_role?.name} size="sm" />
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -2464,13 +2536,13 @@ export default function UserManagement() {
                   <Label>Email</Label>
                   <Input value={editUser.email || ''} disabled className="bg-muted/40" />
                 </div>
-                {isAdmin ? (
+                {canAssignRoles ? (
                   <div className="space-y-2">
                     <Label>Role</Label>
                     <Select value={editForm.role || 'user'} onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {ROLE_OPTIONS.map((option) => (
+                        {assignableRoleOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2680,13 +2752,13 @@ export default function UserManagement() {
                 }}
               />
             </div>
-            {isAdmin ? (
+            {canAssignRoles ? (
               <div className="space-y-2">
                 <Label>Role</Label>
                 <Select value={newUserRole} onValueChange={setNewUserRole}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.map((option) => (
+                    {assignableRoleOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
                   </SelectContent>

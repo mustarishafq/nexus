@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageApplications } from '@/lib/roles';
 
 const toAbsoluteUrl = (url) => {
   if (!url) return '';
@@ -307,7 +308,7 @@ export default function ApplicationBrowser() {
         open={whatsNewOpen}
         onOpenChange={setWhatsNewOpen}
         canManage={Boolean(
-          user?.role === 'admin' || Number(system.created_by_user_id) === Number(user?.id)
+          canManageApplications(user) || Number(system.created_by_user_id) === Number(user?.id)
         )}
       />
     </div>

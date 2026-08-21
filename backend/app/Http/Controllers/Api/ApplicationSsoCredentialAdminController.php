@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ApplicationSsoCredential;
 use App\Support\ApiTokenAuth;
 use App\Services\ApplicationSsoCredentialNotificationService;
+use App\Services\PermissionService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -112,7 +114,7 @@ class ApplicationSsoCredentialAdminController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin') {
+        if (! PermissionService::can($user, PermissionCatalog::TOKENS_MANAGE)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

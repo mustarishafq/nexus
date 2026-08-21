@@ -14,6 +14,7 @@ use App\Support\AppSettings;
 use App\Support\AttendanceLateEvaluator;
 use App\Support\AttendancePolicyValidator;
 use App\Support\AttendanceReminderEvaluator;
+use App\Support\PermissionCatalog;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -406,7 +407,7 @@ class AttendanceController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_VIEW_ALL)) {
             return $response;
         }
 
@@ -457,7 +458,7 @@ class AttendanceController extends Controller
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_VIEW_ALL)) {
             return $response;
         }
 
@@ -553,7 +554,7 @@ class AttendanceController extends Controller
 
     public function userHistory(Request $request, User $user): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_VIEW_ALL)) {
             return $response;
         }
 

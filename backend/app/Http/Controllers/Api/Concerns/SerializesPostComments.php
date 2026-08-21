@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\PostComment;
 use App\Models\User;
+use App\Services\PermissionService;
+use App\Support\PermissionCatalog;
 use App\Support\ReactionEmojis;
 
 trait SerializesPostComments
@@ -34,7 +36,7 @@ trait SerializesPostComments
             'body' => $comment->body,
             'author' => $this->serializeFeedAuthor($comment->author),
             'created_date' => $comment->created_date,
-            'can_delete' => $viewer->id === $comment->author_user_id || $viewer->role === 'admin',
+            'can_delete' => $viewer->id === $comment->author_user_id || PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE),
             'reaction_counts' => $reactionCounts,
             'my_reaction' => $myReaction,
             'available_reactions' => ReactionEmojis::QUICK,

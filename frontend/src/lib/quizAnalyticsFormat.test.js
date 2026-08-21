@@ -10,6 +10,10 @@ import {
 	powerUpLabel,
 	questionOutcome,
 	questionOutcomeMark,
+	formatQuizCreatedAt,
+	formatQuizOwnerMeta,
+	formatSelfPacedDeadline,
+	isSelfPacedDeadlinePassed,
 } from './quizAnalyticsFormat.js';
 
 test('formats response times and empty states', () => {
@@ -38,6 +42,12 @@ test('formats EXP earned', () => {
 	assert.equal(formatExpEarned(0), null);
 });
 
+test('formats quiz owner metadata', () => {
+	assert.equal(formatQuizCreatedAt('2026-08-12T10:00:00.000Z').includes('Aug 2026'), true);
+	assert.match(formatQuizOwnerMeta('2026-08-12T10:00:00.000Z', new Date().toISOString()), /Created .* · Edited /);
+	assert.equal(formatQuizOwnerMeta(null, null), '');
+});
+
 test('question outcomes map to marks', () => {
 	assert.equal(questionOutcome({ result: 'correct' }), 'correct');
 	assert.equal(questionOutcome({ result: 'wrong' }), 'wrong');
@@ -56,4 +66,12 @@ test('power-up labels stay user-facing', () => {
 	assert.equal(formatPointsDelta(1500), '+1,500');
 	assert.equal(formatPointsDelta(-800), '-800');
 	assert.equal(formatPointsDelta(0), '0');
+});
+
+test('formats optional self-paced deadlines', () => {
+	assert.equal(formatSelfPacedDeadline(null), null);
+	assert.equal(isSelfPacedDeadlinePassed(null), false);
+	assert.equal(isSelfPacedDeadlinePassed('2026-08-20T15:59:00.000Z', Date.parse('2026-08-20T15:58:00.000Z')), false);
+	assert.equal(isSelfPacedDeadlinePassed('2026-08-20T15:59:00.000Z', Date.parse('2026-08-20T16:00:00.000Z')), true);
+	assert.match(formatSelfPacedDeadline('2026-08-20T15:59:00.000Z'), /Aug 2026/);
 });

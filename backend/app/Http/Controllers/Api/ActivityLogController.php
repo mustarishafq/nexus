@@ -6,8 +6,9 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
-use App\Support\UserRoles;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,14 +27,14 @@ class ActivityLogController extends Controller
 
         $query = ActivityLog::query();
 
-        if (! UserRoles::isHrOrAdmin($user)) {
+        if (! PermissionService::can($user, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             $query->where('user_id', (string) $user->id);
         }
 
         $items = $this->applyIndexQuery(
             $request,
             $query,
-            UserRoles::isHrOrAdmin($user)
+            PermissionService::can($user, PermissionCatalog::PEOPLE_MANAGE_USERS)
                 ? ['user_id', 'system_id', 'action', 'resource_type', 'resource_id']
                 : ['system_id', 'action', 'resource_type', 'resource_id']
         )->get();
@@ -133,7 +134,7 @@ class ActivityLogController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! UserRoles::isHrOrAdmin($user) && $activityLog->user_id !== (string) $user->id) {
+        if (! PermissionService::can($user, PermissionCatalog::PEOPLE_MANAGE_USERS) && $activityLog->user_id !== (string) $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

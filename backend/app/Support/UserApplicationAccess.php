@@ -6,6 +6,7 @@ use App\Models\AccessGroup;
 use App\Models\Application;
 use App\Models\User;
 use App\Models\UserSystemAccess;
+use App\Services\PermissionService;
 
 class UserApplicationAccess
 {
@@ -17,7 +18,7 @@ class UserApplicationAccess
      */
     public static function allowedPublicSlugs(User $user): ?array
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return null;
         }
 
@@ -64,7 +65,7 @@ class UserApplicationAccess
 
     public static function canAccess(User $user, Application $application): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return true;
         }
 
@@ -100,7 +101,7 @@ class UserApplicationAccess
     {
         $query = self::mcpEnabledQuery();
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::APPLICATIONS_MANAGE)) {
             return $query;
         }
 

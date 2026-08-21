@@ -539,6 +539,14 @@ export const db = {
 			return request(`/quizzes/${id}/attempts`);
 		},
 
+		async history(id) {
+			return request(`/quizzes/${id}/history`);
+		},
+
+		async selfPacedAnalytics(id) {
+			return request(`/quizzes/${id}/self-paced-analytics`);
+		},
+
 		async startSession(id, data = {}) {
 			return request(`/quizzes/${id}/sessions`, { method: 'POST', body: data });
 		},
@@ -607,6 +615,10 @@ export const db = {
 
 		async analytics(id) {
 			return request(`/quiz-sessions/${id}/analytics`);
+		},
+
+		async destroy(id) {
+			return request(`/quiz-sessions/${id}`, { method: 'DELETE' });
 		},
 
 		async showByToken(token) {
@@ -1146,6 +1158,56 @@ export const db = {
 
 		async disconnect() {
 			return request('/google/oauth/disconnect', { method: 'DELETE' });
+		},
+	},
+
+	roles: {
+		async list() {
+			return request('/roles');
+		},
+		async options() {
+			return request('/roles/options');
+		},
+		async create(body) {
+			return request('/roles', { method: 'POST', body });
+		},
+		async update(id, body) {
+			return request(`/roles/${id}`, { method: 'PATCH', body });
+		},
+		async destroy(id) {
+			return request(`/roles/${id}`, { method: 'DELETE' });
+		},
+		async syncPermissions(id, permission_keys) {
+			return request(`/roles/${id}/permissions`, {
+				method: 'PUT',
+				body: { permission_keys },
+			});
+		},
+		async users(id) {
+			return request(`/roles/${id}/users`);
+		},
+		async searchUsers(id, query, limit = 10) {
+			const queryString = buildQuery({ q: query, limit });
+			const payload = await request(`/roles/${id}/user-search${queryString}`);
+			return Array.isArray(payload) ? payload : [];
+		},
+		async assignUsers(id, user_ids) {
+			return request(`/roles/${id}/users`, {
+				method: 'POST',
+				body: { user_ids },
+			});
+		},
+		async reassignUser(id, userId, role_id) {
+			return request(`/roles/${id}/users/${userId}`, {
+				method: 'PATCH',
+				body: { role_id },
+			});
+		},
+	},
+
+	permissions: {
+		async list() {
+			return request('/permissions');
 		},
 	},
 

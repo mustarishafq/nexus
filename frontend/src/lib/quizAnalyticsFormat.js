@@ -1,3 +1,5 @@
+import { format, formatDistanceToNow } from 'date-fns';
+
 export function formatResponseMs(ms) {
 	if (ms == null || ms === '' || !Number.isFinite(Number(ms))) return '—';
 	return `${(Number(ms) / 1000).toFixed(1)}s`;
@@ -56,4 +58,48 @@ export function formatExpEarned(amount, status) {
 	if (!Number.isFinite(n) || n <= 0) return null;
 	if (status === 'pending') return `+${n} EXP pending`;
 	return `+${n} EXP`;
+}
+
+export function formatQuizCreatedAt(value) {
+	if (!value) return null;
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return null;
+	return format(date, 'd MMM yyyy');
+}
+
+export function formatQuizEditedAt(value) {
+	if (!value) return null;
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return null;
+	return formatDistanceToNow(date, { addSuffix: true });
+}
+
+export function formatQuizOwnerMeta(createdAt, updatedAt) {
+	const created = formatQuizCreatedAt(createdAt);
+	const edited = formatQuizEditedAt(updatedAt);
+	if (created && edited) return `Created ${created} · Edited ${edited}`;
+	if (created) return `Created ${created}`;
+	if (edited) return `Edited ${edited}`;
+	return '';
+}
+
+export function formatLiveSessionWhen(value) {
+	if (!value) return 'Live session';
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return 'Live session';
+	return format(date, 'd MMM yyyy · h:mm a');
+}
+
+export function formatSelfPacedDeadline(value) {
+	if (!value) return null;
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return null;
+	return format(date, 'd MMM yyyy, h:mm a');
+}
+
+export function isSelfPacedDeadlinePassed(value, now = Date.now()) {
+	if (!value) return false;
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return false;
+	return date.getTime() <= now;
 }

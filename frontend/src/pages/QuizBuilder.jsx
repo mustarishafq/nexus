@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import PageLoader from '@/components/PageLoader';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
@@ -17,6 +18,7 @@ import { glassDialogMutedText, glassDialogTitleText } from '@/components/layout/
 import { extractPublicStoragePath, toPublicFileUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { isTrueFalseQuestion, trueFalseOptions } from '@/lib/quizQuestion';
+import { formatSelfPacedDeadline } from '@/lib/quizAnalyticsFormat';
 
 const TIME_MIN = 5;
 const TIME_MAX = 120;
@@ -101,6 +103,14 @@ function firstValidationError(err) {
   return err?.data?.message || err.message || 'Save failed';
 }
 
+function toDatetimeLocalValue(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function QuizBuilder() {
   const { id } = useParams();
   const isNew = !id || id === 'new';
@@ -113,6 +123,8 @@ export default function QuizBuilder() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('draft');
   const [bgmTheme, setBgmTheme] = useState('party');
+  const [asyncPowerUps, setAsyncPowerUps] = useState(false);
+  const [asyncDeadlineLocal, setAsyncDeadlineLocal] = useState('');
   const [questions, setQuestions] = useState([emptyQuestion()]);
   const mcBackupRef = useRef({});
   const [bulkTime, setBulkTime] = useState(20);
@@ -132,6 +144,8 @@ export default function QuizBuilder() {
     setDescription(q.description || '');
     setStatus(q.status || 'draft');
     setBgmTheme(q.bgm_theme || 'party');
+    setAsyncPowerUps(!!q.async_power_ups_enabled);
+    setAsyncDeadlineLocal(toDatetimeLocalValue(q.async_deadline_at));
     setQuestions(
       (q.questions || []).map((question) => ({
         clientKey: `saved-${question.id}`,
@@ -181,6 +195,11 @@ export default function QuizBuilder() {
 
       const duplicateMessage = duplicateQuestionMessage(payload.questions);
       if (duplicateMessage) throw new Error(duplicateMessage);
+
+      if (status === 'published') {
+        payload.async_power_ups_enabled = asyncPowerUps;
+        payload.async_deadline_at = asyncDeadlineLocal ? new Date(asyncDeadlineLocal).toISOString() : null;
+      }
 
       if (isNew) return db.quizzes.create(payload);
       return db.quizzes.update(id, payload);
@@ -330,7 +349,50 @@ export default function QuizBuilder() {
               <SelectItem value="published">Published (self-paced)</SelectItem>
             </SelectContent>
           </Select>
+          <p className={cn('text-xs', glassDialogMutedText)}>
+            Draft and published quizzes can both be hosted live. Publishing also unlocks one-time self-paced play.
+          </p>
         </div>
+        {status === 'published' ? (
+          <div className="space-y-3 rounded-xl border border-border px-3 py-3">
+            <p className={cn('text-sm font-medium', glassDialogTitleText)}>Published / Self-paced</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0 space-y-2">
+                <Label>Self-paced power-ups</Label>
+                <div className="flex h-10 items-center justify-between gap-3 rounded-md border border-input bg-background px-3">
+                  <span className={cn('text-sm', glassDialogMutedText)}>
+                    {asyncPowerUps ? 'On' : 'Off'}
+                  </span>
+                  <Switch checked={asyncPowerUps} onCheckedChange={setAsyncPowerUps} />
+                </div>
+                <p className={cn('text-xs', glassDialogMutedText)}>
+                  Off by default. Same power-ups as live games if enabled.
+                </p>
+              </div>
+              <div className="min-w-0 space-y-2">
+                <Label>Deadline (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="datetime-local"
+                    className="min-w-0 flex-1"
+                    value={asyncDeadlineLocal}
+                    onChange={(e) => setAsyncDeadlineLocal(e.target.value)}
+                  />
+                  {asyncDeadlineLocal ? (
+                    <Button type="button" variant="outline" className="shrink-0" onClick={() => setAsyncDeadlineLocal('')}>
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+                <p className={cn('text-xs', glassDialogMutedText)}>
+                  {asyncDeadlineLocal
+                    ? formatSelfPacedDeadline(new Date(asyncDeadlineLocal).toISOString())
+                    : 'No deadline'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </GlassCard>
 
       <GlassCard>

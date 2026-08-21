@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\MetabaseDashboard;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,7 +27,7 @@ class MetabaseDashboardController extends Controller
 
         $query = MetabaseDashboard::query();
 
-        if ($request->boolean('admin') && $user->role === 'admin') {
+        if ($request->boolean('admin') && PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE)) {
             $items = $this->applyIndexQuery(
                 $request,
                 $query->with(['assignedAccessGroups', 'assignedUsers']),
@@ -38,7 +40,7 @@ class MetabaseDashboardController extends Controller
 
         $query->where('is_enabled', true);
 
-        if ($user->role !== 'admin') {
+        if (! PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE)) {
             $userGroupIds = $user->accessGroups()
                 ->pluck('access_groups.id')
                 ->map(fn ($id) => (int) $id)
@@ -79,7 +81,7 @@ class MetabaseDashboardController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE)) {
             $validated = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
                 'public_url' => ['required', 'url', 'max:2048', 'regex:/^https?:\/\//i'],
@@ -118,7 +120,7 @@ class MetabaseDashboardController extends Controller
 
         $dashboard = MetabaseDashboard::create($validated);
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE)) {
             if ($validated['assignment_type'] === MetabaseDashboard::ASSIGNMENT_GROUP) {
                 SyncAssignmentRecords::syncMetabaseDashboardAccessGroups($dashboard, $accessGroupIds ?? []);
             } else {
@@ -137,7 +139,7 @@ class MetabaseDashboardController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin' && ! $this->userCanViewDashboard($user, $metabaseDashboard)) {
+        if (! PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE) && ! $this->userCanViewDashboard($user, $metabaseDashboard)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -156,7 +158,7 @@ class MetabaseDashboardController extends Controller
         $userIds = null;
         $shouldSyncAssignments = false;
 
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE)) {
             if ($metabaseDashboard->owner_user_id !== null) {
                 $validated = $request->validate([
                     'name' => ['sometimes', 'string', 'max:255'],
@@ -268,7 +270,7 @@ class MetabaseDashboardController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->role !== 'admin' && (int) $metabaseDashboard->owner_user_id !== (int) $user->id) {
+        if (! PermissionService::can($user, PermissionCatalog::ANALYTICS_MANAGE) && (int) $metabaseDashboard->owner_user_id !== (int) $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

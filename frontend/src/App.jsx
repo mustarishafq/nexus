@@ -55,6 +55,8 @@ const QuizBuilder = lazy(() => import('@/pages/QuizBuilder'));
 const QuizHost = lazy(() => import('@/pages/QuizHost'));
 const QuizPlay = lazy(() => import('@/pages/QuizPlay'));
 const QuizAnalytics = lazy(() => import('@/pages/QuizAnalytics'));
+const QuizDetails = lazy(() => import('@/pages/QuizDetails'));
+const QuizSelfPacedAnalytics = lazy(() => import('@/pages/QuizSelfPacedAnalytics'));
 const QuizPreview = lazy(() => import('@/pages/QuizPreview'));
 const QuizJoinPublic = lazy(() => import('@/pages/QuizJoinPublic'));
 
@@ -133,6 +135,8 @@ const ProtectedRoutes = () => {
           <Route path="/games/new" element={<QuizBuilder />} />
           <Route path="/games/:id/edit" element={<QuizBuilder />} />
           <Route path="/games/:id/preview" element={<QuizPreview />} />
+          <Route path="/games/:id/self-paced" element={<QuizSelfPacedAnalytics />} />
+          <Route path="/games/:id" element={<QuizDetails />} />
           <Route path="/games/sessions/:id/host" element={<QuizHost />} />
           <Route path="/games/play/:id" element={<QuizPlay />} />
           <Route path="/games/sessions/:id/analytics" element={<QuizAnalytics />} />

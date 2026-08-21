@@ -74,6 +74,7 @@ export default function QuizPlay() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isAsync = searchParams.get('async') === '1';
+  const isPreview = searchParams.get('preview') === '1';
   const queryClient = useQueryClient();
   const [muteMusic, setMuteMusicLocal] = useState(isMusicMuted());
   const [muteSfx, setMuteSfxLocal] = useState(isSfxMuted());
@@ -92,6 +93,7 @@ export default function QuizPlay() {
   });
 
   const session = sessionQuery.data;
+  const creatorPreview = isPreview || !!session?.is_preview;
 
   useEffect(() => {
     armUnlockOnGesture();
@@ -136,7 +138,7 @@ export default function QuizPlay() {
 
     if (session.status === 'question' && qid) {
       if (prev === 'lobby') playSfxOnce('game-start', 'game-start');
-      if (isAsync || isQuizAnsweringOpen(session)) {
+      if (isQuizAnsweringOpen(session)) {
         playSfxOnce(`q:${qid}:start`, 'question-start');
       }
     }
@@ -285,22 +287,22 @@ export default function QuizPlay() {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (isAsync || session?.status !== 'question' || session?.paused) return undefined;
+    if (session?.status !== 'question' || session?.paused) return undefined;
     if (quizCountdownRemainingMs(session) <= 0) return undefined;
     const timerId = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(timerId);
-  }, [isAsync, session?.status, session?.question_started_at, session?.answering_open, session?.paused]);
+  }, [session?.status, session?.question_started_at, session?.answering_open, session?.paused]);
 
-  const countdownMs = isAsync ? 0 : quizCountdownRemainingMs(session, now);
+  const countdownMs = quizCountdownRemainingMs(session, now);
   const countdownLabel = quizCountdownLabel(countdownMs);
-  const answeringOpen = isAsync || isQuizAnsweringOpen(session, now);
+  const answeringOpen = isQuizAnsweringOpen(session, now);
 
   useEffect(() => {
-    if (!countdownLabel || countdownLabel === 'GO!' || isAsync) return;
+    if (!countdownLabel || countdownLabel === 'GO!') return;
     playSfxOnce(`countdown:${id}:${countdownLabel}`, 'timer-tick');
-  }, [countdownLabel, id, isAsync]);
+  }, [countdownLabel, id]);
 
-  const answersLocked = !!session?.my_answer || answerMutation.isPending || (!isAsync && (timedOut || !!session?.paused || !answeringOpen));
+  const answersLocked = !!session?.my_answer || answerMutation.isPending || !answeringOpen || !!session?.paused || (!isAsync && timedOut);
 
   if (sessionQuery.isLoading) return <PageLoader />;
   if (!session) {
@@ -411,7 +413,7 @@ export default function QuizPlay() {
             <>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
-              {!isAsync && (
+              {(session.my_power_ups || []).length > 0 && (
                 <div className="flex gap-2 flex-wrap">
                   {(session.my_power_ups || []).map((pu) => {
                     const meta = POWER_UP_META[pu.type];
@@ -419,7 +421,7 @@ export default function QuizPlay() {
                     if (!isPowerUpVisibleForQuestion(pu.type, currentQuestion)) return null;
                     const Icon = meta.icon;
                     const scoringConflict = scoringPowerUpBlocked(pu.type, session.my_power_ups);
-                    const disabled = pu.uses_remaining < 1 || pu.active || !!session.my_answer || powerUpMutation.isPending || !!session.paused || scoringConflict || !answeringOpen;
+                    const disabled = pu.uses_remaining < 1 || pu.active || !!session.my_answer || powerUpMutation.isPending || !!session.paused || scoringConflict || !answeringOpen || timedOut;
                     return (
                       <motion.button
                         key={pu.type}
@@ -519,20 +521,28 @@ export default function QuizPlay() {
                   title="Final scores!"
                   highlightUserId={session.viewer_user_id}
                 />
-                {session.is_player ? (
+                {session.is_player && !creatorPreview ? (
                   <ExpEarnedBadge amount={session.exp_earned} status={session.exp_status} className="text-2xl" />
                 ) : null}
                 {liveReaction ? <ReactionMoment reaction={liveReaction} /> : null}
                 <div className="flex flex-wrap gap-3 justify-center">
-                  <Link to={`/games/sessions/${session.id}/analytics`}>
-                    <GameActionButton>
-                      <BarChart3 className="h-4 w-4" />
-                      View Analytics
-                    </GameActionButton>
-                  </Link>
-                  <Link to="/games">
-                    <GameActionButton variant="secondary">Back to Games</GameActionButton>
-                  </Link>
+                  {creatorPreview ? (
+                    <Link to="/games">
+                      <GameActionButton>Back to Games</GameActionButton>
+                    </Link>
+                  ) : (
+                    <>
+                      <Link to={`/games/sessions/${session.id}/analytics`}>
+                        <GameActionButton>
+                          <BarChart3 className="h-4 w-4" />
+                          View Analytics
+                        </GameActionButton>
+                      </Link>
+                      <Link to="/games">
+                        <GameActionButton variant="secondary">Back to Games</GameActionButton>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </>
             )}

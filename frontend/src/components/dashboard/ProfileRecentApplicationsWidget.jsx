@@ -9,6 +9,7 @@ import { useApplicationReleaseNoteUnreadCounts } from '@/hooks/useApplicationRel
 import { getRecentApplications } from '@/lib/applications';
 import { useApplicationLaunch } from '@/lib/ApplicationLaunchContext';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageApplications } from '@/lib/roles';
 
 function getFooterSubtitle(app, readOnly) {
   if (app.lastUsed) {
@@ -101,7 +102,7 @@ export default function ProfileRecentApplicationsWidget({
           }}
           canManage={Boolean(
             whatsNewSystem
-            && (user?.role === 'admin' || Number(whatsNewSystem.created_by_user_id) === Number(user?.id))
+            && (canManageApplications(user) || Number(whatsNewSystem.created_by_user_id) === Number(user?.id))
           )}
         />
       )}

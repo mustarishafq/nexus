@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use App\Support\UserRoles;
+use App\Services\PermissionService;
+use App\Support\PermissionCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -121,7 +122,7 @@ class Post extends Model
 
     public function scopeVisibleTo(Builder $query, User $viewer): Builder
     {
-        if (UserRoles::isHrOrAdmin($viewer)) {
+        if (PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
             return $query->whereIn('approval_status', [self::APPROVAL_APPROVED, self::APPROVAL_PENDING]);
         }
 

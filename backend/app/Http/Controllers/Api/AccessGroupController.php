@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
+use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Models\AccessGroup;
-use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,10 +15,11 @@ use Illuminate\Validation\Rule;
 class AccessGroupController extends Controller
 {
     use AppliesIndexQuery;
+    use AuthorizesRoles;
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_GROUPS)) {
             return $response;
         }
 
@@ -41,7 +43,7 @@ class AccessGroupController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_GROUPS)) {
             return $response;
         }
 
@@ -71,7 +73,7 @@ class AccessGroupController extends Controller
 
     public function show(AccessGroup $accessGroup): JsonResponse
     {
-        if ($response = $this->authorizeAdmin(request())) {
+        if ($response = $this->authorizePermission(request(), PermissionCatalog::PEOPLE_MANAGE_GROUPS)) {
             return $response;
         }
 
@@ -80,7 +82,7 @@ class AccessGroupController extends Controller
 
     public function update(Request $request, AccessGroup $accessGroup): JsonResponse
     {
-        if ($response = $this->authorizeAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_GROUPS)) {
             return $response;
         }
 
@@ -116,7 +118,7 @@ class AccessGroupController extends Controller
 
     public function destroy(AccessGroup $accessGroup): JsonResponse
     {
-        if ($response = $this->authorizeAdmin(request())) {
+        if ($response = $this->authorizePermission(request(), PermissionCatalog::PEOPLE_MANAGE_GROUPS)) {
             return $response;
         }
 
@@ -134,20 +136,5 @@ class AccessGroupController extends Controller
     private function normalizeUserIds(array $userIds): array
     {
         return array_values(array_unique(array_map('intval', $userIds)));
-    }
-
-    private function authorizeAdmin(Request $request): ?JsonResponse
-    {
-        $user = ApiTokenAuth::userFromRequest($request);
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return null;
     }
 }

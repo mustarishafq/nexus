@@ -25,6 +25,7 @@ class QuizSession extends Model
         'quiz_id',
         'host_user_id',
         'mode',
+        'is_preview',
         'pin',
         'join_token',
         'status',
@@ -38,6 +39,7 @@ class QuizSession extends Model
         'host_last_seen_at',
         'paused_at',
         'pause_remaining_ms',
+        'finished_at',
     ];
 
     protected function casts(): array
@@ -50,7 +52,14 @@ class QuizSession extends Model
             'paused_at' => 'datetime',
             'pause_remaining_ms' => 'integer',
             'music_enabled' => 'boolean',
+            'is_preview' => 'boolean',
+            'finished_at' => 'datetime',
         ];
+    }
+
+    public function scopeSelfPaced($query)
+    {
+        return $query->where('mode', self::MODE_ASYNC)->where('is_preview', false);
     }
 
     public function quiz(): BelongsTo
@@ -92,5 +101,25 @@ class QuizSession extends Model
     public function isPaused(): bool
     {
         return $this->paused_at !== null;
+    }
+
+    public function isLockedLiveHistory(): bool
+    {
+        if ($this->mode !== self::MODE_LIVE) {
+            return false;
+        }
+
+        if (! in_array($this->status, [
+            self::STATUS_QUESTION,
+            self::STATUS_REVEAL,
+            self::STATUS_LEADERBOARD,
+        ], true)) {
+            return false;
+        }
+
+        $cutoff = now()->subMinutes(max(1, (int) config('quiz.live_session_lock_minutes', 20)));
+        $seen = $this->host_last_seen_at ?? $this->updated_at;
+
+        return $seen && $seen->gte($cutoff);
     }
 }

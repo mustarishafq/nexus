@@ -120,9 +120,10 @@ class QuizCountdownTest extends TestCase
         $this->assertEquals(20, $row->question_started_at->diffInSeconds($row->question_ends_at));
     }
 
-    public function test_async_mode_has_no_countdown(): void
+    public function test_async_mode_has_q1_countdown(): void
     {
         config(['quiz.first_question_countdown_seconds' => 3]);
+        $this->freezeTime();
         $owner = User::factory()->create(['is_approved' => true]);
         $player = User::factory()->create(['is_approved' => true]);
         $quiz = Quiz::create(['user_id' => $owner->id, 'title' => 'Async', 'status' => Quiz::STATUS_PUBLISHED]);
@@ -141,8 +142,23 @@ class QuizCountdownTest extends TestCase
             ->assertCreated()
             ->json();
 
-        $this->assertTrue($session['answering_open']);
+        $this->assertFalse($session['answering_open']);
+        $row = QuizSession::findOrFail($session['id']);
+        $this->assertEquals(20, $row->question_started_at->diffInSeconds($row->question_ends_at));
+        $this->assertTrue($row->question_started_at->gt(now()));
+
         $optionId = $session['quiz']['questions'][0]['options'][0]['id'];
+        $this->withToken($this->token($player))
+            ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $optionId])
+            ->assertStatus(422);
+
+        $this->travel(3)->seconds();
+
+        $open = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+        $this->assertTrue($open['answering_open']);
         $this->withToken($this->token($player))
             ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $optionId])
             ->assertOk();

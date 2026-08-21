@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\GamificationService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +21,7 @@ class AdminManualExpAwardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::GAMIFICATION_AWARD_MANUAL)) {
             return $response;
         }
 
@@ -33,7 +34,7 @@ class AdminManualExpAwardController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::GAMIFICATION_AWARD_MANUAL)) {
             return $response;
         }
 

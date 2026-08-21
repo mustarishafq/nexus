@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/lib/AuthContext';
+import { canViewAllNetworkHealth, canViewNetworkHealth } from '@/lib/roles';
+import { Navigate } from 'react-router-dom';
 import {
   ChartTooltipBox,
   chartAxisTick,
@@ -61,7 +63,8 @@ function formatHourLabel(value) {
 
 export default function NetworkHealthDashboard() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const canViewPage = canViewNetworkHealth(user);
+  const isAdmin = canViewAllNetworkHealth(user);
   const queryClient = useQueryClient();
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -97,7 +100,7 @@ export default function NetworkHealthDashboard() {
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['network-health-dashboard', filters, isAdmin],
     queryFn: () => db.networkHealth.dashboard(filters),
-    enabled: Boolean(user),
+    enabled: Boolean(user) && canViewPage,
   });
 
   const { data: users = [] } = useQuery({
@@ -117,7 +120,7 @@ export default function NetworkHealthDashboard() {
   const { data: userHistory } = useQuery({
     queryKey: ['network-health-user-history', historyUserId],
     queryFn: () => db.networkHealth.userHistory(historyUserId),
-    enabled: Boolean(historyUserId),
+    enabled: Boolean(historyUserId) && canViewPage,
   });
 
   const acknowledgeMut = useMutation({
@@ -167,6 +170,10 @@ export default function NetworkHealthDashboard() {
 
   const browserOptions = [...new Set(latestResults.map((r) => r.browser).filter(Boolean))];
   const osOptions = [...new Set(latestResults.map((r) => r.operating_system).filter(Boolean))];
+
+  if (!canViewPage) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="space-y-6">

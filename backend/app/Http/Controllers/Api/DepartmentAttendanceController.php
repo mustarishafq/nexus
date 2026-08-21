@@ -9,6 +9,7 @@ use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
 use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\DepartmentAttendanceSettings;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -19,7 +20,7 @@ class DepartmentAttendanceController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -55,7 +56,7 @@ class DepartmentAttendanceController extends Controller
 
     public function show(Request $request, Department $department): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -79,7 +80,7 @@ class DepartmentAttendanceController extends Controller
 
     public function update(Request $request, Department $department): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -108,7 +109,7 @@ class DepartmentAttendanceController extends Controller
 
     public function bulkUpdate(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 

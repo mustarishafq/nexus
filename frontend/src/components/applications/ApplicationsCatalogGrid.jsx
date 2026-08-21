@@ -19,6 +19,7 @@ import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationDetailsSheet from '@/components/applications/ApplicationDetailsSheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { canManageApplications } from '@/lib/roles';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
@@ -329,12 +330,12 @@ export default function ApplicationsCatalogGrid({
         icon={Monitor}
         title="No applications"
         description={
-          currentUser?.role === 'admin'
+          canManageApplications(currentUser)
             ? 'Register your first system to get started.'
             : 'You have not been granted access to any systems yet.'
         }
         action={
-          currentUser?.role === 'admin' && onAdd ? (
+          canManageApplications(currentUser) && onAdd ? (
             <Button type="button" size="sm" className="gap-1.5" onClick={onAdd}>
               Add application
             </Button>
@@ -350,7 +351,7 @@ export default function ApplicationsCatalogGrid({
         <AnimatePresence mode="popLayout">
           {systems.map((system, index) => {
             const canManageSystem =
-              currentUser?.role === 'admin'
+              canManageApplications(currentUser)
               || Number(system.created_by_user_id) === Number(currentUser?.id);
 
             return (
@@ -385,7 +386,7 @@ export default function ApplicationsCatalogGrid({
         <AnimatePresence mode="popLayout">
           {systems.map((system, index) => {
             const canManageSystem =
-              currentUser?.role === 'admin'
+              canManageApplications(currentUser)
               || Number(system.created_by_user_id) === Number(currentUser?.id);
 
             return (

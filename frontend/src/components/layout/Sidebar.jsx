@@ -7,7 +7,7 @@ import {
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { canManageUsers, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -24,9 +24,10 @@ export default function Sidebar({
     staleTime: 60_000,
   });
 
-  const showAnalytics = userIsAdmin(user) || metabaseDashboards.length > 0;
+  const showAnalytics = can(user, 'analytics.manage') || metabaseDashboards.length > 0;
   const isAdmin = userIsAdmin(user);
   const showUserManagement = canManageUsers(user);
+  const canBroadcast = can(user, 'broadcast.manage');
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -38,15 +39,17 @@ export default function Sidebar({
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
-    { path: '/network-health', icon: Wifi, label: 'Network Health' },
+    ...(canViewNetworkHealth(user) ? [{ path: '/network-health', icon: Wifi, label: 'Network Health' }] : []),
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/games', icon: Gamepad2, label: 'Games' },
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR' },
     ...(showUserManagement ? [
       { path: '/admin/users', icon: Users, label: isAdmin ? 'User Management' : 'HR Management' },
     ] : []),
-    ...(isAdmin ? [
+    ...(canBroadcast ? [
       { path: '/admin/broadcast', icon: Megaphone, label: 'Broadcast' },
+    ] : []),
+    ...(isAdmin ? [
       { path: '/admin/events', icon: Shield, label: 'System Events' },
     ] : []),
     { path: '/settings', icon: Settings, label: 'Settings' },

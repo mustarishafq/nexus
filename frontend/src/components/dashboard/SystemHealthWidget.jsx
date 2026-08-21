@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
+import { canManageApplications } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -46,7 +47,7 @@ function getSystemHealthSubtitle(system) {
 export default function SystemHealthWidget({ systems }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canManageApplications(user);
 
   const probeAllMut = useMutation({
     mutationFn: () => db.runApplicationHealthChecks(),

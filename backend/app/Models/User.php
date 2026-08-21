@@ -4,8 +4,10 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\UsesAppTimezone;
+use App\Services\PermissionService;
 use App\Support\PublicStorageUrl;
 use App\Support\QuizAccessories;
+use App\Support\UserRoles;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 
 class User extends Authenticatable
 {
@@ -71,6 +74,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'role_id',
         'mcp_access',
         'is_approved',
         'force_password_change',
@@ -247,6 +251,44 @@ class User extends Authenticatable
                 ->orWhereHas('department', fn (Builder $departmentQuery) => $departmentQuery->where('name', 'like', $like))
                 ->orWhereHas('company', fn (Builder $companyQuery) => $companyQuery->where('name', 'like', $like));
         });
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (User $user): void {
+            if (! Schema::hasColumn($user->getTable(), 'role_id') || ! Schema::hasTable('roles')) {
+                return;
+            }
+
+            if ($user->isDirty('role_id') && $user->role_id) {
+                $slug = Role::query()->whereKey($user->role_id)->value('slug');
+                $user->role = in_array($slug, UserRoles::ALL, true) ? $slug : UserRoles::USER;
+
+                return;
+            }
+
+            if ($user->isDirty('role') || ! $user->role_id) {
+                $slug = $user->role ?: UserRoles::USER;
+                $roleId = Role::query()->where('slug', $slug)->value('id');
+                if ($roleId) {
+                    $user->role_id = $roleId;
+                }
+            }
+        });
+
+        static::saved(function (User $user): void {
+            PermissionService::flush($user);
+        });
+    }
+
+    public function assignedRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function canPermission(string $key): bool
+    {
+        return PermissionService::can($this, $key);
     }
 
     public function department(): BelongsTo

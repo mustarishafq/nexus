@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,21 @@ trait AuthorizesRoles
     protected function authorizeHrOrAdmin(Request $request): ?JsonResponse
     {
         return $this->authorizeRoles($request, [UserRoles::ADMIN, UserRoles::HR]);
+    }
+
+    protected function authorizePermission(Request $request, string $key): ?JsonResponse
+    {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! PermissionService::can($user, $key)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return null;
     }
 
     protected function authenticatedUser(Request $request): ?User

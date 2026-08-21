@@ -11,8 +11,10 @@ use App\Models\CalendarEvent;
 use App\Models\User;
 use App\Services\CalendarEventNotificationService;
 use App\Services\CalendarEventRecurrenceService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\CalendarEventCheckInForm;
+use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -470,7 +472,7 @@ class CalendarEventController extends Controller
 
     protected function scopedEventsQuery(User $user)
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::CALENDAR_VIEW_ALL)) {
             return CalendarEvent::query();
         }
 
@@ -495,7 +497,7 @@ class CalendarEventController extends Controller
 
     protected function userCanViewEvent(User $user, CalendarEvent $calendarEvent): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::CALENDAR_VIEW_ALL)) {
             return true;
         }
 
@@ -528,7 +530,7 @@ class CalendarEventController extends Controller
 
     protected function userCanManageEvent(User $user, CalendarEvent $calendarEvent): bool
     {
-        if ($user->role === 'admin') {
+        if (PermissionService::can($user, PermissionCatalog::CALENDAR_MANAGE)) {
             return true;
         }
 

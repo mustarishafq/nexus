@@ -9,7 +9,9 @@ use App\Models\QuizSessionPowerUp;
 use App\Models\User;
 use App\Services\QuizAnalyticsService;
 use App\Services\QuizGameService;
+use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\PermissionCatalog;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,17 +33,25 @@ class QuizSessionController extends Controller
 
         $validated = $request->validate([
             'mode' => ['sometimes', Rule::in([QuizSession::MODE_LIVE, QuizSession::MODE_ASYNC])],
+            'preview' => ['sometimes', 'boolean'],
         ]);
 
         $mode = $validated['mode'] ?? QuizSession::MODE_LIVE;
+        $preview = (bool) ($validated['preview'] ?? false);
 
-        if ($mode === QuizSession::MODE_ASYNC) {
-            $session = $this->game->startAsyncAttempt($quiz, $user);
-
-            return response()->json($this->game->serializeSession($session, $user), 201);
+        if ($preview && $mode !== QuizSession::MODE_ASYNC) {
+            return response()->json([
+                'message' => 'Preview play is only available for self-paced quizzes.',
+            ], 422);
         }
 
-        if ((int) $quiz->user_id !== (int) $user->id && $user->role !== 'admin') {
+        if ($mode === QuizSession::MODE_ASYNC) {
+            [$session, $created] = $this->game->startAsyncAttempt($quiz, $user, $preview);
+
+            return response()->json($this->game->serializeSession($session, $user), $created ? 201 : 200);
+        }
+
+        if (! PermissionService::canManageQuiz($user, $quiz)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -270,6 +280,29 @@ class QuizSessionController extends Controller
         return response()->json($this->game->serializeSession($session, $user));
     }
 
+    public function destroy(Request $request, QuizSession $quizSession): JsonResponse
+    {
+        $user = $this->requireApprovedUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $quiz = $quizSession->quiz;
+        if (! $quiz || ((int) $quiz->user_id !== (int) $user->id && $user->role !== 'admin')) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($quizSession->isLockedLiveHistory()) {
+            return response()->json([
+                'message' => 'This live session is still in progress and cannot be deleted.',
+            ], 422);
+        }
+
+        $quizSession->delete();
+
+        return response()->json(['message' => 'Deleted']);
+    }
+
     public function showByToken(Request $request, string $token): JsonResponse
     {
         $session = QuizSession::query()
@@ -300,6 +333,10 @@ class QuizSessionController extends Controller
     protected function canAccessSession(QuizSession $session, User $user): bool
     {
         if ((int) $session->host_user_id === (int) $user->id) {
+            return true;
+        }
+
+        if ((int) $session->quiz()->value('user_id') === (int) $user->id || PermissionService::can($user, PermissionCatalog::QUIZ_MANAGE)) {
             return true;
         }
 

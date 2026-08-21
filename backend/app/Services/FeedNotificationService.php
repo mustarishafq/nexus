@@ -8,7 +8,7 @@ use App\Models\PostComment;
 use App\Models\PostReach;
 use App\Models\User;
 use App\Support\FeedLinks;
-use App\Support\UserRoles;
+use App\Support\PermissionCatalog;
 use Illuminate\Support\Facades\DB;
 
 class FeedNotificationService
@@ -110,9 +110,8 @@ class FeedNotificationService
             return;
         }
 
-        $moderators = User::query()
+        $moderators = PermissionService::usersWith(PermissionCatalog::FEED_MODERATE)
             ->where('is_approved', true)
-            ->whereIn('role', [UserRoles::ADMIN, UserRoles::HR])
             ->where('id', '!=', $author->id)
             ->get(['id']);
 

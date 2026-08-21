@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceLocation;
 use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\AttendanceLocationSettings;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class AttendanceLocationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -35,7 +36,7 @@ class AttendanceLocationController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -57,7 +58,7 @@ class AttendanceLocationController extends Controller
 
     public function update(Request $request, AttendanceLocation $attendanceLocation): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 
@@ -79,7 +80,7 @@ class AttendanceLocationController extends Controller
 
     public function destroy(Request $request, AttendanceLocation $attendanceLocation): JsonResponse
     {
-        if ($response = $this->authorizeHrOrAdmin($request)) {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_MANAGE_POLICY)) {
             return $response;
         }
 

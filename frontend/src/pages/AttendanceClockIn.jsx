@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAttendanceReminder';
 import { useAuth } from '@/lib/AuthContext';
-import { canManageAttendance } from '@/lib/roles';
+import { canViewAllAttendance } from '@/lib/roles';
 import {
   evaluateLateClockIn,
   findActiveShift,
@@ -33,7 +33,7 @@ function formatRecordType(type) {
 export default function AttendanceClockIn() {
   const { user, appPublicSettings } = useAuth();
   const queryClient = useQueryClient();
-  const canViewAllRecords = canManageAttendance(user);
+  const canViewAllRecords = canViewAllAttendance(user);
 
   const [capture, setCapture] = useState(null);
   const [cameraKey, setCameraKey] = useState(0);

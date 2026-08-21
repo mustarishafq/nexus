@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\ProfileMediaController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\QuizSessionController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SystemEventController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSystemAccessController;
@@ -231,6 +232,18 @@ Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
 Route::delete('/users/{user}', [UserController::class, 'destroy']);
 
+Route::get('/roles/options', [RoleController::class, 'options']);
+Route::get('/roles', [RoleController::class, 'index']);
+Route::post('/roles', [RoleController::class, 'store']);
+Route::get('/permissions', [RoleController::class, 'permissionCatalog']);
+Route::get('/roles/{role}/users', [RoleController::class, 'users']);
+Route::post('/roles/{role}/users', [RoleController::class, 'assignUsers']);
+Route::get('/roles/{role}/user-search', [RoleController::class, 'searchUsers']);
+Route::patch('/roles/{role}/users/{user}', [RoleController::class, 'reassignUser']);
+Route::patch('/roles/{role}', [RoleController::class, 'update']);
+Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
+Route::put('/roles/{role}/permissions', [RoleController::class, 'syncPermissions']);
+
 Route::post('/uploads', [FileUploadController::class, 'store']);
 Route::get('/push-subscriptions', function () {
     return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->index(request());
@@ -283,6 +296,8 @@ Route::put('quizzes/{quiz}/questions/{question}', [QuizController::class, 'updat
 Route::patch('quizzes/{quiz}/questions/{question}', [QuizController::class, 'updateQuestion']);
 Route::delete('quizzes/{quiz}/questions/{question}', [QuizController::class, 'destroyQuestion']);
 Route::get('quizzes/{quiz}/attempts', [QuizController::class, 'attempts']);
+Route::get('quizzes/{quiz}/history', [QuizController::class, 'history']);
+Route::get('quizzes/{quiz}/self-paced-analytics', [QuizController::class, 'selfPacedAnalytics']);
 Route::post('quizzes/{quiz}/sessions', [QuizSessionController::class, 'store']);
 
 Route::post('quiz-sessions/join', [QuizSessionController::class, 'join']);
@@ -297,6 +312,7 @@ Route::post('quiz-sessions/{quizSession}/heartbeat', [QuizSessionController::cla
 Route::post('quiz-sessions/{quizSession}/answer', [QuizSessionController::class, 'answer']);
 Route::post('quiz-sessions/{quizSession}/power-ups', [QuizSessionController::class, 'powerUp']);
 Route::get('quiz-sessions/{quizSession}/analytics', [QuizSessionController::class, 'analytics']);
+Route::delete('quiz-sessions/{quizSession}', [QuizSessionController::class, 'destroy']);
 Route::post('quiz-sessions/{quizSession}/music', [QuizSessionController::class, 'music']);
 Route::get('quiz-join/{token}', [QuizSessionController::class, 'showByToken']);
 Route::get('event-check-in/{token}', [CalendarEventCheckInController::class, 'show']);

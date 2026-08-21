@@ -12,9 +12,10 @@ use App\Models\User;
 use App\Services\FeedNotificationService;
 use App\Services\GamificationService;
 use App\Services\MentionService;
+use App\Services\PermissionService;
 use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
-use App\Support\UserRoles;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -171,7 +172,7 @@ class PostCommentController extends Controller
             return null;
         }
 
-        if ($post->isPending() && ((int) $post->author_user_id === (int) $viewer->id || UserRoles::isHrOrAdmin($viewer))) {
+        if ($post->isPending() && ((int) $post->author_user_id === (int) $viewer->id || PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE))) {
             return response()->json(['message' => 'This post is awaiting approval.'], 422);
         }
 

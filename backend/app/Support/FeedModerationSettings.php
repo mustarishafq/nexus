@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Services\PermissionService;
+use App\Support\PermissionCatalog;
 
 class FeedModerationSettings
 {
@@ -41,7 +43,7 @@ class FeedModerationSettings
             return false;
         }
 
-        if (UserRoles::isHrOrAdmin($user)) {
+        if (PermissionService::can($user, PermissionCatalog::FEED_MODERATE)) {
             return false;
         }
 
