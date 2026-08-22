@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsCompactNav } from '@/hooks/use-mobile';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { GAMIFICATION_ME_QUERY_KEY } from '@/lib/gamification';
@@ -15,13 +15,13 @@ import { cn } from '@/lib/utils';
 import { isRunningStandalone } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
 import { can, canManageUsers, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
-import { glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
+import { glassBottomNavStyles, glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
 import AppsOrbNavItem from './AppsOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
 
 export default function BottomNav() {
   const location = useLocation();
-  const isMobile = useIsMobile();
+  const isCompactNav = useIsCompactNav();
   const { user } = useAuth();
   const viewportBottomOffset = useVisualViewportBottomOffset();
   const standalone = isRunningStandalone();
@@ -37,14 +37,14 @@ export default function BottomNav() {
     queryKey: ['metabase-dashboards'],
     queryFn: () => db.entities.MetabaseDashboard.list('sort_order', 50),
     staleTime: 60_000,
-    enabled: !isMobile,
+    enabled: !isCompactNav,
   });
 
   const { data: unreadNotifications = [] } = useUnreadNotifications({
-    enabled: isMobile,
+    enabled: isCompactNav,
   });
   const { data: platformUnreadCount = 0 } = usePlatformReleaseNoteUnreadCount({
-    enabled: isMobile,
+    enabled: isCompactNav,
   });
   const messagePollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
@@ -78,7 +78,7 @@ export default function BottomNav() {
   });
 
   const navItems = useMemo(() => {
-    if (isMobile) return MOBILE_BOTTOM_NAV_ITEMS;
+    if (isCompactNav) return MOBILE_BOTTOM_NAV_ITEMS;
 
     const showAnalytics = can(user, 'analytics.manage') || metabaseDashboards.length > 0;
     return buildDesktopNavItems({
@@ -88,7 +88,7 @@ export default function BottomNav() {
       canBroadcast: can(user, 'broadcast.manage'),
       canViewNetwork: canViewNetworkHealth(user),
     });
-  }, [isMobile, user, metabaseDashboards.length]);
+  }, [isCompactNav, user, metabaseDashboards.length]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({
@@ -160,7 +160,7 @@ export default function BottomNav() {
         data-exp-sink={item.path === '/missions' ? 'nav' : undefined}
         className={cn(
           'relative flex flex-col items-center justify-center gap-0.5 px-1 transition-colors',
-          isMobile ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',
+          isCompactNav ? 'flex-1' : 'min-w-[4.5rem] shrink-0 px-2',
           isActive ? 'text-primary' : glassDockNavItemInactive
         )}
       >
@@ -184,6 +184,23 @@ export default function BottomNav() {
     );
   };
 
+  if (isCompactNav) {
+    return (
+      <nav
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 overflow-visible border-t pb-[var(--nexus-dock-pad-bottom)]',
+          glassBottomNavStyles
+        )}
+        style={{ bottom: viewportBottomOffset }}
+        aria-label="Main navigation"
+      >
+        <div className="flex h-[var(--nexus-dock-height)] w-full items-stretch overflow-visible px-1">
+          {navItems.map(renderNavItem)}
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav
       className={cn(
@@ -201,11 +218,8 @@ export default function BottomNav() {
     >
       <div
         className={cn(
-          'pointer-events-auto flex items-stretch px-1',
-          glassDockStyles,
-          isMobile
-            ? 'h-[var(--nexus-dock-height)] w-full max-w-lg overflow-visible'
-            : 'h-16 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+          'pointer-events-auto flex h-16 w-fit max-w-full items-stretch overflow-x-auto px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+          glassDockStyles
         )}
       >
         {navItems.map(renderNavItem)}

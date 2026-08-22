@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Download, Share, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsCompactNav } from '@/hooks/use-mobile';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset';
@@ -13,15 +13,13 @@ import {
   dismissManualInstallPrompt,
   getManualInstallPlatform,
   getManualInstallSteps,
-  isRunningStandalone,
 } from '@/lib/pwa';
 
 export default function PwaInstallPrompt() {
-  const isMobile = useIsMobile();
+  const isCompactNav = useIsCompactNav();
   const pwaInstall = usePwaInstall();
   const { isOffline: networkOffline } = useOnlineStatus();
   const viewportBottomOffset = useVisualViewportBottomOffset();
-  const standalone = isRunningStandalone();
   const [showPrompt, setShowPrompt] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [manualInstallPlatform, setManualInstallPlatform] = useState(null);
@@ -83,16 +81,14 @@ export default function PwaInstallPrompt() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}
           className={
-            isMobile
+            isCompactNav
               ? 'fixed inset-x-4 z-50'
               : 'fixed bottom-4 right-4 z-50 w-[min(92vw,360px)]'
           }
           style={
-            isMobile
+            isCompactNav
               ? {
-                  bottom: standalone
-                    ? `calc(var(--nexus-dock-clearance) + ${viewportBottomOffset}px)`
-                    : `calc(4.5rem + ${viewportBottomOffset}px)`,
+                  bottom: `calc(var(--nexus-dock-clearance) + ${viewportBottomOffset}px)`,
                 }
               : undefined
           }

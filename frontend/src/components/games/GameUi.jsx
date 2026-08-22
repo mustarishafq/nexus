@@ -94,9 +94,9 @@ export const GameStage = forwardRef(function GameStage({ children, phase = 'lobb
 		<div
 			ref={ref}
 			className={cn(
-				// Fill under TopBar to screen bottom (behind dock); pad content so dock doesn’t cover UI
+				// Fill under TopBar to screen bottom (behind nav); pad content so the bar doesn’t cover UI
 				'relative flex-1 min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 pt-5 sm:pt-8',
-				'pb-[calc(5.25rem+env(safe-area-inset-bottom)+0.75rem)]',
+				'pb-[calc(var(--nexus-dock-clearance)+1.5rem)]',
 				'bg-gradient-to-br text-white overflow-auto',
 				'[&:fullscreen]:min-h-screen [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:mx-0 [&:fullscreen]:rounded-none [&:fullscreen]:pb-8',
 				'[&:-webkit-full-screen]:min-h-screen [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:-webkit-full-screen]:mx-0 [&:-webkit-full-screen]:pb-8',

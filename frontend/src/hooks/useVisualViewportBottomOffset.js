@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 /**
  * Pins `position: fixed` bottom UI to the *visual* viewport.
  * iOS Safari's collapsing URL/toolbars change the visual viewport while the
- * layout viewport stays tall — without this offset the dock floats mid-screen
+ * layout viewport stays tall — without this offset the bottom nav sits mid-screen
  * or leaves a large gap above the browser chrome.
  */
 export function useVisualViewportBottomOffset() {
