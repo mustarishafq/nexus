@@ -13,11 +13,13 @@ use App\Services\QuizGameService;
 use App\Support\ApiTokenAuth;
 use App\Support\GamificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\GrantsUserRoleQuizPlayAccess;
 use Tests\TestCase;
 
 class QuizExpTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsUserRoleQuizPlayAccess;
 
     private function token(User $user): string
     {

@@ -18,7 +18,7 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
   { type: 'more', icon: Grip, label: 'More' },
 ];
 
-export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork }) {
+export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames }) {
   return [
     {
       type: 'whats-new',
@@ -46,7 +46,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, c
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
-    { path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') },
+    ...(canViewGames ? [{ path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') }] : []),
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     { path: '/profile', icon: User, label: 'Profile', match: (path) => path === '/profile' },
     { path: '/settings', icon: Settings, label: 'Settings', match: (path) => path === '/settings' },
@@ -66,7 +66,7 @@ export function matchMobileMorePath(pathname, moreItems) {
   return moreItems.some((item) => item.match(pathname));
 }
 
-export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork }) {
+export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames }) {
   return [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', match: (path) => path === '/' },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
@@ -95,7 +95,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, c
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },
     { path: '/calendar', icon: Calendar, label: 'Calendar', match: (path) => path === '/calendar' },
-    { path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') },
+    ...(canViewGames ? [{ path: '/games', icon: Gamepad2, label: 'Games', match: (path) => path === '/games' || path.startsWith('/games/') }] : []),
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR', match: (path) => path === '/scan-qr' },
     ...(canManageUsers ? [
       { path: '/admin/users', icon: Users, label: 'Users', match: (path) => path === '/admin/users' },

@@ -9,11 +9,13 @@ use App\Support\ApiTokenAuth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\GrantsUserRoleQuizPlayAccess;
 use Tests\TestCase;
 
 class QuizBuilderTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsUserRoleQuizPlayAccess;
 
     private function token(User $user): string
     {

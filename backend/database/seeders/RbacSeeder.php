@@ -46,7 +46,7 @@ class RbacSeeder extends Seeder
             ],
             UserRoles::USER => [
                 'name' => 'User',
-                'description' => 'Standard employee access, including creating and managing own quizzes.',
+                'description' => 'Standard employee access.',
             ],
         ];
 

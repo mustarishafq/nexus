@@ -52,7 +52,10 @@ class RoleController extends Controller
         $modules = [];
         foreach ($permissions as $permission) {
             $module = $permission->module;
-            if ($module === 'admin' || in_array($permission->key, PermissionCatalog::adminOnlyKeys(), true)) {
+            if ($module === 'admin'
+                || in_array($permission->key, PermissionCatalog::adminOnlyKeys(), true)
+                || in_array($permission->key, PermissionCatalog::hiddenKeys(), true)
+            ) {
                 continue;
             }
             if (! isset($modules[$module])) {
@@ -164,7 +167,7 @@ class RoleController extends Controller
         }
 
         $validated = $request->validate([
-            'permission_keys' => ['required', 'array'],
+            'permission_keys' => ['present', 'array'],
             'permission_keys.*' => ['string', Rule::exists('permissions', 'key')],
         ]);
 
@@ -176,6 +179,8 @@ class RoleController extends Controller
         } else {
             $keys = array_values(array_diff($keys, $adminOnly));
         }
+
+        $keys = PermissionCatalog::expandImpliedKeys($keys);
 
         $ids = Permission::query()->whereIn('key', $keys)->pluck('id');
         $role->permissions()->sync($ids);

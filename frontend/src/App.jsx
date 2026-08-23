@@ -59,6 +59,7 @@ const QuizDetails = lazy(() => import('@/pages/QuizDetails'));
 const QuizSelfPacedAnalytics = lazy(() => import('@/pages/QuizSelfPacedAnalytics'));
 const QuizPreview = lazy(() => import('@/pages/QuizPreview'));
 const QuizJoinPublic = lazy(() => import('@/pages/QuizJoinPublic'));
+const GamesAccessGate = lazy(() => import('@/components/games/GamesAccessGate'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -131,15 +132,17 @@ const ProtectedRoutes = () => {
           <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
           <Route path="/calendar" element={<AdminCalendar />} />
           <Route path="/calendar/events/:id/attendance" element={<EventAttendance />} />
-          <Route path="/games" element={<Games />} />
-          <Route path="/games/new" element={<QuizBuilder />} />
-          <Route path="/games/:id/edit" element={<QuizBuilder />} />
-          <Route path="/games/:id/preview" element={<QuizPreview />} />
-          <Route path="/games/:id/self-paced" element={<QuizSelfPacedAnalytics />} />
-          <Route path="/games/:id" element={<QuizDetails />} />
-          <Route path="/games/sessions/:id/host" element={<QuizHost />} />
-          <Route path="/games/play/:id" element={<QuizPlay />} />
-          <Route path="/games/sessions/:id/analytics" element={<QuizAnalytics />} />
+          <Route element={<GamesAccessGate />}>
+            <Route path="/games" element={<Games />} />
+            <Route path="/games/new" element={<QuizBuilder />} />
+            <Route path="/games/:id/edit" element={<QuizBuilder />} />
+            <Route path="/games/:id/preview" element={<QuizPreview />} />
+            <Route path="/games/:id/self-paced" element={<QuizSelfPacedAnalytics />} />
+            <Route path="/games/:id" element={<QuizDetails />} />
+            <Route path="/games/sessions/:id/host" element={<QuizHost />} />
+            <Route path="/games/play/:id" element={<QuizPlay />} />
+            <Route path="/games/sessions/:id/analytics" element={<QuizAnalytics />} />
+          </Route>
           <Route path="/scan-qr" element={<ScanQr />} />
           <Route path="/admin/calendar" element={<Navigate to="/calendar" replace />} />
           <Route path="/admin/settings" element={<Navigate to="/settings?tab=admin" replace />} />
