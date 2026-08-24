@@ -96,8 +96,8 @@ export default function ManagerCombobox({
     }
   }, [open]);
 
-  const selectManager = (managerId) => {
-    onChange(managerId);
+  const selectManager = (managerId, user = null) => {
+    onChange(managerId, user);
     setOpen(false);
     setSearch('');
   };
@@ -165,7 +165,7 @@ export default function ManagerCombobox({
                   'flex w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent',
                   isSelected && 'bg-accent'
                 )}
-                onClick={() => selectManager(user.id)}
+                onClick={() => selectManager(user.id, user)}
               >
                 <Check className={cn('mt-0.5 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
                 <div className="min-w-0">
