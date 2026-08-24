@@ -14,11 +14,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\GrantsUserRoleQuizPlayAccess;
 use Tests\TestCase;
 
 class QuizIdentityTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsUserRoleQuizPlayAccess;
 
     private function token(User $user): string
     {

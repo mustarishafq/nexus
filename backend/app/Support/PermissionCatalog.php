@@ -4,6 +4,8 @@ namespace App\Support;
 
 class PermissionCatalog
 {
+    public const QUIZ_VIEW = 'quiz.view';
+
     public const QUIZ_CREATE = 'quiz.create';
 
     public const QUIZ_MANAGE_OWN = 'quiz.manage_own';
@@ -54,9 +56,10 @@ class PermissionCatalog
     public static function definitions(): array
     {
         return [
-            ['key' => self::QUIZ_CREATE, 'module' => 'games', 'name' => 'Create games', 'sort_order' => 10],
+            ['key' => self::QUIZ_VIEW, 'module' => 'games', 'name' => 'View & Play Games', 'sort_order' => 5],
+            ['key' => self::QUIZ_CREATE, 'module' => 'games', 'name' => 'Create Games', 'sort_order' => 10],
             ['key' => self::QUIZ_MANAGE_OWN, 'module' => 'games', 'name' => 'Manage own games', 'sort_order' => 20],
-            ['key' => self::QUIZ_MANAGE, 'module' => 'games', 'name' => 'Manage all games', 'sort_order' => 30],
+            ['key' => self::QUIZ_MANAGE, 'module' => 'games', 'name' => 'Manage All Games', 'sort_order' => 30],
 
             ['key' => self::CALENDAR_VIEW_ALL, 'module' => 'calendar', 'name' => 'View all calendar events', 'sort_order' => 10],
             ['key' => self::CALENDAR_MANAGE, 'module' => 'calendar', 'name' => 'Manage all calendar events', 'sort_order' => 20],
@@ -133,6 +136,55 @@ class PermissionCatalog
     }
 
     /**
+     * Stored on roles but not shown in the Roles UI.
+     * Unlike admin-only keys, these are not stripped from non-Admin saves.
+     *
+     * @return list<string>
+     */
+    public static function hiddenKeys(): array
+    {
+        return [
+            self::QUIZ_MANAGE_OWN,
+        ];
+    }
+
+    /**
+     * Expand visible Games checkboxes into the stored permission set.
+     *
+     * @param  list<string>  $keys
+     * @return list<string>
+     */
+    public static function expandImpliedKeys(array $keys): array
+    {
+        $keys = array_values(array_unique($keys));
+        $hasView = in_array(self::QUIZ_VIEW, $keys, true);
+        $hasCreate = in_array(self::QUIZ_CREATE, $keys, true);
+        $hasManage = in_array(self::QUIZ_MANAGE, $keys, true);
+
+        if ($hasManage) {
+            $keys[] = self::QUIZ_VIEW;
+            $keys[] = self::QUIZ_CREATE;
+            $keys[] = self::QUIZ_MANAGE_OWN;
+            $keys[] = self::QUIZ_MANAGE;
+        } elseif ($hasCreate) {
+            $keys[] = self::QUIZ_VIEW;
+            $keys[] = self::QUIZ_CREATE;
+            $keys[] = self::QUIZ_MANAGE_OWN;
+        } else {
+            $keys = array_values(array_diff($keys, [
+                self::QUIZ_CREATE,
+                self::QUIZ_MANAGE_OWN,
+                self::QUIZ_MANAGE,
+            ]));
+            if ($hasView) {
+                $keys[] = self::QUIZ_VIEW;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /**
      * Seeded permission keys that reproduce today's Admin / HR / User behaviour.
      *
      * @return array<string, list<string>>
@@ -144,6 +196,7 @@ class PermissionCatalog
         return [
             UserRoles::ADMIN => $all,
             UserRoles::HR => [
+                self::QUIZ_VIEW,
                 self::QUIZ_CREATE,
                 self::QUIZ_MANAGE_OWN,
                 self::PEOPLE_VIEW_SENSITIVE,
@@ -155,8 +208,6 @@ class PermissionCatalog
                 self::NETWORK_VIEW,
             ],
             UserRoles::USER => [
-                self::QUIZ_CREATE,
-                self::QUIZ_MANAGE_OWN,
                 self::NETWORK_VIEW,
             ],
         ];

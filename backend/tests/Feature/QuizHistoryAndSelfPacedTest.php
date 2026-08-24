@@ -12,11 +12,13 @@ use App\Models\QuizSessionPowerUp;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\GrantsUserRoleQuizPlayAccess;
 use Tests\TestCase;
 
 class QuizHistoryAndSelfPacedTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsUserRoleQuizPlayAccess;
 
     private function token(User $user): string
     {

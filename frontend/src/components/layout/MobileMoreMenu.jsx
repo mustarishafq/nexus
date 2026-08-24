@@ -9,7 +9,7 @@ import PlatformWhatsNewSheet from '@/components/platform/PlatformWhatsNewSheet';
 import { cn } from '@/lib/utils';
 import { glassDialogMutedText, glassDockNavItemInactive, glassDockNavLabel, glassPanelStyles } from './glassStyles';
 import { buildMobileMoreItems, matchMobileMorePath } from './navItems';
-import { can, canManageUsers, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
@@ -43,6 +43,7 @@ export default function MobileMoreMenu({ badgeCounts = {}, triggerIcon: TriggerI
     canManageUsers: canManageUsers(user),
     canBroadcast: can(user, 'broadcast.manage'),
     canViewNetwork: canViewNetworkHealth(user),
+    canViewGames: canViewGames(user),
   });
   const adminItems = moreItems.filter((item) => item.path?.startsWith('/admin/'));
   const regularItems = moreItems.filter((item) => !item.path?.startsWith('/admin/'));

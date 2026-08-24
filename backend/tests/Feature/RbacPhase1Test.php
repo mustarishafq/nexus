@@ -48,24 +48,23 @@ class RbacPhase1Test extends TestCase
             ->assertJsonFragment(['quiz.create']);
     }
 
-    public function test_user_can_still_create_quizzes(): void
+    public function test_user_cannot_create_quizzes_by_default(): void
     {
         [, $token] = $this->actingAsRole('user');
 
         $this->withToken($token)
             ->postJson('/api/quizzes', ['title' => 'Intern quiz'])
-            ->assertCreated()
-            ->assertJsonPath('title', 'Intern quiz');
+            ->assertForbidden();
     }
 
     public function test_hr_can_create_quizzes_but_cannot_manage_someone_elses(): void
     {
-        [$owner, $ownerToken] = $this->actingAsRole('user');
-        $this->withToken($ownerToken)
-            ->postJson('/api/quizzes', ['title' => 'Owned'])
-            ->assertCreated();
-
-        $quizId = \App\Models\Quiz::query()->where('user_id', $owner->id)->value('id');
+        [$owner] = $this->actingAsRole('user');
+        $quiz = Quiz::query()->create([
+            'user_id' => $owner->id,
+            'title' => 'Owned',
+            'status' => Quiz::STATUS_DRAFT,
+        ]);
 
         [, $hrToken] = $this->actingAsRole('hr');
         $this->withToken($hrToken)
@@ -73,22 +72,22 @@ class RbacPhase1Test extends TestCase
             ->assertCreated();
 
         $this->withToken($hrToken)
-            ->patchJson('/api/quizzes/'.$quizId, ['title' => 'Hijacked'])
+            ->patchJson('/api/quizzes/'.$quiz->id, ['title' => 'Hijacked'])
             ->assertForbidden();
     }
 
     public function test_admin_can_manage_someone_elses_quiz(): void
     {
-        [$owner, $ownerToken] = $this->actingAsRole('user');
-        $this->withToken($ownerToken)
-            ->postJson('/api/quizzes', ['title' => 'Owned'])
-            ->assertCreated();
-
-        $quizId = \App\Models\Quiz::query()->where('user_id', $owner->id)->value('id');
+        [$owner] = $this->actingAsRole('user');
+        $quiz = Quiz::query()->create([
+            'user_id' => $owner->id,
+            'title' => 'Owned',
+            'status' => Quiz::STATUS_DRAFT,
+        ]);
 
         [, $adminToken] = $this->actingAsRole('admin');
         $this->withToken($adminToken)
-            ->patchJson('/api/quizzes/'.$quizId, ['title' => 'Admin edit'])
+            ->patchJson('/api/quizzes/'.$quiz->id, ['title' => 'Admin edit'])
             ->assertOk()
             ->assertJsonPath('title', 'Admin edit');
     }
@@ -137,19 +136,26 @@ class RbacPhase1Test extends TestCase
             ->json();
 
         $this->assertSame('Quiz Helper', $created['name']);
-        $this->assertContains(PermissionCatalog::QUIZ_CREATE, $created['permission_keys']);
+        $this->assertNotContains(PermissionCatalog::QUIZ_CREATE, $created['permission_keys']);
+        $this->assertContains(PermissionCatalog::NETWORK_VIEW, $created['permission_keys']);
 
         $this->withToken($adminToken)
             ->patchJson('/api/roles/'.$created['id'], ['description' => 'Updated'])
             ->assertOk()
             ->assertJsonPath('description', 'Updated');
 
-        $this->withToken($adminToken)
+        $keys = $this->withToken($adminToken)
             ->putJson('/api/roles/'.$created['id'].'/permissions', [
                 'permission_keys' => [PermissionCatalog::QUIZ_CREATE],
             ])
             ->assertOk()
-            ->assertJsonPath('permission_keys.0', PermissionCatalog::QUIZ_CREATE);
+            ->json('permission_keys');
+
+        $this->assertEqualsCanonicalizing([
+            PermissionCatalog::QUIZ_VIEW,
+            PermissionCatalog::QUIZ_CREATE,
+            PermissionCatalog::QUIZ_MANAGE_OWN,
+        ], $keys);
     }
 
     public function test_admin_role_cannot_be_deleted_or_deactivated_or_lose_roles_manage(): void
@@ -202,6 +208,92 @@ class RbacPhase1Test extends TestCase
         $this->assertNull(Role::query()->find($role['id']));
     }
 
+    public function test_custom_role_can_save_an_empty_permission_list(): void
+    {
+        [, $token] = $this->actingAsRole('admin');
+
+        $roleId = $this->withToken($token)
+            ->postJson('/api/roles', ['name' => 'No Access'])
+            ->assertCreated()
+            ->json('id');
+
+        $this->withToken($token)
+            ->putJson('/api/roles/'.$roleId.'/permissions', [
+                'permission_keys' => [
+                    PermissionCatalog::QUIZ_CREATE,
+                    PermissionCatalog::NETWORK_VIEW,
+                ],
+            ])
+            ->assertOk();
+
+        $cleared = $this->withToken($token)
+            ->putJson('/api/roles/'.$roleId.'/permissions', [
+                'permission_keys' => [],
+            ])
+            ->assertOk()
+            ->json('permission_keys');
+
+        $this->assertSame([], $cleared);
+    }
+
+    public function test_unchecking_one_module_removes_only_that_modules_permissions(): void
+    {
+        [, $token] = $this->actingAsRole('admin');
+
+        $roleId = $this->withToken($token)
+            ->postJson('/api/roles', ['name' => 'Partial Access'])
+            ->assertCreated()
+            ->json('id');
+
+        $this->withToken($token)
+            ->putJson('/api/roles/'.$roleId.'/permissions', [
+                'permission_keys' => [
+                    PermissionCatalog::QUIZ_VIEW,
+                    PermissionCatalog::QUIZ_CREATE,
+                    PermissionCatalog::NETWORK_VIEW,
+                    PermissionCatalog::FEED_MODERATE,
+                ],
+            ])
+            ->assertOk();
+
+        $keys = $this->withToken($token)
+            ->putJson('/api/roles/'.$roleId.'/permissions', [
+                'permission_keys' => [
+                    PermissionCatalog::NETWORK_VIEW,
+                    PermissionCatalog::FEED_MODERATE,
+                ],
+            ])
+            ->assertOk()
+            ->json('permission_keys');
+
+        $this->assertContains(PermissionCatalog::NETWORK_VIEW, $keys);
+        $this->assertContains(PermissionCatalog::FEED_MODERATE, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_VIEW, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_CREATE, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_MANAGE_OWN, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_MANAGE, $keys);
+    }
+
+    public function test_admin_empty_permission_payload_still_keeps_admin_only_keys(): void
+    {
+        [, $token] = $this->actingAsRole('admin');
+        $adminRoleId = Role::query()->where('slug', 'admin')->value('id');
+
+        $keys = $this->withToken($token)
+            ->putJson('/api/roles/'.$adminRoleId.'/permissions', [
+                'permission_keys' => [],
+            ])
+            ->assertOk()
+            ->json('permission_keys');
+
+        $this->assertContains(PermissionCatalog::ROLES_MANAGE, $keys);
+        $this->assertContains(PermissionCatalog::SETTINGS_MANAGE, $keys);
+        $this->assertContains(PermissionCatalog::TOKENS_MANAGE, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_VIEW, $keys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_CREATE, $keys);
+        $this->assertNotContains(PermissionCatalog::NETWORK_VIEW, $keys);
+    }
+
     public function test_last_admin_cannot_be_demoted(): void
     {
         [$admin, $token] = $this->actingAsRole('admin');
@@ -248,7 +340,9 @@ class RbacPhase1Test extends TestCase
         $this->assertContains('network', $keys);
 
         $allPermissionKeys = collect($modules)->flatMap(fn (array $module) => collect($module['permissions'])->pluck('key'))->all();
+        $this->assertContains(PermissionCatalog::QUIZ_VIEW, $allPermissionKeys);
         $this->assertContains(PermissionCatalog::QUIZ_CREATE, $allPermissionKeys);
+        $this->assertNotContains(PermissionCatalog::QUIZ_MANAGE_OWN, $allPermissionKeys);
         $this->assertContains(PermissionCatalog::CALENDAR_MANAGE, $allPermissionKeys);
         $this->assertContains(PermissionCatalog::PEOPLE_MANAGE_GROUPS, $allPermissionKeys);
         $this->assertContains(PermissionCatalog::ANALYTICS_MANAGE, $allPermissionKeys);

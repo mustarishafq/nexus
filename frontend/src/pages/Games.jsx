@@ -1,7 +1,7 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
@@ -16,7 +16,7 @@ import PageLoader from '@/components/PageLoader';
 import { GlassCard } from '@/components/games/GameUi';
 import { glassDialogMutedText, glassDialogTitleText } from '@/components/layout/glassStyles';
 import { useAuth } from '@/lib/AuthContext';
-import { can } from '@/lib/roles';
+import { can, canViewGames } from '@/lib/roles';
 import QuizAccessoryPicker from '@/components/games/QuizAccessoryPicker';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
@@ -106,6 +106,10 @@ export default function Games() {
   const quizzes = activeTab === 'mine' ? (mineQuery.data || []) : (publishedQuery.data || []);
   const loading = activeTab === 'mine' ? mineQuery.isLoading : publishedQuery.isLoading;
 
+  if (!canViewGames(user)) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -149,16 +153,16 @@ export default function Games() {
             <p className={cn('text-xs', glassDialogMutedText)}>
               Enter the 6-digit PIN from the host screen.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 items-center justify-center w-full">
+            <div className="flex flex-row gap-3 items-center justify-center w-full">
               <Input
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="000000"
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="w-full sm:w-56 text-center text-2xl tracking-[0.35em] font-bold h-14"
+                className="min-w-0 flex-1 sm:flex-none sm:w-56 text-center text-2xl tracking-[0.35em] font-bold h-14"
               />
-              <Button type="submit" disabled={joinMutation.isPending} className="h-14 px-6 shadow-md shadow-primary/20">
+              <Button type="submit" disabled={joinMutation.isPending} className="h-14 px-6 shrink-0 shadow-md shadow-primary/20">
                 {joinMutation.isPending ? 'Joining…' : 'Join'}
               </Button>
             </div>

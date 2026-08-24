@@ -1,7 +1,7 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Copy, ImagePlus, Plus, Trash2, Check, Save, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,8 @@ import { extractPublicStoragePath, toPublicFileUrl } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { isTrueFalseQuestion, trueFalseOptions } from '@/lib/quizQuestion';
 import { formatSelfPacedDeadline } from '@/lib/quizAnalyticsFormat';
+import { useAuth } from '@/lib/AuthContext';
+import { can } from '@/lib/roles';
 
 const TIME_MIN = 5;
 const TIME_MAX = 120;
@@ -114,6 +116,7 @@ function toDatetimeLocalValue(iso) {
 export default function QuizBuilder() {
   const { id } = useParams();
   const isNew = !id || id === 'new';
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const imageInputRef = useRef(null);
@@ -286,6 +289,10 @@ export default function QuizBuilder() {
   };
 
   if (!isNew && quizQuery.isLoading) return <PageLoader />;
+
+  if (isNew && !can(user, 'quiz.create')) {
+    return <Navigate to="/games" replace />;
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
