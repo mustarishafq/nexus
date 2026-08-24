@@ -56,6 +56,14 @@ export const glassDockStyles = cn(
   'rounded-2xl border'
 );
 
+/** Full-width mobile/tablet bottom bar — pairs with the top bar */
+export const glassBottomNavStyles = cn(
+  'backdrop-blur-2xl text-foreground',
+  'bg-card/95 border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)]',
+  'supports-[backdrop-filter]:bg-card/92',
+  'dark:bg-card/40 dark:border-border/70 dark:shadow-[0_-8px_24px_rgba(0,0,0,0.35)]'
+);
+
 /** Inactive bottom-nav item (icon + label) */
 export const glassDockNavItemInactive = cn(
   'text-foreground/75 hover:text-foreground',

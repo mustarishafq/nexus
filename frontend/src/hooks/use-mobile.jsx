@@ -41,3 +41,8 @@ export function useIsXlUp() {
 
   return isXlUp
 }
+
+/** Mobile + tablet: full-width bottom nav instead of the desktop dock. */
+export function useIsCompactNav() {
+  return !useIsXlUp()
+}

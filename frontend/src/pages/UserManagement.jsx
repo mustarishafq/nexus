@@ -45,7 +45,7 @@ import { useIsUserOnline, useUserLastSeenAt } from '@/components/presence/UserPr
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
-import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness, formatRelativeDate } from '@/lib/profile';
+import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness, formatRelativeDate, getDisplayName } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
@@ -2666,8 +2666,13 @@ export default function UserManagement() {
                     value={editForm.manager_id}
                     excludeUserId={editUser.id}
                     selectedLabel={editForm.manager_name}
-                    users={users}
-                    onChange={(managerId) => setEditForm((prev) => ({ ...prev, manager_id: managerId }))}
+                    onChange={(managerId, manager) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        manager_id: managerId,
+                        manager_name: manager ? getDisplayName(manager, '') : '',
+                      }))
+                    }
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -13,10 +13,11 @@ export default function AppsOrbNavItem({ isActive, to = '/applications', label =
     >
       <span
         className={cn(
-          'apps-orb-nav relative -mt-5 flex h-[2.75rem] w-[2.75rem] items-center justify-center pointer-events-none',
+          'apps-orb-nav pointer-events-none relative -mt-6 flex size-12 shrink-0 grow-0 items-center justify-center overflow-visible',
           isActive && 'apps-orb-nav--active'
         )}
       >
+        <span aria-hidden className="apps-orb-nav__glass" />
         <span aria-hidden className="apps-orb-nav__pulse" />
         <span aria-hidden className="apps-orb-nav__pulse apps-orb-nav__pulse--delayed" />
 

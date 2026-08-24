@@ -12,10 +12,10 @@
     /* iPhone notch / Dynamic Island / status bar insets */
     --nexus-safe-top: env(safe-area-inset-top, 0px);
     --nexus-safe-bottom: env(safe-area-inset-bottom, 0px);
-    /* Floating bottom dock: use the larger of float margin OR home-indicator inset (don't stack). */
+    /* Mobile/tablet bottom nav is flush; desktop dock still floats above the edge. */
     --nexus-dock-height: 3.75rem;
-    --nexus-dock-pad-bottom: max(0.75rem, var(--nexus-safe-bottom));
-    --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
+    --nexus-dock-pad-bottom: 0px;
+    --nexus-dock-clearance: var(--nexus-dock-height);
 
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
@@ -105,6 +105,29 @@
     --sidebar-accent-foreground: 220 14% 90%;
     --sidebar-border: 222 40% 12%;
     --sidebar-ring: 206 92% 36%;
+  }
+
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    :root {
+      --nexus-dock-pad-bottom: var(--nexus-safe-bottom);
+      --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
+    }
+  }
+
+  @media (min-width: 1280px) {
+    :root {
+      --nexus-dock-height: 4rem;
+      --nexus-dock-pad-bottom: 0.75rem;
+      --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
+    }
+  }
+
+  @media (min-width: 1280px) and (display-mode: standalone),
+    (min-width: 1280px) and (display-mode: fullscreen) {
+    :root {
+      --nexus-dock-pad-bottom: max(0.75rem, var(--nexus-safe-bottom));
+      --nexus-dock-clearance: calc(var(--nexus-dock-height) + var(--nexus-dock-pad-bottom));
+    }
   }
 }
 
@@ -386,15 +409,52 @@
   }
 }
 
+.apps-orb-nav {
+  width: 3rem;
+  height: 3rem;
+  min-width: 3rem;
+  min-height: 3rem;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+.apps-orb-nav__glass {
+  position: absolute;
+  inset: -0.55rem;
+  z-index: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card) / 0.92);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.dark .apps-orb-nav__glass {
+  border-color: hsl(var(--border) / 0.7);
+  background: hsl(var(--card) / 0.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
 .apps-orb-nav__core {
   position: relative;
   z-index: 2;
   display: flex;
   height: 3rem;
   width: 3rem;
+  min-width: 3rem;
+  min-height: 3rem;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: 50%;
   background: linear-gradient(
     135deg,
     hsl(var(--primary)) 0%,
@@ -435,13 +495,16 @@
   position: absolute;
   inset: -10px;
   z-index: 1;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
 }
 
 .apps-orb-nav__nerve-track,
 .apps-orb-nav__nerve-impulse {
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
 }
 
 .apps-orb-nav__nerve-track {
@@ -485,7 +548,8 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  border-radius: 9999px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   border: 1px solid hsl(var(--primary) / 0.35);
   animation: apps-orb-pulse 2.8s ease-out infinite;
 }

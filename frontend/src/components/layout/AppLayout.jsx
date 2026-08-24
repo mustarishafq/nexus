@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsCompactNav, useIsMobile } from '@/hooks/use-mobile';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import TopBar from './TopBar';
@@ -22,14 +22,13 @@ import {
 } from '@/hooks/useAttendanceReminder';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 import { useEmailFullscreen, setEmailFullscreen } from '@/hooks/useEmailFullscreen';
-import { isRunningStandalone } from '@/lib/pwa';
 
 export default function AppLayout() {
   useNetworkHealthMonitor();
   const { shouldRedirect, fromPath } = useAttendanceClockInRedirect();
   const isMobile = useIsMobile();
+  const isCompactNav = useIsCompactNav();
   const location = useLocation();
-  const standalone = isRunningStandalone();
   const { isFullscreen: emailFullscreen } = useEmailFullscreen();
 
   const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
@@ -86,7 +85,7 @@ export default function AppLayout() {
         <NotificationAudioUnlock />
         {!isFullBleed ? (
           <div className="relative z-30 flex shrink-0 flex-col pt-[var(--nexus-safe-top)]">
-            <TopBar embedded sidebarWidth={0} isMobile={isMobile} />
+            <TopBar embedded sidebarWidth={0} isMobile={isCompactNav} />
             <TopAlertStrips embedded isMobile={isMobile} />
           </div>
         ) : null}
@@ -94,11 +93,7 @@ export default function AppLayout() {
           className={cn(
             'min-w-0 max-w-full flex-1',
             lockToViewport && 'min-h-0 overflow-hidden',
-            showBottomNav
-              && !isGameImmersive
-              && (standalone
-                ? 'pb-[var(--nexus-dock-clearance)]'
-                : 'pb-[4.5rem]')
+            showBottomNav && !isGameImmersive && 'pb-[var(--nexus-dock-clearance)]'
           )}
         >
           {isEmailFullscreen ? (
