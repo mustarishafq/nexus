@@ -146,8 +146,34 @@ class MailMailboxService
         return $resolved;
     }
 
+    public function isImapEnabled(): bool
+    {
+        if (! config('mail.imap.enabled')) {
+            return false;
+        }
+
+        return function_exists('imap_open');
+    }
+
+    protected function ensureImapAvailable(): void
+    {
+        if ($this->isImapEnabled()) {
+            return;
+        }
+
+        if (! config('mail.imap.enabled')) {
+            throw new RuntimeException('IMAP is disabled.');
+        }
+
+        throw new RuntimeException('PHP IMAP extension is not installed on the server.');
+    }
+
     public function isServerConfigured(): bool
     {
+        if (! $this->isImapEnabled()) {
+            return false;
+        }
+
         $settings = AppSettings::row();
 
         return trim((string) ($settings->imap_host ?? $settings->smtp_host ?? '')) !== '';
@@ -218,9 +244,7 @@ class MailMailboxService
     {
         $credential = $this->resolveAccount($user, $accountId);
 
-        if (! function_exists('imap_open')) {
-            throw new RuntimeException('PHP IMAP extension is not installed on the server.');
-        }
+        $this->ensureImapAvailable();
 
         $password = $this->decryptMailboxPassword($credential);
         $config = $this->serverConfig($user, $credential->email);
@@ -262,9 +286,7 @@ class MailMailboxService
             throw new RuntimeException('Mailbox password is required.');
         }
 
-        if (! function_exists('imap_open')) {
-            throw new RuntimeException('PHP IMAP extension is not installed on the server.');
-        }
+        $this->ensureImapAvailable();
 
         $config = $this->serverConfig($user, $mailboxEmail);
         $mailbox = $this->mailboxString($config);
@@ -821,7 +843,9 @@ class MailMailboxService
             ];
         }
 
-        if (! function_exists('imap_open') || ! function_exists('imap_append')) {
+        $this->ensureImapAvailable();
+
+        if (! function_exists('imap_append')) {
             throw new RuntimeException('PHP IMAP extension is not installed on the server.');
         }
 

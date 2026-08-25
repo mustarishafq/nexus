@@ -115,4 +115,18 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | In-app IMAP mailbox
+    |--------------------------------------------------------------------------
+    |
+    | Inbox reading, drafts, and mail-inbox web push need PHP ext-imap.
+    | Set MAIL_IMAP_ENABLED=false to keep SMTP sending while IMAP is off.
+    |
+    */
+
+    'imap' => [
+        'enabled' => filter_var(env('MAIL_IMAP_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
 ];

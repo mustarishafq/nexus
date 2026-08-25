@@ -66,6 +66,7 @@ class MailInboxPushServiceTest extends TestCase
         ]);
 
         $mailMock = Mockery::mock(MailMailboxService::class);
+        $mailMock->shouldReceive('isImapEnabled')->andReturn(true);
         $mailMock->shouldReceive('isServerConfigured')->andReturn(true);
         $mailMock->shouldReceive('listInbox')
             ->once()
@@ -150,6 +151,7 @@ class MailInboxPushServiceTest extends TestCase
         ]);
 
         $mailMock = Mockery::mock(MailMailboxService::class);
+        $mailMock->shouldReceive('isImapEnabled')->andReturn(true);
         $mailMock->shouldReceive('isServerConfigured')->andReturn(true);
         $mailMock->shouldReceive('listInbox')
             ->once()
@@ -234,6 +236,7 @@ class MailInboxPushServiceTest extends TestCase
         ]);
 
         $mailMock = Mockery::mock(MailMailboxService::class);
+        $mailMock->shouldReceive('isImapEnabled')->andReturn(true);
         $mailMock->shouldReceive('isServerConfigured')->andReturn(true);
         $mailMock->shouldNotReceive('listInbox');
 
@@ -292,6 +295,7 @@ class MailInboxPushServiceTest extends TestCase
         }
 
         $mailMock = Mockery::mock(MailMailboxService::class);
+        $mailMock->shouldReceive('isImapEnabled')->andReturn(true);
         $mailMock->shouldReceive('isServerConfigured')->andReturn(true);
 
         $pushMock = Mockery::mock(PushNotificationService::class);
@@ -307,5 +311,54 @@ class MailInboxPushServiceTest extends TestCase
         Queue::assertPushed(CheckMailInboxForUserJob::class, function (CheckMailInboxForUserJob $job) use ($users) {
             return in_array($job->userId, $users->pluck('id')->all(), true);
         });
+    }
+
+    public function test_dispatch_checks_skips_when_imap_disabled(): void
+    {
+        Queue::fake();
+
+        config([
+            'mail.imap.enabled' => false,
+            'services.web_push.public_key' => 'test-public',
+            'services.web_push.private_key' => 'test-private',
+            'services.web_push.subject' => 'mailto:test@example.com',
+        ]);
+
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'smtp_host' => 'mail.example.com',
+            'imap_host' => 'mail.example.com',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'notification_settings' => ['mail_inbox' => true],
+        ]);
+
+        UserMailCredential::query()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'is_primary' => true,
+            'password' => Crypt::encryptString('secret'),
+            'verified_at' => now(),
+        ]);
+
+        DB::table('push_subscriptions')->insert([
+            'user_id' => (string) $user->id,
+            'endpoint' => 'https://push.example.test/subscription/1',
+            'public_key' => str_repeat('a', 87),
+            'auth_token' => str_repeat('b', 22),
+            'content_encoding' => 'aes128gcm',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $summary = app(MailInboxPushService::class)->dispatchChecks();
+
+        $this->assertSame(0, $summary['dispatched']);
+        $this->assertSame(0, $summary['skipped']);
+        Queue::assertNothingPushed();
     }
 }

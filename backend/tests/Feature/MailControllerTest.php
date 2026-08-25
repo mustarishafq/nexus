@@ -64,13 +64,39 @@ class MailControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $imapReady = function_exists('imap_open');
+
         $this->withToken($token)
             ->getJson('/api/mail/status')
             ->assertOk()
             ->assertJson([
-                'configured' => true,
-                'reachable' => true,
+                'configured' => $imapReady,
+                'reachable' => $imapReady,
                 'connected' => false,
+            ]);
+    }
+
+    public function test_mail_status_reports_unconfigured_when_imap_disabled(): void
+    {
+        config(['mail.imap.enabled' => false]);
+
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'smtp_host' => 'mail.example.com',
+            'imap_host' => 'mail.example.com',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/mail/status')
+            ->assertOk()
+            ->assertJson([
+                'configured' => false,
+                'reachable' => false,
             ]);
     }
 

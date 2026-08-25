@@ -117,6 +117,10 @@ class MailInboxPushService
 
     public function shouldCheckUser(User $user): bool
     {
+        if (! $this->mailMailboxService->isImapEnabled()) {
+            return false;
+        }
+
         if (! $this->userWantsMailInboxPush($user)) {
             return false;
         }
