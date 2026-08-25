@@ -29,7 +29,7 @@ function isWithinLastWeek(isoDate) {
 
 function deriveActiveFromFeed(feedPayload) {
   const posts = (Array.isArray(feedPayload?.items) ? feedPayload.items : [])
-    .filter((item) => item?.type === 'post');
+    .filter((item) => item?.type === 'post' && !item.is_deleted);
 
   const thisWeek = posts.filter(
     (item) => isWithinLastWeek(item.created_date) && engagementScore(item) > 0
@@ -56,7 +56,7 @@ async function loadActiveDiscussions() {
     if (error?.status && error.status !== 404 && error.status < 500) {
       throw error;
     }
-    const feed = await db.feed.list({ limit: 30 });
+    const feed = await db.feed.list({ limit: 30, excludeDeleted: true });
     return { items: deriveActiveFromFeed(feed) };
   }
 }

@@ -66,7 +66,7 @@ export default function AttendancePhotoViewer({ record, className, buttonClassNa
           src={photoUrl}
           alt="Attendance photo"
           className={cn((loading || error) && 'invisible')}
-          imgClassName="max-h-[min(72vh,540px)] max-w-[min(90vw,440px)] rounded-2xl shadow-2xl sm:max-w-[min(78vw,520px)]"
+          imgClassName="max-h-[min(72vh,540px)] max-w-[min(90vw,440px)] rounded-none sm:max-w-[min(78vw,520px)]"
           onDismiss={close}
           onLoad={() => setLoading(false)}
           onError={() => {

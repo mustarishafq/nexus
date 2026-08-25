@@ -169,7 +169,7 @@ export default function ProfilePictureUploader({
 
   const cropDialog = (
     <Dialog open={cropDialogOpen} onOpenChange={(open) => !open && handleCropCancel()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="md:max-w-md">
         <DialogHeader>
           <DialogTitle>Crop profile picture</DialogTitle>
           <DialogDescription>

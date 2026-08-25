@@ -176,6 +176,10 @@ class PostController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'body' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -262,6 +266,10 @@ class PostController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if (! $post->isPending()) {
             return response()->json(['message' => 'Only pending posts can be approved.'], 422);
         }
@@ -308,6 +316,10 @@ class PostController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if (! $post->isPending()) {
             return response()->json(['message' => 'Only pending posts can be rejected.'], 422);
         }
@@ -332,9 +344,38 @@ class PostController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         $post->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function restore(Request $request, Post $post): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $isAuthor = (int) $viewer->id === (int) $post->author_user_id;
+        if (! $isAuthor && ! PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (! $post->trashed()) {
+            return response()->json(['message' => 'Only deleted posts can be restored.'], 422);
+        }
+
+        $post->restore();
+        $post->load(['author', 'reactions', 'polls.options', 'polls.votes'])->loadCount(['comments', 'edits', 'views', 'reaches']);
+
+        return response()->json([
+            'item' => $this->serializePost($post, $viewer),
+        ]);
     }
 
     private function notifyMentions(User $author, Post $post, string $body): void

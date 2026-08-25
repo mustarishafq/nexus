@@ -141,6 +141,7 @@ Route::get('/posts/{post}/seen', [PostInsightController::class, 'listSeen']);
 Route::get('/posts/{post}/reaches', [PostInsightController::class, 'listReaches']);
 Route::post('/posts/{post}/approve', [PostController::class, 'approve']);
 Route::post('/posts/{post}/reject', [PostController::class, 'reject']);
+Route::post('/posts/{post}/restore', [PostController::class, 'restore']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);
 Route::post('/posts/{post}/reactions', [PostReactionController::class, 'store']);
 Route::delete('/posts/{post}/reactions', [PostReactionController::class, 'destroy']);

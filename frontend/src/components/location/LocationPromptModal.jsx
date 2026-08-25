@@ -31,7 +31,7 @@ export default function LocationPromptModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border-primary/20">
+      <DialogContent className="md:max-w-md border-primary/20">
         <DialogHeader className="space-y-3">
           <div className="w-12 h-12 rounded-full bg-primary/10 ring-4 ring-primary/10 flex items-center justify-center">
             <MapPin className="w-6 h-6 text-primary" />
@@ -43,7 +43,7 @@ export default function LocationPromptModal({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-col">
+        <DialogFooter className="flex-col gap-2 md:flex-col">
           <Button type="button" className="w-full" onClick={handleEnable} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Allow precise location

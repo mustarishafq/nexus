@@ -44,7 +44,7 @@ export default function SsoCredentialPickerDialog({
         <DialogOverlay className="z-[130] bg-black/25 backdrop-blur-sm" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed left-[50%] top-[50%] z-[130] grid w-[calc(100vw-1.5rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-4 p-6 duration-200',
+            'fixed left-[50%] top-[50%] z-[130] grid w-[calc(100%-2rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-4 p-6 duration-200',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
             'data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]',
@@ -101,18 +101,18 @@ export default function SsoCredentialPickerDialog({
             })}
           </div>
 
-          <DialogFooter className="flex-row justify-end gap-2 sm:justify-end sm:space-x-0">
+          <DialogFooter className="flex-row justify-end gap-2 md:justify-end md:space-x-0">
             <Button
               type="button"
               variant="outline"
-              className="h-10 flex-1 sm:flex-none"
+              className="h-10 flex-1 md:flex-none"
               onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              className="h-10 flex-1 sm:flex-none"
+              className="h-10 flex-1 md:flex-none"
               onClick={handleConfirm}
               disabled={!resolvedSelection}
             >

@@ -259,6 +259,7 @@ class PostPollController extends Controller
                         'sort_order' => $index,
                     ])->save();
                     $keptIds[] = (int) $existing->id;
+
                     continue;
                 }
 
@@ -293,6 +294,10 @@ class PostPollController extends Controller
 
         if ((int) $viewer->id !== (int) $post->author_user_id) {
             return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
         }
 
         if ($post->polls()->count() >= PostPoll::MAX_PER_POST) {
@@ -359,6 +364,10 @@ class PostPollController extends Controller
 
     private function ensurePollBelongsToPost(Post $post, PostPoll $poll): ?JsonResponse
     {
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if ((int) $poll->post_id !== (int) $post->id) {
             return response()->json(['message' => 'Poll not found on this post.'], 404);
         }

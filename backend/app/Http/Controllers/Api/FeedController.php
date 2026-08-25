@@ -35,6 +35,7 @@ class FeedController extends Controller
             'author_user_id' => ['sometimes', 'integer', 'min:1', 'exists:users,id'],
             'focus_post' => ['sometimes', 'integer', 'min:1'],
             'before' => ['sometimes', 'string', 'max:120'],
+            'exclude_deleted' => ['sometimes', 'boolean'],
             'limit' => [
                 'sometimes',
                 'integer',
@@ -54,6 +55,10 @@ class FeedController extends Controller
         $cursor = $this->parseFeedCursor($validated['before'] ?? null);
 
         $postsQuery = Post::query()->visibleTo($viewer);
+
+        if ($request->boolean('exclude_deleted')) {
+            $postsQuery->whereNull('deleted_at');
+        }
 
         if ($authorUserId) {
             $postsQuery->where('author_user_id', $authorUserId);
@@ -80,7 +85,13 @@ class FeedController extends Controller
 
             // Deep-link pin only on the first page.
             if ($focusPostId && ! $cursor) {
-                $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer, $authorUserId);
+                $items = $this->ensurePostInFeedItems(
+                    $items,
+                    $focusPostId,
+                    $viewer,
+                    $authorUserId,
+                    $request->boolean('exclude_deleted'),
+                );
             }
 
             return response()->json([
@@ -98,6 +109,7 @@ class FeedController extends Controller
         $total = (int) $postsQuery->count() + (int) (clone $broadcastsQuery)->count();
         $unseenCount = (int) Post::query()
             ->visibleTo($viewer)
+            ->whereNull('deleted_at')
             ->where('approval_status', Post::APPROVAL_APPROVED)
             ->where('author_user_id', '!=', $viewer->id)
             ->whereDoesntHave('views', fn (Builder $views) => $views->where('user_id', $viewer->id))
@@ -128,7 +140,13 @@ class FeedController extends Controller
 
         // Deep-link pin only on the first page.
         if ($focusPostId && ! $cursor) {
-            $items = $this->ensurePostInFeedItems($items, $focusPostId, $viewer);
+            $items = $this->ensurePostInFeedItems(
+                $items,
+                $focusPostId,
+                $viewer,
+                null,
+                $request->boolean('exclude_deleted'),
+            );
         }
 
         $nextBefore = null;
@@ -166,6 +184,7 @@ class FeedController extends Controller
 
         $items = Post::query()
             ->visibleTo($viewer)
+            ->whereNull('deleted_at')
             ->where(function (Builder $query) use ($since) {
                 $query->where('created_at', '>=', $since)
                     ->orWhereHas('reactions', fn (Builder $reactions) => $reactions->where('created_at', '>=', $since))
@@ -193,7 +212,7 @@ class FeedController extends Controller
      * @param  Collection<int, array<string, mixed>>  $items
      * @return Collection<int, array<string, mixed>>
      */
-    private function ensurePostInFeedItems($items, int $postId, User $viewer, ?int $authorUserId = null)
+    private function ensurePostInFeedItems($items, int $postId, User $viewer, ?int $authorUserId = null, bool $excludeDeleted = false)
     {
         $isFocusedPost = static fn (array $item): bool => ($item['type'] ?? null) === 'post'
             && (int) ($item['id'] ?? 0) === $postId;
@@ -212,6 +231,10 @@ class FeedController extends Controller
 
         if ($authorUserId) {
             $postQuery->where('author_user_id', $authorUserId);
+        }
+
+        if ($excludeDeleted) {
+            $postQuery->whereNull('deleted_at');
         }
 
         $post = $postQuery

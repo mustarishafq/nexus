@@ -788,10 +788,67 @@
   animation: avatar-star-shimmer 4.5s ease-in-out infinite;
 }
 
+/* Vaul injects 500ms drawer CSS at runtime — keep the comments sheet snappy. */
+[data-vaul-drawer] {
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  animation-duration: 0.26s !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+[data-vaul-overlay] {
+  animation-duration: 0.22s !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+@keyframes comments-sheet-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes comments-sheet-composer-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.comments-sheet-list-enter > * {
+  animation: comments-sheet-item-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.comments-sheet-list-enter > *:nth-child(1) { animation-delay: 0.02s; }
+.comments-sheet-list-enter > *:nth-child(2) { animation-delay: 0.06s; }
+.comments-sheet-list-enter > *:nth-child(3) { animation-delay: 0.1s; }
+.comments-sheet-list-enter > *:nth-child(4) { animation-delay: 0.14s; }
+.comments-sheet-list-enter > *:nth-child(5) { animation-delay: 0.18s; }
+.comments-sheet-list-enter > *:nth-child(6) { animation-delay: 0.22s; }
+.comments-sheet-list-enter > *:nth-child(7) { animation-delay: 0.26s; }
+.comments-sheet-list-enter > *:nth-child(8) { animation-delay: 0.3s; }
+.comments-sheet-list-enter > *:nth-child(n + 9) { animation-delay: 0.32s; }
+
+.comments-sheet-composer-enter {
+  animation: comments-sheet-composer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avatar-star-badge__glow,
   .avatar-star-badge__icon {
     animation: none;
+  }
+
+  .comments-sheet-list-enter > *,
+  .comments-sheet-composer-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 
   .avatar-star-badge__icon {

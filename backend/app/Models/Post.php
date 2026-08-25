@@ -8,9 +8,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Post extends Model
 {
+    use SoftDeletes;
+
     public const APPROVAL_APPROVED = 'approved';
 
     public const APPROVAL_PENDING = 'pending';
@@ -31,6 +34,7 @@ class Post extends Model
     protected $casts = [
         'approved_at' => 'datetime',
         'edited_at' => 'datetime',
+        'deleted_at' => 'datetime',
         'image_urls' => 'array',
     ];
 
@@ -122,18 +126,36 @@ class Post extends Model
 
     public function scopeVisibleTo(Builder $query, User $viewer): Builder
     {
+        $query->withTrashed();
+
         if (PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE)) {
             return $query->whereIn('approval_status', [self::APPROVAL_APPROVED, self::APPROVAL_PENDING]);
         }
 
         return $query->where(function (Builder $inner) use ($viewer) {
-            $inner->where('approval_status', self::APPROVAL_APPROVED)
-                ->orWhere(function (Builder $ownPending) use ($viewer) {
-                    $ownPending
-                        ->where('approval_status', self::APPROVAL_PENDING)
-                        ->where('author_user_id', $viewer->id);
-                });
+            $inner->where(function (Builder $live) use ($viewer) {
+                $live->whereNull($this->getQualifiedDeletedAtColumn())
+                    ->where(function (Builder $approval) use ($viewer) {
+                        $approval->where('approval_status', self::APPROVAL_APPROVED)
+                            ->orWhere(function (Builder $ownPending) use ($viewer) {
+                                $ownPending
+                                    ->where('approval_status', self::APPROVAL_PENDING)
+                                    ->where('author_user_id', $viewer->id);
+                            });
+                    });
+            })->orWhere(function (Builder $ownDeleted) use ($viewer) {
+                $ownDeleted
+                    ->whereNotNull($this->getQualifiedDeletedAtColumn())
+                    ->where('author_user_id', $viewer->id);
+            });
         });
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return static::withTrashed()
+            ->where($field ?? $this->getRouteKeyName(), $value)
+            ->first();
     }
 
     public function getCreatedDateAttribute(): ?string

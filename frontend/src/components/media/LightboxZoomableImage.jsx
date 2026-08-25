@@ -55,8 +55,6 @@ export default function LightboxZoomableImage({
     if (!img) return;
     const { scale, x, y } = transformRef.current;
     img.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
-    // Soften the resting “card” chrome once zoomed into the full stage.
-    img.style.borderRadius = scale > 1.05 ? '0px' : '';
   };
 
   const resetTransform = () => {

@@ -729,7 +729,7 @@ export default function RolesPanel() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto md:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingRole ? 'Edit role' : 'Create role'}</DialogTitle>
             <DialogDescription>

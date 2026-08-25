@@ -197,7 +197,7 @@ export default function CoverPhotoUploader({
 
   const cropDialog = (
     <Dialog open={cropDialogOpen} onOpenChange={(open) => !open && handleCropCancel()}>
-      <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[min(92dvh,900px)] flex-col gap-0 overflow-hidden p-0 md:max-w-2xl">
         <div className="shrink-0 space-y-1.5 border-b border-border px-4 py-4 pr-12 sm:px-6">
           <DialogHeader className="space-y-1.5 text-left">
             <DialogTitle>Crop cover photo</DialogTitle>
@@ -277,7 +277,7 @@ export default function CoverPhotoUploader({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-border px-4 py-3 md:px-6">
           <Button type="button" variant="outline" onClick={handleCropCancel} disabled={uploading}>
             Cancel
           </Button>

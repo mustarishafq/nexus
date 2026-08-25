@@ -52,7 +52,7 @@ Portable spec for **full-size photo / media preview** in EMZI Nexus Brain. Light
 | Surface | `bg-black/80 backdrop-blur-md` |
 | Enter | `animate-in fade-in-0 duration-200` |
 | Close button | Ghost icon, `h-10 w-10 rounded-full`, `absolute right-3 top-3` (`sm:right-5 sm:top-5`), `text-white/90 hover:bg-white/10` |
-| Image | `object-contain` + max height/width caps; `rounded-2xl shadow-2xl` for simple previews |
+| Image | `object-contain` + max height/width caps; **no** `rounded-*` or `shadow-*` on the photo (`rounded-none`) |
 | Loading | Centered `Loader2` + short “Loading photo…” label in `text-white/80` |
 
 Content clicks must `stopPropagation` so backdrop click does not close when interacting with the image or side panel.

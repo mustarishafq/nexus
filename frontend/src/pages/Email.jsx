@@ -1321,7 +1321,7 @@ export default function Email() {
       </AlertDialog>
 
       <Dialog open={addAccountOpen} onOpenChange={setAddAccountOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle>Add email account</DialogTitle>
             <DialogDescription>

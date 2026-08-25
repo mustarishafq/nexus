@@ -171,6 +171,7 @@ export function FeedEngagementBar({
   commentsExpanded = false,
   shareUrl = null,
   insights = null,
+  readOnly = false,
   className,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -232,6 +233,7 @@ export function FeedEngagementBar({
   };
 
   const scheduleOpenPicker = () => {
+    if (readOnly) return;
     // Hover is desktop-only; touch devices use long-press instead.
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
       if (pickerModeRef.current === 'collection') return;
@@ -264,6 +266,7 @@ export function FeedEngagementBar({
   };
 
   const applyReaction = (reaction, event) => {
+    if (readOnly) return;
     if (myReaction !== reaction) {
       spawnReactionBurst(reaction, event.clientX, event.clientY, { compact: false });
       setPopReaction(reaction);
@@ -274,6 +277,7 @@ export function FeedEngagementBar({
   const handleLikeClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) return;
     // Long-press already opened the picker — don't also toggle Like.
     if (longPressTriggered.current) {
       longPressTriggered.current = false;
@@ -288,7 +292,7 @@ export function FeedEngagementBar({
   };
 
   const handlePointerDown = (event) => {
-    if (event.pointerType === 'mouse') return;
+    if (readOnly || event.pointerType === 'mouse') return;
     longPressTriggered.current = false;
     clearLongPressTimer();
     longPressTimer.current = window.setTimeout(() => {
@@ -342,6 +346,9 @@ export function FeedEngagementBar({
         </div>
       ) : null}
 
+      {readOnly ? (
+        showSummary ? null : <div className="h-2" />
+      ) : (
       <div
         className={cn(
           'grid w-full grid-cols-3 border-t border-border/30',
@@ -357,7 +364,8 @@ export function FeedEngagementBar({
             >
               <motion.button
                 type="button"
-                whileHover={reactionMotion.whileHover}
+                disabled={readOnly}
+                whileHover={readOnly ? undefined : reactionMotion.whileHover}
                 whileTap={reactionMotion.whileTap}
                 transition={popReaction ? reactionMotion.activePopTransition : reactionMotion.spring}
                 animate={popReaction ? { scale: reactionMotion.activePopScale } : { scale: 1 }}
@@ -376,7 +384,8 @@ export function FeedEngagementBar({
                 className={cn(
                   actionClass,
                   'touch-manipulation select-none',
-                  likeActive ? 'text-primary' : 'text-muted-foreground'
+                  likeActive ? 'text-primary' : 'text-muted-foreground',
+                  readOnly && 'pointer-events-none opacity-40'
                 )}
                 title="Tap to like · long-press for more reactions"
                 aria-label="Like. Long-press for more reactions"
@@ -476,7 +485,7 @@ export function FeedEngagementBar({
         <button
           type="button"
           onClick={handleShare}
-          disabled={!shareUrl}
+          disabled={readOnly || !shareUrl}
           className={cn(
             actionClass,
             'text-muted-foreground disabled:pointer-events-none disabled:opacity-40'
@@ -486,6 +495,7 @@ export function FeedEngagementBar({
           Share
         </button>
       </div>
+      )}
     </div>
   );
 }
@@ -498,6 +508,7 @@ export default function PostReactions({
   reactFn = null,
   invalidateKeys = null,
   expHintActionKey = null,
+  disabled = false,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState('quick');
@@ -550,6 +561,7 @@ export default function PostReactions({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (disabled) return;
           if (fromPicker) {
             closePicker();
           }
@@ -559,12 +571,14 @@ export default function PostReactions({
           }
           reactMutation.mutate(reaction);
         }}
+        disabled={disabled}
         className={cn(
           'inline-flex items-center gap-1 rounded-full border transition-colors',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
           isActive
             ? 'border-primary/40 bg-primary/10 text-primary'
-            : 'border-border/70 bg-background hover:border-primary/30 hover:bg-muted/60'
+            : 'border-border/70 bg-background hover:border-primary/30 hover:bg-muted/60',
+          disabled && 'pointer-events-none opacity-60'
         )}
         title={isActive ? 'Remove reaction' : 'React'}
       >
@@ -599,17 +613,19 @@ export default function PostReactions({
           </motion.div>
         ))}
       </AnimatePresence>
-      <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
+      <Popover open={disabled ? false : pickerOpen} onOpenChange={handlePickerOpenChange} modal={false}>
         <PopoverTrigger asChild>
           <motion.button
             type="button"
-            whileHover={reactionMotion.whileHover}
-            whileTap={reactionMotion.whileTap}
+            disabled={disabled}
+            whileHover={disabled ? undefined : reactionMotion.whileHover}
+            whileTap={disabled ? undefined : reactionMotion.whileTap}
             transition={reactionMotion.spring}
             className={cn(
               'inline-flex items-center justify-center gap-1 rounded-full border border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted/60 hover:text-primary',
               compact ? 'h-6 min-w-6 px-1.5' : 'h-8 min-w-8 px-2',
-              myReaction && !activeEntries.some(([emoji]) => emoji === myReaction) && 'border-primary/30 bg-primary/5 text-primary'
+              myReaction && !activeEntries.some(([emoji]) => emoji === myReaction) && 'border-primary/30 bg-primary/5 text-primary',
+              disabled && 'pointer-events-none opacity-60'
             )}
             title={myReaction ? 'Change reaction' : 'Add reaction'}
             onClick={(event) => event.stopPropagation()}

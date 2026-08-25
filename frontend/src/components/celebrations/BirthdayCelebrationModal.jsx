@@ -105,7 +105,7 @@ export default function BirthdayCelebrationModal({ open, onOpenChange, onDismiss
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md overflow-hidden border-pink-500/25 bg-background p-0 shadow-2xl shadow-pink-500/10 sm:rounded-2xl">
+      <DialogContent className="md:max-w-md overflow-hidden border-pink-500/25 bg-background p-0 shadow-2xl shadow-pink-500/10 rounded-2xl">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-pink-500/20 via-rose-500/10 to-transparent" />
           <div className="absolute -left-10 top-8 h-32 w-32 rounded-full bg-amber-400/15 blur-3xl" />

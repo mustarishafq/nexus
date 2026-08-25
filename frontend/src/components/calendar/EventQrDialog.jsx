@@ -34,7 +34,7 @@ export default function EventQrDialog({ open, onOpenChange, event }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="md:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-primary" />
@@ -62,7 +62,7 @@ export default function EventQrDialog({ open, onOpenChange, event }) {
           </p>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 md:gap-0">
           <Button variant="outline" onClick={handleCopy} disabled={!checkInUrl} className="gap-2">
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? 'Copied' : 'Copy link'}

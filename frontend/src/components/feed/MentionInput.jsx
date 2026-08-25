@@ -123,10 +123,17 @@ const MentionInput = forwardRef(function MentionInput({
       const rect = editorRef.current?.getBoundingClientRect();
       if (!rect) return;
 
+      const width = Math.min(Math.max(rect.width, 240), window.innerWidth - 16);
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const estimatedHeight = 240;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUp = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+
       setDropdownStyle({
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: Math.max(rect.width, 240),
+        top: openUp ? undefined : rect.bottom + 8,
+        bottom: openUp ? window.innerHeight - rect.top + 8 : undefined,
+        left,
+        width,
       });
     };
 

@@ -925,28 +925,34 @@ Destructive: `border-destructive/50 text-destructive`
 ### 11.1 Dialog (default)
 
 - Overlay: `z-50 bg-black/80`
-- Content: `max-w-lg p-6 shadow-lg sm:rounded-lg`
+- Content: `w-[calc(100%-2rem)] max-w-lg rounded-lg p-6 shadow-lg` — always rounded, never edge-to-edge
 - Close: `absolute right-4 top-4 opacity-70`
 - Animation: 200ms zoom/fade
+- Header: `text-center md:text-left`
+- Footer: `flex-col-reverse md:flex-row md:justify-end`
 
 **Photo lightbox:** Full-size image preview stacks above dialogs at `z-[110]` and must not dismiss the parent Dialog/Sheet. Spec: `docs/LIGHTBOX_DESIGN.md`.
 
-**Mobile width:** Do not use bare `w-full` on centered dialogs — it stretches edge-to-edge. Use `w-[calc(100vw-1.5rem)]` with a `sm:max-w-*` cap so the modal keeps side margins on phones (see §11.9).
+**Mobile width (required):** Centered dialogs and alert dialogs must **not** be full-bleed on phones. Keep a **1rem inset on each side**. Overlay layout uses the app mobile breakpoint **`md` (768px)** — the same as `useIsMobile()` / `MOBILE_BREAKPOINT` — not `sm` (640px). See §11.9.
 
-**Footer buttons:** Default `DialogFooter` stacks actions vertically on mobile (`flex-col-reverse`). For confirm/picker dialogs, override with horizontal alignment (see §11.9).
+**Do not** set `w-full` or `sm:w-full` on `DialogContent` / `AlertDialogContent`; that removes the inset. Cap width with `md:max-w-*` (or unprefixed `max-w-*`).
+
+**Footer buttons:** Default `DialogFooter` / `AlertDialogFooter` stacks until `md`, then sits in a row. Compact glass pickers may keep a horizontal row at all sizes (see §11.9).
 
 ### 11.2 Full-height form dialog (Applications CRUD)
 
 ```
-DialogContent: sm:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col
+DialogContent: md:max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col
 DialogHeader:  px-6 pt-6 pb-3 border-b border-border/70
 Scroll body:   flex-1 min-h-0 overflow-y-auto px-6 py-4
 Footer:        px-6 py-4 border-t border-border/70 bg-background
 ```
 
-Reorder dialog: `sm:max-w-lg p-0 gap-0 max-h-[85vh]`
+The shared primitive already applies `w-[calc(100%-2rem)]` — do not add `w-full`.
 
-Crop dialog: `sm:max-w-md`; crop area `h-64 rounded-lg bg-muted`
+Reorder dialog: `md:max-w-lg p-0 gap-0 max-h-[85vh]`
+
+Crop dialog: `md:max-w-md`; crop area `h-64 rounded-lg bg-muted`
 
 ### 11.3 AlertDialog (destructive confirm)
 
@@ -956,7 +962,7 @@ Standard shadcn AlertDialog. Applications delete requires typing exact app name.
 
 - Default overlay: `bg-black/80`
 - Open 500ms / close 300ms ease-in-out
-- Left side: `w-3/4 sm:max-w-sm`
+- Left/right side: `w-3/4 md:max-w-sm` (not full-bleed; cap at `md`)
 - Supports `overlayClassName`, `hideCloseButton`
 - Mobile menu: `w-[280px]` + custom overlay `bg-black/25 backdrop-blur-sm`
 
@@ -984,29 +990,33 @@ See §7.2.
 | Unselected | `border-border bg-card hover:bg-muted/30 hover:border-primary/40` |
 | Preview wireframe | `h-14 rounded-lg border border-border/80 bg-muted/30` |
 
-### 11.9 Mobile compact dialogs (glass / confirm / picker)
+### 11.9 Centered modals on mobile (required)
 
-**Required for:** SSO account picker, destructive confirms, and any small centered modal on mobile.
+**Required for:** every centered `Dialog` / `AlertDialog`, including restore/delete confirms, SSO pickers, and form dialogs.
 
-Users have repeatedly flagged full-width modals and vertically stacked footer buttons on phones. Follow this spec exactly.
+Phones must never show a full-width modal. Overlay chrome uses **`md` (768px)**, matching `useIsMobile()` — not `sm` (640px).
+
+Primitives already encode this in `frontend/src/components/ui/dialog.jsx` and `alert-dialog.jsx`. Call sites should not override width back to full-bleed.
 
 #### Width
 
 | Property | Value |
 |----------|-------|
-| Mobile width | `w-[calc(100vw-1.5rem)]` — **never** bare `w-full` on centered dialogs |
-| Side inset | `0.75rem` each side (`1.5rem` total horizontal margin) |
-| Desktop cap | `sm:max-w-md` (compact) or `sm:max-w-lg` (content-heavy) |
+| Mobile width | `w-[calc(100%-2rem)]` — **never** `w-full` or `sm:w-full` on centered dialogs |
+| Side inset | `1rem` each side (`2rem` total) |
+| Corners | `rounded-lg` at all breakpoints (not `sm:rounded-lg`) |
+| Width cap | `md:max-w-md` (compact) or `md:max-w-lg` / unprefixed `max-w-*` (content-heavy) |
+| Layout breakpoint | `md:` (`768px`) for header alignment, footer row, and max-width caps |
 
 ```jsx
-<DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md">
+<DialogContent className="md:max-w-md">
 ```
 
 Custom glass dialog (Radix `DialogPrimitive.Content`):
 
 ```jsx
 className={cn(
-  'fixed left-[50%] top-[50%] z-[130] w-[calc(100vw-1.5rem)] max-w-md translate-x-[-50%] translate-y-[-50%]',
+  'fixed left-[50%] top-[50%] z-[130] w-[calc(100%-2rem)] max-w-md translate-x-[-50%] translate-y-[-50%]',
   'rounded-2xl border',
   glassDialogPanelStyles,
 )}
@@ -1027,28 +1037,29 @@ Description:
 | Description / helper | `glassDialogMutedText` (not bare `text-muted-foreground` on glass) |
 | Option rows | `bg-card border-border` unselected; `text-foreground` for labels |
 
-#### Footer actions — horizontal on all breakpoints
+#### Footer actions
 
-**Do not** rely on default `DialogFooter` mobile stacking (`flex-col-reverse`) for two-button confirms.
+Default `DialogFooter` / `AlertDialogFooter`: stack below `md`, row at `md+`.
+
+Compact glass pickers (SSO account picker) may keep a horizontal row on phones:
 
 | Property | Value |
 |----------|-------|
 | Layout | `flex-row justify-end gap-2` |
 | Button height | `h-10` |
-| Mobile equal width | `flex-1 sm:flex-none` on each button when both actions should share the row |
+| Equal width on phones | `flex-1 md:flex-none` on each button |
 
 ```jsx
-<DialogFooter className="flex-row justify-end gap-2 sm:justify-end sm:space-x-0">
-  <Button variant="outline" className="h-10 flex-1 sm:flex-none">Cancel</Button>
-  <Button className="h-10 flex-1 sm:flex-none">Continue</Button>
+<DialogFooter className="flex-row justify-end gap-2 md:space-x-0">
+  <Button variant="outline" className="h-10 flex-1 md:flex-none">Cancel</Button>
+  <Button className="h-10 flex-1 md:flex-none">Continue</Button>
 </DialogFooter>
 ```
 
-`AlertDialogFooter` variant: `className="flex-row justify-end gap-2"` with `AlertDialogCancel className="mt-0 h-10 flex-1 sm:flex-none"`.
-
 #### Reference implementation
 
-`frontend/src/components/applications/SsoCredentialPickerDialog.jsx`
+- Primitives: `frontend/src/components/ui/dialog.jsx`, `alert-dialog.jsx`
+- Glass picker: `frontend/src/components/applications/SsoCredentialPickerDialog.jsx`
 
 ---
 
@@ -1160,6 +1171,24 @@ Action row: `mt-auto flex gap-2 pt-4`; buttons `h-8 flex-1 text-xs`
 `grid grid-cols-1 xl:grid-cols-12 gap-6` with mobile reorder via `order-N xl:order-none`
 
 Motion on grid: `initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}`
+
+### 13.6 Company feed posts
+
+**File:** `components/feed/FeedItems.jsx`
+
+Do **not** tint deleted posts with `text-destructive` or card-level `opacity-*`. Dark-mode `--destructive` (`0 62% 30%`) is too dark for labels/borders, and opacity hides the author avatar.
+
+**Deleted** (visible to author / admin / HR only):
+
+| Element | Classes |
+|---------|---------|
+| Card | `bg-card` + wash `bg-red-500/[0.04] dark:bg-red-500/[0.07]`; `border-red-200/80 dark:border-red-400/20` |
+| Banner | Wash `bg-red-500/[0.08] dark:bg-red-500/[0.10]` + `Trash2 h-3.5 text-red-500` + `text-xs font-medium text-red-700 dark:text-red-300` |
+| Restore | Outline `h-7` on `bg-card` with `RotateCcw` + “Restore” |
+| Badge | `bg-red-600 text-white dark:bg-red-500 text-[10px]` |
+| Body / media | `opacity-75`; Like / Comment / Share hidden (`FeedEngagementBar` `readOnly`) |
+
+**Pending approval badge:** `border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300`
 
 ---
 
@@ -1733,6 +1762,7 @@ See §16.1 for full spring spec.
 - Page title: `text-xl sm:text-2xl`
 - Panels: `hidden lg:flex` / `lg:hidden`
 - Table columns: progressive disclosure with `hidden md:table-cell`
+- **Centered modals:** not full-width — `w-[calc(100%-2rem)]`, always `rounded-lg`, overlay layout at `md:` not `sm:` (§11.9)
 
 **Safe areas:** `env(safe-area-inset-bottom)` on all fixed bottom elements.
 
@@ -1846,6 +1876,7 @@ These are **intentional** — do not "fix" to tokens unless explicitly migrating
 | PageNotFound / UserNotRegisteredError | Full `slate-*` palette | Legacy — migrate when touched |
 | Celebrations widget | `amber-500/600` accents | Seasonal UI |
 | Auth brand panel | Fixed `hsl(206,92%,…)` blues | §3.6 — intentional (not CSS vars) |
+| Deleted feed posts | `red-500` washes at 4–10% + `red-600` badge | Light tint only; avoid `red-900`/`red-950` fills in dark mode (§13.6) |
 
 **All new pages and systems:** use semantic tokens only.
 
@@ -2010,8 +2041,9 @@ Filters in collapsible card (mobile collapsed by default):
 - [ ] Glass-dock / orb details match `MOBILE_BOTTOM_NAV_DESIGN.md` when porting
 
 ### Overlays
-- [ ] Mobile compact dialogs: `w-[calc(100vw-1.5rem)]`, not full-width (§11.9)
-- [ ] Two-button dialog footers: horizontal `flex-row` on mobile, not stacked (§11.9)
+- [ ] Centered dialogs keep `1rem` side inset on mobile (`w-[calc(100%-2rem)]`), never `w-full` (§11.9)
+- [ ] Overlay layout breakpoints use `md:` (768px), not `sm:` (§11.9)
+- [ ] Default dialog footers stack below `md`, row at `md+`; glass pickers may stay `flex-row` on phones (§11.9)
 - [ ] Glass pickers use `glassDialogPanelStyles` + `glassDialogMutedText` (§7.0, §11.9)
 - [ ] Photo lightbox uses `MediaLightbox` at `z-[110]`; opening it must not close parent Dialog/Sheet (`docs/LIGHTBOX_DESIGN.md`)
 - [ ] Destructive actions use AlertDialog

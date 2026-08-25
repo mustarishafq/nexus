@@ -113,6 +113,10 @@ class PostReactionController extends Controller
 
     private function ensurePostIsInteractable(Post $post): ?JsonResponse
     {
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if ($post->isApproved()) {
             return null;
         }

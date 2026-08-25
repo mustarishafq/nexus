@@ -22,14 +22,28 @@ const DrawerClose = DrawerPrimitive.Close
 const DrawerOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    className={cn("fixed inset-0 z-50 bg-black/50", className)}
     {...props} />
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
-const DrawerContent = React.forwardRef(({ className, children, ...props }, ref) => (
+const DrawerHandle = React.forwardRef(({ className, ...props }, ref) => (
+  <DrawerPrimitive.Handle
+    ref={ref}
+    className={cn("mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/35", className)}
+    {...props} />
+))
+DrawerHandle.displayName = "DrawerHandle"
+
+const DrawerContent = React.forwardRef(({
+  className,
+  children,
+  overlayClassName,
+  showHandle = true,
+  ...props
+}, ref) => (
   <DrawerPortal>
-    <DrawerOverlay />
+    <DrawerOverlay className={overlayClassName} />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
@@ -37,7 +51,7 @@ const DrawerContent = React.forwardRef(({ className, children, ...props }, ref) 
         className
       )}
       {...props}>
-      <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+      {showHandle ? <DrawerHandle /> : null}
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>
@@ -49,7 +63,7 @@ const DrawerHeader = ({
   ...props
 }) => (
   <div
-    className={cn("grid gap-1.5 p-4 text-center sm:text-left", className)}
+    className={cn("grid gap-1.5 p-4 text-center md:text-left", className)}
     {...props} />
 )
 DrawerHeader.displayName = "DrawerHeader"
@@ -85,6 +99,7 @@ export {
   DrawerTrigger,
   DrawerClose,
   DrawerContent,
+  DrawerHandle,
   DrawerHeader,
   DrawerFooter,
   DrawerTitle,

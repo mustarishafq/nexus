@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PermissionService;
 use App\Support\PermissionCatalog;
 use App\Support\ReactionEmojis;
+use Illuminate\Http\JsonResponse;
 
 trait SerializesPosts
 {
@@ -38,6 +39,7 @@ trait SerializesPosts
 
         $reactionsCount = array_sum($reactionCounts);
         $isPending = $post->isPending();
+        $isDeleted = $post->trashed();
         $canModerate = PermissionService::can($viewer, PermissionCatalog::FEED_MODERATE);
         $imageUrls = $post->resolvedImageUrls();
         $isAuthor = (int) $viewer->id === (int) $post->author_user_id;
@@ -73,11 +75,23 @@ trait SerializesPosts
             'edited_at' => $post->edited_at?->toISOString(),
             'is_edited' => $isEdited,
             'edits_count' => $editsCount,
-            'can_edit' => $isAuthor,
-            'can_delete' => $isAuthor || $canModerate,
-            'can_moderate' => $canModerate && $isPending,
+            'can_edit' => $isAuthor && ! $isDeleted,
+            'can_delete' => ($isAuthor || $canModerate) && ! $isDeleted,
+            'can_moderate' => $canModerate && $isPending && ! $isDeleted,
+            'can_restore' => $isDeleted && ($isAuthor || $canModerate),
             'is_pending' => $isPending,
+            'is_deleted' => $isDeleted,
+            'deleted_at' => $post->deleted_at?->toISOString(),
         ];
+    }
+
+    protected function rejectIfPostDeleted(Post $post): ?JsonResponse
+    {
+        if ($post->trashed()) {
+            return response()->json(['message' => 'This post has been deleted.'], 422);
+        }
+
+        return null;
     }
 
     protected function viewerHasSeenPost(Post $post, User $viewer): bool

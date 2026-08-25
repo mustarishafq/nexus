@@ -680,12 +680,13 @@ export const db = {
 	},
 
 	feed: {
-		async list({ limit, focusPost, authorUserId, before } = {}) {
+		async list({ limit, focusPost, authorUserId, before, excludeDeleted } = {}) {
 			const queryString = buildQuery({
 				limit,
 				focus_post: focusPost,
 				author_user_id: authorUserId,
 				before,
+				exclude_deleted: excludeDeleted ? 1 : undefined,
 			});
 			return request(`/feed${queryString}`);
 		},
@@ -835,6 +836,10 @@ export const db = {
 
 		async rejectPost(postId) {
 			return request(`/posts/${postId}/reject`, { method: 'POST' });
+		},
+
+		async restorePost(postId) {
+			return request(`/posts/${postId}/restore`, { method: 'POST' });
 		},
 
 		async deletePost(postId) {

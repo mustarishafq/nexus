@@ -135,7 +135,7 @@ class FeedPostApprovalTest extends TestCase
             ->postJson("/api/posts/{$postId}/reject")
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('posts', ['id' => $postId]);
+        $this->assertSoftDeleted('posts', ['id' => $postId]);
         $this->assertDatabaseHas('notifications', [
             'user_id' => (string) $author->id,
             'category' => 'approval',

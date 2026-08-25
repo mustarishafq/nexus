@@ -2411,7 +2411,7 @@ export default function UserManagement() {
       </Tabs>
 
       <Dialog open={groupDialogOpen} onOpenChange={(open) => !open && closeGroupDialog()}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 sm:w-full">
+        <DialogContent className="max-w-3xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle>{editGroup ? `Edit Group - ${editGroup.name}` : 'Create Access Group'}</DialogTitle>
           </DialogHeader>
@@ -2496,9 +2496,9 @@ export default function UserManagement() {
                 <p className="text-xs text-muted-foreground">Users can belong to multiple groups. Access is combined from all assigned groups.</p>
               </div>
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t border-border/70 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={closeGroupDialog}>Cancel</Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={groupSaving}>
+            <div className="px-4 md:px-6 py-4 border-t border-border/70 flex flex-col-reverse gap-2 md:flex-row md:justify-end">
+              <Button type="button" variant="outline" className="w-full md:w-auto" onClick={closeGroupDialog}>Cancel</Button>
+              <Button type="submit" className="w-full md:w-auto" disabled={groupSaving}>
                 {groupSaving ? 'Saving...' : editGroup ? 'Save Group' : 'Create Group'}
               </Button>
             </div>
@@ -2507,7 +2507,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 sm:w-full">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle className="text-left pr-6">Edit User{editUser ? ` - ${editUser.email}` : ''}</DialogTitle>
           </DialogHeader>
@@ -2729,7 +2729,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle>Create New User</DialogTitle>
           </DialogHeader>
@@ -2798,7 +2798,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!assignDialogUser} onOpenChange={(open) => !open && setAssignDialogUser(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle>
               Assign Access Groups{assignDialogUser ? ` - ${assignDialogUser.full_name || assignDialogUser.email}` : ''}
@@ -2830,8 +2830,8 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!assignAnalyticsUser} onOpenChange={(open) => !open && setAssignAnalyticsUser(null)}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
-          <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-border/70">
+        <DialogContent className="md:max-w-xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-4 md:px-6 pt-5 md:pt-6 pb-3 border-b border-border/70">
             <DialogTitle className="text-left pr-6">
               Assign Analytics{assignAnalyticsUser ? ` - ${assignAnalyticsUser.full_name || assignAnalyticsUser.email}` : ''}
             </DialogTitle>
@@ -2844,7 +2844,7 @@ export default function UserManagement() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 w-full sm:w-auto h-10"
+                  className="gap-1.5 w-full md:w-auto h-10"
                   onClick={() => openDashboardDialogForUser(assignAnalyticsUser)}
                 >
                   <Plus className="w-4 h-4" />
@@ -2863,7 +2863,7 @@ export default function UserManagement() {
                   </p>
                 </div>
               </div>
-              <div className="px-4 sm:px-6 py-4 border-t border-border/70 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <div className="px-4 md:px-6 py-4 border-t border-border/70 flex flex-col-reverse md:flex-row md:justify-end gap-2">
                 <Button type="button" variant="outline" className="h-10" onClick={() => setAssignAnalyticsUser(null)}>Cancel</Button>
                 <Button type="button" className="h-10" onClick={saveUserAnalytics} disabled={assignAnalyticsSaving}>
                   {assignAnalyticsSaving ? 'Saving...' : 'Save assignments'}
@@ -2875,7 +2875,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={dashboardDialogOpen} onOpenChange={(open) => !open && closeDashboardDialog()}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="md:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle>{editDashboard ? `Edit Dashboard - ${editDashboard.name}` : 'Add Metabase Dashboard'}</DialogTitle>
           </DialogHeader>
@@ -3008,7 +3008,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="md:max-w-md max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
             <DialogTitle>Import from CSV</DialogTitle>
             <DialogDescription className="text-xs">
@@ -3229,7 +3229,7 @@ export default function UserManagement() {
       </AlertDialog>
 
       <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="md:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
             <DialogTitle>Send notification</DialogTitle>
             <DialogDescription className="text-xs">
@@ -3315,7 +3315,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={expAwardDialogOpen} onOpenChange={setExpAwardDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="md:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70 text-left">
             <DialogTitle>Award EXP</DialogTitle>
             <DialogDescription className="text-xs">

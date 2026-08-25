@@ -313,7 +313,7 @@ export default function PostImageGrid({ item, className, flush = false }) {
           src={toAbsoluteUrl(images[viewerIndex])}
           alt={`Post attachment ${viewerIndex + 1}`}
           className={cn(loading && 'invisible')}
-          imgClassName="max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-2xl shadow-2xl"
+          imgClassName="max-h-[min(82vh,720px)] max-w-[min(94vw,920px)] rounded-none"
           onDismiss={close}
           onLoad={() => setLoading(false)}
           onError={() => setLoading(false)}

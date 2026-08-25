@@ -127,6 +127,10 @@ class PostCommentReactionController extends Controller
             return response()->json(['message' => 'Post not found.'], 404);
         }
 
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if ($post->isApproved()) {
             return null;
         }

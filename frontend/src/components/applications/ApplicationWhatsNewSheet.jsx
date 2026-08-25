@@ -266,8 +266,8 @@ export default function ApplicationWhatsNewSheet({
         <SheetContent
           overlayClassName="bg-black/25 backdrop-blur-sm"
           className={cn(
-            'flex w-full flex-col gap-0 border-l p-0 sm:max-w-lg',
-            'rounded-bl-2xl sm:rounded-none',
+            'flex w-full flex-col gap-0 border-l p-0 md:max-w-lg',
+            'rounded-bl-2xl md:rounded-none',
             glassPanelStyles,
           )}
         >

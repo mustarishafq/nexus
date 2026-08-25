@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { startTransition, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Camera, Check, Globe2, ImageIcon, ListChecks, Loader2, Megaphone, MoreHorizontal, Pencil, Plus, Send, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Camera, Check, ChevronDown, Globe2, ImageIcon, ListChecks, Loader2, Megaphone, MoreHorizontal, Pencil, Plus, RotateCcw, Send, SendHorizontal, Trash2, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
@@ -36,17 +36,35 @@ import PostPoll from '@/components/feed/PostPoll';
 import PostReactions, { FeedEngagementBar } from '@/components/feed/PostReactions';
 import PostImageGrid from '@/components/feed/PostImageGrid';
 import { Expandable } from '@/components/ui/expandable';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { toast } from 'sonner';
 import { notifyGamificationOffers } from '@/lib/gamification';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { flattenCommentReplies } from '@/lib/comments';
+import {
+  flattenCommentReplies,
+  INITIAL_VISIBLE_COMMENTS,
+  INITIAL_VISIBLE_COMMENTS_SHEET,
+  INITIAL_VISIBLE_REPLIES,
+  takeNewest,
+} from '@/lib/comments';
 import { buildMentionToken } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { useAuth } from '@/lib/AuthContext';
 import { isEmptyRichText, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 import { feedPostElementId, feedPostPath, feedPostShareUrl } from '@/lib/feedLinks';
+import {
+  compressImageFile,
+  POST_IMAGE_MAX_BYTES,
+  POST_IMAGE_SOURCE_MAX_BYTES,
+} from '@/lib/media';
 import {
   bumpFeedCommentsCount,
   cancelQueryMatches,
@@ -430,13 +448,26 @@ function BroadcastFeedItem({ item, compact = false }) {
   );
 }
 
-function PostComments({ postId, commentsCount, onCollapse, compact = false, className }) {
+function PostComments({
+  postId,
+  commentsCount,
+  onCollapse,
+  compact = false,
+  className,
+  readOnly = false,
+  variant = 'inline',
+}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [commentBody, setCommentBody] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const [showAllComments, setShowAllComments] = useState(false);
+  const [expandedReplyIds, setExpandedReplyIds] = useState(() => new Set());
   const commentInputRef = useRef(null);
   const replyComposerRef = useRef(null);
+  const commentsListRef = useRef(null);
+  const isSheet = variant === 'sheet';
+  const [sheetListEnter, setSheetListEnter] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ['post-comments', postId],
@@ -479,6 +510,13 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 
       insertOptimisticComment(queryClient, postId, optimisticComment, parentCommentId || null);
       bumpFeedCommentsCount(queryClient, postId, 1);
+
+      if (!parentCommentId && variant === 'sheet') {
+        window.requestAnimationFrame(() => {
+          const list = commentsListRef.current;
+          list?.scrollTo?.({ top: list.scrollHeight, behavior: 'smooth' });
+        });
+      }
 
       return { snapshots, tempId, draftBody, draftReply, parentCommentId };
     },
@@ -540,12 +578,31 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
   });
 
   const comments = Array.isArray(data?.comments) ? data.comments : [];
+  const visibleComments = showAllComments
+    ? comments
+    : takeNewest(comments, isSheet ? INITIAL_VISIBLE_COMMENTS_SHEET : INITIAL_VISIBLE_COMMENTS);
+  const hiddenCommentCount = Math.max(0, comments.length - visibleComments.length);
+
+  useEffect(() => {
+    if (!isSheet) return undefined;
+    if (isLoading) {
+      setSheetListEnter(true);
+      return undefined;
+    }
+
+    setSheetListEnter(true);
+    const timer = window.setTimeout(() => setSheetListEnter(false), 560);
+    return () => window.clearTimeout(timer);
+  }, [isLoading, isSheet]);
 
   useEffect(() => {
     if (!replyingTo) return undefined;
 
     const frame = window.requestAnimationFrame(() => {
-      replyComposerRef.current?.scrollIntoView?.({
+      const target = isSheet
+        ? document.getElementById(`feed-comment-${postId}-${replyingTo.id}`)
+        : replyComposerRef.current;
+      target?.scrollIntoView?.({
         behavior: 'smooth',
         block: 'nearest',
       });
@@ -553,7 +610,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [replyingTo]);
+  }, [isSheet, postId, replyingTo]);
 
   const cancelReply = () => {
     setReplyingTo(null);
@@ -586,13 +643,18 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
     });
   };
 
-  const renderComposer = ({ inline = false } = {}) => (
+  const renderComposer = ({ inline = false, sticky = false } = {}) => (
     <form
       ref={inline ? replyComposerRef : undefined}
       className={cn(
         inline
           ? 'mt-2 rounded-xl bg-background/70 p-2 ring-1 ring-border/50'
-          : 'mt-2.5 border-t border-border/50 pt-2.5 md:mt-3 md:pt-3'
+          : sticky
+            ? cn(
+                'shrink-0 border-t border-border/50 bg-background px-3 pt-2 pb-[max(0.5rem,var(--nexus-safe-bottom))]',
+                sheetListEnter && 'comments-sheet-composer-enter'
+              )
+            : 'mb-2.5 border-b border-border/50 pb-2.5 md:mb-3 md:pb-3'
       )}
       onSubmit={submitComment}
     >
@@ -614,6 +676,9 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
         </div>
       ) : null}
       <div className="flex items-end gap-1.5 md:gap-2">
+        {sticky ? (
+          <UserAvatar user={user} className="mb-0.5 h-8 w-8 shrink-0" fallbackClassName="text-[10px]" />
+        ) : null}
         <div className="relative min-w-0 flex-1">
           <MentionInput
             ref={commentInputRef}
@@ -651,12 +716,25 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
     </form>
   );
 
+  const expandReplies = (commentId) => {
+    setExpandedReplyIds((current) => {
+      const next = new Set(current);
+      next.add(commentId);
+      return next;
+    });
+  };
+
   const renderComment = (comment, { isReply = false } = {}) => {
     const nestedReplies = !isReply ? flattenCommentReplies(comment.replies) : [];
+    const repliesExpanded = expandedReplyIds.has(comment.id);
+    const visibleReplies = repliesExpanded
+      ? nestedReplies
+      : takeNewest(nestedReplies, INITIAL_VISIBLE_REPLIES);
+    const hiddenReplyCount = Math.max(0, nestedReplies.length - visibleReplies.length);
     const isActiveReply = replyingTo?.id === comment.id;
 
     return (
-      <div key={comment.id} className="flex gap-2 md:gap-2.5">
+      <div key={comment.id} id={`feed-comment-${postId}-${comment.id}`} className="flex gap-2 md:gap-2.5">
         <Link to={`/people/${comment.author?.id}`} className="shrink-0">
           <UserAvatar
             user={comment.author}
@@ -680,7 +758,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                     {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
                   </span>
                 </div>
-                {comment.can_delete ? (
+                {comment.can_delete && !readOnly ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -715,7 +793,7 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
                   <MentionText text={comment.body} />
                 </div>
               </div>
-              {comment.can_delete ? (
+              {comment.can_delete && !readOnly ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -730,7 +808,8 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
-            <PostReactions item={comment} commentId={comment.id} postId={postId} compact />
+            <PostReactions item={comment} commentId={comment.id} postId={postId} compact disabled={readOnly} />
+            {readOnly ? null : (
             <button
               type="button"
               onClick={() => startReply(comment, { isReply })}
@@ -743,19 +822,93 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
             >
               Reply
             </button>
+            )}
           </div>
 
-          {isActiveReply ? renderComposer({ inline: true }) : null}
+          {!readOnly && isActiveReply && !isSheet ? renderComposer({ inline: true }) : null}
 
           {nestedReplies.length > 0 ? (
             <div className="mt-2.5 ml-5 space-y-2.5 border-l border-border/40 pl-2.5 md:ml-7 md:space-y-3 md:pl-3">
-              {nestedReplies.map((reply) => renderComment(reply, { isReply: true }))}
+              {hiddenReplyCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => expandReplies(comment.id)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-primary transition-colors hover:underline"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                  View {hiddenReplyCount} more {hiddenReplyCount === 1 ? 'reply' : 'replies'}
+                </button>
+              ) : null}
+              {visibleReplies.map((reply) => renderComment(reply, { isReply: true }))}
             </div>
           ) : null}
         </div>
       </div>
     );
   };
+
+  const commentsList = (
+    <div
+      ref={isSheet ? commentsListRef : undefined}
+      className={cn(
+        isSheet
+          ? 'min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3 py-2'
+          : 'space-y-2.5 md:space-y-3',
+        isSheet && !isLoading && sheetListEnter && 'comments-sheet-list-enter'
+      )}
+    >
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading comments...
+        </div>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {readOnly ? 'No comments.' : 'No comments yet. Be the first to reply.'}
+        </p>
+      ) : (
+        <>
+          {hiddenCommentCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllComments(true)}
+              className="flex items-center gap-1 text-[11px] font-medium text-primary transition-colors hover:underline"
+            >
+              <ChevronDown className="h-3 w-3" />
+              View {hiddenCommentCount} more comment{hiddenCommentCount === 1 ? '' : 's'}
+            </button>
+          ) : null}
+          {visibleComments.map((comment) => renderComment(comment))}
+        </>
+      )}
+    </div>
+  );
+
+  if (isSheet) {
+    return (
+      <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
+          <p className="text-sm font-semibold text-foreground">
+            {commentsCount > 0
+              ? `${commentsCount} comment${commentsCount === 1 ? '' : 's'}`
+              : 'Comments'}
+          </p>
+          <DrawerClose asChild>
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Close comments"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </DrawerClose>
+        </div>
+        {commentsList}
+        {!readOnly ? renderComposer({ sticky: true }) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -781,21 +934,28 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
         </button>
       </div>
 
-      <div className="space-y-2.5 md:space-y-3">
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Loading comments...
-          </div>
-        ) : comments.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No comments yet. Be the first to reply.</p>
-        ) : (
-          comments.map((comment) => renderComment(comment))
-        )}
-      </div>
+      {!readOnly && !replyingTo ? renderComposer() : null}
+      {commentsList}
+    </div>
+  );
+}
 
-      {/* Keep the bottom composer for new top-level comments only */}
-      {!replyingTo ? renderComposer() : null}
+function CommentsSheetPlaceholder({ commentsCount = 0, readOnly = false }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
+        <p className="text-sm font-semibold text-foreground">
+          {commentsCount > 0
+            ? `${commentsCount} comment${commentsCount === 1 ? '' : 's'}`
+            : 'Comments'}
+        </p>
+      </div>
+      <div className="min-h-0 flex-1" />
+      {readOnly ? null : (
+        <div className="shrink-0 border-t border-border/50 px-3 pt-2 pb-[max(0.5rem,var(--nexus-safe-bottom))]">
+          <div className="h-9 rounded-md bg-muted/50" />
+        </div>
+      )}
     </div>
   );
 }
@@ -803,17 +963,21 @@ function PostComments({ postId, commentsCount, onCollapse, compact = false, clas
 function PostFeedItem({ item, compact = false, initialExpanded = false }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const articleRef = useRef(null);
   const [expanded, setExpanded] = useState(initialExpanded);
+  const [sheetReady, setSheetReady] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftBody, setDraftBody] = useState(item.body || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
   const itemPolls = pollsFromItem(item);
   const [draftPolls, setDraftPolls] = useState(() => pollDraftsFromItem(item));
   const [removedPollIds, setRemovedPollIds] = useState([]);
   const isPending = Boolean(item.is_pending || item.approval_status === 'pending');
+  const isDeleted = Boolean(item.is_deleted);
   const isAuthor = Number(user?.id) === Number(item.author?.id);
-  const canMarkSeen = !isPending && !isAuthor && Boolean(item.id);
+  const canMarkSeen = !isPending && !isDeleted && !isAuthor && Boolean(item.id);
 
   useMarkPostSeen({
     postId: item.id,
@@ -826,6 +990,41 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
       setExpanded(true);
     }
   }, [initialExpanded]);
+
+  useEffect(() => {
+    if (!isMobile || !expanded || !item.id) return undefined;
+    queryClient.prefetchQuery({
+      queryKey: ['post-comments', item.id],
+      queryFn: () => db.feed.listComments(item.id),
+      staleTime: 15_000,
+    });
+    const timer = window.setTimeout(() => {
+      startTransition(() => setSheetReady(true));
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [expanded, isMobile, item.id, queryClient]);
+
+  const prefetchPostComments = () => {
+    if (!item.id) return;
+    queryClient.prefetchQuery({
+      queryKey: ['post-comments', item.id],
+      queryFn: () => db.feed.listComments(item.id),
+      staleTime: 15_000,
+    });
+  };
+
+  const handleComment = () => {
+    if (isMobile) {
+      prefetchPostComments();
+      setExpanded(true);
+      return;
+    }
+
+    setExpanded((current) => {
+      if (!current) prefetchPostComments();
+      return !current;
+    });
+  };
 
   useEffect(() => {
     if (!editing) {
@@ -928,8 +1127,29 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
     },
   });
 
+  const restorePost = useMutation({
+    mutationFn: () => db.feed.restorePost(item.id),
+    onSuccess: (payload) => {
+      setConfirmRestore(false);
+      if (payload?.item) {
+        patchFeedItem(queryClient, payload.item);
+      }
+      queryClient.invalidateQueries({ queryKey: ['company-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed-active-discussions'] });
+      toast.success('Post restored.');
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to restore post.');
+    },
+  });
+
   const timeAgo = formatDistanceToNow(new Date(item.created_date), { addSuffix: true });
-  const moderationBusy = approvePost.isPending || rejectPost.isPending;
+  const deletedAt = item.deleted_at ? new Date(item.deleted_at) : null;
+  const deletedAgo = deletedAt && !Number.isNaN(deletedAt.getTime())
+    ? formatDistanceToNow(deletedAt, { addSuffix: true })
+    : null;
+  const moderationBusy = approvePost.isPending || rejectPost.isPending || restorePost.isPending;
   const pollsValid = draftPolls.every(isPollDraftValid);
   const canSaveEdit =
     (
@@ -981,13 +1201,50 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
       ref={articleRef}
       id={feedPostElementId(item.id)}
       className={cn(
-        'group scroll-mt-24 overflow-hidden bg-card',
+        'group relative scroll-mt-24 overflow-hidden bg-card',
         compact
-          ? 'rounded-none border-0 border-b border-border/30 last:border-b-0'
-          : 'rounded-lg border border-border/30',
-        isPending && 'bg-amber-500/[0.03]'
+          ? 'rounded-none border-0 border-b last:border-b-0'
+          : 'rounded-lg border',
+        isDeleted
+          ? cn(
+              'border-red-200/80 bg-red-500/[0.04] dark:border-red-400/20 dark:bg-red-500/[0.07]',
+              compact && 'border-b-red-200/80 dark:border-b-red-400/20'
+            )
+          : 'border-solid border-border/30',
+        isPending && !isDeleted && 'bg-amber-500/[0.03]'
       )}
     >
+      {isDeleted ? (
+        <div
+          className={cn(
+            'flex items-center gap-2 border-b border-red-200/70 bg-red-500/[0.08] dark:border-red-400/15 dark:bg-red-500/[0.10]',
+            compact ? 'px-3 py-2 md:px-4' : 'px-3 py-2 sm:px-4'
+          )}
+        >
+            <Trash2 className="h-3.5 w-3.5 shrink-0 text-red-500 dark:text-red-400" />
+            <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-red-700 dark:text-red-300">
+              This post was deleted
+              {deletedAgo ? (
+                <span className="font-normal text-red-600/80 dark:text-red-300/70"> · {deletedAgo}</span>
+              ) : null}
+            </p>
+            {item.can_restore ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 gap-1.5 border-border/80 bg-card px-2.5 text-xs text-foreground hover:bg-muted/60 dark:border-border"
+                onClick={() => setConfirmRestore(true)}
+                disabled={moderationBusy}
+                aria-label="Restore post"
+              >
+                {restorePost.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Restore
+              </Button>
+            ) : null}
+          </div>
+      ) : null}
+
       {/* Header */}
       <div className={cn('flex items-start gap-2.5', compact ? 'px-3 pt-2.5 md:px-4' : 'px-3 pt-2.5 sm:px-4')}>
         <Link to={`/people/${item.author?.id}`} className="shrink-0 self-start">
@@ -1002,7 +1259,11 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             >
               {getDisplayName(item.author)}
             </Link>
-            {isPending ? (
+            {isDeleted ? (
+              <Badge className="border-transparent bg-red-600 px-1.5 py-0 text-[10px] font-semibold text-white shadow-none hover:bg-red-600 dark:bg-red-500">
+                Deleted
+              </Badge>
+            ) : isPending ? (
               <Badge
                 variant="outline"
                 className="border-amber-500/40 bg-amber-500/15 text-[10px] font-medium text-amber-700 dark:text-amber-300"
@@ -1162,25 +1423,29 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
       ) : item.body ? (
         <ExpandablePostBody
           text={item.body}
-          className={cn('px-3 pt-1.5 sm:px-4', !(item.image_url || item.image_urls?.length) && 'pb-1')}
+          className={cn(
+            'px-3 pt-1.5 sm:px-4',
+            isDeleted && 'opacity-75',
+            !(item.image_url || item.image_urls?.length) && 'pb-1'
+          )}
         />
       ) : null}
 
       {/* Full-bleed media — same framing on dashboard (compact) and /feed */}
       {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? (
-        <div className="mt-2">
+        <div className={cn('mt-2', isDeleted && 'opacity-75')}>
           <PostImageGrid item={item} flush />
         </div>
       ) : null}
 
       {!editing && itemPolls.length > 0 ? (
-        <div className="space-y-2 px-3 pt-2.5 sm:px-4">
+        <div className={cn('space-y-2 px-3 pt-2.5 sm:px-4', isDeleted && 'opacity-75')}>
           {itemPolls.map((poll) => (
             <PostPoll
               key={poll.id}
               postId={item.id}
               poll={poll}
-              disabled={isPending}
+              disabled={isPending || isDeleted}
               isAuthor={isAuthor}
             />
           ))}
@@ -1223,8 +1488,9 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             item={item}
             commentsCount={item.comments_count || 0}
             commentsExpanded={expanded}
-            shareUrl={feedPostShareUrl(item.id)}
-            onComment={() => setExpanded((current) => !current)}
+            shareUrl={isDeleted ? null : feedPostShareUrl(item.id)}
+            readOnly={isDeleted}
+            onComment={handleComment}
             insights={
               item.can_view_insights || compact ? (
                 <>
@@ -1249,17 +1515,72 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
         <div className="h-2" />
       )}
 
-      <Expandable open={!isPending && !editing && expanded}>
-        <div className="border-t border-border/25 px-3 pb-3 pt-1 sm:px-4">
-          <PostComments
-            postId={item.id}
-            commentsCount={item.comments_count || 0}
-            compact={compact}
-            onCollapse={() => setExpanded(false)}
-            className="mt-2 border-0 bg-transparent p-0 md:mt-2 md:bg-transparent md:p-0"
-          />
-        </div>
-      </Expandable>
+      {isMobile ? (
+        <Drawer
+          open={!isPending && !editing && expanded}
+          onOpenChange={(open) => {
+            setExpanded(open);
+            if (open) prefetchPostComments();
+          }}
+          onAnimationEnd={(open) => {
+            if (open) {
+              startTransition(() => setSheetReady(true));
+              return;
+            }
+            setSheetReady(false);
+          }}
+          shouldScaleBackground={false}
+          setBackgroundColorOnScale={false}
+          handleOnly
+          fixed
+          autoFocus={false}
+          repositionInputs={false}
+        >
+          <DrawerContent
+            className={cn(
+              'mt-0 h-[92dvh] max-h-[92dvh] overflow-hidden rounded-t-2xl p-0',
+              !sheetReady && 'will-change-transform'
+            )}
+            overlayClassName="bg-black/30"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <DrawerTitle className="sr-only">Comments</DrawerTitle>
+            <DrawerDescription className="sr-only">
+              {item.comments_count
+                ? `${item.comments_count} comment${item.comments_count === 1 ? '' : 's'}`
+                : 'Post comments'}
+            </DrawerDescription>
+            {sheetReady ? (
+              <PostComments
+                postId={item.id}
+                commentsCount={item.comments_count || 0}
+                compact={compact}
+                readOnly={isDeleted}
+                variant="sheet"
+                onCollapse={() => setExpanded(false)}
+              />
+            ) : (
+              <CommentsSheetPlaceholder
+                commentsCount={item.comments_count || 0}
+                readOnly={isDeleted}
+              />
+            )}
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Expandable open={!isPending && !editing && expanded}>
+          <div className="border-t border-border/25 px-3 pb-3 pt-1 sm:px-4">
+            <PostComments
+              postId={item.id}
+              commentsCount={item.comments_count || 0}
+              compact={compact}
+              readOnly={isDeleted}
+              onCollapse={() => setExpanded(false)}
+              className="mt-2 border-0 bg-transparent p-0 md:mt-2 md:bg-transparent md:p-0"
+            />
+          </div>
+        </Expandable>
+      )}
     </article>
 
     <AlertDialog open={confirmDelete} onOpenChange={(open) => !open && !deletePost.isPending && setConfirmDelete(false)}>
@@ -1267,10 +1588,10 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this post?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the post
+            This hides the post
             {itemPolls.length > 0 ? `, ${itemPolls.length === 1 ? 'poll' : 'polls'}` : ''}
             {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? ', photos' : ''}
-            , and comments from the company feed.
+            , and comments from the company feed. The author, admin, or HR can restore it.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1284,6 +1605,33 @@ function PostFeedItem({ item, compact = false, initialExpanded = false }) {
             }}
           >
             {deletePost.isPending ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={confirmRestore} onOpenChange={(open) => !open && !restorePost.isPending && setConfirmRestore(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Restore this post?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This post will be visible on the company feed again, including its comments
+            {itemPolls.length > 0 ? ` and ${itemPolls.length === 1 ? 'poll' : 'polls'}` : ''}
+            {(item.image_url || (Array.isArray(item.image_urls) && item.image_urls.length > 0)) ? ' and photos' : ''}
+            .
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={restorePost.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={restorePost.isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              restorePost.mutate();
+            }}
+          >
+            {restorePost.isPending ? 'Restoring...' : 'Restore'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1310,20 +1658,26 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
   const [body, setBody] = useState('');
   const [imageItems, setImageItems] = useState([]);
   const [draftPolls, setDraftPolls] = useState([]);
+  const [compressingImages, setCompressingImages] = useState(false);
   const requiresApproval = Boolean(user?.feed_post_requires_approval);
 
-  const addImageFiles = (files) => {
+  const addImageFiles = async (files) => {
     const incoming = Array.isArray(files) ? files.filter(Boolean) : Array.from(files || []).filter(Boolean);
     if (incoming.length === 0) return;
 
-    setImageItems((current) => {
-      const remaining = MAX_POST_IMAGES - current.length;
-      if (remaining <= 0) {
-        toast.error(`You can attach up to ${MAX_POST_IMAGES} images.`);
-        return current;
-      }
+    const remaining = MAX_POST_IMAGES - imageItems.length;
+    if (remaining <= 0) {
+      toast.error(`You can attach up to ${MAX_POST_IMAGES} images.`);
+      return;
+    }
 
-      const accepted = [];
+    if (incoming.length > remaining) {
+      toast.error(`Only ${remaining} more image${remaining === 1 ? '' : 's'} can be added.`);
+    }
+
+    setCompressingImages(true);
+    const prepared = [];
+    try {
       for (const file of incoming.slice(0, remaining)) {
         const type = String(file.type || '').toLowerCase();
         const looksLikeImage = type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name || '');
@@ -1331,26 +1685,44 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
           toast.error('Please choose image files only.');
           continue;
         }
-        if (file.size > 10 * 1024 * 1024) {
+        if (file.size > POST_IMAGE_SOURCE_MAX_BYTES) {
+          toast.error('Each image must be 40 MB or smaller.');
+          continue;
+        }
+
+        const compressed = await compressImageFile(file);
+        if (compressed.size > POST_IMAGE_MAX_BYTES) {
           toast.error('Each image must be 10 MB or smaller.');
           continue;
         }
-        accepted.push({
-          id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
-          file,
-          preview: URL.createObjectURL(file),
+
+        prepared.push({
+          id: `${compressed.name}-${compressed.size}-${compressed.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+          file: compressed,
+          preview: URL.createObjectURL(compressed),
         });
       }
+    } finally {
+      setCompressingImages(false);
+    }
 
-      if (accepted.length === 0) {
+    if (prepared.length === 0) {
+      return;
+    }
+
+    setImageItems((current) => {
+      const slots = MAX_POST_IMAGES - current.length;
+      if (slots <= 0) {
+        prepared.forEach((item) => URL.revokeObjectURL(item.preview));
+        toast.error(`You can attach up to ${MAX_POST_IMAGES} images.`);
         return current;
       }
 
-      if (incoming.length > remaining) {
-        toast.error(`Only ${remaining} more image${remaining === 1 ? '' : 's'} can be added.`);
+      if (prepared.length > slots) {
+        prepared.slice(slots).forEach((item) => URL.revokeObjectURL(item.preview));
       }
 
-      return [...current, ...accepted].slice(0, MAX_POST_IMAGES);
+      return [...current, ...prepared.slice(0, slots)];
     });
   };
 
@@ -1510,6 +1882,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
     && (draftPolls.length === 0 || hasValidPolls)
   );
   const isSubmitting = createPost.isPending;
+  const isBusy = isSubmitting || compressingImages;
   const plainLength = stripHtml(body).length;
   const nearLimit = plainLength >= 1800;
 
@@ -1526,7 +1899,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
   };
 
   const handleSubmit = () => {
-    if (submitLockRef.current || createPost.isPending || !canPost) return;
+    if (submitLockRef.current || createPost.isPending || compressingImages || !canPost) return;
 
     if (draftPolls.length > 0 && !hasValidPolls) {
       toast.error(draftPolls.map(pollDraftIssue).find(Boolean) || `Each poll needs at least ${MIN_POLL_OPTIONS} options.`);
@@ -1563,7 +1936,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
             }
             minHeight={isMobile ? '3.5rem' : '4rem'}
             maxLength={2000}
-            disabled={isSubmitting}
+            disabled={isBusy}
             editorClassName="border-0 shadow-none rounded-lg bg-muted/20"
           />
 
@@ -1600,7 +1973,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
                   })}
                   correctOptionKey={draft.correctOptionKey}
                   onCorrectOptionKeyChange={(correctOptionKey) => updateComposerPoll(index, { correctOptionKey })}
-                  disabled={isSubmitting}
+                  disabled={isBusy}
                   maxOptions={MAX_POLL_OPTIONS}
                   onRemove={() => setDraftPolls((current) => current.filter((_, i) => i !== index))}
                 />
@@ -1612,13 +1985,20 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
                   size="sm"
                   className="h-8 gap-1.5 text-xs"
                   onClick={addComposerPoll}
-                  disabled={isSubmitting}
+                  disabled={isBusy}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add another poll
                 </Button>
               ) : null}
             </div>
+          ) : null}
+
+          {compressingImages ? (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Optimizing photos…
+            </p>
           ) : null}
 
           {imageItems.length > 0 ? (
@@ -1647,7 +2027,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
                     size="icon"
                     className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full bg-background/90 shadow-sm"
                     onClick={() => removeImage(item.id)}
-                    disabled={isSubmitting}
+                    disabled={isBusy}
                     title="Remove photo"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -1682,10 +2062,10 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
           size="sm"
           className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground sm:h-8"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
+          disabled={isBusy || imageItems.length >= MAX_POST_IMAGES}
           title="Upload photos"
         >
-          <ImageIcon className="h-4 w-4" />
+          {compressingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
           <span className="hidden text-xs sm:inline">Photo</span>
         </Button>
         <Button
@@ -1694,7 +2074,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
           size="sm"
           className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground sm:h-8"
           onClick={() => cameraInputRef.current?.click()}
-          disabled={isSubmitting || imageItems.length >= MAX_POST_IMAGES}
+          disabled={isBusy || imageItems.length >= MAX_POST_IMAGES}
           title="Take photo"
         >
           <Camera className="h-4 w-4" />
@@ -1711,7 +2091,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
               : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
           )}
           onClick={addComposerPoll}
-          disabled={isSubmitting || draftPolls.length >= MAX_POLLS_PER_POST}
+          disabled={isBusy || draftPolls.length >= MAX_POLLS_PER_POST}
           title={draftPolls.length >= MAX_POLLS_PER_POST ? `Up to ${MAX_POLLS_PER_POST} polls per post` : 'Add poll'}
         >
           <ListChecks className="h-4 w-4" />
@@ -1742,7 +2122,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
               'h-9 gap-1.5 rounded-full px-3.5 touch-manipulation sm:h-8',
               !canPost && 'opacity-50'
             )}
-            disabled={isSubmitting || !canPost}
+            disabled={isBusy || !canPost}
             title="Post"
             onClick={handleSubmit}
           >

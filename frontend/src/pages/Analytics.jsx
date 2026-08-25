@@ -417,7 +417,7 @@ export default function Analytics() {
       )}
 
       <Dialog open={personalDialogOpen} onOpenChange={(open) => !open && closePersonalDialog()}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-lg max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="md:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-left pr-6">
               {editPersonalDashboard ? `Edit - ${editPersonalDashboard.name}` : 'Add Personal Dashboard'}
@@ -466,7 +466,7 @@ export default function Analytics() {
                 />
               </div>
             </div>
-            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse md:flex-row md:justify-end gap-2 pt-2">
               <Button type="button" variant="outline" className="h-10" onClick={closePersonalDialog}>
                 Cancel
               </Button>
@@ -479,7 +479,7 @@ export default function Analytics() {
       </Dialog>
 
       <AlertDialog open={Boolean(pendingDeleteDashboard)} onOpenChange={(open) => !open && setPendingDeleteDashboard(null)}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md">
+        <AlertDialogContent className="md:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Remove dashboard?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -488,7 +488,7 @@ export default function Analytics() {
                 : 'This dashboard will be permanently removed.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+          <AlertDialogFooter className="flex-col-reverse md:flex-row gap-2">
             <AlertDialogCancel className="mt-0 h-10">Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"

@@ -16,6 +16,13 @@ export const IMAGE_EXPORT_QUALITY = 0.97;
 export const COVER_PHOTO_MAX_WIDTH = 3200;
 export const PROFILE_PHOTO_MAX_SIZE = 1200;
 
+/** Long-edge cap for feed photos — sharp on retina, far below typical camera megapixels. */
+export const POST_IMAGE_MAX_EDGE = 2560;
+/** JPEG quality ≈ visually lossless for photos; still much smaller than phone originals. */
+export const POST_IMAGE_QUALITY = 0.92;
+export const POST_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const POST_IMAGE_SOURCE_MAX_BYTES = 40 * 1024 * 1024;
+
 /**
  * Public disk files are served at /storage/..., never under /api.
  * Upload responses may be relative or absolute (APP_URL) — canonicalize the path.
@@ -321,6 +328,10 @@ export async function getResizedImageBlob(
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(image, 0, 0, outWidth, outHeight);
 
+  return canvasToBlob(canvas, mimeType, quality);
+}
+
+function canvasToBlob(canvas, mimeType, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -334,6 +345,114 @@ export async function getResizedImageBlob(
       quality
     );
   });
+}
+
+function isGifFile(file) {
+  const type = String(file?.type || '').toLowerCase();
+  return type === 'image/gif' || /\.gif$/i.test(file?.name || '');
+}
+
+function toJpegFileName(name) {
+  const base = String(name || 'image').replace(/\.[^.]+$/, '').trim() || 'image';
+  return `${base}.jpg`;
+}
+
+async function decodeImageSource(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return {
+        bitmap: await createImageBitmap(file, { imageOrientation: 'from-image' }),
+        objectUrl: null,
+      };
+    } catch {
+      try {
+        return { bitmap: await createImageBitmap(file), objectUrl: null };
+      } catch {
+        // Fall through to HTMLImageElement (HEIC on some browsers).
+      }
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return { bitmap: await createImage(objectUrl), objectUrl };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+function sourcePixelSize(image) {
+  return {
+    width: image.naturalWidth || image.width || 0,
+    height: image.naturalHeight || image.height || 0,
+  };
+}
+
+/**
+ * Re-encode a feed photo at high quality before upload.
+ * Animated GIFs are left as-is. If the result is not smaller, the original file is kept.
+ */
+export async function compressImageFile(
+  file,
+  {
+    maxEdge = POST_IMAGE_MAX_EDGE,
+    quality = POST_IMAGE_QUALITY,
+  } = {}
+) {
+  if (!file || isGifFile(file)) {
+    return file;
+  }
+
+  let bitmap = null;
+  let objectUrl = null;
+
+  try {
+    ({ bitmap, objectUrl } = await decodeImageSource(file));
+    const { width, height } = sourcePixelSize(bitmap);
+    if (!width || !height) {
+      return file;
+    }
+
+    const { outWidth, outHeight } = getOutputDimensions(width, height, {
+      maxWidth: maxEdge,
+      maxHeight: maxEdge,
+    });
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return file;
+    }
+
+    canvas.width = outWidth;
+    canvas.height = outHeight;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outWidth, outHeight);
+    ctx.drawImage(bitmap, 0, 0, outWidth, outHeight);
+
+    const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+    const didDownscale = outWidth < width || outHeight < height;
+    if (!didDownscale && blob.size >= file.size) {
+      return file;
+    }
+
+    return new File([blob], toJpegFileName(file.name), {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  } finally {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+    if (bitmap && typeof bitmap.close === 'function') {
+      bitmap.close();
+    }
+  }
 }
 
 export async function getCroppedImageBlob(

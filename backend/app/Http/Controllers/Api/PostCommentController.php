@@ -13,11 +13,12 @@ use App\Services\FeedNotificationService;
 use App\Services\GamificationService;
 use App\Services\MentionService;
 use App\Services\PermissionService;
-use App\Support\FeedLinks;
 use App\Support\ApiTokenAuth;
+use App\Support\FeedLinks;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class PostCommentController extends Controller
 {
@@ -33,7 +34,7 @@ class PostCommentController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($response = $this->ensurePostIsInteractable($post, $viewer)) {
+        if ($response = $this->ensurePostIsVisible($post, $viewer)) {
             return $response;
         }
 
@@ -55,7 +56,7 @@ class PostCommentController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, PostComment>  $allComments
+     * @param  Collection<int, PostComment>  $allComments
      * @return array<string, mixed>
      */
     private function serializeCommentTree(PostComment $comment, $allComments, User $viewer): array
@@ -150,6 +151,15 @@ class PostCommentController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        $postComment->loadMissing('post');
+        $post = $postComment->post;
+        if (! $post) {
+            return response()->json(['message' => 'Post not found.'], 404);
+        }
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         $postComment->delete();
 
         return response()->json(null, 204);
@@ -166,8 +176,30 @@ class PostCommentController extends Controller
         return $user;
     }
 
+    private function ensurePostIsVisible(Post $post, User $viewer): ?JsonResponse
+    {
+        $visible = Post::query()
+            ->visibleTo($viewer)
+            ->whereKey($post->id)
+            ->exists();
+
+        if (! $visible) {
+            return response()->json(['message' => 'Post not found.'], 404);
+        }
+
+        return null;
+    }
+
     private function ensurePostIsInteractable(Post $post, User $viewer): ?JsonResponse
     {
+        if ($response = $this->ensurePostIsVisible($post, $viewer)) {
+            return $response;
+        }
+
+        if ($response = $this->rejectIfPostDeleted($post)) {
+            return $response;
+        }
+
         if ($post->isApproved()) {
             return null;
         }

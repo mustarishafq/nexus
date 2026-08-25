@@ -272,7 +272,7 @@ function McpAccessDialog({ target, saving, onClose, onSave }) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="!flex h-[min(90vh,820px)] max-h-[90vh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+      <DialogContent className="!flex h-[min(90vh,820px)] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 md:max-w-3xl">
         <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-primary" />

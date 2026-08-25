@@ -83,7 +83,7 @@ export default function People() {
             <SelectTrigger>
               <SelectValue placeholder="All departments" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent searchPlaceholder="Search departments...">
               <SelectItem value="all">All departments</SelectItem>
               {departments.map((item) => (
                 <SelectItem key={item.id} value={String(item.id)}>
@@ -97,7 +97,7 @@ export default function People() {
             <SelectTrigger>
               <SelectValue placeholder="All groups" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent searchPlaceholder="Search access groups...">
               <SelectItem value="all">All access groups</SelectItem>
               {directoryAccessGroups.map((group) => (
                 <SelectItem key={group.id} value={String(group.id)}>

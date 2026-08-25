@@ -56,7 +56,8 @@ export default function AppLayout() {
   const isGameImmersive = /^\/games\/(sessions\/[^/]+\/host|play\/[^/]+|[^/]+\/preview)$/.test(location.pathname);
   const isAnalyticsPage = location.pathname === '/analytics';
   const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
-  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage) && !isFullBleed;
+  const isOrganizationPage = location.pathname === '/organization' || location.pathname.startsWith('/organization/');
+  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage || isOrganizationPage) && !isFullBleed;
   const showBottomNav = !isFullBleed;
 
   const lockToViewport = isFullBleed || isViewportFillPage;

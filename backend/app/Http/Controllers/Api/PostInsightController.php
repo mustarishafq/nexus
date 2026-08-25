@@ -39,6 +39,7 @@ class PostInsightController extends Controller
 
         $visiblePosts = Post::query()
             ->visibleTo($viewer)
+            ->whereNull('deleted_at')
             ->whereIn('id', $postIds)
             ->where('approval_status', Post::APPROVAL_APPROVED)
             ->where('author_user_id', '!=', $viewer->id)
@@ -77,7 +78,7 @@ class PostInsightController extends Controller
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        if (! $post->isApproved() || (int) $post->author_user_id === (int) $viewer->id) {
+        if ($post->trashed() || ! $post->isApproved() || (int) $post->author_user_id === (int) $viewer->id) {
             return response()->json([
                 'marked' => false,
             ]);

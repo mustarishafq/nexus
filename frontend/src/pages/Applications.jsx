@@ -540,7 +540,7 @@ export default function Applications() {
   return (
     <div className="space-y-3 sm:space-y-6">
       <Dialog open={reorderDialogOpen} onOpenChange={(open) => { if (!open) closeReorderDialog(); }}>
-        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
+        <DialogContent className="md:max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
             <DialogTitle>Reorder Applications</DialogTitle>
             <p className="text-sm text-muted-foreground font-normal pt-1">
@@ -598,7 +598,7 @@ export default function Applications() {
                   <span className="hidden sm:inline">Add</span>
                 </Button>
               </DialogTrigger>
-          <DialogContent className="sm:max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogContent className="md:max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/70">
               <DialogTitle>{editSystem ? 'Edit System' : 'Register New Application'}</DialogTitle>
             </DialogHeader>

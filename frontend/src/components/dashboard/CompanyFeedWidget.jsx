@@ -40,7 +40,7 @@ export default function CompanyFeedWidget() {
 
   const { data } = useQuery({
     queryKey: ['company-feed', 'dashboard'],
-    queryFn: () => db.feed.list({ limit: 1 }),
+    queryFn: () => db.feed.list({ limit: 1, excludeDeleted: true }),
     staleTime: 30_000,
   });
 
