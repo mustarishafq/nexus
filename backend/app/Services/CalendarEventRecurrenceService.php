@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Jobs\SyncCalendarEventToGoogleJob;
 use App\Models\CalendarEvent;
 use App\Support\SyncAssignmentRecords;
 use Illuminate\Support\Carbon;
@@ -109,17 +108,11 @@ class CalendarEventRecurrenceService
             'recurrence_month_mode' => $event->recurrence_month_mode,
             'recurrence_month_day' => $event->recurrence_month_day,
             'recurrence_weekday' => $event->recurrence_weekday,
-            'google_sync_status' => 'pending',
-            'google_sync_error' => null,
         ];
 
         if ($event->series_share_qr && $event->check_in_token) {
             $payload['check_in_token'] = $event->check_in_token;
         }
-
-        $payload['google_calendar_url'] = $this->buildGoogleCalendarUrl(array_merge($payload, [
-            'attendee_emails' => $attendeeEmails,
-        ]));
 
         $next = DB::transaction(function () use ($payload, $attendeeEmails) {
             $item = CalendarEvent::create($payload);
@@ -127,8 +120,6 @@ class CalendarEventRecurrenceService
 
             return $item;
         });
-
-        SyncCalendarEventToGoogleJob::dispatch($next->id)->onQueue('calendar');
 
         return $next->fresh()->load('attendees');
     }
@@ -235,39 +226,5 @@ class CalendarEventRecurrenceService
                 'recurrence_month_mode' => ['Invalid monthly recurrence mode.'],
             ]),
         };
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    protected function buildGoogleCalendarUrl(array $data): string
-    {
-        $title = (string) ($data['title'] ?? 'Event');
-        $description = (string) ($data['description'] ?? '');
-        $location = (string) ($data['location'] ?? '');
-        $isAllDay = (bool) ($data['is_all_day'] ?? false);
-
-        $startAt = Carbon::parse($data['start_at']);
-        $endAt = Carbon::parse($data['end_at']);
-
-        if ($isAllDay) {
-            $dateRange = $startAt->format('Ymd').'/'.$endAt->copy()->addDay()->format('Ymd');
-        } else {
-            $dateRange = $startAt->utc()->format('Ymd\\THis\\Z').'/'.$endAt->utc()->format('Ymd\\THis\\Z');
-        }
-
-        $params = [
-            'action' => 'TEMPLATE',
-            'text' => $title,
-            'dates' => $dateRange,
-            'details' => $description,
-            'location' => $location,
-        ];
-
-        if (! empty($data['attendee_emails']) && is_array($data['attendee_emails'])) {
-            $params['add'] = implode(',', $data['attendee_emails']);
-        }
-
-        return 'https://calendar.google.com/calendar/render?'.http_build_query($params);
     }
 }

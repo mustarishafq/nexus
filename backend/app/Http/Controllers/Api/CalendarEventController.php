@@ -4,9 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
-use App\Jobs\DeleteCalendarEventFromGoogleJob;
 use App\Jobs\NotifyCalendarInviteesJob;
-use App\Jobs\SyncCalendarEventToGoogleJob;
 use App\Models\CalendarEvent;
 use App\Models\User;
 use App\Services\CalendarEventNotificationService;
@@ -230,24 +228,12 @@ class CalendarEventController extends Controller
                 $occurrencePayload['check_in_token'] = $sharedCheckInToken;
             }
 
-            $payload = $this->withGoogleCalendarUrl(array_merge($occurrencePayload, [
-                'attendee_emails' => $attendeeEmails,
-            ]));
-
-            $created = CalendarEvent::create(array_merge(
-                collect($payload)->except(['attendee_emails'])->all(),
-                [
-                    'google_sync_status' => 'pending',
-                    'google_sync_error' => null,
-                ]
-            ));
+            $created = CalendarEvent::create($occurrencePayload);
 
             SyncAssignmentRecords::syncCalendarEventAttendees($created, $attendeeEmails);
 
             return $created;
         });
-
-        SyncCalendarEventToGoogleJob::dispatch($item->id)->onQueue('calendar');
 
         $item = $item->fresh()->load('attendees');
         NotifyCalendarInviteesJob::dispatch(
@@ -345,18 +331,11 @@ class CalendarEventController extends Controller
             ], 422);
         }
 
-        $payload = $this->withGoogleCalendarUrl(
-            array_merge($validated, $attendeeEmails !== null ? ['attendee_emails' => $attendeeEmails] : []),
-            $calendarEvent
-        );
-
-        $calendarEvent->update(collect($payload)->except(['attendee_emails'])->all());
+        $calendarEvent->update($validated);
 
         if ($attendeeEmails !== null) {
             SyncAssignmentRecords::syncCalendarEventAttendees($calendarEvent, $attendeeEmails);
         }
-
-        SyncCalendarEventToGoogleJob::dispatch($calendarEvent->id)->onQueue('calendar');
 
         $calendarEvent = $calendarEvent->fresh()->load('attendees');
 
@@ -400,11 +379,6 @@ class CalendarEventController extends Controller
                 'source_system_id' => $calendarEvent->source_system_id,
                 'attendee_emails' => $calendarEvent->attendeeEmailList(),
             ],
-        )->onQueue('calendar');
-
-        DeleteCalendarEventFromGoogleJob::dispatch(
-            $calendarEvent->google_event_id,
-            $calendarEvent->created_by,
         )->onQueue('calendar');
 
         $calendarEvent->delete();
@@ -577,49 +551,5 @@ class CalendarEventController extends Controller
             ->all();
 
         return count($normalized) > 0 ? $normalized : null;
-    }
-
-    protected function withGoogleCalendarUrl(array $payload, ?CalendarEvent $calendarEvent = null): array
-    {
-        if ($calendarEvent) {
-            $data = array_merge($calendarEvent->toArray(), $payload);
-        } else {
-            $data = $payload;
-        }
-
-        $payload['google_calendar_url'] = $this->buildGoogleCalendarUrl($data);
-
-        return $payload;
-    }
-
-    protected function buildGoogleCalendarUrl(array $data): string
-    {
-        $title = (string) ($data['title'] ?? 'Event');
-        $description = (string) ($data['description'] ?? '');
-        $location = (string) ($data['location'] ?? '');
-        $isAllDay = (bool) ($data['is_all_day'] ?? false);
-
-        $startAt = Carbon::parse($data['start_at']);
-        $endAt = Carbon::parse($data['end_at']);
-
-        if ($isAllDay) {
-            $dateRange = $startAt->format('Ymd') . '/' . $endAt->copy()->addDay()->format('Ymd');
-        } else {
-            $dateRange = $startAt->utc()->format('Ymd\\THis\\Z') . '/' . $endAt->utc()->format('Ymd\\THis\\Z');
-        }
-
-        $params = [
-            'action' => 'TEMPLATE',
-            'text' => $title,
-            'dates' => $dateRange,
-            'details' => $description,
-            'location' => $location,
-        ];
-
-        if (! empty($data['attendee_emails']) && is_array($data['attendee_emails'])) {
-            $params['add'] = implode(',', $data['attendee_emails']);
-        }
-
-        return 'https://calendar.google.com/calendar/render?' . http_build_query($params);
     }
 }

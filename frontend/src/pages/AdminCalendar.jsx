@@ -7,7 +7,6 @@ import {
   Calendar as CalendarIcon,
   Plus,
   MapPin,
-  ExternalLink,
   Clock,
   ChevronsUpDown,
   Check,
@@ -722,16 +721,6 @@ export default function AdminCalendar() {
                         ) : null}
 
                         <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                          {event.google_calendar_url ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs gap-1"
-                              onClick={() => window.open(event.google_calendar_url, '_blank', 'noopener,noreferrer')}
-                            >
-                              <ExternalLink className="w-3 h-3" /> Google Calendar
-                            </Button>
-                          ) : null}
                           {manageable ? (
                             <>
                               {event.check_in_url ? (

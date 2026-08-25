@@ -1152,20 +1152,6 @@ export const db = {
 		},
 	},
 
-	googleOAuth: {
-		async status() {
-			return request('/google/oauth/status');
-		},
-
-		async connect() {
-			return request('/google/oauth/connect', { method: 'POST' });
-		},
-
-		async disconnect() {
-			return request('/google/oauth/disconnect', { method: 'DELETE' });
-		},
-	},
-
 	roles: {
 		async list() {
 			return request('/roles');

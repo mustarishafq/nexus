@@ -61,23 +61,6 @@
       "items": {
         "type": "string"
       }
-    },
-    "google_calendar_url": {
-      "type": "string"
-    },
-    "google_event_id": {
-      "type": "string"
-    },
-    "google_sync_status": {
-      "type": "string",
-      "enum": [
-        "pending",
-        "synced",
-        "failed"
-      ]
-    },
-    "google_sync_error": {
-      "type": "string"
     }
   },
   "required": [

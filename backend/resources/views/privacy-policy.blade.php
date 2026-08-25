@@ -75,7 +75,7 @@
     <main class="container">
         <article class="card">
             <h1>Privacy Policy</h1>
-            <p class="updated">Last updated: May 10, 2026</p>
+            <p class="updated">Last updated: August 25, 2026</p>
             <hr>
 
             <h2>Introduction</h2>
@@ -86,28 +86,18 @@
             <p>We may collect the following information:</p>
             <ul>
                 <li>Name and email address</li>
-                <li>Google account information authorized by the user</li>
                 <li>Calendar event information created or managed through the application</li>
-                <li>Authentication tokens required for Google Calendar integration</li>
                 <li>System usage logs and technical information</li>
             </ul>
-            <p>We do not collect passwords for your Google account.</p>
 
             <h2>How We Use Information</h2>
             <p>We use the collected information to:</p>
             <ul>
-                <li>Connect your Google Calendar account</li>
                 <li>Create, update, and manage calendar events</li>
                 <li>Send meeting invitations and reminders</li>
                 <li>Improve system functionality and user experience</li>
                 <li>Maintain system security and prevent unauthorized access</li>
             </ul>
-
-            <h2>Google API Services Disclosure</h2>
-            <p>Our application uses Google APIs to access Google Calendar features.</p>
-            <p>The use of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.</p>
-            <p>Google user data is only used to provide or improve user-facing features related to calendar functionality.</p>
-            <p>We do not sell Google user data to third parties.</p>
 
             <h2>Data Sharing</h2>
             <p>We do not sell, rent, or trade your personal information.</p>
@@ -130,13 +120,11 @@
 
             <h2>Data Retention</h2>
             <p>We retain user information only as long as necessary to provide the service or comply with legal obligations.</p>
-            <p>Users may request deletion of their connected Google account data at any time.</p>
+            <p>Users may request deletion of their data at any time.</p>
 
             <h2>Third-Party Services</h2>
             <p>Our services may integrate with third-party platforms including:</p>
             <ul>
-                <li>Google Calendar API</li>
-                <li>Google OAuth Services</li>
                 <li>Email service providers</li>
                 <li>Cloud hosting providers</li>
             </ul>
@@ -148,7 +136,6 @@
                 <li>Request access to their stored information</li>
                 <li>Request correction of inaccurate information</li>
                 <li>Request deletion of their data</li>
-                <li>Disconnect Google account access at any time</li>
             </ul>
 
             <h2>Changes To This Policy</h2>

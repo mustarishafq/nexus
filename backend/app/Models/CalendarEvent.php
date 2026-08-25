@@ -32,10 +32,6 @@ class CalendarEvent extends Model
         'check_in_form_audience',
         'source_system_id',
         'external_event_id',
-        'google_calendar_url',
-        'google_event_id',
-        'google_sync_status',
-        'google_sync_error',
     ];
 
     protected $hidden = [

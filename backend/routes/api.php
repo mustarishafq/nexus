@@ -29,7 +29,6 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\GamificationController;
-use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\ImpersonateController;
 use App\Http\Controllers\Api\MailController;
 use App\Http\Controllers\Api\McpController;
@@ -68,8 +67,6 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
-
-Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback']);
 
 Route::post('/mcp', [McpController::class, 'handle']);
 
@@ -177,10 +174,6 @@ Route::get('/conversations/{conversation}/messages', [ConversationController::cl
 Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
 Route::patch('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
 Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
-Route::get('/google/oauth/status', [GoogleOAuthController::class, 'status']);
-Route::post('/google/oauth/connect', [GoogleOAuthController::class, 'connect']);
-Route::delete('/google/oauth/disconnect', [GoogleOAuthController::class, 'disconnect']);
-
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
 Route::get('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'index']);
 Route::post('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'store']);

@@ -12,7 +12,6 @@ class CalendarEventIntegrationService
 {
     public function __construct(
         protected CalendarEventMapperService $mapper,
-        protected GoogleCalendarService $googleCalendarService,
         protected CalendarEventNotificationService $notificationService,
     ) {}
 
@@ -60,12 +59,9 @@ class CalendarEventIntegrationService
             'created_by' => $organizerEmail,
             'source_system_id' => $application->slug,
             'external_event_id' => $mapped['external_event_id'],
-            'google_sync_status' => 'pending',
-            'google_sync_error' => null,
         ]);
 
         SyncAssignmentRecords::syncCalendarEventAttendees($calendarEvent, $attendeeEmails);
-        $this->syncToGoogle($calendarEvent);
 
         $calendarEvent = $calendarEvent->fresh()->load('attendees');
         $this->notificationService->notifyInvitees(
@@ -110,8 +106,6 @@ class CalendarEventIntegrationService
             SyncAssignmentRecords::syncCalendarEventAttendees($calendarEvent, $attendeeEmails);
         }
 
-        $this->syncToGoogle($calendarEvent);
-
         $calendarEvent = $calendarEvent->fresh()->load('attendees');
 
         if ($notifyAction !== null) {
@@ -144,7 +138,6 @@ class CalendarEventIntegrationService
             CalendarEventNotificationService::ACTION_CANCELLED
         );
 
-        $this->googleCalendarService->deleteEvent($calendarEvent);
         $calendarEvent->delete();
 
         return [
@@ -206,26 +199,5 @@ class CalendarEventIntegrationService
         }
 
         return false;
-    }
-
-    protected function syncToGoogle(CalendarEvent $calendarEvent): void
-    {
-        $result = $this->googleCalendarService->syncEvent($calendarEvent);
-
-        if (! $result['success']) {
-            $calendarEvent->update([
-                'google_sync_status' => 'failed',
-                'google_sync_error' => $result['error'],
-            ]);
-
-            return;
-        }
-
-        $calendarEvent->update([
-            'google_event_id' => $result['event_id'],
-            'google_calendar_url' => $result['url'],
-            'google_sync_status' => 'synced',
-            'google_sync_error' => $result['error'],
-        ]);
     }
 }

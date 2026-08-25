@@ -158,10 +158,6 @@ CACHE_STORE=database
 WEB_PUSH_SUBJECT=mailto:admin@yourdomain.com
 WEB_PUSH_PUBLIC_KEY=
 WEB_PUSH_PRIVATE_KEY=
-
-# Optional integrations
-GOOGLE_OAUTH_CLIENT_ID=
-GOOGLE_OAUTH_CLIENT_SECRET=
 ```
 
 Generate VAPID keys once (keep the same keys across redeploys unless compromised):
