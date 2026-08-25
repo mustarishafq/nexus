@@ -193,7 +193,7 @@ export default function ProfileAboutCard({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">Bio</p>
           <p
             className={cn(
-              'text-sm leading-relaxed whitespace-pre-wrap overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.16_1_0.3_1)]',
+              'text-sm leading-relaxed whitespace-pre-wrap overflow-hidden transition-[max-height] duration-300 ease-out',
               isMobile && !bioExpanded ? 'max-h-[4.5rem]' : 'max-h-[80rem]'
             )}
           >
