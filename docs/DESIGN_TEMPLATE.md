@@ -286,19 +286,21 @@ Use these layers consistently. Do not invent new z-index values without updating
 
 ```
 ┌─────────────────────────────────────────────┐
-│  TopBar (h-16, z-30, glass panel)           │
-│  [Optional] GlobalBroadcastStrip (z-25)     │
+│  TopBar (sticky in main, glass frost)       │
+│  [Optional] alert strips                    │
 ├─────────────────────────────────────────────┤
-│  main                                       │
+│  main (overflow-y-auto) — content scrolls   │
+│  under the frosted header                   │
 │  ┌─────────────────────────────────────┐    │
 │  │  max-w-[1600px] mx-auto             │    │
 │  │  p-4 sm:p-6                         │    │
-│  │  { page content: space-y-6 }        │    │
 │  └─────────────────────────────────────┘    │
 ├─────────────────────────────────────────────┤
 │  BottomNav (z-40, glass dock)              │
 └─────────────────────────────────────────────┘
 ```
+
+The shell is `h-[100dvh] overflow-y-hidden`. The header is `sticky top-0` inside scrolling `main` so feed content can frost through (`backdrop-blur` + translucent `bg-card`).
 
 ### 6.2 Spacing tokens
 
@@ -322,9 +324,9 @@ Use these layers consistently. Do not invent new z-index values without updating
 
 | Variant | Route / condition | Behavior |
 |---------|-------------------|----------|
-| **Standard** | Most pages | TopBar + `p-4 sm:p-6` + bottom nav |
+| **Standard** | Most pages | TopBar + scrolling `main` (`overflow-y-auto`) + `p-4 sm:p-6` + bottom nav |
 | **Full bleed** | `/applications/:id/view` or email fullscreen | No TopBar, no padding, no bottom nav |
-| **Viewport fill** | `/analytics`, `/email`, `/messages` (when not full-bleed) | `h-[100dvh] overflow-hidden`; padded flex column; TeamRosterPanel hidden |
+| **Viewport fill** | `/analytics`, `/email`, `/messages` (when not full-bleed) | Same locked shell; `main` is `overflow-hidden`; padded flex column; TeamRosterPanel hidden |
 | **Auth** | `/login`, `/register`, etc. | No app shell; standalone full-screen |
 
 ### 6.4 Grid patterns
@@ -368,7 +370,7 @@ Four surface recipes + dialog text helpers. Pick the opacity tier that matches t
 | Token | Opacity intent | Use when |
 |-------|----------------|----------|
 | `glassPanelStyles` | Low (`bg-card/30` light, `/35` dark) | Sheets / panels over content when dense text is not required |
-| `glassTopBarStyles` | High light (`bg-card/95`, supports `/92`), low dark (`/35`) | Fixed TopBar — label legibility in light mode |
+| `glassTopBarStyles` | Light `bg-card/55` with blur; dark `bg-card/25` with blur. Never use unprefixed `supports-[backdrop-filter]:bg-card/92` — it overrides dark and looks solid. | Sticky TopBar over scrolling `main` |
 | `glassDockStyles` | Mid (`bg-card/50` both themes) + `rounded-2xl border` | Floating bottom dock |
 | `glassDialogPanelStyles` | Highest (`bg-card/95` → supports `/90`; dark `/85`) | Dialogs, pickers, readable body copy |
 
@@ -389,7 +391,7 @@ Four surface recipes + dialog text helpers. Pick the opacity tier that matches t
 | Setting | Light | Dark |
 |---------|-------|------|
 | Blur | `backdrop-blur-2xl` | same |
-| Background | `bg-card/95` (`supports-[backdrop-filter]:bg-card/92`) | `bg-card/35` |
+| Background | `bg-card/80` (`supports-[backdrop-filter]:bg-card/55`) | `bg-card/40` (`dark:supports-[backdrop-filter]:bg-card/25`) |
 | Border | `border-border` | `border-border/70` |
 | Shadow | `shadow-sm` | `shadow-[0_8px_32px_rgba(0,0,0,0.4)]` |
 | Ring | `ring-1 ring-black/5` | `ring-white/10` |
@@ -443,7 +445,7 @@ import {
 
 | Component | Classes |
 |-----------|---------|
-| TopBar (§7.1) | `glassTopBarStyles` + `border-b` |
+| TopBar (§7.1) | AppLayout header stack: `glassTopBarStyles` + `border-b`. Embedded `TopBar` is transparent on that stack. |
 | Mobile More sheet (§7.3) | `glassPanelStyles` + `rounded-t-2xl border-t` |
 | Bottom dock (§7.4) | `glassDockStyles` (already includes radius + border) |
 | SSO picker / compact glass dialogs (§11.9) | `glassDialogPanelStyles` + `rounded-2xl border` |
@@ -457,7 +459,7 @@ import {
 | Height | `h-16` |
 | Background | `glassTopBarStyles` + `border-b` (see §7.0) |
 | Padding | `px-6`; inner `gap-3` / right actions `gap-2 sm:gap-3` |
-| Position | Embedded in AppLayout stack (`embedded` prop): `w-full`. Legacy fixed: `fixed top-0 right-0 z-30` |
+| Position | Sticky inside scrolling `main` (`sticky top-0 z-30`) + `glassTopBarStyles` + `border-b`. Embedded `TopBar` is transparent on that stack so feed content can frost through. |
 | Transition | `transition-all duration-200` |
 
 **Left:** `GlobalSearchTrigger` (`flex-1`)
@@ -1778,6 +1780,7 @@ See §16.1 for full spring spec.
 
 ```css
 * { @apply border-border outline-ring/50; }
+html, body, #root { overflow-x: clip; } /* clip, not hidden — hidden breaks sticky descendants */
 body { @apply bg-background text-foreground font-sans; }
 ```
 
@@ -2297,9 +2300,10 @@ export const glassDialogTitleText = 'text-foreground';
 
 export const glassTopBarStyles = cn(
   'backdrop-blur-2xl text-foreground',
-  'bg-card/95 border-border shadow-sm ring-1 ring-black/5',
-  'supports-[backdrop-filter]:bg-card/92',
-  'dark:bg-card/35 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10'
+  'border-border shadow-sm ring-1 ring-black/5',
+  'bg-card/80 supports-[backdrop-filter]:bg-card/55',
+  'dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10',
+  'dark:bg-card/40 dark:supports-[backdrop-filter]:bg-card/25'
 );
 
 export const glassDockStyles = cn(

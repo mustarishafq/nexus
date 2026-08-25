@@ -56,9 +56,10 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
     <>
       <header
         className={cn(
-          glassTopBarStyles,
-          'flex h-16 items-center justify-between gap-3 border-b px-4 transition-all duration-200 sm:px-6',
-          embedded ? 'w-full min-w-0' : 'fixed right-0 top-0 z-30 pt-[var(--nexus-safe-top)]'
+          'flex h-16 items-center justify-between gap-3 px-4 transition-all duration-200 sm:px-6',
+          embedded
+            ? 'w-full min-w-0 bg-transparent shadow-none ring-0'
+            : cn(glassTopBarStyles, 'fixed right-0 top-0 z-30 border-b pt-[var(--nexus-safe-top)]'),
         )}
         style={embedded ? undefined : {
           left: sidebarWidth,

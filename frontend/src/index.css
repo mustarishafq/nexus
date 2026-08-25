@@ -137,10 +137,12 @@
   }
 
   html {
-    /* Stop iOS from inflating text and allowing sideways rubber-band scroll */
+    /* Stop iOS from inflating text and allowing sideways rubber-band scroll.
+       Use clip (not hidden): hidden forces overflow-y to auto and breaks
+       position:sticky on descendants. */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
     overscroll-behavior-x: none;
     max-width: 100%;
   }
@@ -149,7 +151,7 @@
     @apply bg-background text-foreground font-sans;
     font-family: var(--font-sans);
     scrollbar-gutter: stable;
-    overflow-x: hidden;
+    overflow-x: clip;
     overscroll-behavior-x: none;
     max-width: 100%;
     position: relative;
@@ -158,7 +160,7 @@
   #root {
     min-width: 0;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   img,

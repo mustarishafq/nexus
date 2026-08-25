@@ -39,12 +39,14 @@ export const glassDialogLinkStyles = cn(
 /** Primary row titles on glass dialog surfaces */
 export const glassDialogTitleText = 'text-foreground';
 
-/** Top navigation bar — opaque enough for legible labels in light mode */
+/** Top navigation bar — frosted glass. Dark must not use the light `supports:` fill
+ *  (`bg-card/92`) or the bar reads as a solid slab. */
 export const glassTopBarStyles = cn(
   'backdrop-blur-2xl text-foreground',
-  'bg-card/95 border-border shadow-sm ring-1 ring-black/5',
-  'supports-[backdrop-filter]:bg-card/92',
-  'dark:bg-card/35 dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10'
+  'border-border shadow-sm ring-1 ring-black/5',
+  'bg-card/80 supports-[backdrop-filter]:bg-card/55',
+  'dark:border-border/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10',
+  'dark:bg-card/40 dark:supports-[backdrop-filter]:bg-card/25'
 );
 
 /** Bottom navigation dock — opaque enough for legible labels over busy backgrounds */

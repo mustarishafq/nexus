@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useIsCompactNav, useIsMobile } from '@/hooks/use-mobile';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { glassTopBarStyles } from './glassStyles';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import BirthdayCelebrationGate from '@/components/celebrations/BirthdayCelebrationGate';
@@ -66,12 +67,8 @@ export default function AppLayout() {
     <UserPresenceGate>
       <div
         className={cn(
-          'flex min-w-0 max-w-full flex-col overflow-x-hidden bg-background',
-          // Viewport-fill pages (email, messages, analytics) must not grow with
-          // list content — otherwise panes expand and action bars scroll away.
-          lockToViewport
-            ? 'h-[100dvh] max-h-[100dvh] overflow-hidden'
-            : 'min-h-screen',
+          'flex min-w-0 max-w-full flex-col bg-background',
+          'h-[100dvh] max-h-[100dvh] overflow-x-clip overflow-y-hidden',
         )}
       >
         <CelebrationGateProvider>
@@ -84,38 +81,52 @@ export default function AppLayout() {
         <NotificationClickGate />
         <MailNotificationGate />
         <NotificationAudioUnlock />
-        {!isFullBleed ? (
-          <div className="relative z-30 flex shrink-0 flex-col pt-[var(--nexus-safe-top)]">
-            <TopBar embedded sidebarWidth={0} isMobile={isCompactNav} />
-            <TopAlertStrips embedded isMobile={isMobile} />
-          </div>
-        ) : null}
         <main
           className={cn(
-            'min-w-0 max-w-full flex-1',
-            lockToViewport && 'min-h-0 overflow-hidden',
-            showBottomNav && !isGameImmersive && 'pb-[var(--nexus-dock-clearance)]'
+            'flex min-h-0 min-w-0 max-w-full flex-1 flex-col',
+            lockToViewport || isGameImmersive
+              ? 'overflow-hidden'
+              : 'overflow-x-clip overflow-y-auto overscroll-y-contain',
           )}
         >
-          {isEmailFullscreen ? (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden p-2 sm:p-3">
-              <Outlet />
+          {!isFullBleed ? (
+            <div
+              className={cn(
+                glassTopBarStyles,
+                'sticky top-0 z-30 flex shrink-0 flex-col border-b pt-[var(--nexus-safe-top)]',
+              )}
+            >
+              <TopBar embedded sidebarWidth={0} isMobile={isCompactNav} />
+              <TopAlertStrips embedded isMobile={isMobile} />
             </div>
-          ) : isFullBleed ? (
-            <Outlet />
-          ) : isGameImmersive ? (
-            <div className="flex-1 flex flex-col min-h-0 w-full">
+          ) : null}
+          <div
+            className={cn(
+              'min-w-0',
+              (lockToViewport || isGameImmersive) && 'flex min-h-0 flex-1 flex-col overflow-hidden',
+              showBottomNav && !isGameImmersive && 'pb-[var(--nexus-dock-clearance)]',
+            )}
+          >
+            {isEmailFullscreen ? (
+              <div className="flex h-full min-h-0 flex-col overflow-hidden p-2 sm:p-3">
+                <Outlet />
+              </div>
+            ) : isFullBleed ? (
               <Outlet />
-            </div>
-          ) : isViewportFillPage ? (
-            <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden px-4 pt-4 sm:px-6 sm:pt-6">
-              <Outlet />
-            </div>
-          ) : (
-            <div className="mx-auto min-w-0 max-w-[1600px] p-4 sm:p-6">
-              <Outlet />
-            </div>
-          )}
+            ) : isGameImmersive ? (
+              <div className="flex h-full min-h-0 w-full flex-1 flex-col">
+                <Outlet />
+              </div>
+            ) : isViewportFillPage ? (
+              <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden px-4 pt-4 sm:px-6 sm:pt-6">
+                <Outlet />
+              </div>
+            ) : (
+              <div className="mx-auto min-w-0 max-w-[1600px] p-4 sm:p-6">
+                <Outlet />
+              </div>
+            )}
+          </div>
         </main>
         {showBottomNav && <BottomNav />}
         <TeamRosterPanel hidden={isFullBleed || isViewportFillPage || isGameImmersive || isMobile} />
