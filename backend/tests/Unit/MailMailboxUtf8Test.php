@@ -8,6 +8,25 @@ use Tests\TestCase;
 
 class MailMailboxUtf8Test extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // PHP 8.4+ unbundled ext-imap; CI/php-cli images often omit it. decodePart
+        // only needs these constants, not a live IMAP connection.
+        foreach ([
+            'TYPETEXT' => 0,
+            'TYPEMESSAGE' => 2,
+            'ENC7BIT' => 0,
+            'ENCBASE64' => 3,
+            'ENCQUOTEDPRINTABLE' => 4,
+        ] as $name => $value) {
+            if (! defined($name)) {
+                define($name, $value);
+            }
+        }
+    }
+
     public function test_ensure_utf8_converts_iso_8859_1_to_valid_utf8(): void
     {
         $service = app(MailMailboxService::class);

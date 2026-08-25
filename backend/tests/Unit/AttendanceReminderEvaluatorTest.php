@@ -146,6 +146,11 @@ class AttendanceReminderEvaluatorTest extends TestCase
         $method = new ReflectionMethod(AttendanceReminderEvaluator::class, 'evaluateClockOutReminder');
         $method->setAccessible(true);
 
-        return $method->invoke(null, $setting, $record, $now);
+        $shifts = array_values(array_filter(
+            is_array($setting->shifts) ? $setting->shifts : [],
+            static fn ($shift) => is_array($shift),
+        ));
+
+        return $method->invoke(null, $setting, $record, $now, $shifts);
     }
 }
