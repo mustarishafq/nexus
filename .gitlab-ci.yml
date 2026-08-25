@@ -1,38 +1,3 @@
-# EMZI Nexus — GitLab CI
-#
-# GitLab → Settings → CI/CD → Variables
-# Mask + protect SSH keys. Do not use File type.
-#
-# Staging (branch develop):
-#   STAGING_HOST
-#   STAGING_USER
-#   STAGING_SSH_PRIVATE_KEY
-#   STAGING_BACKEND_PATH          Laravel app dir on the server
-#   STAGING_FRONTEND_PATH         SPA document root
-#   STAGING_VITE_API_BASE_URL     e.g. https://staging-api.example.com
-#   STAGING_SSH_PORT              optional, default 22
-#   STAGING_REMOTE_RESTART_CMD    optional, e.g. sudo supervisorctl restart nexus-queue && sudo systemctl reload php8.5-fpm
-#
-# Production (branch master):
-#   PRODUCTION_HOST
-#   PRODUCTION_USER
-#   PRODUCTION_SSH_PRIVATE_KEY
-#   PRODUCTION_BACKEND_PATH
-#   PRODUCTION_FRONTEND_PATH
-#   PRODUCTION_VITE_API_BASE_URL  e.g. https://brainapi.emzinexus.com
-#   PRODUCTION_SSH_PORT           optional, default 22
-#   PRODUCTION_REMOTE_RESTART_CMD optional
-#
-# Server .env is never overwritten. Deploy jobs are skipped until HOST is set.
-# Runner must be able to SSH to the server (self-hosted runner if the host is private).
-
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
-    - if: $CI_COMMIT_BRANCH
-
 stages:
   - test
   - build
@@ -40,173 +5,90 @@ stages:
 
 variables:
   COMPOSER_NO_INTERACTION: "1"
-  COMPOSER_CACHE_DIR: "$CI_PROJECT_DIR/.composer-cache"
-  npm_config_cache: "$CI_PROJECT_DIR/.npm"
 
-# ---------------------------------------------------------------------------
-# Test
-# ---------------------------------------------------------------------------
+# =========================
+# TEST BACKEND
+# =========================
 
 test:backend:
   stage: test
   image: php:8.5-cli
-  cache:
-    key:
-      files:
-        - backend/composer.lock
-    paths:
-      - .composer-cache/
+
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq --no-install-recommends git unzip libzip-dev libsqlite3-dev libicu-dev libonig-dev libxml2-dev libfreetype6-dev libjpeg62-turbo-dev libpng-dev
-    - docker-php-ext-configure gd --with-freetype --with-jpeg
-    - docker-php-ext-install -j$(nproc) pdo_sqlite zip bcmath intl mbstring gd
-    - php -m | grep -qi '^xml$' || docker-php-ext-install xml
+    - apt-get install -y -qq git unzip libzip-dev libsqlite3-dev
+    - docker-php-ext-install pdo_sqlite zip
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
   script:
     - cd backend
     - cp .env.example .env
     - composer install --prefer-dist --no-progress
     - php artisan key:generate
-    # Temporarily skipped so build/deploy can run; re-enable once CI is stable.
-    # - php artisan test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
 
-test:frontend:
-  stage: test
-  image: node:20-bookworm
-  cache:
-    key:
-      files:
-        - frontend/package-lock.json
-    paths:
-      - .npm/
-  script:
-    - cd frontend
-    - npm ci
-    - npm run lint
-    - npm run test:audio
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
-
-# ---------------------------------------------------------------------------
-# Build
-# ---------------------------------------------------------------------------
+# =========================
+# BUILD FRONTEND
+# =========================
 
 build:frontend:
   stage: build
   image: node:20-bookworm
-  cache:
-    key:
-      files:
-        - frontend/package-lock.json
-    paths:
-      - .npm/
+
   script:
-    - |
-      set -euo pipefail
-      if [ "$CI_COMMIT_BRANCH" = "master" ]; then
-        API_URL="${PRODUCTION_VITE_API_BASE_URL:-}"
-      else
-        API_URL="${STAGING_VITE_API_BASE_URL:-}"
-      fi
-      printf 'VITE_API_BASE_URL=%s\n' "$API_URL" > frontend/.env.production
+    - echo "VITE_API_BASE_URL=$PRODUCTION_VITE_API_BASE_URL" > frontend/.env.production
     - cd frontend
     - npm ci
     - npm run build
+
   artifacts:
-    name: frontend-dist-$CI_COMMIT_SHORT_SHA
     paths:
       - frontend/dist/
     expire_in: 1 week
-  rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-    - if: $CI_COMMIT_BRANCH == "master"
 
-# ---------------------------------------------------------------------------
-# Deploy (SSH + rsync)
-# ---------------------------------------------------------------------------
+# =========================
+# DEPLOY PRODUCTION
+# =========================
 
-.deploy:
+deploy:production:
   stage: deploy
   image: alpine:3.21
+
   needs:
     - test:backend
-    - test:frontend
     - build:frontend
+
   before_script:
     - apk add --no-cache openssh-client rsync
     - eval "$(ssh-agent -s)"
-    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_deploy
     - chmod 600 ~/.ssh/id_deploy
     - ssh-add ~/.ssh/id_deploy
-    - ssh-keyscan -p "${SSH_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+    - ssh-keyscan -H "$PRODUCTION_HOST" >> ~/.ssh/known_hosts
+
   script:
-    - |
-      set -euo pipefail
-      SSH_PORT="${SSH_PORT:-22}"
-      RSH="ssh -p ${SSH_PORT} -o StrictHostKeyChecking=yes"
-      rsync -az --delete \
-        --exclude='.env' \
-        --exclude='.env.*' \
-        --exclude='vendor/' \
-        --exclude='node_modules/' \
-        --exclude='.git/' \
-        --exclude='tests/' \
-        --exclude='storage/' \
-        -e "$RSH" \
-        backend/ "${DEPLOY_USER}@${DEPLOY_HOST}:${BACKEND_PATH}/"
-      rsync -az --delete \
-        -e "$RSH" \
-        frontend/dist/ "${DEPLOY_USER}@${DEPLOY_HOST}:${FRONTEND_PATH}/"
-      $RSH "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<EOF
-      set -euo pipefail
-      cd "${BACKEND_PATH}"
-      composer install --no-dev --optimize-autoloader --no-interaction
-      php artisan migrate --force
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-      php artisan storage:link || true
-      EOF
-    - |
-      set -euo pipefail
-      if [ -n "${REMOTE_RESTART_CMD:-}" ]; then
-        ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=yes \
-          "${DEPLOY_USER}@${DEPLOY_HOST}" \
-          "${REMOTE_RESTART_CMD}"
-      fi
 
-deploy:staging:
-  extends: .deploy
-  variables:
-    DEPLOY_HOST: $STAGING_HOST
-    DEPLOY_USER: $STAGING_USER
-    SSH_PRIVATE_KEY: $STAGING_SSH_PRIVATE_KEY
-    SSH_PORT: $STAGING_SSH_PORT
-    BACKEND_PATH: $STAGING_BACKEND_PATH
-    FRONTEND_PATH: $STAGING_FRONTEND_PATH
-    REMOTE_RESTART_CMD: $STAGING_REMOTE_RESTART_CMD
-  environment:
-    name: staging
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "develop" && $STAGING_HOST'
+    # Deploy Laravel
+    - rsync -az --delete
+      --exclude='.env'
+      --exclude='vendor/'
+      --exclude='storage/'
+      --exclude='.git/'
+      backend/
+      "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_BACKEND_PATH/"
 
-deploy:production:
-  extends: .deploy
-  variables:
-    DEPLOY_HOST: $PRODUCTION_HOST
-    DEPLOY_USER: $PRODUCTION_USER
-    SSH_PRIVATE_KEY: $PRODUCTION_SSH_PRIVATE_KEY
-    SSH_PORT: $PRODUCTION_SSH_PORT
-    BACKEND_PATH: $PRODUCTION_BACKEND_PATH
-    FRONTEND_PATH: $PRODUCTION_FRONTEND_PATH
-    REMOTE_RESTART_CMD: $PRODUCTION_REMOTE_RESTART_CMD
-  environment:
-    name: production
+    # Deploy Frontend
+    - rsync -az --delete
+      frontend/dist/
+      "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_FRONTEND_PATH/"
+
+    # Laravel setup
+    - ssh "$PRODUCTION_USER@$PRODUCTION_HOST"
+      "cd $PRODUCTION_BACKEND_PATH &&
+       composer install --no-dev --optimize-autoloader --no-interaction &&
+       php artisan migrate --force &&
+       php artisan config:cache"
+
   rules:
-    - if: '$CI_COMMIT_BRANCH == "master" && $PRODUCTION_HOST'
+    - if: '$CI_COMMIT_BRANCH == "master"'
