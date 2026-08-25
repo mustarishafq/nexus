@@ -37,10 +37,19 @@ class QuizController extends Controller
         $query = Quiz::query()->withCount('questions')->with('owner:id,name,full_name,email');
 
         if ($scope === 'published') {
+            if (! PermissionService::canAccessGames($user)) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
             $query->where('status', Quiz::STATUS_PUBLISHED);
         } elseif ($scope === 'all' && PermissionService::can($user, PermissionCatalog::QUIZ_MANAGE)) {
             // admins see everything
         } else {
+            if (! PermissionService::can($user, PermissionCatalog::QUIZ_CREATE)
+                && ! PermissionService::can($user, PermissionCatalog::QUIZ_MANAGE_OWN)
+                && ! PermissionService::can($user, PermissionCatalog::QUIZ_MANAGE)
+            ) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
             $query->where('user_id', $user->id);
         }
 
@@ -779,7 +788,12 @@ class QuizController extends Controller
 
     protected function canViewQuiz(User $user, Quiz $quiz): bool
     {
-        return $this->canEditQuiz($user, $quiz) || $quiz->status === Quiz::STATUS_PUBLISHED;
+        if ($this->canEditQuiz($user, $quiz)) {
+            return true;
+        }
+
+        return $quiz->status === Quiz::STATUS_PUBLISHED
+            && PermissionService::canAccessGames($user);
     }
 
     /**

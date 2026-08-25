@@ -7,7 +7,7 @@ import {
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { can, canManageUsers, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -41,7 +41,7 @@ export default function Sidebar({
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     ...(canViewNetworkHealth(user) ? [{ path: '/network-health', icon: Wifi, label: 'Network Health' }] : []),
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
-    { path: '/games', icon: Gamepad2, label: 'Games' },
+    ...(canViewGames(user) ? [{ path: '/games', icon: Gamepad2, label: 'Games' }] : []),
     { path: '/scan-qr', icon: QrCode, label: 'Scan QR' },
     ...(showUserManagement ? [
       { path: '/admin/users', icon: Users, label: isAdmin ? 'User Management' : 'HR Management' },

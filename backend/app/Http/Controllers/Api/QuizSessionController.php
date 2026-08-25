@@ -46,6 +46,10 @@ class QuizSessionController extends Controller
         }
 
         if ($mode === QuizSession::MODE_ASYNC) {
+            if (! $preview && ! PermissionService::canAccessGames($user)) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
             [$session, $created] = $this->game->startAsyncAttempt($quiz, $user, $preview);
 
             return response()->json($this->game->serializeSession($session, $user), $created ? 201 : 200);
@@ -65,6 +69,10 @@ class QuizSessionController extends Controller
         $user = $this->requireApprovedUser($request);
         if ($user instanceof JsonResponse) {
             return $user;
+        }
+
+        if (! PermissionService::canAccessGames($user)) {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $validated = $request->validate([

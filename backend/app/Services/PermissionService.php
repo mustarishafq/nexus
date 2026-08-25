@@ -105,14 +105,26 @@ class PermissionService
         ];
     }
 
+    public static function canAccessGames(User $user): bool
+    {
+        return self::can($user, PermissionCatalog::QUIZ_VIEW)
+            || self::can($user, PermissionCatalog::QUIZ_CREATE)
+            || self::can($user, PermissionCatalog::QUIZ_MANAGE_OWN)
+            || self::can($user, PermissionCatalog::QUIZ_MANAGE);
+    }
+
     public static function canManageQuiz(User $user, Quiz $quiz): bool
     {
         if (self::can($user, PermissionCatalog::QUIZ_MANAGE)) {
             return true;
         }
 
+        if ((int) $quiz->user_id !== (int) $user->id) {
+            return false;
+        }
+
         return self::can($user, PermissionCatalog::QUIZ_MANAGE_OWN)
-            && (int) $quiz->user_id === (int) $user->id;
+            || self::can($user, PermissionCatalog::QUIZ_CREATE);
     }
 
     public static function resolveRole(User $user): ?Role
