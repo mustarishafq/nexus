@@ -11,6 +11,7 @@ use App\Models\UserStreak;
 use App\Services\GamificationService;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
+use App\Support\GamificationCatalog;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -590,6 +591,15 @@ class GamificationTest extends TestCase
         $this->assertArrayHasKey('podium', $payload['week_spotlight']);
         $this->assertArrayHasKey('achievements', $payload);
         $this->assertNotEmpty($payload['achievements']['catalog']);
+        $catalogKeys = collect($payload['achievements']['catalog'])->pluck('badge_key')->all();
+        $this->assertContains('level_25', $catalogKeys);
+        $this->assertContains('level_50', $catalogKeys);
+        $this->assertContains('level_100', $catalogKeys);
+        $this->assertContains('level_250', $catalogKeys);
+        $this->assertContains('commenter_25', $catalogKeys);
+        $this->assertContains('clock_in_30', $catalogKeys);
+        $this->assertContains('event_5', $catalogKeys);
+        $this->assertContains('quiz_5', $catalogKeys);
     }
 
     public function test_first_claim_unlocks_badge(): void
@@ -608,6 +618,72 @@ class GamificationTest extends TestCase
         $this->assertDatabaseHas('user_achievements', [
             'user_id' => $user->id,
             'badge_key' => 'first_claim',
+        ]);
+    }
+
+    public function test_claim_unlocks_level_25_badge(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'exp_total' => GamificationCatalog::totalExpToReach(25),
+        ]);
+        $reward = app(GamificationService::class)->offer($user, 'event_check_in', 'calendar_event', 505);
+        $this->assertNotNull($reward);
+
+        $response = $this->withToken($this->token($user))
+            ->postJson("/api/gamification/rewards/{$reward->id}/claim")
+            ->assertOk()
+            ->json();
+
+        $badgeKeys = collect($response['new_badges'] ?? [])->pluck('badge_key')->all();
+        $this->assertContains('level_5', $badgeKeys);
+        $this->assertContains('level_10', $badgeKeys);
+        $this->assertContains('level_25', $badgeKeys);
+        $this->assertDatabaseHas('user_achievements', [
+            'user_id' => $user->id,
+            'badge_key' => 'level_25',
+        ]);
+    }
+
+    public function test_claim_unlocks_commenter_25_badge(): void
+    {
+        $user = User::factory()->create(['is_approved' => true, 'exp_total' => 0]);
+        $past = now()->subDays(2);
+
+        for ($i = 1; $i <= 24; $i++) {
+            ExpReward::query()->create([
+                'user_id' => $user->id,
+                'action_key' => 'feed_comment',
+                'amount' => 8,
+                'title' => 'Feed comment',
+                'status' => ExpReward::STATUS_CLAIMED,
+                'source_type' => 'post_comment',
+                'source_id' => (string) $i,
+                'claimed_at' => $past,
+            ]);
+        }
+
+        ExpReward::query()
+            ->where('user_id', $user->id)
+            ->where('action_key', 'feed_comment')
+            ->update([
+                'created_at' => $past,
+                'updated_at' => $past,
+            ]);
+
+        $reward = app(GamificationService::class)->offer($user, 'feed_comment', 'post_comment', 25);
+        $this->assertNotNull($reward);
+
+        $response = $this->withToken($this->token($user))
+            ->postJson("/api/gamification/rewards/{$reward->id}/claim")
+            ->assertOk()
+            ->json();
+
+        $badgeKeys = collect($response['new_badges'] ?? [])->pluck('badge_key')->all();
+        $this->assertContains('commenter_25', $badgeKeys);
+        $this->assertDatabaseHas('user_achievements', [
+            'user_id' => $user->id,
+            'badge_key' => 'commenter_25',
         ]);
     }
 

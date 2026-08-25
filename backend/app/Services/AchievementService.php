@@ -30,11 +30,10 @@ class AchievementService
         }
 
         $level = (int) ($claimOutcome['level'] ?? GamificationCatalog::levelProgress((int) $user->exp_total)['level']);
-        if ($level >= 5) {
-            $candidates[] = 'level_5';
-        }
-        if ($level >= 10) {
-            $candidates[] = 'level_10';
+        foreach (GamificationBadges::LEVEL_BADGES as $minLevel => $badgeKey) {
+            if ($level >= $minLevel) {
+                $candidates[] = $badgeKey;
+            }
         }
 
         $rank = $claimOutcome['rank'] ?? null;
@@ -54,14 +53,22 @@ class AchievementService
             }
         }
 
-        $reactClaims = ExpReward::query()
+        $actionKeys = array_keys(GamificationBadges::ACTION_COUNT_BADGES);
+        $actionCounts = ExpReward::query()
             ->where('user_id', $user->id)
             ->where('status', ExpReward::STATUS_CLAIMED)
-            ->where('action_key', 'feed_react')
-            ->count();
+            ->whereIn('action_key', $actionKeys)
+            ->selectRaw('action_key, COUNT(*) as claimed_count')
+            ->groupBy('action_key')
+            ->pluck('claimed_count', 'action_key');
 
-        if ($reactClaims >= 50) {
-            $candidates[] = 'social_butterfly';
+        foreach (GamificationBadges::ACTION_COUNT_BADGES as $actionKey => $thresholds) {
+            $count = (int) ($actionCounts[$actionKey] ?? 0);
+            foreach ($thresholds as $minCount => $badgeKey) {
+                if ($count >= $minCount) {
+                    $candidates[] = $badgeKey;
+                }
+            }
         }
 
         $candidates = array_values(array_unique($candidates));
