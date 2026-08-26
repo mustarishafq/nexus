@@ -6,16 +6,25 @@ use App\Models\User;
 use App\Models\UserMailCredential;
 use App\Models\UserMailRecipientSuggestion;
 use App\Support\AppSettings;
-use Illuminate\Http\UploadedFile;
+use App\Support\MailImapSession;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
-use IMAP\Connection;
 use RuntimeException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Throwable;
+use Webklex\PHPIMAP\Attachment;
+use Webklex\PHPIMAP\Attribute;
+use Webklex\PHPIMAP\Client;
+use Webklex\PHPIMAP\ClientManager;
+use Webklex\PHPIMAP\Exceptions\MessageNotFoundException;
+use Webklex\PHPIMAP\Folder;
+use Webklex\PHPIMAP\IMAP;
+use Webklex\PHPIMAP\Message;
 
 class MailMailboxService
 {
@@ -148,28 +157,11 @@ class MailMailboxService
 
     public function isImapEnabled(): bool
     {
-        if (! config('mail.imap.enabled')) {
-            return false;
-        }
-
-        return function_exists('imap_open');
-    }
-
-    protected function ensureImapAvailable(): void
-    {
-        if (function_exists('imap_open')) {
-            return;
-        }
-
-        throw new RuntimeException('PHP IMAP extension is not installed on the server.');
+        return (bool) config('mail.imap.enabled');
     }
 
     public function isServerConfigured(): bool
     {
-        if (! function_exists('imap_open')) {
-            return false;
-        }
-
         $settings = AppSettings::row();
 
         return trim((string) ($settings->imap_host ?? $settings->smtp_host ?? '')) !== '';
@@ -198,7 +190,7 @@ class MailMailboxService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, UserMailCredential>
+     * @return Collection<int, UserMailCredential>
      */
     public function accountsFor(User $user)
     {
@@ -233,41 +225,41 @@ class MailMailboxService
         return $credential;
     }
 
-    /**
-     * @return resource|Connection
-     */
-    public function connect(User $user, ?int $accountId = null, string $folder = self::FOLDER_INBOX)
+    public function connect(User $user, ?int $accountId = null, string $folder = self::FOLDER_INBOX): MailImapSession
     {
         $credential = $this->resolveAccount($user, $accountId);
-
-        $this->ensureImapAvailable();
-
         $password = $this->decryptMailboxPassword($credential);
         $config = $this->serverConfig($user, $credential->email);
         $logicalFolder = $this->normalizeLogicalFolder($folder);
 
-        $previous = imap_errors();
-        if (is_array($previous)) {
-            imap_errors();
-        }
-
-        $connection = $this->openMailbox($this->mailboxString($config, 'INBOX'), $credential->email, $password);
-
-        $map = $this->discoverFolderMapFromConnection($connection, $config);
+        $client = $this->openMailbox($config, $credential->email, $password);
+        $map = $this->discoverFolderMapFromClient($client);
         $this->folderMapCache[$credential->id] = $map;
 
-        $imapFolder = $map[$logicalFolder] ?? $this->defaultImapFolder($logicalFolder);
+        try {
+            $imapFolder = $map[$logicalFolder] ?? $this->defaultImapFolder($logicalFolder);
 
-        if ($imapFolder !== 'INBOX') {
-            $target = $this->mailboxString($config, $imapFolder);
-            if (! @imap_reopen($connection, $target)) {
-                $error = imap_last_error() ?: "Could not open folder \"{$logicalFolder}\".";
-                imap_close($connection);
-                throw new RuntimeException($error);
+            return new MailImapSession(
+                $client,
+                $this->resolveImapFolder($client, $imapFolder, $logicalFolder),
+                $map,
+            );
+        } catch (Throwable $exception) {
+            try {
+                $client->disconnect();
+            } catch (Throwable) {
             }
-        }
 
-        return $connection;
+            if ($exception instanceof RuntimeException) {
+                throw $exception;
+            }
+
+            throw new RuntimeException(
+                $exception->getMessage() ?: "Could not open folder \"{$logicalFolder}\".",
+                0,
+                $exception,
+            );
+        }
     }
 
     public function testAndStoreCredentials(User $user, string $password, ?string $email = null, ?string $label = null): UserMailCredential
@@ -282,18 +274,9 @@ class MailMailboxService
             throw new RuntimeException('Mailbox password is required.');
         }
 
-        $this->ensureImapAvailable();
-
         $config = $this->serverConfig($user, $mailboxEmail);
-        $mailbox = $this->mailboxString($config);
-
-        $previous = imap_errors();
-        if (is_array($previous)) {
-            imap_errors();
-        }
-
-        $connection = $this->openMailbox($mailbox, $mailboxEmail, $password);
-        imap_close($connection);
+        $client = $this->openMailbox($config, $mailboxEmail, $password);
+        $client->disconnect();
 
         $existingCount = UserMailCredential::query()->where('user_id', $user->id)->count();
         $existing = UserMailCredential::query()
@@ -407,16 +390,12 @@ class MailMailboxService
             }
         }
 
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            $imapFolder = $this->folderMapCache[$credential->id][$folder]
-                ?? $this->defaultImapFolder($folder);
-            $mailbox = $this->mailboxString($this->serverConfig($user, $credential->email), $imapFolder);
-            $status = imap_status($connection, $mailbox, SA_UNSEEN);
-            $unreadCount = (int) ($status->unseen ?? 0);
+            $unreadCount = $this->folderUnseenCount($session->folder);
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
 
         Cache::put($cacheKey, ['unread_count' => $unreadCount], now()->addSeconds(45));
@@ -460,20 +439,16 @@ class MailMailboxService
     ): array {
         $credential = $this->resolveAccount($user, $accountId);
         $folder = $this->normalizeLogicalFolder($folder);
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            $uids = $this->searchMessageUids($connection, $query, $unreadOnly);
-            $imapFolder = $this->folderMapCache[$credential->id][$folder]
-                ?? $this->defaultImapFolder($folder);
-            $mailbox = $this->mailboxString($this->serverConfig($user, $credential->email), $imapFolder);
+            $uids = $this->searchMessageUids($session->folder, $query, $unreadOnly);
+            $unreadCount = $this->folderUnseenCount($session->folder);
 
             if ($uids === []) {
-                $status = imap_status($connection, $mailbox, SA_UNSEEN);
-
                 return [
                     'messages' => [],
-                    'unread_count' => (int) ($status->unseen ?? 0),
+                    'unread_count' => $unreadCount,
                     'folder' => $folder,
                     'account_id' => $credential->id,
                 ];
@@ -482,39 +457,36 @@ class MailMailboxService
             rsort($uids);
             $uids = array_slice($uids, 0, min($limit, 100));
 
-            $status = imap_status($connection, $mailbox, SA_UNSEEN);
-            $unreadCount = (int) ($status->unseen ?? 0);
+            $fetched = $session->folder->query()
+                ->where('UID', implode(',', $uids))
+                ->leaveUnread()
+                ->setFetchOrder('desc')
+                ->setFetchBody($includeAttachments)
+                ->get();
 
-            $unreadUids = imap_search($connection, 'UNSEEN', SE_UID);
-            $unreadSet = is_array($unreadUids) ? array_flip($unreadUids) : [];
-
-            $overviews = $uids !== [] ? (imap_fetch_overview($connection, implode(',', $uids), FT_UID) ?: []) : [];
-            $overviewByUid = [];
-
-            foreach ($overviews as $overview) {
-                $overviewByUid[(int) $overview->uid] = $overview;
+            $byUid = [];
+            foreach ($fetched as $message) {
+                $byUid[(int) $message->getUid()] = $message;
             }
 
             $messages = [];
 
             foreach ($uids as $uid) {
-                $overview = $overviewByUid[$uid] ?? null;
+                $message = $byUid[$uid] ?? null;
 
-                if (! $overview) {
+                if (! $message) {
                     continue;
                 }
 
-                $seen = ! isset($unreadSet[$uid]);
-
                 $messages[] = [
                     'uid' => $uid,
-                    'subject' => $this->decodeHeader($overview->subject ?? '(No subject)'),
-                    'from' => $this->decodeHeader($overview->from ?? ''),
-                    'to' => $this->decodeHeader($overview->to ?? ''),
-                    'date' => $overview->date ?? null,
-                    'seen' => $seen,
+                    'subject' => $this->messageSubject($message),
+                    'from' => $this->formatAddresses($message->getFrom()),
+                    'to' => $this->formatAddresses($message->getTo()),
+                    'date' => $this->messageDate($message),
+                    'seen' => $message->hasFlag('Seen'),
                     'has_attachments' => $includeAttachments
-                        ? $this->messageHasAttachments($connection, $uid)
+                        ? $this->fileAttachments($message) !== []
                         : false,
                 ];
             }
@@ -526,7 +498,7 @@ class MailMailboxService
                 'account_id' => $credential->id,
             ];
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
     }
 
@@ -537,42 +509,36 @@ class MailMailboxService
     {
         $credential = $this->resolveAccount($user, $accountId);
         $folder = $this->normalizeLogicalFolder($folder);
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            $overviewList = imap_fetch_overview($connection, (string) $uid, FT_UID);
+            $message = $this->getImapMessage($session->folder, $uid);
+            $message->setFlag('Seen');
 
-            if (! is_array($overviewList) || $overviewList === []) {
-                throw new RuntimeException('Message not found.');
-            }
-
-            $overview = $overviewList[0];
-            imap_setflag_full($connection, (string) $uid, '\\Seen', ST_UID);
-
-            $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
-            $content = $this->extractMessageContent($connection, $uid, $structure);
-            $attachments = $this->collectAttachments($structure);
+            $content = $this->extractMessageContent($message);
+            $attachments = $this->collectAttachments($message);
+            $from = $this->formatAddresses($message->getFrom());
 
             return [
                 'uid' => $uid,
                 'folder' => $folder,
                 'account_id' => $credential->id,
-                'subject' => $this->decodeHeader($overview->subject ?? '(No subject)'),
-                'from' => $this->decodeHeader($overview->from ?? ''),
-                'to' => $this->decodeHeader($overview->to ?? ''),
-                'cc' => $this->decodeHeader($overview->cc ?? ''),
-                'date' => $overview->date ?? null,
+                'subject' => $this->messageSubject($message),
+                'from' => $from,
+                'to' => $this->formatAddresses($message->getTo()),
+                'cc' => $this->formatAddresses($message->getCc()),
+                'date' => $this->messageDate($message),
                 'body' => $content['text'] ?: $content['html_text'],
                 'body_html' => $content['html'],
                 'body_text' => $content['text'],
-                'message_id' => $overview->message_id ?? null,
-                'reply_to' => $this->extractEmailAddress($this->decodeHeader($overview->from ?? '')),
+                'message_id' => $this->attributeString($message->getMessageId()) ?: null,
+                'reply_to' => $this->extractEmailAddress($from),
                 'seen' => true,
                 'attachments' => $attachments,
                 'has_attachments' => $attachments !== [],
             ];
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
     }
 
@@ -584,27 +550,25 @@ class MailMailboxService
         $partNumber = $this->normalizeAttachmentPartNumber($partNumber);
         $credential = $this->resolveAccount($user, $accountId);
         $folder = $this->normalizeLogicalFolder($folder);
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
-            $part = $this->findPartByNumber($structure, $partNumber);
+            $message = $this->getImapMessage($session->folder, $uid);
+            $attachment = $this->findFileAttachment($message, $partNumber);
 
-            if (! $part || ! $this->partIsAttachment($part)) {
+            if (! $attachment) {
                 throw new RuntimeException('Attachment not found.');
             }
 
-            $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
-            $content = $this->decodePart(is_string($raw) ? $raw : '', $part, convertCharset: false);
-            $filename = $this->partFilename($part) ?: 'attachment-'.$partNumber;
+            $filename = $attachment->getName() ?: $attachment->filename ?: 'attachment-'.$partNumber;
 
             return [
                 'filename' => $this->decodeHeader($filename),
-                'mime' => $this->partMimeType($part),
-                'content' => $content,
+                'mime' => $attachment->getContentType() ?: 'application/octet-stream',
+                'content' => $attachment->getContent(),
             ];
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
     }
 
@@ -839,12 +803,6 @@ class MailMailboxService
             ];
         }
 
-        $this->ensureImapAvailable();
-
-        if (! function_exists('imap_append')) {
-            throw new RuntimeException('PHP IMAP extension is not installed on the server.');
-        }
-
         $password = $this->decryptMailboxPassword($credential);
         $config = $this->serverConfig($user, $credential->email);
         $fromName = $credential->label
@@ -860,49 +818,32 @@ class MailMailboxService
         ];
 
         $raw = $this->buildSentMimeMessage($credential->email, $fromName, $draftPayload);
-        $connection = $this->openMailbox(
-            $this->mailboxString($config, 'INBOX'),
-            $credential->email,
-            $password,
-        );
+        $client = $this->openMailbox($config, $credential->email, $password);
 
         try {
-            $map = $this->discoverFolderMapFromConnection($connection, $config);
+            $map = $this->discoverFolderMapFromClient($client);
             $this->folderMapCache[$credential->id] = $map;
             $imapFolder = $map[self::FOLDER_DRAFTS] ?? $this->defaultImapFolder(self::FOLDER_DRAFTS);
-            $mailbox = $this->mailboxString($config, $imapFolder);
-
-            if (! @imap_reopen($connection, $mailbox)) {
-                @imap_createmailbox($connection, $mailbox);
-                if (! @imap_reopen($connection, $mailbox)) {
-                    throw new RuntimeException(imap_last_error() ?: 'Could not open Drafts folder.');
-                }
-            }
+            $folder = $this->resolveImapFolder($client, $imapFolder, self::FOLDER_DRAFTS, create: true);
 
             if ($existingUid) {
-                @imap_delete($connection, (string) $existingUid, FT_UID);
-                @imap_expunge($connection);
-                if (! @imap_reopen($connection, $mailbox)) {
-                    throw new RuntimeException(imap_last_error() ?: 'Could not reopen Drafts folder.');
+                try {
+                    $this->getImapMessage($folder, $existingUid)->delete(true);
+                } catch (RuntimeException) {
                 }
             }
 
-            $status = @imap_status($connection, $mailbox, SA_UIDNEXT);
-            $expectedUid = $status ? (int) $status->uidnext : 0;
+            $expectedUid = $this->folderUidNext($folder);
 
-            if (! @imap_append($connection, $mailbox, $raw, '\\Draft')) {
-                @imap_createmailbox($connection, $mailbox);
-                if (! @imap_reopen($connection, $mailbox)) {
-                    throw new RuntimeException(imap_last_error() ?: 'Could not open Drafts folder.');
-                }
-                $status = @imap_status($connection, $mailbox, SA_UIDNEXT);
-                $expectedUid = $status ? (int) $status->uidnext : 0;
-                if (! @imap_append($connection, $mailbox, $raw, '\\Draft')) {
-                    throw new RuntimeException(imap_last_error() ?: 'Could not save draft.');
-                }
+            try {
+                $folder->appendMessage($raw, ['\\Draft']);
+            } catch (Throwable) {
+                $folder = $this->resolveImapFolder($client, $imapFolder, self::FOLDER_DRAFTS, create: true);
+                $expectedUid = $this->folderUidNext($folder);
+                $folder->appendMessage($raw, ['\\Draft']);
             }
 
-            $uid = $expectedUid > 0 ? $expectedUid : $this->latestUidInMailbox($connection);
+            $uid = $expectedUid > 0 ? $expectedUid : $this->latestUidInMailbox($folder);
 
             $this->forgetUnreadCountCache($user, $credential->id, self::FOLDER_DRAFTS);
 
@@ -912,7 +853,7 @@ class MailMailboxService
                 'account_id' => $credential->id,
             ];
         } finally {
-            imap_close($connection);
+            $client->disconnect();
         }
     }
 
@@ -922,14 +863,11 @@ class MailMailboxService
         $this->forgetUnreadCountCache($user, $accountId, self::FOLDER_DRAFTS);
     }
 
-    /**
-     * @param  resource|Connection  $connection
-     */
-    protected function latestUidInMailbox($connection): int
+    protected function latestUidInMailbox(Folder $folder): int
     {
-        $uids = imap_search($connection, 'ALL', SE_UID);
+        $uids = $this->searchUids($folder, 'ALL');
 
-        if (! is_array($uids) || $uids === []) {
+        if ($uids === []) {
             return 0;
         }
 
@@ -948,32 +886,24 @@ class MailMailboxService
         array $payload,
         string $fromName,
     ): void {
-        if (! function_exists('imap_append')) {
-            return;
-        }
-
         try {
             $raw = $this->buildSentMimeMessage($credential->email, $fromName, $payload);
-            $connection = $this->openMailbox(
-                $this->mailboxString($config, 'INBOX'),
-                $credential->email,
-                $password,
-            );
+            $client = $this->openMailbox($config, $credential->email, $password);
 
             try {
-                $map = $this->discoverFolderMapFromConnection($connection, $config);
+                $map = $this->discoverFolderMapFromClient($client);
                 $this->folderMapCache[$credential->id] = $map;
                 $imapFolder = $map[self::FOLDER_SENT] ?? $this->defaultImapFolder(self::FOLDER_SENT);
-                $mailbox = $this->mailboxString($config, $imapFolder);
+                $folder = $this->resolveImapFolder($client, $imapFolder, self::FOLDER_SENT, create: true);
 
-                if (! @imap_append($connection, $mailbox, $raw, '\\Seen')) {
-                    @imap_createmailbox($connection, $mailbox);
-                    if (! @imap_append($connection, $mailbox, $raw, '\\Seen')) {
-                        throw new RuntimeException(imap_last_error() ?: 'Could not save message to Sent.');
-                    }
+                try {
+                    $folder->appendMessage($raw, ['\\Seen']);
+                } catch (Throwable) {
+                    $folder = $this->resolveImapFolder($client, $imapFolder, self::FOLDER_SENT, create: true);
+                    $folder->appendMessage($raw, ['\\Seen']);
                 }
             } finally {
-                imap_close($connection);
+                $client->disconnect();
             }
 
             $this->forgetUnreadCountCache($user, $credential->id, self::FOLDER_SENT);
@@ -987,7 +917,7 @@ class MailMailboxService
      */
     protected function buildSentMimeMessage(string $fromEmail, string $fromName, array $payload): string
     {
-        $email = (new Email())
+        $email = (new Email)
             ->from(new Address($fromEmail, $fromName))
             ->subject((string) $payload['subject'])
             ->date(new \DateTimeImmutable('now'))
@@ -1039,49 +969,46 @@ class MailMailboxService
     public function deleteMessage(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void
     {
         $credential = $this->resolveAccount($user, $accountId);
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            if (! imap_delete($connection, (string) $uid, FT_UID)) {
+            if (! $this->getImapMessage($session->folder, $uid)->delete(true)) {
                 throw new RuntimeException('Could not delete message.');
             }
-
-            imap_expunge($connection);
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
     }
 
     public function markUnread(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void
     {
         $credential = $this->resolveAccount($user, $accountId);
-        $connection = $this->connect($user, $credential->id, $folder);
+        $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            imap_clearflag_full($connection, (string) $uid, '\\Seen', ST_UID);
+            $this->getImapMessage($session->folder, $uid)->unsetFlag('Seen');
         } finally {
-            imap_close($connection);
+            $session->disconnect();
         }
     }
 
     /**
      * @return array<int, int>
      */
-    protected function searchMessageUids($connection, ?string $query, bool $unreadOnly = false): array
+    protected function searchMessageUids(Folder $folder, ?string $query, bool $unreadOnly = false): array
     {
         $query = trim((string) $query);
         $hasQuery = $query !== '';
 
         $searchUids = $hasQuery
-            ? $this->searchUidsByText($connection, $query)
-            : $this->fetchAllMessageUids($connection);
+            ? $this->searchUidsByText($folder, $query)
+            : $this->fetchAllMessageUids($folder);
 
         if (! $unreadOnly) {
             return $searchUids;
         }
 
-        $unreadUids = imap_search($connection, 'UNSEEN', SE_UID) ?: [];
-        $unreadSet = is_array($unreadUids) ? array_flip($unreadUids) : [];
+        $unreadSet = array_flip($this->searchUids($folder, 'UNSEEN'));
 
         return array_values(array_filter(
             $searchUids,
@@ -1090,12 +1017,11 @@ class MailMailboxService
     }
 
     /**
-     * PHP's imap_search() only supports IMAP2 criteria and rejects OR, so run
-     * separate field searches and merge the UID lists in PHP.
+     * IMAP SEARCH rejects OR on some hosts, so run separate field searches and merge.
      *
      * @return array<int, int>
      */
-    protected function searchUidsByText($connection, string $query): array
+    protected function searchUidsByText(Folder $folder, string $query): array
     {
         $escaped = $this->escapeImapSearchString($query);
 
@@ -1106,7 +1032,7 @@ class MailMailboxService
         $merged = [];
 
         foreach (['TEXT', 'SUBJECT', 'FROM', 'BODY'] as $field) {
-            foreach ($this->imapSearchUids($connection, $field.' "'.$escaped.'"') as $uid) {
+            foreach ($this->searchUids($folder, $field, $escaped) as $uid) {
                 $merged[$uid] = $uid;
             }
         }
@@ -1123,7 +1049,7 @@ class MailMailboxService
 
         foreach ($terms as $term) {
             foreach (['TEXT', 'SUBJECT', 'FROM'] as $field) {
-                foreach ($this->imapSearchUids($connection, $field.' "'.$term.'"') as $uid) {
+                foreach ($this->searchUids($folder, $field, $term) as $uid) {
                     $merged[$uid] = $uid;
                 }
             }
@@ -1135,32 +1061,30 @@ class MailMailboxService
     /**
      * @return array<int, int>
      */
-    protected function fetchAllMessageUids($connection): array
+    protected function fetchAllMessageUids(Folder $folder): array
     {
-        $uids = imap_search($connection, 'ALL', SE_UID);
-
-        return is_array($uids) ? array_map('intval', $uids) : [];
+        return $this->searchUids($folder, 'ALL');
     }
 
     /**
      * @return array<int, int>
      */
-    protected function imapSearchUids($connection, string $criteria): array
+    protected function searchUids(Folder $folder, string $field, ?string $value = null): array
     {
-        $this->clearImapErrors();
+        try {
+            $query = $folder->query();
+            if ($value === null) {
+                $query->where($field);
+            } else {
+                $query->where($field, $value);
+            }
 
-        $uids = imap_search($connection, $criteria, SE_UID, 'UTF-8');
-
-        if ($uids === false) {
-            $this->clearImapErrors();
-            $uids = imap_search($connection, $criteria, SE_UID);
-        }
-
-        if (! is_array($uids)) {
+            $uids = $query->search();
+        } catch (Throwable) {
             return [];
         }
 
-        return array_map('intval', $uids);
+        return array_values(array_map('intval', $uids->all()));
     }
 
     /**
@@ -1205,28 +1129,61 @@ class MailMailboxService
         return filter_var($value, FILTER_VALIDATE_EMAIL) ? $value : $value;
     }
 
-    /**
-     * @return resource|Connection
-     */
-    protected function openMailbox(string $mailbox, string $email, string $password)
+    protected function openMailbox(array $config, string $email, string $password): Client
     {
         $lastError = null;
 
         foreach ($this->imapUsernames($email) as $username) {
-            imap_errors();
+            try {
+                $client = $this->makeImapClient($config, $username, $password);
+                $client->connect();
 
-            $connection = @imap_open($mailbox, $username, $password, 0, 1, [
-                'DISABLE_AUTHENTICATOR' => 'GSSAPI',
-            ]);
-
-            if ($connection !== false) {
-                return $connection;
+                return $client;
+            } catch (Throwable $exception) {
+                $lastError = $exception->getMessage() ?: $lastError;
             }
-
-            $lastError = imap_last_error() ?: $lastError;
         }
 
         throw new RuntimeException($lastError ?: 'Could not connect to mail server. Check your mailbox password.');
+    }
+
+    /**
+     * @param  array{host: string, port: int, encryption: string|null}  $config
+     */
+    protected function makeImapClient(array $config, string $username, string $password): Client
+    {
+        $encryption = match (strtolower((string) ($config['encryption'] ?? 'ssl'))) {
+            'ssl' => 'ssl',
+            'tls' => 'starttls',
+            default => false,
+        };
+
+        $manager = new ClientManager([
+            'options' => [
+                'fetch' => IMAP::FT_PEEK,
+                'sequence' => IMAP::ST_UID,
+                'rfc822' => false,
+                'open' => [
+                    'DISABLE_AUTHENTICATOR' => 'GSSAPI',
+                ],
+            ],
+            'security' => [
+                'detect_spoofing' => false,
+                'detect_spoofing_exception' => false,
+            ],
+        ]);
+
+        return $manager->make([
+            'host' => $config['host'],
+            'port' => (int) $config['port'],
+            'encryption' => $encryption,
+            'validate_cert' => false,
+            'username' => $username,
+            'password' => $password,
+            'protocol' => 'imap',
+            'authentication' => null,
+            'timeout' => 30,
+        ]);
     }
 
     /**
@@ -1273,21 +1230,27 @@ class MailMailboxService
     protected array $folderMapCache = [];
 
     /**
-     * @param  array{host: string, port: int, encryption: string|null}  $config
      * @return array<string, string>
      */
-    protected function discoverFolderMapFromConnection($connection, array $config): array
+    protected function discoverFolderMapFromClient(Client $client): array
     {
-        $refMailbox = $this->mailboxString($config, '');
-        $mailboxes = @imap_list($connection, $refMailbox, '*') ?: [];
+        try {
+            $mailboxes = $client->getFolders(false);
+        } catch (Throwable) {
+            $mailboxes = [];
+        }
 
         $names = [];
-        foreach ($mailboxes as $mailboxPath) {
-            $folder = $this->folderNameFromMailboxPath($mailboxPath, $refMailbox);
-            if ($folder !== '') {
-                $names[] = $folder;
+        foreach ($mailboxes as $mailbox) {
+            foreach ([$mailbox->full_name ?? '', $mailbox->path ?? '', $mailbox->name ?? ''] as $name) {
+                $name = trim((string) $name);
+                if ($name !== '') {
+                    $names[] = $name;
+                }
             }
         }
+
+        $names = array_values(array_unique($names));
 
         return [
             self::FOLDER_INBOX => 'INBOX',
@@ -1296,6 +1259,73 @@ class MailMailboxService
             self::FOLDER_SPAM => $this->matchFolder($names, ['junk e-mail', 'junk email', 'junk', 'spam', 'bulk mail']) ?? 'Junk',
             self::FOLDER_ARCHIVE => $this->matchFolder($names, ['archive', 'archived']) ?? 'Archive',
         ];
+    }
+
+    protected function resolveImapFolder(Client $client, string $imapFolder, string $logicalFolder, bool $create = false): Folder
+    {
+        $folder = $this->findImapFolder($client, $imapFolder);
+
+        if ($folder) {
+            return $folder;
+        }
+
+        if ($create) {
+            try {
+                $folder = $client->createFolder($imapFolder);
+            } catch (Throwable) {
+                $folder = $this->findImapFolder($client, $imapFolder);
+            }
+
+            if ($folder) {
+                return $folder;
+            }
+        }
+
+        throw new RuntimeException("Could not open folder \"{$logicalFolder}\".");
+    }
+
+    protected function findImapFolder(Client $client, string $imapFolder): ?Folder
+    {
+        try {
+            return $client->getFolderByPath($imapFolder, false, true)
+                ?? $client->getFolderByName($imapFolder, true)
+                ?? $client->getFolder($imapFolder);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    protected function folderUnseenCount(Folder $folder): int
+    {
+        try {
+            $status = $folder->status();
+        } catch (Throwable) {
+            return 0;
+        }
+
+        return (int) ($status['unseen'] ?? $status['UNSEEN'] ?? 0);
+    }
+
+    protected function folderUidNext(Folder $folder): int
+    {
+        try {
+            $status = $folder->status();
+        } catch (Throwable) {
+            return 0;
+        }
+
+        return (int) ($status['uidnext'] ?? $status['UIDNEXT'] ?? 0);
+    }
+
+    protected function getImapMessage(Folder $folder, int $uid): Message
+    {
+        try {
+            return $folder->query()->getMessageByUid($uid);
+        } catch (MessageNotFoundException) {
+            throw new RuntimeException('Message not found.');
+        } catch (Throwable $exception) {
+            throw new RuntimeException($exception->getMessage() ?: 'Message not found.', 0, $exception);
+        }
     }
 
     /**
@@ -1338,171 +1368,141 @@ class MailMailboxService
         return (string) end($parts);
     }
 
-    protected function folderNameFromMailboxPath(string $mailboxPath, string $refMailbox): string
-    {
-        if (str_starts_with($mailboxPath, $refMailbox)) {
-            return substr($mailboxPath, strlen($refMailbox));
-        }
-
-        if (preg_match('/\}(.+)$/', $mailboxPath, $matches)) {
-            return $matches[1];
-        }
-
-        return $mailboxPath;
-    }
-
-    protected function clearImapErrors(): void
-    {
-        $errors = imap_errors();
-        if (is_array($errors)) {
-            imap_errors();
-        }
-
-        imap_alerts();
-    }
-
-    /**
-     * @param  array{host: string, port: int, encryption: string|null}  $config
-     */
-    protected function mailboxString(array $config, string $folder = 'INBOX'): string
-    {
-        $flags = '/imap';
-
-        if ($config['encryption'] === 'ssl') {
-            $flags .= '/ssl';
-        } elseif ($config['encryption'] === 'tls') {
-            $flags .= '/tls';
-        }
-
-        $flags .= '/novalidate-cert';
-
-        return '{'.$config['host'].':'.$config['port'].$flags.'}'.$folder;
-    }
-
     protected function decodeHeader(?string $value): string
     {
         if ($value === null || $value === '') {
             return '';
         }
 
-        $decoded = function_exists('imap_utf8') ? imap_utf8($value) : $value;
+        $decoded = $value;
+        if (function_exists('iconv_mime_decode')) {
+            $decoded = @iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8') ?: $value;
+        } elseif (function_exists('mb_decode_mimeheader')) {
+            $decoded = mb_decode_mimeheader($value);
+        }
 
         return $this->ensureUtf8(trim($decoded !== '' ? $decoded : $value));
     }
 
-    /**
-     * @param  resource|Connection  $connection
-     */
-    protected function messageHasAttachments($connection, int $uid): bool
+    protected function messageSubject(Message $message): string
     {
-        $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
+        $subject = $this->attributeString($message->getSubject());
 
-        return $this->structureHasAttachments($structure);
+        return $subject !== '' ? $subject : '(No subject)';
     }
 
-    protected function structureHasAttachments($structure): bool
+    protected function messageDate(Message $message): ?string
     {
-        if (! $structure) {
-            return false;
+        $date = $message->getDate();
+
+        if (! $date) {
+            return null;
         }
 
-        if (isset($structure->parts) && is_array($structure->parts)) {
-            foreach ($structure->parts as $part) {
-                if ($this->partIsAttachment($part)) {
-                    return true;
-                }
+        try {
+            return $date->toDate()->toRfc2822String();
+        } catch (Throwable) {
+            $value = $this->attributeString($date);
 
-                if (isset($part->parts) && $this->structureHasAttachments($part)) {
-                    return true;
+            return $value !== '' ? $value : null;
+        }
+    }
+
+    protected function attributeString(mixed $attribute): string
+    {
+        if ($attribute === null) {
+            return '';
+        }
+
+        if ($attribute instanceof Attribute) {
+            return $this->decodeHeader(trim((string) $attribute));
+        }
+
+        return $this->decodeHeader(trim((string) $attribute));
+    }
+
+    protected function formatAddresses(mixed $attribute): string
+    {
+        if ($attribute === null) {
+            return '';
+        }
+
+        if ($attribute instanceof Attribute) {
+            $parts = [];
+            foreach ($attribute->all() as $address) {
+                $formatted = trim((string) $address);
+                if ($formatted !== '') {
+                    $parts[] = $formatted;
                 }
+            }
+
+            return $this->decodeHeader(implode(', ', $parts));
+        }
+
+        return $this->decodeHeader(trim((string) $attribute));
+    }
+
+    /**
+     * @return array<int, Attachment>
+     */
+    protected function fileAttachments(Message $message): array
+    {
+        $files = [];
+
+        foreach ($message->getAttachments() as $attachment) {
+            if (! $this->attachmentIsFile($attachment)) {
+                continue;
+            }
+
+            $files[] = $attachment;
+        }
+
+        return $files;
+    }
+
+    protected function attachmentIsFile(Attachment $attachment): bool
+    {
+        return strtolower((string) $attachment->getDisposition()) === 'attachment';
+    }
+
+    protected function attachmentPartId(Attachment $attachment): string
+    {
+        $part = (string) $attachment->getPartNumber();
+
+        return $part !== '' ? $part : '1';
+    }
+
+    protected function findFileAttachment(Message $message, string $partNumber): ?Attachment
+    {
+        foreach ($this->fileAttachments($message) as $attachment) {
+            if ($this->attachmentPartId($attachment) === $partNumber) {
+                return $attachment;
             }
         }
 
-        return $this->partIsAttachment($structure);
-    }
-
-    protected function partIsAttachment($part): bool
-    {
-        if (! $part) {
-            return false;
-        }
-
-        // Only real file attachments; inline CID images are embedded in the body.
-        return strtolower((string) ($part->disposition ?? '')) === 'attachment';
+        return null;
     }
 
     /**
      * @return array<int, array{part: string, filename: string, mime: string, size: int|null}>
      */
-    protected function collectAttachments($structure, string $prefix = ''): array
+    protected function collectAttachments(Message $message): array
     {
-        if (! $structure) {
-            return [];
-        }
-
         $attachments = [];
 
-        if (isset($structure->parts) && is_array($structure->parts)) {
-            foreach ($structure->parts as $index => $part) {
-                $partNumber = $prefix === '' ? (string) ($index + 1) : $prefix.'.'.($index + 1);
+        foreach ($this->fileAttachments($message) as $attachment) {
+            $partNumber = $this->attachmentPartId($attachment);
+            $filename = $attachment->getName() ?: $attachment->filename ?: 'attachment-'.$partNumber;
 
-                if (isset($part->parts) && is_array($part->parts)) {
-                    $attachments = array_merge($attachments, $this->collectAttachments($part, $partNumber));
-
-                    continue;
-                }
-
-                if ($this->partIsAttachment($part)) {
-                    $attachments[] = $this->attachmentMeta($part, $partNumber);
-                }
-            }
-
-            return $attachments;
-        }
-
-        if ($this->partIsAttachment($structure)) {
-            $attachments[] = $this->attachmentMeta($structure, $prefix !== '' ? $prefix : '1');
+            $attachments[] = [
+                'part' => $partNumber,
+                'filename' => $this->decodeHeader($filename),
+                'mime' => $attachment->getContentType() ?: 'application/octet-stream',
+                'size' => $attachment->getSize() !== null ? (int) $attachment->getSize() : null,
+            ];
         }
 
         return $attachments;
-    }
-
-    /**
-     * @return array{part: string, filename: string, mime: string, size: int|null}
-     */
-    protected function attachmentMeta($part, string $partNumber): array
-    {
-        $filename = $this->partFilename($part) ?: 'attachment-'.$partNumber;
-
-        return [
-            'part' => $partNumber,
-            'filename' => $this->decodeHeader($filename),
-            'mime' => $this->partMimeType($part),
-            'size' => isset($part->bytes) ? (int) $part->bytes : null,
-        ];
-    }
-
-    protected function partFilename($part): ?string
-    {
-        foreach (['dparameters', 'parameters'] as $key) {
-            if (! isset($part->{$key}) || ! is_array($part->{$key})) {
-                continue;
-            }
-
-            foreach ($part->{$key} as $param) {
-                $attribute = strtolower((string) ($param->attribute ?? ''));
-
-                if (in_array($attribute, ['filename', 'name'], true)) {
-                    $value = trim((string) ($param->value ?? ''));
-
-                    if ($value !== '') {
-                        return $value;
-                    }
-                }
-            }
-        }
-
-        return null;
     }
 
     protected function normalizeAttachmentPartNumber(string $partNumber): string
@@ -1519,25 +1519,13 @@ class MailMailboxService
     /**
      * @return array{html: string|null, text: string|null, html_text: string}
      */
-    protected function extractMessageContent($connection, int $uid, $structure): array
+    protected function extractMessageContent(Message $message): array
     {
-        if (! $structure) {
-            $raw = imap_body($connection, (string) $uid, FT_UID);
-            $text = $this->normalizeBody(is_string($raw) ? $this->ensureUtf8($raw) : '');
-
-            return [
-                'html' => null,
-                'text' => $text,
-                'html_text' => '',
-            ];
-        }
-
-        $walked = $this->walkStructureParts($connection, $uid, $structure);
-        $html = $walked['html'];
-        $text = $walked['text'];
+        $html = $message->hasHTMLBody() ? $message->getHTMLBody() : null;
+        $text = $message->hasTextBody() ? $message->getTextBody() : null;
 
         if ($html !== null && $html !== '') {
-            $html = $this->embedInlineImages($connection, $uid, $html, $walked['inline_parts']);
+            $html = $this->embedInlineImages($message, $html);
             $html = $this->sanitizeHtml($html);
         }
 
@@ -1556,91 +1544,20 @@ class MailMailboxService
         ];
     }
 
-    /**
-     * @return array{html: ?string, text: ?string, inline_parts: array<string, string>}
-     */
-    protected function walkStructureParts($connection, int $uid, $structure, string $prefix = ''): array
+    protected function embedInlineImages(Message $message, string $html): string
     {
-        $html = null;
-        $text = null;
-        $inlineParts = [];
-
-        if (isset($structure->parts) && is_array($structure->parts)) {
-            foreach ($structure->parts as $index => $part) {
-                $partNumber = $prefix === '' ? (string) ($index + 1) : $prefix.'.'.($index + 1);
-
-                if (isset($part->parts) && is_array($part->parts)) {
-                    $nested = $this->walkStructureParts($connection, $uid, $part, $partNumber);
-                    $html ??= $nested['html'];
-                    $text ??= $nested['text'];
-                    $inlineParts = array_merge($inlineParts, $nested['inline_parts']);
-
-                    continue;
-                }
-
-                $type = (int) ($part->type ?? TYPETEXT);
-                $subtype = strtolower((string) ($part->subtype ?? ''));
-
-                if ($type === TYPETEXT && $subtype === 'plain' && $text === null) {
-                    $text = $this->fetchPartBody($connection, $uid, $partNumber, $part);
-                }
-
-                if ($type === TYPETEXT && $subtype === 'html' && $html === null) {
-                    $html = $this->fetchPartBody($connection, $uid, $partNumber, $part);
-                }
-
-                if ($type === TYPEIMAGE && isset($part->id)) {
-                    $cid = $this->normalizeContentId((string) $part->id);
-                    if ($cid !== '') {
-                        $inlineParts[$cid] = $partNumber;
-                    }
-                }
-            }
-
-            return [
-                'html' => $html,
-                'text' => $text,
-                'inline_parts' => $inlineParts,
-            ];
-        }
-
-        $type = (int) ($structure->type ?? TYPETEXT);
-        $subtype = strtolower((string) ($structure->subtype ?? ''));
-        $partNumber = $prefix !== '' ? $prefix : '1';
-
-        if ($type === TYPETEXT && $subtype === 'plain') {
-            $text = $this->fetchPartBody($connection, $uid, $partNumber, $structure);
-        } elseif ($type === TYPETEXT && $subtype === 'html') {
-            $html = $this->fetchPartBody($connection, $uid, $partNumber, $structure);
-        } else {
-            $raw = imap_body($connection, (string) $uid, FT_UID);
-            $text = $this->normalizeBody($this->decodePart(is_string($raw) ? $raw : '', $structure));
-        }
-
-        return [
-            'html' => $html,
-            'text' => $text,
-            'inline_parts' => $inlineParts,
-        ];
-    }
-
-    /**
-     * @param  array<string, string>  $inlineParts
-     */
-    protected function embedInlineImages($connection, int $uid, string $html, array $inlineParts): string
-    {
-        foreach ($inlineParts as $cid => $partNumber) {
-            $structure = imap_fetchstructure($connection, (string) $uid, FT_UID);
-            $part = $this->findPartByNumber($structure, $partNumber);
-
-            if (! $part) {
+        foreach ($message->getAttachments() as $attachment) {
+            if ($this->attachmentIsFile($attachment)) {
                 continue;
             }
 
-            $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
-            $decoded = $this->decodePart(is_string($raw) ? $raw : '', $part, convertCharset: false);
-            $mime = $this->partMimeType($part);
-            $dataUri = 'data:'.$mime.';base64,'.base64_encode($decoded);
+            $cid = $this->normalizeContentId((string) ($attachment->id ?: ''));
+            if ($cid === '') {
+                continue;
+            }
+
+            $mime = $attachment->getContentType() ?: 'application/octet-stream';
+            $dataUri = 'data:'.$mime.';base64,'.base64_encode($attachment->getContent());
 
             $patterns = [
                 '/cid:'.preg_quote($cid, '/').'/i',
@@ -1659,47 +1576,9 @@ class MailMailboxService
         return $html;
     }
 
-    protected function findPartByNumber($structure, string $partNumber)
-    {
-        if (! str_contains($partNumber, '.')) {
-            $index = (int) $partNumber - 1;
-
-            return $structure->parts[$index] ?? $structure;
-        }
-
-        $segments = explode('.', $partNumber);
-        $current = $structure;
-
-        foreach ($segments as $segment) {
-            $index = (int) $segment - 1;
-            if (! isset($current->parts[$index])) {
-                return null;
-            }
-            $current = $current->parts[$index];
-        }
-
-        return $current;
-    }
-
     protected function normalizeContentId(string $contentId): string
     {
         return trim($contentId, " \t\n\r\0\x0B<>");
-    }
-
-    protected function partMimeType($part): string
-    {
-        $typeMap = [
-            TYPETEXT => 'text',
-            TYPEIMAGE => 'image',
-            TYPEAPPLICATION => 'application',
-            TYPEAUDIO => 'audio',
-            TYPEVIDEO => 'video',
-        ];
-
-        $type = $typeMap[(int) ($part->type ?? TYPETEXT)] ?? 'application';
-        $subtype = strtolower((string) ($part->subtype ?? 'octet-stream'));
-
-        return $type.'/'.$subtype;
     }
 
     protected function sanitizeHtml(string $html): string
@@ -1710,28 +1589,6 @@ class MailMailboxService
         $html = preg_replace('/javascript:/i', '', $html) ?? $html;
 
         return $html;
-    }
-
-    /**
-     * @param  resource|Connection  $connection
-     *
-     * @deprecated Use extractMessageContent instead.
-     */
-    protected function extractBody($connection, int $uid, $structure): string
-    {
-        $content = $this->extractMessageContent($connection, $uid, $structure);
-
-        return $content['text'] ?: $content['html_text'];
-    }
-
-    /**
-     * @param  resource|Connection  $connection
-     */
-    protected function fetchPartBody($connection, int $uid, string $partNumber, $part): string
-    {
-        $raw = imap_fetchbody($connection, (string) $uid, $partNumber, FT_UID);
-
-        return $this->decodePart(is_string($raw) ? $raw : '', $part);
     }
 
     protected function decodePart(string $raw, $part, bool $convertCharset = true): string

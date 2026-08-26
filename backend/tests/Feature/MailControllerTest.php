@@ -64,14 +64,12 @@ class MailControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $imapReady = function_exists('imap_open');
-
         $this->withToken($token)
             ->getJson('/api/mail/status')
             ->assertOk()
             ->assertJson([
-                'configured' => $imapReady,
-                'reachable' => $imapReady,
+                'configured' => true,
+                'reachable' => true,
                 'connected' => false,
             ]);
     }
@@ -91,14 +89,12 @@ class MailControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $imapReady = function_exists('imap_open');
-
         $this->withToken($token)
             ->getJson('/api/mail/status')
             ->assertOk()
             ->assertJson([
-                'configured' => $imapReady,
-                'reachable' => $imapReady,
+                'configured' => true,
+                'reachable' => true,
             ]);
     }
 
@@ -305,5 +301,13 @@ class MailControllerTest extends TestCase
 
         $this->assertNotNull($row);
         $this->assertSame(2, (int) $row->use_count);
+    }
+
+    public function test_imap_is_enabled_without_php_imap_extension(): void
+    {
+        config(['mail.imap.enabled' => true]);
+
+        $this->assertTrue(app(MailMailboxService::class)->isImapEnabled());
+        $this->assertTrue(class_exists(\Webklex\PHPIMAP\Client::class));
     }
 }

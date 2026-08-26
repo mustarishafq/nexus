@@ -120,9 +120,9 @@ return [
     | In-app IMAP mailbox
     |--------------------------------------------------------------------------
     |
-    | Background inbox-push jobs need PHP ext-imap. The in-app Email page
-    | still uses IMAP when the extension is loaded.
-    | Set MAIL_IMAP_ENABLED=false to skip those jobs without hiding the inbox.
+    | Background inbox-push jobs and the in-app Email page talk IMAP over a
+    | pure-PHP client (no ext-imap). Set MAIL_IMAP_ENABLED=false to skip those
+    | jobs without hiding the inbox.
     |
     */
 

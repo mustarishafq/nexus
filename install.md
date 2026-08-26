@@ -24,7 +24,6 @@ Copy this block for every production deploy:
 [ ] Confirm frontend build env VITE_API_BASE_URL (§5)
 [ ] Cron: * * * * * php artisan schedule:run (§8)
 [ ] Queue worker: --queue=mail-inbox,default (§9)
-[ ] PHP IMAP extension enabled (§3)
 [ ] Web Push VAPID keys set (§10)
 [ ] Admin → Email settings: SMTP + IMAP host (§11)
 [ ] Post-deploy smoke tests (§13)
@@ -63,24 +62,8 @@ Copy this block for every production deploy:
   - `ctype`
   - `json`
   - `fileinfo`
-  - **`imap`** — required for in-app Email (staff mailboxes)
 
-Install IMAP (examples):
-
-```bash
-# Ubuntu/Debian
-sudo apt install php8.2-imap && sudo systemctl restart php8.2-fpm
-
-# macOS (Homebrew PHP)
-pecl install imap
-# or use a PHP build that includes --with-imap
-```
-
-Verify:
-
-```bash
-php -m | grep imap
-```
+In-app Email uses a pure-PHP IMAP client (`webklex/php-imap`). The PHP `imap` extension is **not** required (PHP 8.4+ no longer ships it).
 
 ### Node.js (frontend build)
 
@@ -452,7 +435,7 @@ sudo systemctl reload php8.2-fpm   # or your PHP service
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | Email page 422 on connect | Wrong IMAP host / DNS | Admin IMAP host → real server (e.g. `harpy.awedns.com`) |
-| `PHP IMAP extension is not installed` | Missing `ext-imap` | Install php-imap, restart PHP-FPM |
+| Email connect fails after PHP 8.4 upgrade | Deploy this release (`webklex/php-imap`; no `ext-imap`) | `composer install` on the server, then retry |
 | No push when app closed | Queue not processing `mail-inbox` | Worker `--queue=mail-inbox,default` |
 | No push at all | Missing VAPID keys or HTTPS | Set `WEB_PUSH_*`, use HTTPS |
 | Mail push never runs | Cron missing | Add `schedule:run` crontab |
