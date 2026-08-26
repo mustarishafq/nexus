@@ -4,6 +4,13 @@ import { formatPointsDelta } from './quizAnalyticsFormat.js';
 export const QUIZ_BONUS_POINTS = 500;
 export const SCORING_POWER_UP_TYPES = ['double', 'bonus'];
 
+export const POWER_UP_GUIDE = [
+	{ type: 'eraser', label: 'Eraser', blurb: 'Removes 2 wrong answers.' },
+	{ type: 'double', label: 'Double', blurb: '2× if correct. Lose points if wrong.' },
+	{ type: 'streak_freeze', label: 'Shield', blurb: 'Keeps your streak if you miss.' },
+	{ type: 'bonus', label: 'Bonus', blurb: '+500 extra if you get it right.' },
+];
+
 export function isScoringPowerUp(type) {
 	return type === 'double' || type === 'bonus';
 }

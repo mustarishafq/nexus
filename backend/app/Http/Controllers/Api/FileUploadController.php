@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
 use App\Support\PublicStorageUrl;
 use App\Support\PermissionCatalog;
+use App\Support\QuizQuestionImageStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -56,6 +57,10 @@ class FileUploadController extends Controller
                         ->max(10240),
                 ],
             ]);
+        } elseif ($folder === QuizQuestionImageStorage::FOLDER) {
+            $request->validate([
+                'file' => ['required', 'file', 'max:1024', 'image', 'mimes:jpeg,jpg,png,webp'],
+            ]);
         } elseif (in_array($folder, self::IMAGE_FOLDERS, true)) {
             $request->validate([
                 'file' => ['required', 'file', 'max:10240', 'image', 'mimes:jpeg,jpg,png,webp,gif'],
@@ -78,5 +83,43 @@ class FileUploadController extends Controller
             'media_type' => str_starts_with($mime, 'video/') ? 'video' : 'image',
             'mime_type' => $mime,
         ], 201);
+    }
+
+    public function show(Request $request)
+    {
+        if (! $this->authenticatedUser($request)) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'file_url' => ['required', 'string', 'max:2048'],
+        ]);
+
+        $path = QuizQuestionImageStorage::relativePath($validated['file_url']);
+        if (! $path) {
+            return response()->json(['message' => 'Only quiz question images can be loaded this way.'], 422);
+        }
+
+        if (! Storage::disk('public')->exists($path)) {
+            return response()->json(['message' => 'Image not found.'], 404);
+        }
+
+        return Storage::disk('public')->response($path);
+    }
+
+    public function destroy(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'file_url' => ['required', 'string', 'max:2048'],
+        ]);
+
+        $path = QuizQuestionImageStorage::relativePath($validated['file_url']);
+        if (! $path) {
+            return response()->json(['message' => 'Only quiz question images can be removed this way.'], 422);
+        }
+
+        QuizQuestionImageStorage::delete($validated['file_url']);
+
+        return response()->json(['deleted' => true]);
     }
 }

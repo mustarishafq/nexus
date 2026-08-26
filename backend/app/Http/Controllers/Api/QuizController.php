@@ -12,6 +12,7 @@ use App\Services\QuizAnalyticsService;
 use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
 use App\Support\PermissionCatalog;
+use App\Support\QuizQuestionImageStorage;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -181,6 +182,10 @@ class QuizController extends Controller
         $questionPayload = $validated['questions'] ?? $this->questionPayloadFromQuiz($quiz);
         $this->assertPublishableQuestionSet($questionPayload);
 
+        $oldImageUrls = array_key_exists('questions', $validated)
+            ? $quiz->questions()->pluck('image_url')->all()
+            : [];
+
         DB::transaction(function () use ($quiz, $validated) {
             $quiz->fill(collect($validated)->only(['title', 'description', 'status', 'bgm_theme', 'sfx_pack'])->all());
             $nextStatus = $validated['status'] ?? $quiz->status;
@@ -195,6 +200,11 @@ class QuizController extends Controller
                 $this->syncQuestions($quiz, $validated['questions']);
             }
         });
+
+        if ($oldImageUrls !== []) {
+            $kept = $quiz->fresh()->questions()->pluck('image_url')->all();
+            QuizQuestionImageStorage::deleteUnused($oldImageUrls, $kept);
+        }
 
         return response()->json($quiz->fresh()->load(['questions.options', 'owner:id,name,full_name,email']));
     }
@@ -211,6 +221,7 @@ class QuizController extends Controller
         }
 
         $blocked = false;
+        $imageUrls = $quiz->questions()->pluck('image_url')->all();
         DB::transaction(function () use ($quiz, &$blocked) {
             $quiz->sessions()->lockForUpdate()->get();
 
@@ -228,6 +239,8 @@ class QuizController extends Controller
                 'message' => 'This quiz cannot be deleted while a live game is in progress.',
             ], 422);
         }
+
+        QuizQuestionImageStorage::deleteUnused($imageUrls, []);
 
         return response()->json(['message' => 'Deleted']);
     }
@@ -357,6 +370,8 @@ class QuizController extends Controller
             $this->projectedQuestionPayloadAfterUpdate($quiz, $question, $validated),
         );
 
+        $previousImage = $question->image_url;
+
         DB::transaction(function () use ($question, $validated) {
             $question->fill(collect($validated)->only([
                 'prompt', 'time_limit_seconds', 'points_base', 'sort_order', 'question_type',
@@ -382,6 +397,10 @@ class QuizController extends Controller
             }
         });
 
+        if (array_key_exists('image_url', $validated)) {
+            QuizQuestionImageStorage::deleteUnused([$previousImage], [$question->fresh()->image_url]);
+        }
+
         return response()->json($question->fresh()->load('options'));
     }
 
@@ -402,8 +421,10 @@ class QuizController extends Controller
             ], 422);
         }
 
+        $imageUrl = $question->image_url;
         $question->options()->delete();
         $question->delete();
+        QuizQuestionImageStorage::delete($imageUrl);
 
         return response()->json(['message' => 'Deleted']);
     }

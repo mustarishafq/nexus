@@ -6,6 +6,7 @@ use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Models\QuizSession;
+use App\Models\QuizSessionAnswer;
 use App\Models\User;
 use App\Support\ApiTokenAuth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,5 +165,257 @@ class QuizCountdownTest extends TestCase
         $this->withToken($this->token($player))
             ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $optionId])
             ->assertOk();
+    }
+
+    public function test_async_each_question_gets_a_fresh_timer(): void
+    {
+        config(['quiz.first_question_countdown_seconds' => 0]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(2, 20);
+
+        $firstEndsAt = $session['question_ends_at'];
+        $q1Id = $session['current_question_id'];
+        $this->assertSame(1, $session['quiz']['current_question_number']);
+
+        $this->travel(5)->seconds();
+
+        $correctId = QuizQuestion::with('options')->findOrFail($q1Id)
+            ->options->firstWhere('is_correct', true)->id;
+
+        $after = $this->withToken($this->token($player))
+            ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $correctId])
+            ->assertOk()
+            ->json('session');
+
+        $this->assertSame('question', $after['status']);
+        $this->assertSame(2, $after['quiz']['current_question_number']);
+        $this->assertNotSame($q1Id, $after['current_question_id']);
+        $this->assertNotSame($firstEndsAt, $after['question_ends_at']);
+
+        $row = QuizSession::findOrFail($session['id']);
+        $this->assertEquals(20, $row->question_started_at->diffInSeconds($row->question_ends_at));
+        $this->assertLessThan(1, $row->question_started_at->diffInSeconds(now()));
+    }
+
+    public function test_async_refresh_does_not_reset_question_timer(): void
+    {
+        config(['quiz.first_question_countdown_seconds' => 0]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(1, 20);
+
+        $endsAt = $session['question_ends_at'];
+        $this->travel(5)->seconds();
+
+        $later = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame($endsAt, $later['question_ends_at']);
+        $this->assertSame($session['current_question_id'], $later['current_question_id']);
+        $this->assertSame('question', $later['status']);
+        $this->assertTrue($later['answering_open']);
+    }
+
+    public function test_async_timeout_counts_as_miss_and_cannot_be_answered_again(): void
+    {
+        config(['quiz.first_question_countdown_seconds' => 0]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(2, 20);
+        $q1Id = $session['current_question_id'];
+        $q1OptionId = QuizQuestion::with('options')->findOrFail($q1Id)
+            ->options->firstWhere('is_correct', true)->id;
+
+        $this->travel(21)->seconds();
+
+        $after = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('question', $after['status']);
+        $this->assertSame(2, $after['quiz']['current_question_number']);
+        $this->assertNotSame($q1Id, $after['current_question_id']);
+        $this->assertDatabaseHas('quiz_session_answers', [
+            'quiz_session_id' => $session['id'],
+            'quiz_question_id' => $q1Id,
+            'user_id' => $player->id,
+            'quiz_option_id' => null,
+            'is_correct' => 0,
+        ]);
+
+        $this->withToken($this->token($player))
+            ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $q1OptionId])
+            ->assertStatus(422);
+
+        $row = QuizSession::findOrFail($session['id']);
+        $this->assertEquals(20, $row->question_started_at->diffInSeconds($row->question_ends_at));
+        $this->assertLessThan(1, $row->question_started_at->diffInSeconds(now()));
+    }
+
+    public function test_async_timeout_does_not_skip_later_questions(): void
+    {
+        config(['quiz.first_question_countdown_seconds' => 0]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(3, 20);
+        $q1Id = $session['current_question_id'];
+
+        $this->travel(100)->seconds();
+
+        $after = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('question', $after['status']);
+        $this->assertSame(2, $after['quiz']['current_question_number']);
+        $this->assertNotSame($q1Id, $after['current_question_id']);
+        $this->assertSame(1, QuizSessionAnswer::query()->where('quiz_session_id', $session['id'])->count());
+
+        $row = QuizSession::findOrFail($session['id']);
+        $this->assertEquals(20, $row->question_started_at->diffInSeconds($row->question_ends_at));
+        $this->assertTrue($row->question_started_at->gte(now()->subSecond()));
+    }
+
+    public function test_async_last_question_timeout_finishes_the_attempt(): void
+    {
+        config(['quiz.first_question_countdown_seconds' => 0]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(1, 20);
+        $optionId = QuizQuestion::with('options')->findOrFail($session['current_question_id'])
+            ->options->firstWhere('is_correct', true)->id;
+
+        $this->travel(21)->seconds();
+
+        $after = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('finished', $after['status']);
+        $this->assertDatabaseHas('quiz_session_answers', [
+            'quiz_session_id' => $session['id'],
+            'quiz_question_id' => $session['current_question_id'],
+            'quiz_option_id' => null,
+            'is_correct' => 0,
+        ]);
+
+        $this->withToken($this->token($player))
+            ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $optionId])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['session']);
+    }
+
+    public function test_live_refresh_does_not_reset_question_timer(): void
+    {
+        $ctx = $this->bootLive(1);
+        $started = $this->withToken($this->token($ctx['host']))
+            ->postJson("/api/quiz-sessions/{$ctx['sessionId']}/start")
+            ->assertOk()
+            ->json();
+
+        $this->travel(3)->seconds();
+        $open = $this->withToken($this->token($ctx['player']))
+            ->getJson("/api/quiz-sessions/{$ctx['sessionId']}")
+            ->assertOk()
+            ->json();
+        $this->assertTrue($open['answering_open']);
+        $endsAt = $open['question_ends_at'];
+
+        $this->travel(5)->seconds();
+        $later = $this->withToken($this->token($ctx['player']))
+            ->getJson("/api/quiz-sessions/{$ctx['sessionId']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame($endsAt, $later['question_ends_at']);
+        $this->assertSame('question', $later['status']);
+    }
+
+    public function test_async_feedback_delay_keeps_a_full_answering_window(): void
+    {
+        config([
+            'quiz.first_question_countdown_seconds' => 0,
+            'quiz.async_feedback_seconds' => 2,
+        ]);
+        $this->freezeTime();
+        [$player, $session] = $this->bootAsync(2, 25);
+
+        $q1Id = $session['current_question_id'];
+        $correctId = QuizQuestion::with('options')->findOrFail($q1Id)
+            ->options->firstWhere('is_correct', true)->id;
+
+        $after = $this->withToken($this->token($player))
+            ->postJson("/api/quiz-sessions/{$session['id']}/answer", ['option_id' => $correctId])
+            ->assertOk()
+            ->json('session');
+
+        $this->assertSame(2, $after['quiz']['current_question_number']);
+        $this->assertFalse($after['answering_open']);
+        $this->assertNotNull($after['server_now']);
+        $this->assertGreaterThanOrEqual(25000, $after['remaining_question_ms']);
+
+        $row = QuizSession::findOrFail($session['id']);
+        $this->assertSame(
+            now()->copy()->addSeconds(2)->toDateTimeString(),
+            $row->question_started_at->toDateTimeString()
+        );
+        $this->assertSame(
+            now()->copy()->addSeconds(27)->toDateTimeString(),
+            $row->question_ends_at->toDateTimeString()
+        );
+
+        $this->travel(2)->seconds();
+        $open = $this->withToken($this->token($player))
+            ->getJson("/api/quiz-sessions/{$session['id']}")
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($open['answering_open']);
+        $this->assertGreaterThanOrEqual(24000, $open['remaining_question_ms']);
+        $this->assertLessThanOrEqual(26000, $open['remaining_question_ms']);
+    }
+
+    /**
+     * @return array{0: User, 1: array<string, mixed>}
+     */
+    private function bootAsync(int $questionCount = 2, int $timeLimit = 20): array
+    {
+        $owner = User::factory()->create(['is_approved' => true]);
+        $player = User::factory()->create(['is_approved' => true]);
+        $quiz = Quiz::create([
+            'user_id' => $owner->id,
+            'title' => 'Published',
+            'status' => Quiz::STATUS_PUBLISHED,
+        ]);
+
+        for ($i = 0; $i < $questionCount; $i++) {
+            $question = QuizQuestion::create([
+                'quiz_id' => $quiz->id,
+                'prompt' => "Q{$i}",
+                'time_limit_seconds' => $timeLimit,
+                'points_base' => 1000,
+                'sort_order' => $i,
+            ]);
+            QuizOption::create([
+                'quiz_question_id' => $question->id,
+                'label' => 'Yes',
+                'is_correct' => true,
+                'sort_order' => 0,
+            ]);
+            QuizOption::create([
+                'quiz_question_id' => $question->id,
+                'label' => 'No',
+                'is_correct' => false,
+                'sort_order' => 1,
+            ]);
+        }
+
+        $session = $this->withToken($this->token($player))
+            ->postJson("/api/quizzes/{$quiz->id}/sessions", ['mode' => 'async'])
+            ->assertCreated()
+            ->json();
+
+        return [$player, $session];
     }
 }

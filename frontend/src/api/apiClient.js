@@ -550,6 +550,14 @@ export const db = {
 		async startSession(id, data = {}) {
 			return request(`/quizzes/${id}/sessions`, { method: 'POST', body: data });
 		},
+
+		async gameSettings() {
+			return request('/games/settings');
+		},
+
+		async updateGameSettings(data) {
+			return request('/games/settings', { method: 'PUT', body: data });
+		},
 	},
 
 	quizSessions: {
@@ -1248,6 +1256,54 @@ export const db = {
 				}
 
 				return payload;
+			},
+
+			async DownloadFile({ file_url } = {}) {
+				if (!file_url) {
+					throw new Error('DownloadFile requires a file_url parameter.');
+				}
+
+				const token = getAuthToken();
+				const params = new URLSearchParams({ file_url });
+				const response = await fetch(`${API_BASE_URL}/uploads?${params.toString()}`, {
+					method: 'GET',
+					credentials: 'include',
+					headers: {
+						Accept: 'image/*,application/octet-stream,application/json',
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
+					},
+				});
+
+				if (!response.ok) {
+					let payload = null;
+					try {
+						payload = await response.json();
+					} catch {
+						payload = null;
+					}
+					const error = new Error(payload?.message || 'Could not load image for recrop.');
+					error.status = response.status;
+					error.data = payload;
+					throw error;
+				}
+
+				const blob = await response.blob();
+				if (!blob || blob.size === 0) {
+					throw new Error('Could not load image for recrop.');
+				}
+
+				return blob;
+			},
+
+			async DeleteFile({ file_url } = {}) {
+				if (!file_url) {
+					throw new Error('DeleteFile requires a file_url parameter.');
+				}
+
+				return request('/uploads', {
+					method: 'DELETE',
+					body: { file_url },
+				});
 			},
 		},
 	},

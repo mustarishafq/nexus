@@ -51,6 +51,7 @@ use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\ProfileMediaController;
 use App\Http\Controllers\Api\PwaController;
 use App\Http\Controllers\Api\QuizController;
+use App\Http\Controllers\Api\QuizGameSettingsController;
 use App\Http\Controllers\Api\QuizSessionController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SystemEventController;
@@ -239,6 +240,8 @@ Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
 Route::put('/roles/{role}/permissions', [RoleController::class, 'syncPermissions']);
 
 Route::post('/uploads', [FileUploadController::class, 'store']);
+Route::get('/uploads', [FileUploadController::class, 'show']);
+Route::delete('/uploads', [FileUploadController::class, 'destroy']);
 Route::get('/push-subscriptions', function () {
     return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->index(request());
 });
@@ -280,6 +283,8 @@ Route::apiResource('system-events', SystemEventController::class);
 Route::post('broadcasting/auth', BroadcastAuthController::class);
 
 Route::get('quizzes', [QuizController::class, 'index']);
+Route::get('games/settings', [QuizGameSettingsController::class, 'show']);
+Route::put('games/settings', [QuizGameSettingsController::class, 'update']);
 Route::post('quizzes', [QuizController::class, 'store']);
 Route::get('quizzes/{quiz}', [QuizController::class, 'show']);
 Route::put('quizzes/{quiz}', [QuizController::class, 'update']);

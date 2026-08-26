@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isTrueFalseQuestion } from './quizQuestion.js';
 import {
+	POWER_UP_GUIDE,
 	QUIZ_BONUS_POINTS,
 	answerFeedbackText,
 	isPowerUpVisibleForQuestion,
@@ -59,10 +60,11 @@ test('true/false still hides eraser and keeps other power-ups', () => {
 	assert.equal(isPowerUpVisibleForQuestion('eraser', { question_type: 'multiple_choice' }), true);
 });
 
-test('power-up button copy stays short enough for mobile wrap', () => {
-	for (const type of ['eraser', 'double', 'streak_freeze', 'bonus']) {
-		assert.ok(powerUpHint(type).length <= 48, `${type} hint too long`);
-		assert.ok(powerUpArmedHint(type).length <= 24, `${type} armed hint too long`);
+test('power-up guide stays compact for the games page', () => {
+	assert.equal(POWER_UP_GUIDE.length, 4);
+	for (const item of POWER_UP_GUIDE) {
+		assert.ok(item.label.length <= 16, `${item.type} label too long`);
+		assert.ok(item.blurb.length <= 48, `${item.type} blurb too long`);
 	}
 });
 

@@ -23,6 +23,12 @@ export const POST_IMAGE_QUALITY = 0.92;
 export const POST_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const POST_IMAGE_SOURCE_MAX_BYTES = 40 * 1024 * 1024;
 
+/** Square quiz question images: sharp on play screens, small on disk. */
+export const QUIZ_QUESTION_IMAGE_MAX_EDGE = 1080;
+export const QUIZ_QUESTION_IMAGE_QUALITY = 0.82;
+export const QUIZ_QUESTION_IMAGE_MAX_BYTES = 1 * 1024 * 1024;
+export const QUIZ_QUESTION_IMAGE_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
+
 /**
  * Public disk files are served at /storage/..., never under /api.
  * Upload responses may be relative or absolute (APP_URL) — canonicalize the path.
@@ -261,24 +267,57 @@ export async function getCoverDisplayPreviewDataUrl(
   return outputCanvas.toDataURL('image/jpeg', 0.9);
 }
 
-function resolveNaturalPixelCrop(image, cropArea = {}) {
-  const { percentages, pixels } = cropArea;
+function isFiniteArea(area) {
+  if (!area || typeof area !== 'object') return false;
+  return ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(Number(area[key])));
+}
 
-  if (percentages) {
+/**
+ * Accept react-easy-crop output, a flat percentage box, or { percentages, pixels }.
+ * @returns {{ percentages: { x: number, y: number, width: number, height: number } | null, pixels: { x: number, y: number, width: number, height: number } | null } | null}
+ */
+export function toExportCropArea(cropArea) {
+  if (!cropArea || typeof cropArea !== 'object') return null;
+
+  if (cropArea.percentages || cropArea.pixels) {
+    const percentages = cropArea.percentages ? normalizeMediaCropArea(cropArea.percentages) : null;
+    const pixels = isFiniteArea(cropArea.pixels)
+      ? {
+          x: Number(cropArea.pixels.x),
+          y: Number(cropArea.pixels.y),
+          width: Number(cropArea.pixels.width),
+          height: Number(cropArea.pixels.height),
+        }
+      : null;
+    if (!percentages && !pixels) return null;
+    return { percentages, pixels };
+  }
+
+  const percentages = normalizeMediaCropArea(cropArea);
+  return percentages ? { percentages, pixels: null } : null;
+}
+
+function resolveNaturalPixelCrop(image, cropArea = {}) {
+  const normalized = toExportCropArea(cropArea);
+  if (!normalized) {
+    throw new Error('Crop area is required.');
+  }
+
+  if (normalized.pixels && normalized.pixels.width > 0 && normalized.pixels.height > 0) {
     return {
-      x: Math.round((percentages.x / 100) * image.naturalWidth),
-      y: Math.round((percentages.y / 100) * image.naturalHeight),
-      width: Math.round((percentages.width / 100) * image.naturalWidth),
-      height: Math.round((percentages.height / 100) * image.naturalHeight),
+      x: Math.round(normalized.pixels.x),
+      y: Math.round(normalized.pixels.y),
+      width: Math.round(normalized.pixels.width),
+      height: Math.round(normalized.pixels.height),
     };
   }
 
-  if (pixels) {
+  if (normalized.percentages) {
     return {
-      x: Math.round(pixels.x),
-      y: Math.round(pixels.y),
-      width: Math.round(pixels.width),
-      height: Math.round(pixels.height),
+      x: Math.round((normalized.percentages.x / 100) * image.naturalWidth),
+      y: Math.round((normalized.percentages.y / 100) * image.naturalHeight),
+      width: Math.round((normalized.percentages.width / 100) * image.naturalWidth),
+      height: Math.round((normalized.percentages.height / 100) * image.naturalHeight),
     };
   }
 
@@ -467,7 +506,9 @@ export async function getCroppedImageBlob(
 ) {
   const image = await createImage(imageSrc);
   const pixelCrop = resolveNaturalPixelCrop(image, cropArea);
-  const { outWidth, outHeight } = getOutputDimensions(pixelCrop.width, pixelCrop.height, {
+  const cropWidth = Math.max(1, pixelCrop.width);
+  const cropHeight = Math.max(1, pixelCrop.height);
+  const { outWidth, outHeight } = getOutputDimensions(cropWidth, cropHeight, {
     maxWidth,
     maxHeight,
   });
@@ -478,18 +519,31 @@ export async function getCroppedImageBlob(
   canvas.height = outHeight;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, outWidth, outHeight);
 
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    outWidth,
-    outHeight
-  );
+  const imageWidth = image.naturalWidth || image.width || 0;
+  const imageHeight = image.naturalHeight || image.height || 0;
+  const srcX = Math.max(0, pixelCrop.x);
+  const srcY = Math.max(0, pixelCrop.y);
+  const srcRight = Math.min(imageWidth, pixelCrop.x + cropWidth);
+  const srcBottom = Math.min(imageHeight, pixelCrop.y + cropHeight);
+  const srcWidth = srcRight - srcX;
+  const srcHeight = srcBottom - srcY;
+
+  if (srcWidth > 0 && srcHeight > 0) {
+    ctx.drawImage(
+      image,
+      srcX,
+      srcY,
+      srcWidth,
+      srcHeight,
+      ((srcX - pixelCrop.x) / cropWidth) * outWidth,
+      ((srcY - pixelCrop.y) / cropHeight) * outHeight,
+      (srcWidth / cropWidth) * outWidth,
+      (srcHeight / cropHeight) * outHeight,
+    );
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -503,5 +557,34 @@ export async function getCroppedImageBlob(
       mimeType,
       quality
     );
+  });
+}
+
+export async function exportQuizQuestionImage(imageSrc, cropArea) {
+  let quality = QUIZ_QUESTION_IMAGE_QUALITY;
+  let blob = await getCroppedImageBlob(imageSrc, cropArea, {
+    mimeType: 'image/jpeg',
+    quality,
+    maxWidth: QUIZ_QUESTION_IMAGE_MAX_EDGE,
+    maxHeight: QUIZ_QUESTION_IMAGE_MAX_EDGE,
+  });
+
+  while (blob.size > QUIZ_QUESTION_IMAGE_MAX_BYTES && quality > 0.5) {
+    quality = Math.max(0.5, quality - 0.08);
+    blob = await getCroppedImageBlob(imageSrc, cropArea, {
+      mimeType: 'image/jpeg',
+      quality,
+      maxWidth: QUIZ_QUESTION_IMAGE_MAX_EDGE,
+      maxHeight: QUIZ_QUESTION_IMAGE_MAX_EDGE,
+    });
+  }
+
+  if (blob.size > QUIZ_QUESTION_IMAGE_MAX_BYTES) {
+    throw new Error('Image is still too large after compression. Try a simpler photo.');
+  }
+
+  return new File([blob], 'quiz-question.jpg', {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
   });
 }

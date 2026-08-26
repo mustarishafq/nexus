@@ -58,7 +58,7 @@ test('question outcomes map to marks', () => {
 });
 
 test('power-up labels stay user-facing', () => {
-	assert.equal(powerUpLabel('streak_freeze'), 'Streak Shield');
+	assert.equal(powerUpLabel('streak_freeze'), 'Shield');
 	assert.equal(powerUpLabel('double'), 'Double');
 	assert.equal(powerUpLabel('bonus'), 'Bonus');
 	assert.equal(formatScore(8420), '8,420');
