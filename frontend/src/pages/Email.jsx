@@ -703,7 +703,7 @@ export default function Email() {
     [activeAccountId, folder, debouncedSearch, unreadOnly],
   );
 
-  const { data: inboxData, isLoading: inboxLoading, refetch: refetchInbox, isFetching } = useQuery({
+  const { data: inboxData, isLoading: inboxLoading, isError: inboxError, error: inboxErrorDetail, refetch: refetchInbox, isFetching } = useQuery({
     queryKey: inboxQueryKey,
     queryFn: () => db.mail.listMessages({
       limit: 50,
@@ -1079,6 +1079,19 @@ export default function Email() {
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
+            ) : inboxError ? (
+              <EmptyState
+                variant="compact"
+                icon={ShieldAlert}
+                title="Couldn't load mailbox"
+                description={inboxErrorDetail?.message || 'The mail server returned an error.'}
+                action={(
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchInbox()}>
+                    <RefreshCw className="h-4 w-4" />
+                    Try again
+                  </Button>
+                )}
+              />
             ) : messages.length === 0 ? (
               <EmptyState
                 variant="compact"

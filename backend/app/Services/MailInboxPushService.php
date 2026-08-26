@@ -36,7 +36,11 @@ class MailInboxPushService
             'skipped' => 0,
         ];
 
-        if (! $this->mailMailboxService->isServerConfigured() || ! $this->pushNotificationService->isEnabled()) {
+        if (
+            ! $this->mailMailboxService->isImapEnabled()
+            || ! $this->mailMailboxService->isServerConfigured()
+            || ! $this->pushNotificationService->isEnabled()
+        ) {
             return $summary;
         }
 
@@ -83,7 +87,11 @@ class MailInboxPushService
             'errors' => 0,
         ];
 
-        if (! $this->mailMailboxService->isServerConfigured() || ! $this->pushNotificationService->isEnabled()) {
+        if (
+            ! $this->mailMailboxService->isImapEnabled()
+            || ! $this->mailMailboxService->isServerConfigured()
+            || ! $this->pushNotificationService->isEnabled()
+        ) {
             return $summary;
         }
 

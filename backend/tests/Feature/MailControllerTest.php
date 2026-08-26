@@ -76,7 +76,7 @@ class MailControllerTest extends TestCase
             ]);
     }
 
-    public function test_mail_status_reports_unconfigured_when_imap_disabled(): void
+    public function test_mail_status_stays_configured_when_inbox_push_disabled(): void
     {
         config(['mail.imap.enabled' => false]);
 
@@ -91,12 +91,14 @@ class MailControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $imapReady = function_exists('imap_open');
+
         $this->withToken($token)
             ->getJson('/api/mail/status')
             ->assertOk()
             ->assertJson([
-                'configured' => false,
-                'reachable' => false,
+                'configured' => $imapReady,
+                'reachable' => $imapReady,
             ]);
     }
 

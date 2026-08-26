@@ -157,12 +157,8 @@ class MailMailboxService
 
     protected function ensureImapAvailable(): void
     {
-        if ($this->isImapEnabled()) {
+        if (function_exists('imap_open')) {
             return;
-        }
-
-        if (! config('mail.imap.enabled')) {
-            throw new RuntimeException('IMAP is disabled.');
         }
 
         throw new RuntimeException('PHP IMAP extension is not installed on the server.');
@@ -170,7 +166,7 @@ class MailMailboxService
 
     public function isServerConfigured(): bool
     {
-        if (! $this->isImapEnabled()) {
+        if (! function_exists('imap_open')) {
             return false;
         }
 
