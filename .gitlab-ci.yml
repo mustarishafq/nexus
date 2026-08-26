@@ -89,7 +89,7 @@ deploy:production:
        composer install --no-dev --optimize-autoloader --no-interaction &&
        php artisan migrate --force &&
        php artisan storage:link &&
-       php artisan config:cache
+       php artisan config:cache"
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
