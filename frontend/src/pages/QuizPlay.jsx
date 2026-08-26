@@ -22,25 +22,25 @@ import PageLoader from '@/components/PageLoader';
 import {
   AnswerButton, ScorePill, TimerRing, WaitingDots, QuestionTitle, QuestionMedia,
   GameStage, PodiumLeaderboard, GameActionButton, GameIconButton, FullscreenButton,
-  AnswerDistributionChart, QuestionCountdown, ExpEarnedBadge,
+  AnswerDistributionChart, QuestionCountdown, ExpEarnedBadge, QuestionProgress,
 } from '@/components/games/GameUi';
 import QuizAvatar from '@/components/games/QuizAvatar';
 import { cn } from '@/lib/utils';
 import { answerGridClass, isTrueFalseQuestion } from '@/lib/quizQuestion';
 import {
-  isQuizAnsweringOpen, questionTimerState, quizCountdownLabel, quizCountdownRemainingMs,
+  attachSessionClock, isQuizAnsweringOpen, questionTimerState, quizCountdownLabel, quizCountdownRemainingMs,
 } from '@/lib/quizCountdown';
 import {
   consumeReactionAnimation,
   finishedReactionKey,
   getOrCreateReaction,
+  getQuizReaction,
   reactionEventKey,
   reactionTheme,
   resetReactionGates,
 } from '@/lib/quizReactions';
 import { formatPointsDelta } from '@/lib/quizAnalyticsFormat';
 import {
-  answerFeedbackText,
   isPowerUpVisibleForQuestion,
   powerUpArmedHint,
   powerUpHint,
@@ -50,14 +50,14 @@ import {
 const POWER_UP_META = {
   eraser: { label: 'Eraser', icon: Eraser, color: 'bg-[#1368CE]' },
   double: { label: 'Double', icon: Zap, color: 'bg-[#D89E00]' },
-  streak_freeze: { label: 'Streak Shield', icon: Shield, color: 'bg-[#864CBF]' },
+  streak_freeze: { label: 'Shield', icon: Shield, color: 'bg-[#864CBF]' },
   bonus: { label: 'Bonus', icon: Sparkles, color: 'bg-[#26890C]' },
 };
 
 const POWER_UP_TOAST = {
   eraser: 'Eraser used',
   double: 'Double armed',
-  streak_freeze: 'Streak Shield armed',
+  streak_freeze: 'Shield armed',
   bonus: 'Bonus armed',
 };
 
@@ -69,6 +69,8 @@ function stagePhase(status) {
   return 'leaderboard';
 }
 
+const ASYNC_REACTION_MS = 2000;
+
 export default function QuizPlay() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -78,21 +80,28 @@ export default function QuizPlay() {
   const queryClient = useQueryClient();
   const [muteMusic, setMuteMusicLocal] = useState(isMusicMuted());
   const [muteSfx, setMuteSfxLocal] = useState(isSfxMuted());
-  const [lastFeedback, setLastFeedback] = useState(null);
+  const [asyncHold, setAsyncHold] = useState(null);
+  const asyncHoldRef = useRef(null);
   const prevStatus = useRef(null);
   const stageRef = useRef(null);
+  asyncHoldRef.current = asyncHold;
 
   const sessionQuery = useQuery({
     queryKey: ['quiz-session', id],
     queryFn: () => db.quizSessions.get(id),
     refetchInterval: (query) => {
+      if (asyncHoldRef.current) return false;
       const status = query.state.data?.status;
       if (!status || status === 'finished') return false;
-      return isAsync ? false : 1500;
+      if (isAsync) return status === 'question' ? 1000 : false;
+      return 1500;
     },
   });
 
-  const session = sessionQuery.data;
+  const session = useMemo(
+    () => attachSessionClock(sessionQuery.data, sessionQuery.dataUpdatedAt),
+    [sessionQuery.data, sessionQuery.dataUpdatedAt],
+  );
   const creatorPreview = isPreview || !!session?.is_preview;
 
   useEffect(() => {
@@ -107,10 +116,10 @@ export default function QuizPlay() {
   }, [id]);
 
   useEffect(() => {
-    if (!session || isAsync) return;
+    if (!session) return;
     setSessionAudio({ bgmTheme: session.bgm_theme });
     syncGameMusic(session.music_enabled, session.bgm_theme, phaseForSessionStatus(session.status));
-  }, [session?.status, session?.music_enabled, session?.bgm_theme, isAsync]);
+  }, [session?.status, session?.music_enabled, session?.bgm_theme]);
 
   const selfStats = useMemo(() => {
     if (!session?.players?.length) return { score: 0, streak: 0, name: 'You' };
@@ -177,9 +186,21 @@ export default function QuizPlay() {
       void unlockAudio();
       playSfx('answer-lock');
       if (isAsync && data.answer) {
-        setLastFeedback({
-          is_correct: data.answer.is_correct,
-          points: data.answer.points_awarded,
+        asyncHoldRef.current = true;
+        const answeredQuestion = (session?.quiz?.questions || []).find(
+          (q) => Number(q.id) === Number(session?.current_question_id),
+        );
+        const reaction = getQuizReaction({
+          status: 'question',
+          my_answer: data.answer,
+          time_limit_seconds: answeredQuestion?.time_limit_seconds,
+          player_count: 1,
+          session_id: session?.id,
+          question_id: session?.current_question_id,
+        });
+        setAsyncHold({
+          key: reactionEventKey(session?.id, session?.current_question_id),
+          ...reaction,
         });
         if (data.answer.is_correct) {
           playSfx('correct');
@@ -191,7 +212,19 @@ export default function QuizPlay() {
         } else {
           playSfx('wrong');
         }
-        setTimeout(() => setLastFeedback(null), 1200);
+        window.setTimeout(() => {
+          if (data.session) {
+            queryClient.setQueryData(
+              ['quiz-session', id],
+              attachSessionClock(data.session, Date.now() - ASYNC_REACTION_MS, { overwrite: true }),
+            );
+          } else {
+            queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
+          }
+          asyncHoldRef.current = null;
+          setAsyncHold(null);
+        }, ASYNC_REACTION_MS);
+        return;
       }
       if (data.session) {
         queryClient.setQueryData(['quiz-session', id], data.session);
@@ -199,7 +232,13 @@ export default function QuizPlay() {
         queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
       }
     },
-    onError: (err) => toast.error(err.message || err?.data?.message || 'Answer failed'),
+    onError: (err) => {
+      const message = err.message || err?.data?.message || 'Answer failed';
+      if (isAsync && err.status === 422) {
+        queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
+      }
+      toast.error(message);
+    },
   });
 
   const powerUpMutation = useMutation({
@@ -283,6 +322,12 @@ export default function QuizPlay() {
     return (currentQuestion.options || []).filter((o) => !erased.has(Number(o.id)));
   }, [currentQuestion, session?.erased_option_ids]);
 
+  const visiblePowerUps = useMemo(() => (
+    (session?.my_power_ups || []).filter((pu) => (
+      POWER_UP_META[pu.type] && isPowerUpVisibleForQuestion(pu.type, currentQuestion)
+    ))
+  ), [session?.my_power_ups, currentQuestion]);
+
   const { remaining: remainingSeconds, timedOut } = useQuestionTimer(session, currentQuestion);
   const [now, setNow] = useState(() => Date.now());
 
@@ -295,14 +340,82 @@ export default function QuizPlay() {
 
   const countdownMs = quizCountdownRemainingMs(session, now);
   const countdownLabel = quizCountdownLabel(countdownMs);
-  const answeringOpen = isQuizAnsweringOpen(session, now);
+  const answeringOpen = isQuizAnsweringOpen(session);
 
   useEffect(() => {
     if (!countdownLabel || countdownLabel === 'GO!') return;
-    playSfxOnce(`countdown:${id}:${countdownLabel}`, 'timer-tick');
+    playSfxOnce(`countdown:${id}:1:${countdownLabel}`, 'timer-tick');
   }, [countdownLabel, id]);
 
-  const answersLocked = !!session?.my_answer || answerMutation.isPending || !answeringOpen || !!session?.paused || (!isAsync && timedOut);
+  const answersLocked = !!session?.my_answer || answerMutation.isPending || !answeringOpen || !!session?.paused || timedOut || !!asyncHold;
+
+  useEffect(() => {
+    if (!isAsync || !id || !timedOut || session?.my_answer || session?.status !== 'question') {
+      return undefined;
+    }
+    if (asyncHoldRef.current) return undefined;
+    asyncHoldRef.current = { pending: true };
+
+    const questionId = session.current_question_id;
+    const reaction = getQuizReaction({
+      status: 'question',
+      my_answer: { quiz_option_id: null, is_correct: false, points_awarded: 0 },
+      time_limit_seconds: currentQuestion?.time_limit_seconds,
+      player_count: 1,
+      session_id: session.id,
+      question_id: questionId,
+    });
+    setAsyncHold({
+      key: `async-miss:${session.id}:${questionId}`,
+      ...reaction,
+    });
+
+    const startedAt = Date.now();
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await db.quizSessions.get(id);
+        const wait = Math.max(0, ASYNC_REACTION_MS - (Date.now() - startedAt));
+        await new Promise((resolve) => window.setTimeout(resolve, wait));
+        if (cancelled) return;
+        queryClient.setQueryData(
+          ['quiz-session', id],
+          attachSessionClock(next, Date.now() - wait, { overwrite: true }),
+        );
+        asyncHoldRef.current = null;
+        setAsyncHold(null);
+      } catch {
+        if (!cancelled) {
+          asyncHoldRef.current = null;
+          setAsyncHold(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAsync, timedOut, session?.my_answer, session?.status, session?.current_question_id, session?.id, currentQuestion?.time_limit_seconds, id, queryClient]);
+
+  useEffect(() => {
+    if (session?.status !== 'question' || answersLocked || countdownLabel) return undefined;
+    const onKey = (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const tag = event.target?.tagName;
+      if (tag && /input|textarea|select/i.test(tag)) return;
+      let index = null;
+      if (event.key >= '1' && event.key <= '4') index = Number(event.key) - 1;
+      const letter = String(event.key || '').toLowerCase();
+      if (['a', 'b', 'c', 'd'].includes(letter)) index = letter.charCodeAt(0) - 97;
+      const option = visibleOptions[index];
+      if (!option) return;
+      event.preventDefault();
+      void unlockAudio();
+      answerMutation.mutate(option.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [session?.status, answersLocked, countdownLabel, visibleOptions, answerMutation]);
 
   if (sessionQuery.isLoading) return <PageLoader />;
   if (!session) {
@@ -327,8 +440,8 @@ export default function QuizPlay() {
           <div className="flex gap-2">
             <GameIconButton
               title={muteMusic ? 'Unmute music' : 'Mute music'}
-              onClick={() => {
-                void unlockAudio();
+              onClick={async () => {
+                await unlockAudio();
                 const next = !muteMusic;
                 setMuteMusicLocal(next);
                 setMusicMuted(next);
@@ -355,20 +468,6 @@ export default function QuizPlay() {
           <div className="rounded-2xl border border-amber-300/40 bg-amber-400/20 px-4 py-3 text-center text-sm font-bold text-white">
             Game paused — the host will be back shortly.
           </div>
-        )}
-
-        {lastFeedback && (
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className={cn(
-              'rounded-2xl px-4 py-3 flex items-center gap-3 text-sm font-black shadow-lg',
-              lastFeedback.is_correct ? 'bg-[#26890C] text-white' : 'bg-[#E21B3C] text-white',
-            )}
-          >
-            {lastFeedback.is_correct ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
-            <span>{answerFeedbackText(lastFeedback.is_correct, lastFeedback.points)}</span>
-          </motion.div>
         )}
 
         {session.status === 'lobby' && (
@@ -411,14 +510,18 @@ export default function QuizPlay() {
             <QuestionCountdown label={countdownLabel} />
             {!countdownLabel && (
             <>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
-              {(session.my_power_ups || []).length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {(session.my_power_ups || []).map((pu) => {
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <QuestionProgress
+                  number={session.quiz?.current_question_number}
+                  total={session.quiz?.question_count}
+                />
+                <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
+              </div>
+              {visiblePowerUps.length > 0 && (
+                <div className="grid grid-cols-2 gap-1.5 flex-1 min-w-0 sm:flex sm:flex-wrap sm:justify-end sm:gap-2">
+                  {visiblePowerUps.map((pu) => {
                     const meta = POWER_UP_META[pu.type];
-                    if (!meta) return null;
-                    if (!isPowerUpVisibleForQuestion(pu.type, currentQuestion)) return null;
                     const Icon = meta.icon;
                     const scoringConflict = scoringPowerUpBlocked(pu.type, session.my_power_ups);
                     const disabled = pu.uses_remaining < 1 || pu.active || !!session.my_answer || powerUpMutation.isPending || !!session.paused || scoringConflict || !answeringOpen || timedOut;
@@ -429,24 +532,19 @@ export default function QuizPlay() {
                         whileHover={disabled ? undefined : { scale: 1.06, y: -2 }}
                         whileTap={disabled ? undefined : { scale: 0.95 }}
                         disabled={disabled}
-                        title={powerUpHint(pu.type)}
+                        title={pu.active ? powerUpArmedHint(pu.type) : powerUpHint(pu.type)}
                         onClick={() => {
                           void unlockAudio();
                           powerUpMutation.mutate(pu.type);
                         }}
                         className={cn(
-                          'inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-black text-white shadow-lg disabled:opacity-40',
+                          'inline-flex items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-black text-white shadow-lg whitespace-nowrap disabled:opacity-40 w-full min-w-0 sm:w-auto sm:gap-1.5 sm:px-2.5 sm:text-xs',
                           pu.active ? 'ring-2 ring-white' : '',
                           meta.color,
                         )}
                       >
                         <Icon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="text-left leading-tight">
-                          <span className="block">{meta.label}</span>
-                          <span className="block text-[9px] font-bold opacity-90">
-                            {pu.active ? powerUpArmedHint(pu.type) : powerUpHint(pu.type)}
-                          </span>
-                        </span>
+                        <span className="truncate">{meta.label}</span>
                       </motion.button>
                     );
                   })}
@@ -457,7 +555,9 @@ export default function QuizPlay() {
             <QuestionTitle key={currentQuestion.id}>{currentQuestion.prompt}</QuestionTitle>
             <QuestionMedia src={currentQuestion.image_url} compact />
 
-            {session.my_answer ? (
+            {asyncHold ? (
+              <ReactionMoment reaction={asyncHold} />
+            ) : session.my_answer ? (
               <div className="rounded-3xl bg-black/25 border border-white/15 py-10 text-center space-y-4">
                 <motion.div
                   animate={{ scale: [1, 1.08, 1] }}
@@ -468,10 +568,10 @@ export default function QuizPlay() {
                 </motion.div>
                 <WaitingDots label="Waiting for reveal" />
               </div>
-            ) : !isAsync && timedOut ? (
+            ) : timedOut ? (
               <div className="rounded-3xl bg-black/25 border border-white/15 py-10 text-center space-y-4">
                 <p className="text-2xl font-black text-white">Time&apos;s up</p>
-                <WaitingDots label="Waiting for the host" />
+                <WaitingDots label={isAsync ? 'Moving on' : 'Waiting for the host'} />
               </div>
             ) : (
               <div className={answerGridClass(currentQuestion)}>
@@ -746,6 +846,9 @@ function useQuestionTimer(session, question) {
     session?.paused,
     session?.pause_remaining_ms,
     session?.answering_open,
+    session?.remaining_question_ms,
+    session?.server_now,
+    session?._clientReceivedAt,
     question?.id,
     question?.time_limit_seconds,
   ]);

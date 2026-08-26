@@ -23,7 +23,7 @@ export function formatPointsDelta(amount) {
 }
 
 export function powerUpLabel(type) {
-	if (type === 'streak_freeze') return 'Streak Shield';
+	if (type === 'streak_freeze') return 'Shield';
 	if (type === 'double') return 'Double';
 	if (type === 'bonus') return 'Bonus';
 	if (type === 'eraser') return 'Eraser';

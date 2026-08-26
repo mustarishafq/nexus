@@ -326,6 +326,8 @@ class QuizGameTest extends TestCase
 
         $this->assertSame('async', $session['mode']);
         $this->assertSame('question', $session['status']);
+        $this->assertTrue($session['music_enabled']);
+        $this->assertSame(1, $session['quiz']['current_question_number']);
 
         $q1 = collect($session['quiz']['questions'])->firstWhere('id', $session['current_question_id']);
         $correct = collect($q1['options'])->firstWhere('is_correct', true);
@@ -339,6 +341,7 @@ class QuizGameTest extends TestCase
             ->json('session');
 
         $this->assertSame('question', $afterFirst['status']);
+        $this->assertSame(2, $afterFirst['quiz']['current_question_number']);
 
         $correct2 = QuizQuestion::with('options')->find($afterFirst['current_question_id'])
             ->options->firstWhere('is_correct', true)->id;

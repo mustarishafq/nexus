@@ -9,6 +9,7 @@ import PageLoader from '@/components/PageLoader';
 import {
   GlassCard, AnswerButton, ScorePill, TimerRing, QuestionTitle, QuestionMedia,
   GameStage, GameActionButton, PodiumLeaderboard, FullscreenButton, GameIconButton,
+  QuestionProgress,
 } from '@/components/games/GameUi';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
 import { answerGridClass, isTrueFalseQuestion } from '@/lib/quizQuestion';
@@ -119,6 +120,25 @@ export default function QuizPreview() {
       playSfx('wrong');
     }
   };
+
+  useEffect(() => {
+    if (!started || finished || revealed || !question) return undefined;
+    const onKey = (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const tag = event.target?.tagName;
+      if (tag && /input|textarea|select/i.test(tag)) return;
+      let optionIndex = null;
+      if (event.key >= '1' && event.key <= '4') optionIndex = Number(event.key) - 1;
+      const letter = String(event.key || '').toLowerCase();
+      if (['a', 'b', 'c', 'd'].includes(letter)) optionIndex = letter.charCodeAt(0) - 97;
+      const option = question.options?.[optionIndex];
+      if (!option) return;
+      event.preventDefault();
+      answer(option.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [started, finished, revealed, question]);
 
   const next = () => {
     if (index + 1 >= questions.length) {
@@ -231,9 +251,7 @@ export default function QuizPreview() {
         ) : question ? (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
-              <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-bold text-white">
-                Q{index + 1} / {questions.length}
-              </span>
+              <QuestionProgress number={index + 1} total={questions.length} />
               <TimerRing seconds={secondsLeft} total={question.time_limit_seconds || 20} />
               <GameIconButton title="Audio" onClick={() => setShowAudio((v) => !v)} active={showAudio}>
                 <Headphones className="h-4 w-4" />

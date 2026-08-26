@@ -10,6 +10,9 @@ return [
     'live_session_lock_minutes' => (int) env('QUIZ_LIVE_SESSION_LOCK_MINUTES', 20),
     // Extra pre-question time before Q1 answering opens in live games only.
     'first_question_countdown_seconds' => (int) env('QUIZ_FIRST_QUESTION_COUNTDOWN_SECONDS', 3),
+    // Hold the next published/self-paced answering window while the client shows
+    // correct/miss feedback, so Q2+ still starts with a full per-question timer.
+    'async_feedback_seconds' => (int) env('QUIZ_ASYNC_FEEDBACK_SECONDS', 2),
     // A live player must have been seen this recently at finish to receive quiz EXP.
     'player_presence_grace_seconds' => (int) env('QUIZ_PLAYER_PRESENCE_GRACE_SECONDS', 20),
 ];

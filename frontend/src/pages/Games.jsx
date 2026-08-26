@@ -5,7 +5,8 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-  Gamepad2, Plus, Play, Pencil, Trash2, Users, BookOpen, Hash, Sparkles, Eye, BarChart3,
+  Gamepad2, Plus, Play, Pencil, Trash2, Users, BookOpen, Hash, Sparkles, Eye, BarChart3, Settings,
+  Eraser, Zap, Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,11 +22,26 @@ import QuizAccessoryPicker from '@/components/games/QuizAccessoryPicker';
 import { getDisplayName } from '@/lib/profile';
 import { cn } from '@/lib/utils';
 import { formatQuizOwnerMeta, formatSelfPacedDeadline, isSelfPacedDeadlinePassed } from '@/lib/quizAnalyticsFormat';
+import { POWER_UP_GUIDE } from '@/lib/quizPowerUps';
 
 function joinErrorMessage(err) {
   const first = err?.data?.errors ? Object.values(err.data.errors).flat().find(Boolean) : null;
   return first || err?.data?.message || err.message || 'Could not join';
 }
+
+const POWER_UP_GUIDE_ICONS = {
+  eraser: Eraser,
+  double: Zap,
+  streak_freeze: Shield,
+  bonus: Sparkles,
+};
+
+const POWER_UP_GUIDE_COLORS = {
+  eraser: 'bg-[#1368CE]',
+  double: 'bg-[#D89E00]',
+  streak_freeze: 'bg-[#864CBF]',
+  bonus: 'bg-[#26890C]',
+};
 
 export default function Games() {
   const navigate = useNavigate();
@@ -122,13 +138,24 @@ export default function Games() {
             Join a live game, set your look, then host or play at your own pace.
           </p>
         </div>
-        {can(user, 'quiz.create') ? (
-          <Button asChild className="shadow-md shadow-primary/20">
-            <Link to="/games/new">
-              <Plus className="h-4 w-4 mr-2" />
-              New quiz
-            </Link>
-          </Button>
+        {(can(user, 'quiz.create') || can(user, 'quiz.manage')) ? (
+        <div className="flex items-center gap-2 shrink-0">
+          {can(user, 'quiz.create') ? (
+            <Button asChild className="shadow-md shadow-primary/20">
+              <Link to="/games/new">
+                <Plus className="h-4 w-4 mr-2" />
+                New quiz
+              </Link>
+            </Button>
+          ) : null}
+          {can(user, 'quiz.manage') ? (
+            <Button asChild variant="outline" size="icon" className="shrink-0" title="Games settings">
+              <Link to="/games/settings" aria-label="Games settings">
+                <Settings className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
         ) : null}
       </div>
 
@@ -190,6 +217,43 @@ export default function Games() {
               }}
             />
           </div>
+        </div>
+      </GlassCard>
+
+      <GlassCard className="p-4 sm:p-5 space-y-3">
+        <div className="text-center">
+          <h2 className={cn('text-sm font-semibold tracking-tight', glassDialogTitleText)}>Power-ups</h2>
+          <p className={cn('text-xs mt-1 leading-snug sm:whitespace-nowrap', glassDialogMutedText)}>
+            Live games include these. Published quizzes only have them if the creator turns them on.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+          {POWER_UP_GUIDE.map((item) => {
+            const Icon = POWER_UP_GUIDE_ICONS[item.type];
+            return (
+              <div
+                key={item.type}
+                className="flex flex-col items-center text-center gap-1.5 rounded-xl px-2 py-2.5"
+              >
+                <span
+                  className={cn(
+                    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white',
+                    POWER_UP_GUIDE_COLORS[item.type],
+                  )}
+                >
+                  {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                </span>
+                <p className="min-w-0">
+                  <span className={cn('block text-xs font-semibold leading-tight', glassDialogTitleText)}>
+                    {item.label}
+                  </span>
+                  <span className={cn('mt-0.5 block text-[11px] leading-snug', glassDialogMutedText)}>
+                    {item.blurb}
+                  </span>
+                </p>
+              </div>
+            );
+          })}
         </div>
       </GlassCard>
 

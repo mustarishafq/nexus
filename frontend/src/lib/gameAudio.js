@@ -338,7 +338,11 @@ export function armUnlockOnGesture() {
 	if (typeof window === 'undefined' || gestureArmed) return;
 	gestureArmed = true;
 	const onGesture = () => {
-		void unlockAudio();
+		void unlockAudio().then((ok) => {
+			if (ok && desiredBgmOn && !isMusicMuted()) {
+				startBgm(true, currentBgm(), desiredPhase);
+			}
+		});
 	};
 	window.addEventListener('pointerdown', onGesture, { once: true, capture: true });
 	window.addEventListener('keydown', onGesture, { once: true, capture: true });

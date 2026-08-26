@@ -366,6 +366,104 @@ class QuizBuilderTest extends TestCase
         $this->assertStringContainsString('/storage/quiz-question-images/', $url);
     }
 
+    public function test_quiz_question_image_over_one_megabyte_is_rejected(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create(['is_approved' => true]);
+
+        $this->withToken($this->token($user))
+            ->post('/api/uploads', [
+                'folder' => 'quiz-question-images',
+                'file' => UploadedFile::fake()->image('huge.jpg')->size(2048),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422);
+
+        $this->withToken($this->token($user))
+            ->post('/api/uploads', [
+                'folder' => 'quiz-question-images',
+                'file' => UploadedFile::fake()->create('anim.gif', 40, 'image/gif'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422);
+    }
+
+    public function test_quiz_question_image_can_be_downloaded_for_recrop(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create(['is_approved' => true]);
+
+        $url = $this->withToken($this->token($user))
+            ->post('/api/uploads', [
+                'folder' => 'quiz-question-images',
+                'file' => UploadedFile::fake()->image('diagram.jpg'),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('file_url');
+
+        $this->withToken($this->token($user))
+            ->get('/api/uploads?'.http_build_query(['file_url' => $url]))
+            ->assertOk();
+
+        $this->withToken($this->token($user))
+            ->getJson('/api/uploads?'.http_build_query(['file_url' => '/storage/profile-pictures/nope.jpg']))
+            ->assertStatus(422);
+    }
+
+    public function test_replacing_a_question_image_deletes_the_old_file(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create(['is_approved' => true]);
+
+        $firstUrl = $this->withToken($this->token($user))
+            ->post('/api/uploads', [
+                'folder' => 'quiz-question-images',
+                'file' => UploadedFile::fake()->image('one.jpg'),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('file_url');
+
+        $secondUrl = $this->withToken($this->token($user))
+            ->post('/api/uploads', [
+                'folder' => 'quiz-question-images',
+                'file' => UploadedFile::fake()->image('two.jpg'),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('file_url');
+
+        $firstPath = $this->publicDiskPath($firstUrl);
+        $secondPath = $this->publicDiskPath($secondUrl);
+        Storage::disk('public')->assertExists($firstPath);
+        Storage::disk('public')->assertExists($secondPath);
+
+        $quiz = $this->createQuiz($user, [
+            $this->sampleQuestion('Pic', ['image_url' => $firstUrl]),
+        ]);
+
+        $this->withToken($this->token($user))
+            ->putJson("/api/quizzes/{$quiz->id}", [
+                'questions' => [
+                    $this->sampleQuestion('Pic', ['image_url' => $secondUrl]),
+                ],
+            ])
+            ->assertOk();
+
+        Storage::disk('public')->assertMissing($firstPath);
+        Storage::disk('public')->assertExists($secondPath);
+
+        $this->withToken($this->token($user))
+            ->deleteJson('/api/uploads', ['file_url' => $secondUrl])
+            ->assertOk();
+
+        Storage::disk('public')->assertMissing($secondPath);
+    }
+
+    private function publicDiskPath(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH) ?: $url;
+        $path = str_starts_with($path, '/storage/') ? substr($path, strlen('/storage/')) : ltrim($path, '/');
+
+        return ltrim($path, '/');
+    }
+
     public function test_existing_quizzes_without_images_still_work_in_play_payload(): void
     {
         $owner = User::factory()->create(['is_approved' => true]);

@@ -18,9 +18,9 @@ export function trueFalseOptions(trueIsCorrect = true) {
 
 export function answerGridClass(question) {
 	if (isTrueFalseQuestion(question)) {
-		return 'grid grid-cols-1 sm:grid-cols-2 gap-3';
+		return 'grid grid-cols-2 gap-3';
 	}
-	return 'grid gap-3';
+	return 'grid grid-cols-2 lg:grid-cols-1 gap-3';
 }
 
 export const QUIZ_GOLD_OUTLINE_CLASS = 'outline outline-4 outline-offset-2 outline-[#D89E00]';

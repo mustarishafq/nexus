@@ -357,3 +357,29 @@ test('getQuizReaction includes label and metric', () => {
 	assert.equal(reaction.label, 'LIGHTNING ROUND');
 	assert.equal(reaction.metric, '+980');
 });
+
+test('published solo play skips rank reactions and still scores fast/miss', () => {
+	assert.equal(pickQuizReactionCategory({
+		player_count: 1,
+		my_answer: baseAnswer({
+			rank: 1,
+			rank_delta: 4,
+			response_ms: 3000,
+			streak_after: 1,
+		}),
+		time_limit_seconds: 20,
+	}), 'correct_fast');
+	assert.equal(pickQuizReactionCategory({
+		player_count: 1,
+		my_answer: baseAnswer({
+			is_correct: false,
+			response_ms: 16000,
+			streak_after: 0,
+		}),
+		time_limit_seconds: 20,
+	}), 'wrong_slow');
+	assert.equal(pickQuizReactionCategory({
+		player_count: 1,
+		my_answer: { quiz_option_id: null, is_correct: false, points_awarded: 0 },
+	}), 'missed');
+});

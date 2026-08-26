@@ -23,11 +23,12 @@ import {
   GlassCard, AnswerButton, TimerRing, PulsingPin, LobbyPlayerChip, WaitingDots,
   AnswerProgress, QuestionTitle, QuestionMedia, GameStage, PodiumLeaderboard, GameActionButton,
   GameIconButton, FullscreenButton, AnswerDistributionChart, HostTopRanking, QuestionCountdown,
+  QuestionProgress,
 } from '@/components/games/GameUi';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
 import { answerGridClass, isTrueFalseQuestion } from '@/lib/quizQuestion';
 import {
-  questionTimerState, quizCountdownLabel, quizCountdownRemainingMs,
+  attachSessionClock, questionTimerState, quizCountdownLabel, quizCountdownRemainingMs,
 } from '@/lib/quizCountdown';
 
 function stagePhase(status) {
@@ -57,7 +58,10 @@ export default function QuizHost() {
     },
   });
 
-  const session = sessionQuery.data;
+  const session = useMemo(
+    () => attachSessionClock(sessionQuery.data, sessionQuery.dataUpdatedAt),
+    [sessionQuery.data, sessionQuery.dataUpdatedAt],
+  );
 
   useEffect(() => {
     armUnlockOnGesture();
@@ -172,7 +176,7 @@ export default function QuizHost() {
 
   useEffect(() => {
     if (!countdownLabel || countdownLabel === 'GO!') return;
-    playSfxOnce(`countdown:${id}:${countdownLabel}`, 'timer-tick');
+    playSfxOnce(`countdown:${id}:1:${countdownLabel}`, 'timer-tick');
   }, [countdownLabel, id]);
 
   useEffect(() => {
@@ -385,14 +389,20 @@ export default function QuizHost() {
           {!countdownLabel && (
           <>
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
+            <div className="flex items-center gap-3 flex-wrap">
+              <QuestionProgress
+                number={session.quiz?.current_question_number}
+                total={session.quiz?.question_count}
+              />
+              <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
+            </div>
             <div className="flex-1 min-w-[160px] max-w-xs ml-auto">
               <AnswerProgress answered={session.answer_count} total={session.player_count} />
             </div>
           </div>
           <QuestionTitle key={currentQuestion.id}>{currentQuestion.prompt}</QuestionTitle>
           <QuestionMedia src={currentQuestion.image_url} />
-          <div className={isTrueFalseQuestion(currentQuestion) ? answerGridClass(currentQuestion) : 'grid sm:grid-cols-2 gap-3'}>
+          <div className={answerGridClass(currentQuestion)}>
             {(currentQuestion.options || []).map((opt, i) => (
               <AnswerButton
                 key={opt.id}
@@ -509,6 +519,9 @@ function useQuestionTimer(session, question) {
     session?.paused,
     session?.pause_remaining_ms,
     session?.answering_open,
+    session?.remaining_question_ms,
+    session?.server_now,
+    session?._clientReceivedAt,
     question?.id,
     question?.time_limit_seconds,
   ]);

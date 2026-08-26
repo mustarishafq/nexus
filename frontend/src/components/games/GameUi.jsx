@@ -509,18 +509,24 @@ export function QuestionMedia({ src, compact = false }) {
 	if (!url) return null;
 
 	return (
-		<div
+		<img
+			src={url}
+			alt=""
 			className={cn(
-				'overflow-hidden rounded-2xl border border-white/20 bg-black/25',
-				compact ? 'max-h-44' : 'max-h-72',
+				'mx-auto w-full max-w-sm rounded-2xl object-cover aspect-square',
+				compact ? 'max-w-[11rem]' : 'max-w-sm',
 			)}
-		>
-			<img
-				src={url}
-				alt=""
-				className={cn('mx-auto w-full object-contain', compact ? 'max-h-44' : 'max-h-72')}
-			/>
-		</div>
+		/>
+	);
+}
+
+export function QuestionProgress({ number, total }) {
+	if (!number || !total) return null;
+
+	return (
+		<span className="rounded-full bg-white/20 px-3 py-1 text-sm font-bold tabular-nums text-white">
+			Q{number} / {total}
+		</span>
 	);
 }
 

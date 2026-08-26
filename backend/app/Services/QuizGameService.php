@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\MediaCropNormalizer;
 use App\Support\PublicStorageUrl;
 use App\Support\QuizAccessories;
+use App\Support\QuizGameSettings;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -34,23 +35,7 @@ class QuizGameService
 
     public static function completionExpForRank(int $rank): int
     {
-        if ($rank <= 0) {
-            return 0;
-        }
-        if ($rank === 1) {
-            return 20;
-        }
-        if ($rank === 2) {
-            return 15;
-        }
-        if ($rank === 3) {
-            return 10;
-        }
-        if ($rank <= 10) {
-            return 5;
-        }
-
-        return 2;
+        return QuizGameSettings::expForRank($rank);
     }
 
     public function createLiveSession(Quiz $quiz, User $host): QuizSession
@@ -361,6 +346,10 @@ class QuizGameService
 
     public function hydrateLiveSession(QuizSession $session): QuizSession
     {
+        if ($session->mode === QuizSession::MODE_ASYNC) {
+            return $this->hydrateAsyncSession($session);
+        }
+
         if ($session->mode !== QuizSession::MODE_LIVE || $session->status === QuizSession::STATUS_FINISHED) {
             return $session;
         }
@@ -403,6 +392,26 @@ class QuizGameService
         }
 
         return $updated;
+    }
+
+    public function hydrateAsyncSession(QuizSession $session): QuizSession
+    {
+        if ($session->mode !== QuizSession::MODE_ASYNC || $session->status === QuizSession::STATUS_FINISHED) {
+            return $session;
+        }
+
+        if ($session->status !== QuizSession::STATUS_QUESTION || ! $this->questionDeadlinePassed($session)) {
+            return $session;
+        }
+
+        $updated = DB::transaction(function () use ($session) {
+            $locked = $this->lockSession($session);
+            $this->applyAsyncTimeoutLocked($locked);
+
+            return $locked;
+        });
+
+        return $updated->fresh($this->defaultRelations());
     }
 
     public function setAudioSettings(QuizSession $session, User $host, array $settings): QuizSession
@@ -495,7 +504,7 @@ class QuizGameService
 
                 [$elapsedMs, $remainingMs, $limitMs, $timedOut] = $this->timingForQuestion($lockedSession, $question);
 
-                if ($timedOut && $lockedSession->mode === QuizSession::MODE_LIVE) {
+                if ($timedOut) {
                     throw ValidationException::withMessages([
                         'session' => 'Time is up for this question.',
                     ]);
@@ -823,7 +832,7 @@ class QuizGameService
                 'current_question_id' => $first->id,
                 'question_started_at' => $started,
                 'question_ends_at' => $endsAt,
-                'music_enabled' => false,
+                'music_enabled' => true,
                 'bgm_theme' => $lockedQuiz->bgm_theme ?: 'party',
                 'sfx_pack' => $lockedQuiz->sfx_pack ?: 'classic',
             ]);
@@ -839,6 +848,10 @@ class QuizGameService
 
             return $session->fresh($this->defaultRelations());
         });
+
+        if (! $created) {
+            $session = $this->hydrateAsyncSession($session);
+        }
 
         return [$session, $created];
     }
@@ -860,28 +873,20 @@ class QuizGameService
         $session->loadMissing('quiz');
         $this->assertAsyncSessionPlayable($session, $user);
 
-        $result = $this->submitAnswer($session, $user, $optionId);
-
-        // Auto-advance async to next question or finish
-        $next = $this->findNextQuestion($session);
-
-        if ($next) {
-            $session->update([
-                'current_question_id' => $next->id,
-                'question_started_at' => now(),
-                'status' => QuizSession::STATUS_QUESTION,
-            ]);
-        } else {
-            $session->update([
-                'status' => QuizSession::STATUS_FINISHED,
-                'question_started_at' => null,
-                'finished_at' => $session->finished_at ?? now(),
+        $session = $this->hydrateAsyncSession($session);
+        if ($session->status === QuizSession::STATUS_FINISHED) {
+            throw ValidationException::withMessages([
+                'session' => 'Time is up for this question.',
             ]);
         }
 
+        $result = $this->submitAnswer($session, $user, $optionId);
+
+        $advanced = $this->advanceAsyncAfterAnswer($session->fresh($this->defaultRelations()));
+
         return [
             ...$result,
-            'session' => $session->fresh($this->defaultRelations()),
+            'session' => $advanced,
         ];
     }
 
@@ -965,9 +970,9 @@ class QuizGameService
         }
     }
 
-    protected function beginQuestion(QuizSession $session, QuizQuestion $question, bool $withCountdown = false): void
+    protected function beginQuestion(QuizSession $session, QuizQuestion $question, bool $withCountdown = false, int $extraDelaySeconds = 0): void
     {
-        [$started, $endsAt] = $this->questionWindow($question, $withCountdown);
+        [$started, $endsAt] = $this->questionWindow($question, $withCountdown, $extraDelaySeconds);
         $session->update([
             'status' => QuizSession::STATUS_QUESTION,
             'current_question_id' => $question->id,
@@ -980,19 +985,64 @@ class QuizGameService
         $session->unsetRelation('currentQuestion');
     }
 
+    protected function applyAsyncTimeoutLocked(QuizSession $session): void
+    {
+        if ($session->mode !== QuizSession::MODE_ASYNC || $session->status !== QuizSession::STATUS_QUESTION) {
+            return;
+        }
+
+        if (! $this->questionDeadlinePassed($session)) {
+            return;
+        }
+
+        $this->markMissingAnswersAsWrong($session);
+        $this->advanceAsyncAfterAnswer($session);
+    }
+
+    protected function advanceAsyncAfterAnswer(QuizSession $session): QuizSession
+    {
+        if ($session->mode !== QuizSession::MODE_ASYNC) {
+            return $session->fresh($this->defaultRelations());
+        }
+
+        if ($session->status === QuizSession::STATUS_FINISHED) {
+            return $session->fresh($this->defaultRelations());
+        }
+
+        $next = $this->findNextQuestion($session);
+
+        if ($next) {
+            $this->beginQuestion($session, $next, false, $this->asyncFeedbackDelaySeconds());
+        } else {
+            $session->update([
+                'status' => QuizSession::STATUS_FINISHED,
+                'question_started_at' => null,
+                'question_ends_at' => null,
+                'finished_at' => $session->finished_at ?? now(),
+            ]);
+        }
+
+        return $session->fresh($this->defaultRelations());
+    }
+
     /**
      * @return array{0: \Carbon\CarbonInterface, 1: \Carbon\CarbonInterface}
      */
-    protected function questionWindow(QuizQuestion $question, bool $withCountdown = false): array
+    protected function questionWindow(QuizQuestion $question, bool $withCountdown = false, int $extraDelaySeconds = 0): array
     {
-        $countdown = 0;
+        $delay = max(0, $extraDelaySeconds);
         if ($withCountdown) {
-            $countdown = max(0, (int) config('quiz.first_question_countdown_seconds', 3));
+            $delay += max(0, (int) config('quiz.first_question_countdown_seconds', 3));
         }
 
-        $started = now()->addSeconds($countdown);
+        $started = now()->addSeconds($delay);
 
         return [$started, $started->copy()->addSeconds(max(1, (int) $question->time_limit_seconds))];
+    }
+
+    protected function asyncFeedbackDelaySeconds(): int
+    {
+        return max(0, (int) config('quiz.async_feedback_seconds', 2));
     }
 
     protected function revealLocked(QuizSession $session): void
@@ -1227,9 +1277,9 @@ class QuizGameService
     protected function timingForQuestion(QuizSession $session, QuizQuestion $question): array
     {
         $limitMs = max(1, (int) $question->time_limit_seconds * 1000);
+        $remainingMs = $this->remainingQuestionMs($session);
 
-        if ($session->mode === QuizSession::MODE_LIVE) {
-            $remainingMs = $this->remainingMs($session);
+        if ($session->question_ends_at || $session->mode === QuizSession::MODE_LIVE) {
             $elapsedMs = min($limitMs, max(0, $limitMs - $remainingMs));
 
             return [$elapsedMs, $remainingMs, $limitMs, $remainingMs <= 0];
@@ -1430,6 +1480,7 @@ class QuizGameService
                 'status' => $session->quiz->status,
                 'questions' => $questions,
                 'question_count' => $session->quiz->questions->count(),
+                'current_question_number' => $this->currentQuestionNumber($session),
             ],
             'host_user_id' => $session->host_user_id,
             'host' => [
@@ -1445,6 +1496,8 @@ class QuizGameService
             'question_started_at' => $session->question_started_at?->toIso8601String(),
             'question_ends_at' => $session->question_ends_at?->toIso8601String(),
             'phase_ends_at' => $session->phase_ends_at?->toIso8601String(),
+            'server_now' => now()->toIso8601String(),
+            'remaining_question_ms' => $this->remainingQuestionMs($session),
             'answering_open' => $this->isAnsweringOpen($session),
             'paused' => $session->isPaused(),
             'paused_at' => $session->paused_at?->toIso8601String(),
@@ -1452,7 +1505,9 @@ class QuizGameService
             'heartbeat_interval_seconds' => (int) config('quiz.host_heartbeat_interval_seconds', 5),
             'distribution_seconds' => (int) config('quiz.distribution_seconds', 4),
             'recap_seconds' => (int) config('quiz.recap_seconds', 5),
-            'music_enabled' => (bool) $session->music_enabled,
+            'music_enabled' => $session->mode === QuizSession::MODE_ASYNC
+                ? true
+                : (bool) $session->music_enabled,
             'bgm_theme' => $session->bgm_theme ?: 'party',
             'sfx_pack' => $session->sfx_pack ?: 'classic',
             'players' => $playersPayload,
@@ -1817,6 +1872,24 @@ class QuizGameService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->first();
+    }
+
+    protected function currentQuestionNumber(QuizSession $session): ?int
+    {
+        if (! $session->current_question_id) {
+            return null;
+        }
+
+        $ordered = $session->quiz->questions
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        $index = $ordered->search(fn (QuizQuestion $question) => (int) $question->id === (int) $session->current_question_id);
+
+        return $index === false ? null : $index + 1;
     }
 
     protected function seedPowerUps(QuizSession $session, User $user): void

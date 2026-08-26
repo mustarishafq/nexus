@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\QuizGameService;
 use App\Support\ApiTokenAuth;
 use App\Support\GamificationCatalog;
+use App\Support\QuizGameSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\GrantsUserRoleQuizPlayAccess;
 use Tests\TestCase;
@@ -136,6 +137,38 @@ class QuizExpTest extends TestCase
         $this->assertSame(5, $this->expFor($byRank[4]['user_id'], $ctx['sessionId']));
         $this->assertSame(5, $this->expFor($byRank[10]['user_id'], $ctx['sessionId']));
         $this->assertSame(2, $this->expFor($byRank[11]['user_id'], $ctx['sessionId']));
+    }
+
+    public function test_disabled_live_exp_awards_zero(): void
+    {
+        QuizGameSettings::save([
+            'live_exp_enabled' => false,
+            'rank_1' => 20,
+            'rank_2' => 15,
+            'rank_3' => 10,
+            'rank_4_to_10' => 5,
+            'rank_11_plus' => 2,
+        ]);
+
+        $this->assertSame(0, QuizGameService::completionExpForRank(1));
+        $ctx = $this->finishLiveWithPlayers(1);
+        $this->assertSame(0, $this->expFor($ctx['players'][0]->id, $ctx['sessionId']));
+    }
+
+    public function test_custom_live_exp_amounts_are_awarded(): void
+    {
+        QuizGameSettings::save([
+            'live_exp_enabled' => true,
+            'rank_1' => 50,
+            'rank_2' => 15,
+            'rank_3' => 10,
+            'rank_4_to_10' => 5,
+            'rank_11_plus' => 2,
+        ]);
+
+        $this->assertSame(50, QuizGameService::completionExpForRank(1));
+        $ctx = $this->finishLiveWithPlayers(1);
+        $this->assertSame(50, $this->expFor($ctx['players'][0]->id, $ctx['sessionId']));
     }
 
     public function test_host_who_is_not_a_player_does_not_receive_exp(): void

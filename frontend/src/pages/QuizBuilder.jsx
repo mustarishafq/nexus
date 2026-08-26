@@ -3,7 +3,7 @@ import db from '@/api/apiClient';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Copy, ImagePlus, Plus, Trash2, Check, Save, Eye } from 'lucide-react';
+import { ArrowLeft, Copy, Plus, Trash2, Check, Save, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,8 +14,9 @@ import { toast } from 'sonner';
 import PageLoader from '@/components/PageLoader';
 import GameAudioPicker from '@/components/games/GameAudioPicker';
 import { GlassCard, ANSWER_COLORS } from '@/components/games/GameUi';
+import QuizQuestionImageField from '@/components/games/QuizQuestionImageField';
 import { glassDialogMutedText, glassDialogTitleText } from '@/components/layout/glassStyles';
-import { extractPublicStoragePath, toPublicFileUrl } from '@/lib/media';
+import { extractPublicStoragePath } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import { isTrueFalseQuestion, trueFalseOptions } from '@/lib/quizQuestion';
 import { formatSelfPacedDeadline } from '@/lib/quizAnalyticsFormat';
@@ -26,7 +27,6 @@ const TIME_MIN = 5;
 const TIME_MAX = 120;
 const POINTS_MIN = 100;
 const POINTS_MAX = 5000;
-const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 function newClientKey() {
   return `q-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -119,8 +119,6 @@ export default function QuizBuilder() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const imageInputRef = useRef(null);
-  const [imageTargetIndex, setImageTargetIndex] = useState(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -132,7 +130,6 @@ export default function QuizBuilder() {
   const mcBackupRef = useRef({});
   const [bulkTime, setBulkTime] = useState(20);
   const [bulkPoints, setBulkPoints] = useState(1000);
-  const [uploadingQi, setUploadingQi] = useState(null);
 
   const quizQuery = useQuery({
     queryKey: ['quiz', String(id)],
@@ -258,36 +255,6 @@ export default function QuizBuilder() {
     });
   };
 
-  const pickImage = (qi) => {
-    setImageTargetIndex(qi);
-    imageInputRef.current?.click();
-  };
-
-  const onImageSelected = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    const qi = imageTargetIndex;
-    setImageTargetIndex(null);
-    if (!file || qi == null) return;
-    if (file.size > IMAGE_MAX_BYTES) {
-      toast.error('Image must be 10MB or smaller');
-      return;
-    }
-    setUploadingQi(qi);
-    try {
-      const { file_url } = await db.integrations.Core.UploadFile({
-        file,
-        folder: 'quiz-question-images',
-      });
-      const storedUrl = extractPublicStoragePath(file_url) || file_url || null;
-      setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, image_url: storedUrl } : q)));
-    } catch (err) {
-      toast.error(firstValidationError(err) || 'Image upload failed');
-    } finally {
-      setUploadingQi(null);
-    }
-  };
-
   if (!isNew && quizQuery.isLoading) return <PageLoader />;
 
   if (isNew && !can(user, 'quiz.create')) {
@@ -296,41 +263,43 @@ export default function QuizBuilder() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        className="hidden"
-        onChange={onImageSelected}
-      />
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/games"><ArrowLeft className="h-5 w-5" /></Link>
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className={cn('text-xl font-bold tracking-tight', glassDialogTitleText)}>
-            {isNew ? 'New quiz' : 'Edit quiz'}
-          </h1>
-          <p className={cn('text-sm', glassDialogMutedText)}>
-            Build questions, choose audio, then preview.
-          </p>
-        </div>
-        {!isNew && (
-          <Button variant="outline" asChild>
-            <Link to={`/games/${id}/preview`}>
-              <Eye className="h-4 w-4 mr-2" />
-              Preview / Test
-            </Link>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <Button variant="ghost" size="icon" className="shrink-0 mt-0.5" asChild>
+            <Link to="/games" aria-label="Back to games"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
-        )}
-        <Button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="shadow-md shadow-primary/20"
+          <div className="min-w-0 flex-1">
+            <h1 className={cn('text-xl font-bold tracking-tight', glassDialogTitleText)}>
+              {isNew ? 'New quiz' : 'Edit quiz'}
+            </h1>
+            <p className={cn('text-sm mt-0.5', glassDialogMutedText)}>
+              Build questions, choose audio, then preview.
+            </p>
+          </div>
+        </div>
+        <div
+          className={cn(
+            'grid w-full gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center',
+            isNew ? 'grid-cols-1' : 'grid-cols-2',
+          )}
         >
-          <Save className="h-4 w-4 mr-2" />
-          {saveMutation.isPending ? 'Saving…' : 'Save'}
-        </Button>
+          {!isNew && (
+            <Button variant="outline" asChild className="w-full sm:w-auto justify-center">
+              <Link to={`/games/${id}/preview`}>
+                <Eye className="h-4 w-4 mr-2 shrink-0" />
+                Preview / Test
+              </Link>
+            </Button>
+          )}
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="w-full sm:w-auto justify-center shadow-md shadow-primary/20"
+          >
+            <Save className="h-4 w-4 mr-2 shrink-0" />
+            {saveMutation.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </div>
 
       <GlassCard className="space-y-4">
@@ -423,7 +392,7 @@ export default function QuizBuilder() {
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Time for all</Label>
+            <Label>Time per question for all</Label>
             <div className="flex gap-2">
               <Input
                 type="number"
@@ -440,7 +409,9 @@ export default function QuizBuilder() {
                 Apply
               </Button>
             </div>
-            <p className={cn('text-xs', glassDialogMutedText)}>{TIME_MIN}–{TIME_MAX} seconds</p>
+            <p className={cn('text-xs', glassDialogMutedText)}>
+              {TIME_MIN}–{TIME_MAX} seconds each. This is the timer for every question, not one clock for the whole quiz.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Points for all</Label>
@@ -516,52 +487,12 @@ export default function QuizBuilder() {
               placeholder="Ask something…"
               rows={2}
             />
-            <div className="flex flex-col gap-3">
-              <Label className="text-xs">Optional image</Label>
-              {question.image_url ? (
-                <div className="space-y-2">
-                  <div className="overflow-hidden rounded-xl border border-border bg-muted/40">
-                    <img
-                      src={toPublicFileUrl(question.image_url)}
-                      alt=""
-                      className="mx-auto max-h-48 w-full object-contain"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={uploadingQi === qi}
-                      onClick={() => pickImage(qi)}
-                    >
-                      Replace image
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, image_url: null } : q)))}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-fit"
-                  disabled={uploadingQi === qi}
-                  onClick={() => pickImage(qi)}
-                >
-                  <ImagePlus className="h-4 w-4 mr-2" />
-                  {uploadingQi === qi ? 'Uploading…' : 'Add image'}
-                </Button>
-              )}
-            </div>
+            <QuizQuestionImageField
+              value={question.image_url}
+              onChange={(image_url) => {
+                setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, image_url } : q)));
+              }}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Time (seconds)</Label>
@@ -575,6 +506,9 @@ export default function QuizBuilder() {
                     setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, time_limit_seconds: v } : q)));
                   }}
                 />
+                <p className={cn('text-[11px] leading-snug', glassDialogMutedText)}>
+                  Players get this many seconds for this question only. When time runs out it counts as a miss.
+                </p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Base points</Label>
