@@ -171,4 +171,55 @@ class InsanAttendancePullTest extends TestCase
 
         $this->assertSame(0, AttendanceRecord::query()->count());
     }
+
+    public function test_offer_exp_on_grants_only_that_calendar_day(): void
+    {
+        $this->createInsanApplication();
+        $user = User::factory()->create([
+            'email' => 'ain.azman@example.com',
+            'is_approved' => true,
+        ]);
+
+        $this->fakeInsanExport([
+            [
+                'id' => 100,
+                'source' => 'insan',
+                'external_id' => '100',
+                'email' => $user->email,
+                'type' => 'clock_in',
+                'captured_at' => Carbon::parse('2026-08-26 07:29:26', 'Asia/Kuala_Lumpur')->toIso8601String(),
+                'photo_url' => 'https://example.com/old.jpg',
+                'timezone' => 'Asia/Kuala_Lumpur',
+            ],
+            [
+                'id' => 101,
+                'source' => 'insan',
+                'external_id' => '101',
+                'email' => $user->email,
+                'type' => 'clock_in',
+                'captured_at' => Carbon::parse('2026-09-01 08:14:20', 'Asia/Kuala_Lumpur')->toIso8601String(),
+                'photo_url' => 'https://example.com/today.jpg',
+                'timezone' => 'Asia/Kuala_Lumpur',
+            ],
+        ]);
+
+        $this->artisan('attendance:pull-from-insan', ['--offer-exp-on' => '2026-09-01'])
+            ->assertSuccessful();
+
+        $this->assertSame(2, AttendanceRecord::query()->count());
+        $today = AttendanceRecord::query()->where('external_id', '101')->first();
+        $old = AttendanceRecord::query()->where('external_id', '100')->first();
+        $this->assertNotNull($today);
+        $this->assertNotNull($old);
+
+        $this->assertDatabaseHas('exp_rewards', [
+            'user_id' => $user->id,
+            'action_key' => 'clock_in',
+            'source_id' => (string) $today->id,
+        ]);
+        $this->assertDatabaseMissing('exp_rewards', [
+            'user_id' => $user->id,
+            'source_id' => (string) $old->id,
+        ]);
+    }
 }

@@ -20,13 +20,20 @@ class InsanAttendancePullService
      *     imported: int,
      *     skipped_existing: int,
      *     unmatched: int,
+     *     exp_offered: int,
      *     pages: int,
      *     dry_run: bool,
-     *     offer_exp: bool
+     *     offer_exp: bool,
+     *     offer_exp_on: ?string
      * }
      */
-    public function pull(?Carbon $from = null, ?Carbon $to = null, bool $dryRun = false, bool $offerExp = false): array
-    {
+    public function pull(
+        ?Carbon $from = null,
+        ?Carbon $to = null,
+        bool $dryRun = false,
+        bool $offerExp = false,
+        ?string $offerExpOn = null,
+    ): array {
         $application = $this->forwarder->resolveResourceApplication();
         if (! $application || ! $application->base_url || ! $application->api_key) {
             throw new \RuntimeException('Insan/Resource application is not configured (enabled, base_url, api_key).');
@@ -41,14 +48,19 @@ class InsanAttendancePullService
 
         $url = $baseUrl.'/'.ltrim($exportPath, '/');
         $apiKey = (string) $application->api_key;
+        $offerExpOn = $offerExpOn !== null && trim($offerExpOn) !== ''
+            ? Carbon::parse(trim($offerExpOn))->toDateString()
+            : null;
 
         $stats = [
             'imported' => 0,
             'skipped_existing' => 0,
             'unmatched' => 0,
+            'exp_offered' => 0,
             'pages' => 0,
             'dry_run' => $dryRun,
-            'offer_exp' => $offerExp,
+            'offer_exp' => $offerExp || $offerExpOn !== null,
+            'offer_exp_on' => $offerExpOn,
         ];
 
         $afterId = 0;
@@ -101,8 +113,9 @@ class InsanAttendancePullService
                     continue;
                 }
 
-                $result = $this->importRow($row, $dryRun, $offerExp);
-                $stats[$result]++;
+                $result = $this->importRow($row, $dryRun, $offerExp, $offerExpOn);
+                $stats[$result['status']]++;
+                $stats['exp_offered'] += $result['exp_offered'] ? 1 : 0;
             }
 
             $hasMore = (bool) ($pagination['has_more'] ?? false);
@@ -117,14 +130,14 @@ class InsanAttendancePullService
 
     /**
      * @param  array<string, mixed>  $row
-     * @return 'imported'|'skipped_existing'|'unmatched'
+     * @return array{status: 'imported'|'skipped_existing'|'unmatched', exp_offered: bool}
      */
-    private function importRow(array $row, bool $dryRun, bool $offerExp): string
+    private function importRow(array $row, bool $dryRun, bool $offerExp, ?string $offerExpOn): array
     {
         $email = strtolower(trim((string) ($row['email'] ?? '')));
         $type = (string) ($row['type'] ?? '');
         if ($email === '' || ! in_array($type, ['clock_in', 'clock_out'], true)) {
-            return 'unmatched';
+            return ['status' => 'unmatched', 'exp_offered' => false];
         }
 
         $user = User::query()->where('email', $email)->first();
@@ -139,7 +152,7 @@ class InsanAttendancePullService
                 'insan_id' => $row['id'] ?? null,
             ]);
 
-            return 'unmatched';
+            return ['status' => 'unmatched', 'exp_offered' => false];
         }
 
         $capturedAt = $this->parseCapturedAt(
@@ -150,13 +163,19 @@ class InsanAttendancePullService
         $insanId = filled($row['id'] ?? null) ? (string) $row['id'] : '';
         $origin = (string) ($row['source'] ?? 'insan');
         $brainExternalId = (string) ($row['external_id'] ?? '');
+        $existing = $this->findExisting($user->id, $type, $capturedAt, $insanId, $origin, $brainExternalId);
 
-        if ($this->alreadyExists($user->id, $type, $capturedAt, $insanId, $origin, $brainExternalId)) {
-            return 'skipped_existing';
+        if ($existing) {
+            $expOffered = false;
+            if (! $dryRun) {
+                $expOffered = $this->maybeOfferExp($user, $existing, $capturedAt, $offerExp, $offerExpOn);
+            }
+
+            return ['status' => 'skipped_existing', 'exp_offered' => $expOffered];
         }
 
         if ($dryRun) {
-            return 'imported';
+            return ['status' => 'imported', 'exp_offered' => false];
         }
 
         $externalId = $insanId !== '' ? $insanId : ($brainExternalId !== '' ? $brainExternalId : $capturedAt->timestamp.'-'.$user->id);
@@ -181,28 +200,47 @@ class InsanAttendancePullService
             'external_id' => $externalId,
         ]);
 
-        if ($offerExp) {
-            app(GamificationService::class)->offerForAttendanceRecord($user, $record);
-        }
+        $expOffered = $this->maybeOfferExp($user, $record, $capturedAt, $offerExp, $offerExpOn);
 
-        return 'imported';
+        return ['status' => 'imported', 'exp_offered' => $expOffered];
     }
 
-    private function alreadyExists(
+    private function maybeOfferExp(
+        User $user,
+        AttendanceRecord $record,
+        Carbon $capturedAt,
+        bool $offerExp,
+        ?string $offerExpOn,
+    ): bool {
+        if ($offerExpOn !== null) {
+            $timezone = (string) (config('app.timezone') ?: 'Asia/Kuala_Lumpur');
+            if ($capturedAt->copy()->timezone($timezone)->toDateString() !== $offerExpOn) {
+                return false;
+            }
+        } elseif (! $offerExp) {
+            return false;
+        }
+
+        $offers = app(GamificationService::class)->offerForAttendanceRecord($user, $record);
+
+        return collect($offers)->filter()->isNotEmpty();
+    }
+
+    private function findExisting(
         int $userId,
         string $type,
         Carbon $capturedAt,
         string $insanId,
         string $origin,
         string $brainExternalId,
-    ): bool {
+    ): ?AttendanceRecord {
         if ($insanId !== '') {
             $byInsanId = AttendanceRecord::query()
                 ->whereIn('source', ['insan', 'kashfi', 'resource'])
                 ->where('external_id', $insanId)
-                ->exists();
+                ->first();
             if ($byInsanId) {
-                return true;
+                return $byInsanId;
             }
         }
 
@@ -211,7 +249,7 @@ class InsanAttendancePullService
             if ($original
                 && (int) $original->user_id === $userId
                 && $original->type === $type) {
-                return true;
+                return $original;
             }
         }
 
@@ -219,7 +257,7 @@ class InsanAttendancePullService
             ->where('user_id', $userId)
             ->where('type', $type)
             ->where('captured_at', $capturedAt)
-            ->exists();
+            ->first();
     }
 
     private function parseCapturedAt(null|string $value, ?string $timezone = null): Carbon
