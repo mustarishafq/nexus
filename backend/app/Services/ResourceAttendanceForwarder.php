@@ -27,6 +27,8 @@ class ResourceAttendanceForwarder
 
     private const DEFAULT_ATTENDANCE_INGEST_PATH = '/api/nexus/v1/attendance/ingest';
 
+    private const DEFAULT_ATTENDANCE_EXPORT_PATH = '/api/nexus/v1/attendance';
+
     private const DEFAULT_ATTENDANCE_POLICY_PATH = '/api/nexus/v1/attendance/policy';
 
     public function forwardAfterResponse(AttendanceRecord $record, User $user): void
@@ -204,6 +206,11 @@ class ResourceAttendanceForwarder
     public function defaultAttendanceIngestPath(): string
     {
         return self::DEFAULT_ATTENDANCE_INGEST_PATH;
+    }
+
+    public function defaultAttendanceExportPath(): string
+    {
+        return self::DEFAULT_ATTENDANCE_EXPORT_PATH;
     }
 
     public function defaultAttendancePolicyPath(): string
