@@ -1,14 +1,24 @@
 <IfModule mod_headers.c>
+    # SPA HTML must revalidate so deploys pick up new hashed /assets/* URLs.
+    Header always set Cache-Control "no-cache, no-store, must-revalidate" "expr=%{CONTENT_TYPE} =~ m#^text/html#"
+
     <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-        Header set Pragma "no-cache"
-        Header set Expires "0"
+        Header unset ETag
+        Header always unset Expires
+        Header always set Cache-Control "no-cache, no-store, must-revalidate"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
     </FilesMatch>
 </IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
+
+    # Built assets must 404 when missing. Falling back to index.html makes the
+    # browser reject JS/CSS with: MIME type "text/html" is not a valid module/stylesheet.
+    RewriteRule ^assets/ - [L]
+
     RewriteRule ^index\.html$ - [L]
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

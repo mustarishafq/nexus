@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v8.0.11';
+const CACHE_NAME = 'nexus-shell-v8.0.12';
 // Client ids reported as running in standalone/installed-PWA display mode.
 // Notification clicks must only reuse these, never a plain browser tab,
 // otherwise Android opens the click target in Chrome instead of the app.
@@ -91,6 +91,12 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        const contentType = response.headers.get('content-type') || '';
+        const isHashedAsset = url.pathname.startsWith('/assets/');
+        // SPA fallback can return 200 HTML for a missing JS/CSS file. Never cache that.
+        if (!response.ok || (isHashedAsset && /text\/html/i.test(contentType))) {
+          return response;
+        }
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;

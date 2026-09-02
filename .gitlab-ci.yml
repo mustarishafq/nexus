@@ -79,9 +79,17 @@ deploy:production:
       "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_BACKEND_PATH/"
 
     # Deploy Frontend
-    - rsync -az --delete
+    # Publish hashed assets first so index.html never points at files that are
+    # still uploading. Keep previous hashed files so cached HTML shells still work.
+    - rsync -az --delay-updates
+      frontend/dist/assets/
+      "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_FRONTEND_PATH/assets/"
+    - rsync -az --delete --delay-updates
+      --exclude='assets/'
       frontend/dist/
       "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_FRONTEND_PATH/"
+    - ssh "$PRODUCTION_USER@$PRODUCTION_HOST"
+      "find $PRODUCTION_FRONTEND_PATH/assets -type f -mtime +14 -delete"
 
     # Laravel setup
     - ssh "$PRODUCTION_USER@$PRODUCTION_HOST"
