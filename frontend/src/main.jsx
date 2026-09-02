@@ -53,7 +53,11 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.matchMedia('(display-mode: standalone)').addEventListener('change', reportDisplayMode);
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.ready.then(reportDisplayMode).catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(() => {
+      navigator.serviceWorker.ready.then(reportDisplayMode);
+    }).catch((err) => {
+      console.warn('[sw] Registration failed:', err);
+    });
   });
 }
 

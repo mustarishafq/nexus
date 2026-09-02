@@ -89,7 +89,7 @@ deploy:production:
       frontend/dist/
       "$PRODUCTION_USER@$PRODUCTION_HOST:$PRODUCTION_FRONTEND_PATH/"
     - ssh "$PRODUCTION_USER@$PRODUCTION_HOST"
-      "find $PRODUCTION_FRONTEND_PATH/assets -type f -mtime +14 -delete"
+      "find $PRODUCTION_FRONTEND_PATH/assets -type f -mtime +30 -delete"
 
     # Laravel setup
     - ssh "$PRODUCTION_USER@$PRODUCTION_HOST"

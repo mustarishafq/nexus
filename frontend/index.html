@@ -86,28 +86,20 @@
       } catch (e) {}
     </script>
     <script>
-      // Register the SW from HTML so a failed module script cannot block updates.
-      // A poisoned SW that cached HTML as JS would otherwise never be replaced.
+      // Same /sw.js registration the installed PWA already uses.
+      // Do not unregister — that would drop the install and push subscription.
       (function () {
         if (!('serviceWorker' in navigator)) return;
-        var version = '8.0.13';
-        var swUrl = '/sw.js?v=' + version;
-        navigator.serviceWorker.getRegistrations().then(function (regs) {
-          return Promise.all(regs.map(function (reg) {
-            var worker = reg.active || reg.waiting || reg.installing;
-            var url = worker && worker.scriptURL ? worker.scriptURL : '';
-            if (url.indexOf('v=' + version) === -1) return reg.unregister();
-          }));
-        }).then(function () {
-          if (!window.caches || !caches.keys) return;
-          return caches.keys().then(function (keys) {
-            return Promise.all(keys.filter(function (key) {
-              return key.indexOf('nexus-shell-v' + version) !== 0;
-            }).map(function (key) { return caches.delete(key); }));
+
+        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function () {});
+
+        // After an in-place SW update, reload once so this window uses the new worker.
+        // Existing installed PWAs stay installed.
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            window.location.reload();
           });
-        }).then(function () {
-          return navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' });
-        }).catch(function () {});
+        }
       })();
     </script>
   </head>
