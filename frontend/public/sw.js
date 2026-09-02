@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v8.0.12';
+const CACHE_NAME = 'nexus-shell-v8.0.13';
 // Client ids reported as running in standalone/installed-PWA display mode.
 // Notification clicks must only reuse these, never a plain browser tab,
 // otherwise Android opens the click target in Chrome instead of the app.
@@ -44,9 +44,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
       keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    ))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -55,6 +54,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+  // Hashed Vite files are immutable and must never be served from a SW cache.
+  // Intercepting them is how HTML (SPA fallback / 404 page) gets executed as JS.
+  if (url.pathname.startsWith('/assets/')) return;
 
   // Never cache dev-server and HMR assets; stale modules can break exports during development.
   if (
@@ -87,16 +89,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Use network-first for static assets so new deploys replace old bundles promptly.
+  // Network-first for remaining same-origin static files (icons, manifest, etc.).
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const contentType = response.headers.get('content-type') || '';
-        const isHashedAsset = url.pathname.startsWith('/assets/');
-        // SPA fallback can return 200 HTML for a missing JS/CSS file. Never cache that.
-        if (!response.ok || (isHashedAsset && /text\/html/i.test(contentType))) {
-          return response;
-        }
+        if (!response.ok) return response;
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;

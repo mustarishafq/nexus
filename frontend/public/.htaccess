@@ -11,6 +11,12 @@
     </FilesMatch>
 </IfModule>
 
+<IfModule mod_expires.c>
+    <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
+        ExpiresActive Off
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
@@ -24,3 +30,8 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule . /index.html [L]
 </IfModule>
+
+# Missing /assets/* files 404 as plain text, not an HTML error page.
+<If "%{REQUEST_URI} =~ m#^/assets/#">
+    ErrorDocument 404 "Not found"
+</If>

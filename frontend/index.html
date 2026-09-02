@@ -85,6 +85,31 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      // Register the SW from HTML so a failed module script cannot block updates.
+      // A poisoned SW that cached HTML as JS would otherwise never be replaced.
+      (function () {
+        if (!('serviceWorker' in navigator)) return;
+        var version = '8.0.13';
+        var swUrl = '/sw.js?v=' + version;
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (reg) {
+            var worker = reg.active || reg.waiting || reg.installing;
+            var url = worker && worker.scriptURL ? worker.scriptURL : '';
+            if (url.indexOf('v=' + version) === -1) return reg.unregister();
+          }));
+        }).then(function () {
+          if (!window.caches || !caches.keys) return;
+          return caches.keys().then(function (keys) {
+            return Promise.all(keys.filter(function (key) {
+              return key.indexOf('nexus-shell-v' + version) !== 0;
+            }).map(function (key) { return caches.delete(key); }));
+          });
+        }).then(function () {
+          return navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' });
+        }).catch(function () {});
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
