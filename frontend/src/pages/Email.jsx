@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
+import { MAIL_STATUS_QUERY_KEY, mailInboxQueryKey } from '@/lib/queryKeys';
 import { EmptyState } from '@/components/ui/empty-state';
 import { UnreadBadge } from '@/components/ui/unread-badge';
 import { Expandable } from '@/components/ui/expandable';
@@ -37,7 +38,6 @@ import EmailMessageBody from '@/components/email/EmailMessageBody';
 import EmailAttachments from '@/components/email/EmailAttachments';
 import RecipientSuggestInput from '@/components/email/RecipientSuggestInput';
 
-const MAIL_STATUS_QUERY_KEY = ['mail-status'];
 const MAIL_ACCOUNT_STORAGE_KEY = 'nexus-mail-account-id';
 const COMPOSE_SESSION_KEY_PREFIX = 'nexus-mail-compose-draft:';
 
@@ -78,10 +78,6 @@ const FOLDERS = [
   { id: 'spam', label: 'Spam', icon: ShieldAlert },
   { id: 'archive', label: 'Archive', icon: Archive },
 ];
-
-function mailInboxQueryKey(accountId, folder, search, unreadOnly) {
-  return ['mail-inbox', accountId || 'default', folder || 'inbox', search, unreadOnly ? 'unread' : 'all'];
-}
 
 function readStoredAccountId() {
   try {
@@ -666,8 +662,9 @@ export default function Email() {
   });
 
   const { data: status, isLoading: statusLoading } = useQuery({
-    queryKey: [...MAIL_STATUS_QUERY_KEY, accountId || 'default'],
-    queryFn: () => db.mail.status(accountId || undefined),
+    queryKey: MAIL_STATUS_QUERY_KEY,
+    queryFn: () => db.mail.status(),
+    staleTime: 30_000,
   });
 
   const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
@@ -713,6 +710,7 @@ export default function Email() {
       folder,
     }),
     enabled: Boolean(status?.connected) && Boolean(activeAccountId),
+    staleTime: 20_000,
     refetchInterval: debouncedSearch || folder !== 'inbox' ? false : pollInterval,
   });
 
@@ -725,8 +723,32 @@ export default function Email() {
 
   useEffect(() => {
     if (!messageData?.uid) return;
-    queryClient.invalidateQueries({ queryKey: ['mail-inbox'] });
-    queryClient.invalidateQueries({ queryKey: ['mail-unread-count'] });
+
+    let markedRead = 0;
+    queryClient.setQueriesData({ queryKey: ['mail-inbox'] }, (current) => {
+      if (!current?.messages) return current;
+
+      const messages = current.messages.map((message) => {
+        if (String(message.uid) !== String(messageData.uid) || message.seen) {
+          return message;
+        }
+        markedRead = 1;
+        return { ...message, seen: true };
+      });
+
+      return {
+        ...current,
+        messages,
+        unread_count: Math.max(0, (current.unread_count || 0) - markedRead),
+      };
+    });
+
+    if (markedRead) {
+      queryClient.setQueriesData({ queryKey: ['mail-unread-count'] }, (current) => {
+        if (!current || typeof current.unread_count !== 'number') return current;
+        return { ...current, unread_count: Math.max(0, current.unread_count - 1) };
+      });
+    }
   }, [messageData?.uid, queryClient]);
 
   const invalidateMail = () => {

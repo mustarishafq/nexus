@@ -16,9 +16,11 @@ import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttend
 import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
 import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettingsPanel';
 import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
+import EarlyClockInBackfillPanel from '@/components/admin/EarlyClockInBackfillPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { normalizeSplashAnimation } from '@/lib/splashAnimations';
 import { resetSplashFormState, splashConfigToFormState } from '@/lib/splashConfig';
 import { launchConfigToFormState, resetLaunchFormState } from '@/lib/launchConfig';
@@ -35,6 +37,13 @@ const ADMIN_SECTIONS = [
 ];
 
 const ATTENDANCE_TAB_IDS = new Set(ATTENDANCE_SETTING_TABS.map((tab) => tab.id));
+
+const GAMIFICATION_TABS = [
+  { id: 'settings', label: 'Settings' },
+  { id: 'recalculate', label: 'Recalculate' },
+];
+
+const GAMIFICATION_TAB_IDS = new Set(GAMIFICATION_TABS.map((tab) => tab.id));
 
 const ADMIN_SECTION_IDS = new Set(ADMIN_SECTIONS.map((item) => item.id));
 
@@ -108,6 +117,8 @@ export default function AdminSettings({ embedded = false }) {
 
   const attendanceTabParam = searchParams.get('attendanceTab');
   const attendanceTab = ATTENDANCE_TAB_IDS.has(attendanceTabParam) ? attendanceTabParam : 'locations';
+  const expTabParam = searchParams.get('expTab');
+  const gamificationTab = GAMIFICATION_TAB_IDS.has(expTabParam) ? expTabParam : 'settings';
 
   const setActiveSection = (section) => {
     setSearchParams((current) => {
@@ -119,6 +130,11 @@ export default function AdminSettings({ embedded = false }) {
       } else if (!next.get('attendanceTab')) {
         next.set('attendanceTab', 'locations');
       }
+      if (section !== 'gamification') {
+        next.delete('expTab');
+      } else if (!next.get('expTab')) {
+        next.set('expTab', 'settings');
+      }
       return next;
     });
   };
@@ -129,6 +145,16 @@ export default function AdminSettings({ embedded = false }) {
       next.set('tab', 'admin');
       next.set('section', 'attendance');
       next.set('attendanceTab', nextTab);
+      return next;
+    });
+  };
+
+  const setGamificationTab = (nextTab) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('tab', 'admin');
+      next.set('section', 'gamification');
+      next.set('expTab', nextTab);
       return next;
     });
   };
@@ -298,17 +324,56 @@ export default function AdminSettings({ embedded = false }) {
             ) : null}
 
             {activeSection === 'gamification' && isAdmin ? (
-              <Card className="rounded-2xl">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Experience rewards</CardTitle>
-                  <CardDescription>
-                    Tune EXP amounts and daily caps for missions without a code deploy.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <GamificationSettingsPanel settings={settings} onChange={setSettings} />
-                </CardContent>
-              </Card>
+              <div className="space-y-4">
+                <div className="flex gap-1 rounded-lg border bg-muted/40 p-1 w-full sm:w-auto">
+                  {GAMIFICATION_TABS.map((item) => {
+                    const selected = item.id === gamificationTab;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setGamificationTab(item.id)}
+                        className={cn(
+                          'min-h-[36px] flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none',
+                          selected
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {gamificationTab === 'recalculate' ? (
+                  <Card className="rounded-2xl">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Recalculate Early clock-in EXP</CardTitle>
+                      <CardDescription>
+                        Preview and offer missed Early clock-in rewards after you widen the window.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <EarlyClockInBackfillPanel
+                        windowMinutes={Number(settings?.gamification?.early_clock_in_window_minutes ?? 60)}
+                        cutoffMinutes={Number(settings?.gamification?.early_clock_in_cutoff_minutes ?? 0)}
+                      />
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="rounded-2xl">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Experience rewards</CardTitle>
+                      <CardDescription>
+                        Tune EXP amounts and daily caps for missions without a code deploy.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <GamificationSettingsPanel settings={settings} onChange={setSettings} />
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             ) : null}
 
             {activeSection === 'attendance' ? (
@@ -460,7 +525,9 @@ export default function AdminSettings({ embedded = false }) {
               </>
             ) : null}
 
-            {activeSection !== 'attendance' && !(activeSection === 'feed' && !isAdmin) ? (
+            {activeSection !== 'attendance'
+              && !(activeSection === 'feed' && !isAdmin)
+              && !(activeSection === 'gamification' && gamificationTab === 'recalculate') ? (
               <div className="sticky bottom-[var(--nexus-dock-clearance)] z-30 -mx-1 flex justify-end rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 md:bottom-4 md:z-20">
                 <Button onClick={save} disabled={saving} className="gap-2 w-full sm:w-auto min-h-[44px]">
                   <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save admin settings'}

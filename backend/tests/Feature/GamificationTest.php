@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceRecord;
 use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\ExpReward;
@@ -473,7 +474,7 @@ class GamificationTest extends TestCase
 
     public function test_level_progress_boundaries_and_claim_level_up(): void
     {
-        $catalog = \App\Support\GamificationCatalog::class;
+        $catalog = GamificationCatalog::class;
 
         $this->assertSame(1, $catalog::levelProgress(0)['level']);
         $this->assertSame(0, $catalog::levelProgress(0)['stars']);
@@ -528,7 +529,7 @@ class GamificationTest extends TestCase
         $reward = $service->offer($user, 'event_check_in', 'calendar_event', 303);
         $this->assertNotNull($reward);
 
-        $before = \App\Support\GamificationCatalog::levelProgress(54830);
+        $before = GamificationCatalog::levelProgress(54830);
         $this->assertSame(99, $before['level']);
         $this->assertSame(0, $before['stars']);
 
@@ -728,5 +729,96 @@ class GamificationTest extends TestCase
             ->assertJsonPath('user.exp_total', 250)
             ->assertJsonPath('user.level', 3)
             ->assertJsonPath('user.rank', 1);
+    }
+
+    public function test_early_clock_in_backfill_uses_original_day_and_preserves_later_streak(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 10:00:00', 'Asia/Kuala_Lumpur'));
+
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'gamification_overrides' => json_encode([
+                'early_clock_in_window_minutes' => 120,
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AppSettings::forget();
+
+        $department = Department::query()->create(['name' => 'Ops']);
+        DepartmentAttendanceSetting::query()->create([
+            'department_id' => $department->id,
+            'enabled' => true,
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'grace_period_minutes' => 10,
+            'require_early_clock_out_reason' => false,
+            'require_late_clock_in_reason' => false,
+            'allow_outside_shift_hours' => true,
+            'overtime_enabled' => false,
+            'standard_hours_per_day' => 8,
+            'overtime_threshold_minutes' => 0,
+            'shifts' => [[
+                'name' => 'Day Shift',
+                'days_of_week' => [1, 2, 3, 4, 5],
+                'start_time' => '09:00',
+                'end_time' => '17:30',
+                'crosses_midnight' => false,
+            ]],
+        ]);
+
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'department_id' => $department->id,
+            'email' => 'ain.azman@example.com',
+        ]);
+
+        $capturedAt = Carbon::parse('2026-08-26 07:29:26', 'Asia/Kuala_Lumpur');
+        $record = AttendanceRecord::query()->create([
+            'user_id' => $user->id,
+            'type' => 'clock_in',
+            'photo_url' => 'https://example.com/in.jpg',
+            'captured_at' => $capturedAt,
+        ]);
+
+        $todayEarly = app(GamificationService::class)->offer(
+            $user,
+            'clock_in_early',
+            'attendance_record',
+            8318,
+        );
+        $this->assertNotNull($todayEarly);
+        $this->assertSame(1, (int) UserStreak::query()
+            ->where('user_id', $user->id)
+            ->where('streak_key', 'early_clock_in')
+            ->value('current_count'));
+
+        $this->artisan('gamification:backfill-early-clock-in', [
+            '--date' => '2026-08-26',
+            '--user' => (string) $user->id,
+            '--timezone' => 'Asia/Kuala_Lumpur',
+        ])->assertSuccessful();
+
+        $backfilled = ExpReward::query()
+            ->where('user_id', $user->id)
+            ->where('action_key', 'clock_in_early')
+            ->where('source_id', (string) $record->id)
+            ->first();
+
+        $this->assertNotNull($backfilled);
+        $this->assertSame(ExpReward::STATUS_PENDING, $backfilled->status);
+        $this->assertSame(15, (int) $backfilled->amount);
+        $this->assertSame('2026-08-26', $backfilled->created_at->timezone('Asia/Kuala_Lumpur')->toDateString());
+        $this->assertTrue((bool) data_get($backfilled->metadata, 'streak_skipped'));
+
+        $streak = UserStreak::query()
+            ->where('user_id', $user->id)
+            ->where('streak_key', 'early_clock_in')
+            ->first();
+        $this->assertSame(1, (int) $streak->current_count);
+        $this->assertSame('2026-09-01', $streak->last_qualified_on?->toDateString());
+        $this->assertSame(ExpReward::STATUS_PENDING, $todayEarly->fresh()->status);
+
+        Carbon::setTestNow();
     }
 }

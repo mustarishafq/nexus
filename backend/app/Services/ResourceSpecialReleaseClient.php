@@ -132,6 +132,7 @@ class ResourceSpecialReleaseClient
             ], $apiKey, 'HS256');
 
             $response = Http::timeout(self::HTTP_TIMEOUT_SECONDS)
+                ->connectTimeout(1)
                 ->withToken($serviceToken)
                 ->withHeaders([
                     'Accept' => 'application/json',

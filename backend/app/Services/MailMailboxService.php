@@ -23,6 +23,7 @@ use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\MessageNotFoundException;
 use Webklex\PHPIMAP\Folder;
+use Webklex\PHPIMAP\Header;
 use Webklex\PHPIMAP\IMAP;
 use Webklex\PHPIMAP\Message;
 
@@ -233,10 +234,19 @@ class MailMailboxService
         $logicalFolder = $this->normalizeLogicalFolder($folder);
 
         $client = $this->openMailbox($config, $credential->email, $password);
-        $map = $this->discoverFolderMapFromClient($client);
-        $this->folderMapCache[$credential->id] = $map;
 
         try {
+            // INBOX is always selectable by name — skip LIST (which is slow on
+            // large cPanel accounts and happens on every inbox load).
+            if ($logicalFolder === self::FOLDER_INBOX) {
+                return new MailImapSession(
+                    $client,
+                    new Folder($client, 'INBOX', '.', []),
+                    $this->folderMapCache[$credential->id] ?? [self::FOLDER_INBOX => 'INBOX'],
+                );
+            }
+
+            $map = $this->cachedFolderMap($credential, $client);
             $imapFolder = $map[$logicalFolder] ?? $this->defaultImapFolder($logicalFolder);
 
             return new MailImapSession(
@@ -313,9 +323,17 @@ class MailMailboxService
     public function disconnect(User $user, ?int $accountId = null): void
     {
         if ($accountId === null) {
+            $ids = UserMailCredential::query()
+                ->where('user_id', $user->id)
+                ->pluck('id');
+
             UserMailCredential::query()
                 ->where('user_id', $user->id)
                 ->delete();
+
+            foreach ($ids as $id) {
+                Cache::forget('mail:folders.'.$id);
+            }
 
             app(MailInboxPushService::class)->resetWatchState($user);
 
@@ -324,6 +342,7 @@ class MailMailboxService
 
         $credential = $this->resolveAccount($user, $accountId);
         $wasPrimary = $credential->is_primary;
+        Cache::forget('mail:folders.'.$credential->id);
         $credential->delete();
 
         if ($wasPrimary) {
@@ -420,6 +439,8 @@ class MailMailboxService
             ? [$this->normalizeLogicalFolder($folder)]
             : self::logicalFolders();
 
+        $this->bumpMailboxCacheEpoch($user->id, $credential->id);
+
         foreach ($folders as $logicalFolder) {
             Cache::forget("mail:unread:{$user->id}:{$credential->id}:{$logicalFolder}");
         }
@@ -433,65 +454,42 @@ class MailMailboxService
         int $limit = 40,
         ?string $query = null,
         bool $unreadOnly = false,
-        bool $includeAttachments = true,
+        bool $includeAttachments = false,
         ?int $accountId = null,
         string $folder = self::FOLDER_INBOX,
     ): array {
         $credential = $this->resolveAccount($user, $accountId);
         $folder = $this->normalizeLogicalFolder($folder);
+        $limit = max(1, min($limit, 100));
+        $query = trim((string) $query);
+
+        $cacheKey = $this->listCacheKey(
+            $user->id,
+            $credential->id,
+            $folder,
+            $limit,
+            $query,
+            $unreadOnly,
+            $includeAttachments,
+        );
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['messages'])) {
+            return $cached;
+        }
+
         $session = $this->connect($user, $credential->id, $folder);
 
         try {
-            $uids = $this->searchMessageUids($session->folder, $query, $unreadOnly);
+            $messages = $this->fetchListMessages(
+                $session->folder,
+                $limit,
+                $query,
+                $unreadOnly,
+                $includeAttachments,
+            );
             $unreadCount = $this->folderUnseenCount($session->folder);
 
-            if ($uids === []) {
-                return [
-                    'messages' => [],
-                    'unread_count' => $unreadCount,
-                    'folder' => $folder,
-                    'account_id' => $credential->id,
-                ];
-            }
-
-            rsort($uids);
-            $uids = array_slice($uids, 0, min($limit, 100));
-
-            $fetched = $session->folder->query()
-                ->where('UID', implode(',', $uids))
-                ->leaveUnread()
-                ->setFetchOrder('desc')
-                ->setFetchBody($includeAttachments)
-                ->get();
-
-            $byUid = [];
-            foreach ($fetched as $message) {
-                $byUid[(int) $message->getUid()] = $message;
-            }
-
-            $messages = [];
-
-            foreach ($uids as $uid) {
-                $message = $byUid[$uid] ?? null;
-
-                if (! $message) {
-                    continue;
-                }
-
-                $messages[] = [
-                    'uid' => $uid,
-                    'subject' => $this->messageSubject($message),
-                    'from' => $this->formatAddresses($message->getFrom()),
-                    'to' => $this->formatAddresses($message->getTo()),
-                    'date' => $this->messageDate($message),
-                    'seen' => $message->hasFlag('Seen'),
-                    'has_attachments' => $includeAttachments
-                        ? $this->fileAttachments($message) !== []
-                        : false,
-                ];
-            }
-
-            return [
+            $payload = [
                 'messages' => $messages,
                 'unread_count' => $unreadCount,
                 'folder' => $folder,
@@ -500,6 +498,206 @@ class MailMailboxService
         } finally {
             $session->disconnect();
         }
+
+        Cache::put($cacheKey, $payload, now()->addSeconds(20));
+        Cache::put(
+            "mail:unread:{$user->id}:{$credential->id}:{$folder}",
+            ['unread_count' => $unreadCount],
+            now()->addSeconds(45),
+        );
+
+        return $payload;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function fetchListMessages(
+        Folder $folder,
+        int $limit,
+        string $query,
+        bool $unreadOnly,
+        bool $includeAttachments,
+    ): array {
+        if ($query !== '') {
+            $uids = $this->searchMessageUids($folder, $query, $unreadOnly);
+
+            if ($uids === []) {
+                return [];
+            }
+
+            rsort($uids);
+            $uids = array_slice($uids, 0, $limit);
+
+            try {
+                $fetched = $folder->query()
+                    ->where('UID', implode(',', $uids))
+                    ->leaveUnread()
+                    ->setFetchOrder('desc')
+                    ->setFetchBody($includeAttachments)
+                    ->get();
+            } catch (Throwable) {
+                return [];
+            }
+
+            $byUid = [];
+            foreach ($fetched as $message) {
+                $byUid[(int) $message->getUid()] = $message;
+            }
+
+            $messages = [];
+            foreach ($uids as $uid) {
+                $message = $byUid[$uid] ?? null;
+                if (! $message) {
+                    continue;
+                }
+                $messages[] = $this->summarizeListMessage($message, $includeAttachments);
+            }
+
+            return $messages;
+        }
+
+        try {
+            $builder = $folder->query()
+                ->leaveUnread()
+                ->setFetchOrder('desc')
+                ->setFetchBody($includeAttachments)
+                ->limit($limit);
+
+            if ($unreadOnly) {
+                $builder->unseen();
+            } else {
+                $builder->all();
+            }
+
+            $fetched = $builder->get();
+        } catch (Throwable) {
+            return [];
+        }
+
+        $messages = [];
+        foreach ($fetched as $message) {
+            $messages[] = $this->summarizeListMessage($message, $includeAttachments);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function summarizeListMessage(Message $message, bool $includeAttachments): array
+    {
+        return [
+            'uid' => (int) $message->getUid(),
+            'subject' => $this->messageSubject($message),
+            'from' => $this->formatAddresses($message->getFrom()),
+            'to' => $this->formatAddresses($message->getTo()),
+            'date' => $this->messageDate($message),
+            'seen' => $message->hasFlag('Seen'),
+            'has_attachments' => $includeAttachments
+                ? $this->fileAttachments($message) !== []
+                : $this->headersSuggestAttachments($message->getHeader()),
+        ];
+    }
+
+    protected function headersSuggestAttachments(?Header $header): bool
+    {
+        if ($header === null) {
+            return false;
+        }
+
+        return $this->contentHeadersSuggestAttachments(
+            (string) $header->get('content_type'),
+            (string) $header->get('content_disposition'),
+            (string) ($header->raw ?? ''),
+            (string) $header->get('x_ms_has_attach'),
+        );
+    }
+
+    /**
+     * Detect attachments from RFC822 headers so the inbox list does not
+     * download message bodies (and any attached files) just for a paperclip.
+     */
+    protected function contentHeadersSuggestAttachments(
+        string $contentType,
+        string $disposition = '',
+        string $raw = '',
+        string $msHasAttach = '',
+    ): bool {
+        $contentType = strtolower($contentType);
+        $disposition = strtolower($disposition);
+        $msHasAttach = strtolower(trim($msHasAttach));
+
+        if ($msHasAttach === 'yes' || str_contains($disposition, 'attachment')) {
+            return true;
+        }
+
+        if (str_contains($contentType, 'multipart/mixed')) {
+            return true;
+        }
+
+        return stripos($raw, 'Content-Disposition: attachment') !== false;
+    }
+
+    protected function listCacheKey(
+        int $userId,
+        int $credentialId,
+        string $folder,
+        int $limit,
+        string $query,
+        bool $unreadOnly,
+        bool $includeAttachments,
+    ): string {
+        $epoch = $this->mailboxCacheEpoch($userId, $credentialId);
+
+        return sprintf(
+            'mail:list:%d:%d:%d:%s:%d:%s:%s:%d',
+            $epoch,
+            $userId,
+            $credentialId,
+            $folder,
+            $limit,
+            $unreadOnly ? 'u' : 'a',
+            md5($query),
+            $includeAttachments ? 1 : 0,
+        );
+    }
+
+    protected function mailboxCacheEpoch(int $userId, int $credentialId): int
+    {
+        return max(1, (int) Cache::get("mail:epoch:{$userId}:{$credentialId}", 1));
+    }
+
+    protected function bumpMailboxCacheEpoch(int $userId, int $credentialId): void
+    {
+        Cache::put(
+            "mail:epoch:{$userId}:{$credentialId}",
+            $this->mailboxCacheEpoch($userId, $credentialId) + 1,
+            now()->addDay(),
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function cachedFolderMap(UserMailCredential $credential, Client $client): array
+    {
+        if (isset($this->folderMapCache[$credential->id])) {
+            return $this->folderMapCache[$credential->id];
+        }
+
+        $cacheKey = 'mail:folders.'.$credential->id;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && $cached !== []) {
+            return $this->folderMapCache[$credential->id] = $cached;
+        }
+
+        $map = $this->discoverFolderMapFromClient($client);
+        $this->folderMapCache[$credential->id] = $map;
+        Cache::put($cacheKey, $map, now()->addMinutes(15));
+
+        return $map;
     }
 
     /**
@@ -978,6 +1176,8 @@ class MailMailboxService
         } finally {
             $session->disconnect();
         }
+
+        $this->forgetUnreadCountCache($user, $accountId, $folder);
     }
 
     public function markUnread(User $user, int $uid, ?int $accountId = null, string $folder = self::FOLDER_INBOX): void
@@ -990,6 +1190,8 @@ class MailMailboxService
         } finally {
             $session->disconnect();
         }
+
+        $this->forgetUnreadCountCache($user, $accountId, $folder);
     }
 
     /**
@@ -1287,9 +1489,15 @@ class MailMailboxService
     protected function findImapFolder(Client $client, string $imapFolder): ?Folder
     {
         try {
+            $client->openFolder($imapFolder);
+
+            return new Folder($client, $imapFolder, '.', []);
+        } catch (Throwable) {
+        }
+
+        try {
             return $client->getFolderByPath($imapFolder, false, true)
-                ?? $client->getFolderByName($imapFolder, true)
-                ?? $client->getFolder($imapFolder);
+                ?? $client->getFolderByName($imapFolder, true);
         } catch (Throwable) {
             return null;
         }

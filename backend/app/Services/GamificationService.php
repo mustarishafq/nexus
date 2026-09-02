@@ -180,6 +180,7 @@ class GamificationService
         int|string $sourceId,
         array $meta = [],
         ?int $amountOverride = null,
+        ?Carbon $occurredAt = null,
     ): ?ExpReward {
         $definition = GamificationCatalog::action($actionKey);
         if ($definition === null) {
@@ -200,7 +201,8 @@ class GamificationService
         }
 
         $timezone = $this->resolveTimezone($user);
-        $today = now()->timezone($timezone)->toDateString();
+        $qualifiedAt = $occurredAt?->copy()->timezone($timezone) ?? now()->timezone($timezone);
+        $today = $qualifiedAt->toDateString();
 
         if ($definition['daily_cap'] !== null) {
             $dayStart = Carbon::parse($today, $timezone)->startOfDay()->timezone(config('app.timezone'));
@@ -222,13 +224,29 @@ class GamificationService
         $metadata = $meta;
 
         if ($definition['streak_key'] !== null) {
-            $streak = $this->advanceStreak($user, $definition['streak_key'], $today);
-            $streakCount = $streak->current_count;
-            $bonus = GamificationCatalog::streakBonus($amount, $streakCount);
-            $amount += $bonus;
-            $metadata['streak_key'] = $definition['streak_key'];
-            $metadata['streak_count'] = $streakCount;
-            $metadata['streak_bonus'] = $bonus;
+            $existingStreak = UserStreak::query()
+                ->where('user_id', $user->id)
+                ->where('streak_key', $definition['streak_key'])
+                ->first();
+            $lastQualified = $existingStreak?->last_qualified_on?->toDateString();
+
+            // A historical backfill must not rewind a streak that already
+            // qualified on a later day.
+            if ($lastQualified !== null && $lastQualified > $today) {
+                $streakCount = 1;
+                $metadata['streak_key'] = $definition['streak_key'];
+                $metadata['streak_count'] = $streakCount;
+                $metadata['streak_bonus'] = 0;
+                $metadata['streak_skipped'] = true;
+            } else {
+                $streak = $this->advanceStreak($user, $definition['streak_key'], $today);
+                $streakCount = $streak->current_count;
+                $bonus = GamificationCatalog::streakBonus($amount, $streakCount);
+                $amount += $bonus;
+                $metadata['streak_key'] = $definition['streak_key'];
+                $metadata['streak_count'] = $streakCount;
+                $metadata['streak_bonus'] = $bonus;
+            }
         }
 
         $title = $definition['title'];
@@ -237,7 +255,7 @@ class GamificationService
         }
 
         try {
-            return ExpReward::query()->create([
+            $reward = ExpReward::query()->create([
                 'user_id' => $user->id,
                 'action_key' => $actionKey,
                 'amount' => $amount,
@@ -251,6 +269,14 @@ class GamificationService
             // Race on unique constraint — treat as already offered.
             return null;
         }
+
+        if ($occurredAt !== null) {
+            $reward->created_at = $occurredAt->copy()->timezone(config('app.timezone'));
+            $reward->updated_at = $reward->created_at;
+            $reward->saveQuietly();
+        }
+
+        return $reward;
     }
 
     /**

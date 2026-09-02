@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Mockery;
 use Tests\TestCase;
+use Webklex\PHPIMAP\Client;
 
 class MailControllerTest extends TestCase
 {
@@ -308,6 +309,38 @@ class MailControllerTest extends TestCase
         config(['mail.imap.enabled' => true]);
 
         $this->assertTrue(app(MailMailboxService::class)->isImapEnabled());
-        $this->assertTrue(class_exists(\Webklex\PHPIMAP\Client::class));
+        $this->assertTrue(class_exists(Client::class));
+    }
+
+    public function test_mail_index_lists_headers_without_fetching_bodies(): void
+    {
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $mailMock = Mockery::mock(MailMailboxService::class)->makePartial();
+        $mailMock->shouldReceive('listInbox')
+            ->once()
+            ->withArgs(function ($checkedUser, $limit, $query, $unreadOnly, $includeAttachments) use ($user) {
+                return $checkedUser->is($user)
+                    && $limit === 50
+                    && $query === null
+                    && $unreadOnly === false
+                    && $includeAttachments === false;
+            })
+            ->andReturn([
+                'messages' => [],
+                'unread_count' => 0,
+                'folder' => 'inbox',
+                'account_id' => 1,
+            ]);
+        $this->app->instance(MailMailboxService::class, $mailMock);
+
+        $this->withToken($token)
+            ->getJson('/api/mail/messages')
+            ->assertOk()
+            ->assertJson([
+                'messages' => [],
+                'unread_count' => 0,
+            ]);
     }
 }

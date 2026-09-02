@@ -14,6 +14,7 @@ class AttendanceLateEvaluator
      * (start−earlyWindow … end+grace). After the shift ends, a clock-in is
      * outside hours — not a late arrival for that start.
      *
+     * @param  bool  $includeSpecialRelease  When false, skip Insan pin lookups (bulk backfill).
      * @return array{
      *     is_late: bool,
      *     late_minutes: int,
@@ -27,7 +28,7 @@ class AttendanceLateEvaluator
      *     special_release_shift?: bool
      * }
      */
-    public static function evaluate(User $user, Carbon $capturedAt): array
+    public static function evaluate(User $user, Carbon $capturedAt, bool $includeSpecialRelease = true): array
     {
         $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
         $earlyCutoff = GamificationSettings::earlyClockInCutoffMinutes();
@@ -63,13 +64,15 @@ class AttendanceLateEvaluator
         $grace = (int) $setting->grace_period_minutes;
         $result['grace_period_minutes'] = $grace;
 
-        $today = $at->toDateString();
-        $release = app(ResourceSpecialReleaseClient::class)
-            ->findApprovedForUserOnDate($user->id, $today);
-        $synthetic = $release?->toSyntheticShift();
+        if ($includeSpecialRelease) {
+            $today = $at->toDateString();
+            $release = app(ResourceSpecialReleaseClient::class)
+                ->findApprovedForUserOnDate($user->id, $today);
+            $synthetic = $release?->toSyntheticShift();
 
-        if ($synthetic) {
-            return self::evaluateAgainstShift($synthetic, $at, $grace, $earlyWindow, $result, specialRelease: true);
+            if ($synthetic) {
+                return self::evaluateAgainstShift($synthetic, $at, $grace, $earlyWindow, $result, specialRelease: true);
+            }
         }
 
         if (empty($setting->shifts)) {

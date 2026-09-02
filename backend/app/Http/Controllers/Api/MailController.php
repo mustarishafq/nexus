@@ -242,12 +242,7 @@ class MailController extends Controller
                 (int) ($validated['limit'] ?? 50),
                 $validated['q'] ?? null,
                 (bool) ($validated['unread'] ?? false),
-                true,
-                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
-                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
-            );
-            $this->mail->forgetUnreadCountCache(
-                $user,
+                false,
                 isset($validated['account_id']) ? (int) $validated['account_id'] : null,
                 $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
             );

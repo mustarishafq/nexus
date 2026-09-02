@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import db from '@/api/apiClient';
 import { showMailInboxAlert } from '@/lib/notificationAlerts';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
+import { MAIL_STATUS_QUERY_KEY, mailInboxQueryKey } from '@/lib/queryKeys';
 import { isWebPushSupported } from '@/lib/webPush';
-
-export const MAIL_NOTIFY_QUERY_KEY = ['mail-inbox-notify'];
 
 async function hasActiveBrowserPushSubscription() {
   if (!isWebPushSupported()) {
@@ -26,7 +25,6 @@ async function hasActiveBrowserPushSubscription() {
 
 export default function MailNotificationGate() {
   const { isAuthenticated } = useAuth();
-  const queryClient = useQueryClient();
   const seenUidsRef = useRef(new Set());
   const initializedRef = useRef(false);
   const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
@@ -64,18 +62,24 @@ export default function MailNotificationGate() {
   const useClientPolling = isAuthenticated && !serverPushActive;
 
   const { data: mailStatus } = useQuery({
-    queryKey: ['mail-status'],
+    queryKey: MAIL_STATUS_QUERY_KEY,
     queryFn: () => db.mail.status(),
     enabled: isAuthenticated,
     staleTime: 60_000,
   });
 
   const mailConnected = Boolean(mailStatus?.connected);
+  const accountId = mailStatus?.account?.id || null;
 
   const { data: mailInbox } = useQuery({
-    queryKey: MAIL_NOTIFY_QUERY_KEY,
-    queryFn: () => db.mail.listMessages({ limit: 25 }),
+    queryKey: mailInboxQueryKey(accountId, 'inbox', '', false),
+    queryFn: () => db.mail.listMessages({
+      limit: 50,
+      accountId: accountId || undefined,
+      folder: 'inbox',
+    }),
     enabled: useClientPolling && mailConnected,
+    staleTime: 20_000,
     refetchInterval: useClientPolling ? pollInterval : false,
     retry: false,
   });
@@ -92,18 +96,6 @@ export default function MailNotificationGate() {
       initializedRef.current = false;
     }
   }, [isAuthenticated, mailConnected]);
-
-  useEffect(() => {
-    if (!useClientPolling || !mailConnected || !pollInterval) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: MAIL_NOTIFY_QUERY_KEY });
-    }, pollInterval);
-
-    return () => window.clearInterval(intervalId);
-  }, [useClientPolling, mailConnected, pollInterval, queryClient]);
 
   useEffect(() => {
     if (!useClientPolling) {

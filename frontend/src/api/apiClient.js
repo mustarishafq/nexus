@@ -1609,6 +1609,13 @@ export const db = {
 		});
 	},
 
+	async backfillEarlyClockInExp(payload) {
+		return request('/admin/gamification/early-clock-in-backfill', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
 	async listAdminApiTokens() {
 		return request('/admin/api-tokens');
 	},

@@ -77,4 +77,23 @@ class MailMailboxUtf8Test extends TestCase
         $this->assertStringContainsString('Price', $decoded);
         $this->assertStringContainsString('100', $decoded);
     }
+
+    public function test_content_headers_detect_attachments_without_body(): void
+    {
+        $service = app(MailMailboxService::class);
+        $method = new ReflectionMethod(MailMailboxService::class, 'contentHeadersSuggestAttachments');
+
+        $this->assertTrue($method->invoke($service, 'multipart/mixed; boundary="abc"', '', '', ''));
+        $this->assertTrue($method->invoke($service, 'text/plain', 'attachment; filename="a.pdf"', '', ''));
+        $this->assertTrue($method->invoke($service, 'text/html', '', '', 'yes'));
+        $this->assertTrue($method->invoke(
+            $service,
+            'multipart/alternative',
+            '',
+            "Content-Type: multipart/alternative\r\nContent-Disposition: attachment; filename=\"x.csv\"\r\n",
+            '',
+        ));
+        $this->assertFalse($method->invoke($service, 'multipart/alternative; boundary="x"', '', '', ''));
+        $this->assertFalse($method->invoke($service, 'text/plain; charset=utf-8', '', '', ''));
+    }
 }

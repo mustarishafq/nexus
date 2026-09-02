@@ -247,6 +247,7 @@ class ResourceAttendanceForwarder
 
         try {
             $response = Http::timeout(4)
+                ->connectTimeout(1)
                 ->acceptJson()
                 ->get($baseUrl.'/.well-known/nexus-integration.json');
 
