@@ -545,7 +545,54 @@ class GamificationTest extends TestCase
             ->assertJsonPath('star_earned', true);
     }
 
+    public function test_celebration_wish_does_not_reoffer_exp_after_unreact(): void
+    {
+        $celebrationDate = '2026-09-06';
+        $recipient = User::factory()->create([
+            'is_approved' => true,
+            'date_of_birth' => '1990-09-06',
+        ]);
+        $sender = User::factory()->create(['is_approved' => true]);
+        $payload = [
+            'recipient_user_id' => $recipient->id,
+            'celebration_type' => 'birthday',
+            'celebration_date' => $celebrationDate,
+            'reaction' => '🎉',
+        ];
+
+        $first = $this->withToken($this->token($sender))
+            ->postJson('/api/dashboard/celebrations/wishes', $payload)
+            ->assertCreated();
+
+        $this->assertNotNull($first->json('gamification_offer'));
+        $this->assertSame(
+            1,
+            ExpReward::query()->where('user_id', $sender->id)->where('action_key', 'celebration_wish')->count()
+        );
+
+        $wishId = $first->json('reaction.id');
+
+        $this->withToken($this->token($sender))
+            ->deleteJson("/api/dashboard/celebrations/wishes/{$wishId}")
+            ->assertNoContent();
+
+        $second = $this->withToken($this->token($sender))
+            ->postJson('/api/dashboard/celebrations/wishes', $payload)
+            ->assertCreated();
+
+        $this->assertNull($second->json('gamification_offer'));
+        $this->assertSame(
+            1,
+            ExpReward::query()->where('user_id', $sender->id)->where('action_key', 'celebration_wish')->count()
+        );
+        $this->assertSame(
+            $recipient->id.'-birthday-'.$celebrationDate.'-'.$sender->id,
+            ExpReward::query()->where('user_id', $sender->id)->where('action_key', 'celebration_wish')->value('source_id')
+        );
+    }
+
     public function test_self_reaction_does_not_offer_exp(): void
+
     {
         $author = User::factory()->create(['is_approved' => true]);
         $post = Post::query()->create([

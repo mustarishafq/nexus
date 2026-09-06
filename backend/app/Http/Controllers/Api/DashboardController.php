@@ -198,7 +198,7 @@ class DashboardController extends Controller
                 $sender,
                 'celebration_wish',
                 'celebration_wish',
-                $wish->id,
+                $recipient->id.'-'.$validated['celebration_type'].'-'.$celebrationDate.'-'.$sender->id,
             );
             $payload = array_merge($payload, app(GamificationService::class)->offerPayload($offer));
         }
