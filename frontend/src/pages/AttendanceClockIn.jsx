@@ -48,9 +48,12 @@ export default function AttendanceClockIn() {
   const nextType = status?.next_type || 'clock_in';
   const isClockIn = nextType === 'clock_in';
   const policy = status?.policy;
-  const allowOutsideRadius = isClockIn
-    ? Boolean(policy?.allow_outside_radius)
-    : Boolean(policy?.allow_clock_out_outside_radius);
+  const activeSpecialRelease = policy?.active_special_release || null;
+  const allowOutsideRadius = activeSpecialRelease
+    ? Boolean(activeSpecialRelease.allow_outside_radius)
+    : (isClockIn
+      ? Boolean(policy?.allow_outside_radius)
+      : Boolean(policy?.allow_clock_out_outside_radius));
 
   const lateClockIn = useMemo(() => {
     if (!isClockIn || !policy?.require_late_clock_in_reason) {
@@ -143,8 +146,34 @@ export default function AttendanceClockIn() {
     });
   }, [capture, clockMutation, lateClockInReason, needsLateReason, reasonReady]);
 
-  const activeSpecialRelease = policy?.active_special_release || null;
-  const activeShift = policy ? findActiveShift(policy) : null;
+  const submitHint = !reasonReady ? 'Enter a late clock-in reason first' : '';
+  const reasonFields = needsLateReason ? (
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
+      <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
+        <CardTitle className="text-base">Late clock-in reason</CardTitle>
+        <CardDescription className="text-pretty">
+          You are clocking in
+          {lateClockIn.late_minutes
+            ? ` ${formatDurationMinutes(lateClockIn.late_minutes, { style: 'long' })} late`
+            : ' late'}
+          . A reason is required.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 p-4 pt-0 sm:p-6 sm:pt-0">
+        <Label htmlFor="late-clock-in-reason">Reason</Label>
+        <Textarea
+          id="late-clock-in-reason"
+          value={lateClockInReason}
+          onChange={(event) => setLateClockInReason(event.target.value)}
+          placeholder="Why are you clocking in late?"
+          maxLength={500}
+          rows={3}
+          disabled={clockMutation.isPending}
+        />
+      </CardContent>
+    </Card>
+  ) : null;
+
   const attendanceSites = useMemo(() => {
     if (activeSpecialRelease?.center_latitude != null && activeSpecialRelease?.center_longitude != null) {
       const typeLabel = activeSpecialRelease.type === 'wfh'
@@ -176,6 +205,7 @@ export default function AttendanceClockIn() {
 
   const scheduleHint = status?.schedule_hint;
   const policyParts = useMemo(() => listAttendancePolicyParts(policy), [policy]);
+  const activeShift = policy ? findActiveShift(policy) : null;
   const specialReleaseTypeLabel = activeSpecialRelease
     ? (activeSpecialRelease.type === 'wfh'
       ? 'WFH'
@@ -264,8 +294,17 @@ export default function AttendanceClockIn() {
         </Card>
       ) : null}
 
-      <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <Card className="min-w-0 overflow-hidden rounded-2xl p-0">
+      <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+        {needsLateReason ? (
+          <div className="order-1 min-w-0 lg:col-start-2 lg:row-start-1">
+            {reasonFields}
+          </div>
+        ) : null}
+        <Card className={
+          needsLateReason
+            ? 'order-2 min-w-0 overflow-hidden rounded-2xl p-0 lg:col-start-1 lg:row-start-1 lg:row-span-2'
+            : 'min-w-0 overflow-hidden rounded-2xl p-0 lg:col-start-1 lg:row-start-1'
+        }>
           <CardContent className="p-0">
             <AttendanceCamera
               key={cameraKey}
@@ -278,6 +317,7 @@ export default function AttendanceClockIn() {
               actionType={nextType}
               submitting={clockMutation.isPending}
               canSubmit={Boolean(capture?.blob) && reasonReady}
+              submitHint={submitHint}
               disabled={clockMutation.isPending || statusLoading}
               onCapture={handleCapture}
               onSubmit={handleSubmit}
@@ -285,34 +325,11 @@ export default function AttendanceClockIn() {
           </CardContent>
         </Card>
 
-        <div className="min-w-0 space-y-3 sm:space-y-4">
-          {needsLateReason ? (
-            <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
-              <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-                <CardTitle className="text-base">Late clock-in reason</CardTitle>
-                <CardDescription className="text-pretty">
-                  You are clocking in
-                  {lateClockIn.late_minutes
-                    ? ` ${formatDurationMinutes(lateClockIn.late_minutes, { style: 'long' })} late`
-                    : ' late'}
-                  . A reason is required.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 p-4 pt-0 sm:p-6 sm:pt-0">
-                <Label htmlFor="late-clock-in-reason">Reason</Label>
-                <Textarea
-                  id="late-clock-in-reason"
-                  value={lateClockInReason}
-                  onChange={(event) => setLateClockInReason(event.target.value)}
-                  placeholder="Why are you clocking in late?"
-                  maxLength={500}
-                  rows={3}
-                  disabled={clockMutation.isPending}
-                />
-              </CardContent>
-            </Card>
-          ) : null}
-
+        <div className={
+          needsLateReason
+            ? 'order-3 min-w-0 space-y-3 sm:space-y-4 lg:col-start-2 lg:row-start-2'
+            : 'min-w-0 space-y-3 sm:space-y-4 lg:col-start-2 lg:row-start-1'
+        }>
           <Card className="min-w-0 overflow-hidden rounded-2xl">
             <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
               <CardTitle className="text-base">Current status</CardTitle>

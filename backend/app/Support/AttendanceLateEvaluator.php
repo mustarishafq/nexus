@@ -4,15 +4,13 @@ namespace App\Support;
 
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
-use App\Services\ResourceSpecialReleaseClient;
 use Carbon\Carbon;
 
 class AttendanceLateEvaluator
 {
     /**
-     * Late only while still inside the scheduled shift window
-     * (start−earlyWindow … end+grace). After the shift ends, a clock-in is
-     * outside hours — not a late arrival for that start.
+     * Late if after the resolved shift start + grace (including overnight morning
+     * leg and punches after the window). Special-release overwrite hours win when set.
      *
      * @param  bool  $includeSpecialRelease  When false, skip Insan pin lookups (bulk backfill).
      * @return array{
@@ -65,30 +63,47 @@ class AttendanceLateEvaluator
         $result['grace_period_minutes'] = $grace;
 
         if ($includeSpecialRelease) {
-            $today = $at->toDateString();
-            $release = app(ResourceSpecialReleaseClient::class)
-                ->findApprovedForUserOnDate($user->id, $today);
-            $synthetic = $release?->toSyntheticShift();
-
-            if ($synthetic) {
-                return self::evaluateAgainstShift($synthetic, $at, $grace, $earlyWindow, $result, specialRelease: true);
-            }
+            $shift = AttendanceShiftResolver::resolveShiftForClockIn($user, $at, $setting);
+        } else {
+            $shift = self::resolveDepartmentShift($user, $at, $setting);
         }
 
-        if (empty($setting->shifts)) {
+        if ($shift === null) {
             return $result;
         }
 
-        $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
-        foreach ($shifts as $shift) {
-            if (! self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
-                continue;
-            }
+        return self::evaluateAgainstShift(
+            $shift,
+            $at,
+            $grace,
+            $result,
+            specialRelease: ! empty($shift['special_release_id']),
+        );
+    }
 
-            return self::evaluateAgainstShift($shift, $at, $grace, $earlyWindow, $result);
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function resolveDepartmentShift(User $user, Carbon $at, DepartmentAttendanceSetting $setting): ?array
+    {
+        $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
+        if ($shifts === []) {
+            return null;
         }
 
-        return $result;
+        if (count($shifts) === 1) {
+            return $shifts[0];
+        }
+
+        $grace = (int) $setting->grace_period_minutes;
+        $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
+        foreach ($shifts as $shift) {
+            if (self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
+                return $shift;
+            }
+        }
+
+        return AttendanceShiftResolver::nearestDayMatchingShift($shifts, $at) ?? $shifts[0];
     }
 
     /**
@@ -100,14 +115,9 @@ class AttendanceLateEvaluator
         array $shift,
         Carbon $at,
         int $grace,
-        int $earlyWindow,
         array $result,
         bool $specialRelease = false,
     ): array {
-        if (! self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
-            return $result;
-        }
-
         $start = self::parseTimeToMinutes((string) ($shift['start_time'] ?? '09:00'));
         $end = self::parseTimeToMinutes((string) ($shift['end_time'] ?? '17:00'));
         $crosses = (bool) ($shift['crosses_midnight'] ?? false);

@@ -128,6 +128,7 @@ export default function AttendanceCamera({
   submitting = false,
   canSubmit = false,
   disabled = false,
+  submitHint = '',
   className = '',
 }) {
   const videoRef = useRef(null);
@@ -672,6 +673,11 @@ export default function AttendanceCamera({
                         : actionLabel}
                     </button>
                     </div>
+                    {!canSubmit && submitHint ? (
+                      <p className="text-center text-[11px] font-medium text-amber-100 drop-shadow">
+                        {submitHint}
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2.5">

@@ -97,15 +97,51 @@ function parseTimeToMinutes(time) {
   return (hour * 60) + minute;
 }
 
-export function isWithinShift(shift, date, graceMinutes = 0, earlyWindowMinutes = 60) {
+const WEEKDAY_TO_ISO = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+
+export function zonedTimeParts(date, timeZone) {
+  const instant = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(instant.getTime())) {
+    return { isoDay: 1, minutes: 0 };
+  }
+  if (!timeZone) {
+    return {
+      isoDay: instant.getDay() === 0 ? 7 : instant.getDay(),
+      minutes: (instant.getHours() * 60) + instant.getMinutes(),
+    };
+  }
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(instant);
+    const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const hour = Number(map.hour);
+    const minute = Number(map.minute);
+    return {
+      isoDay: WEEKDAY_TO_ISO[map.weekday] || (instant.getDay() === 0 ? 7 : instant.getDay()),
+      minutes: ((Number.isFinite(hour) ? hour : 0) * 60) + (Number.isFinite(minute) ? minute : 0),
+    };
+  } catch {
+    return {
+      isoDay: instant.getDay() === 0 ? 7 : instant.getDay(),
+      minutes: (instant.getHours() * 60) + instant.getMinutes(),
+    };
+  }
+}
+
+function isWithinShiftAt(shift, zoned, graceMinutes = 0, earlyWindowMinutes = 60) {
   const days = shift?.days_of_week || [];
   if (!days.length) return true;
 
-  const isoDay = date.getDay() === 0 ? 7 : date.getDay();
-  const current = (date.getHours() * 60) + date.getMinutes();
   const start = parseTimeToMinutes(shift.start_time);
   const end = parseTimeToMinutes(shift.end_time);
   const crosses = Boolean(shift.crosses_midnight);
+  const current = zoned.minutes;
+  const isoDay = zoned.isoDay;
   const earlyWindow = Number.isFinite(Number(earlyWindowMinutes))
     ? Math.max(0, Number(earlyWindowMinutes))
     : 60;
@@ -124,17 +160,122 @@ export function isWithinShift(shift, date, graceMinutes = 0, earlyWindowMinutes 
   return current >= startBound && current <= endBound;
 }
 
+export function isWithinShift(shift, date, graceMinutes = 0, earlyWindowMinutes = 60, timeZone = null) {
+  return isWithinShiftAt(shift, zonedTimeParts(date, timeZone), graceMinutes, earlyWindowMinutes);
+}
+
+function specialReleaseTypeLabel(type) {
+  return ({
+    wfh: 'WFH',
+    outstation: 'Outstation',
+    training: 'Training',
+    event: 'Event',
+  }[type] || 'Other');
+}
+
+export function specialReleaseOverwriteShift(policy) {
+  const release = policy?.active_special_release;
+  const start = String(release?.shift_start_time || '').slice(0, 5);
+  const end = String(release?.shift_end_time || '').slice(0, 5);
+  if (!release?.overwrite_shift || !/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) {
+    return null;
+  }
+  return {
+    id: release.id != null ? `special-release-${release.id}` : 'special-release',
+    name: `Special release (${specialReleaseTypeLabel(release.type)})`,
+    days_of_week: [1, 2, 3, 4, 5, 6, 7],
+    start_time: start.length === 4 ? `0${start}` : start,
+    end_time: end.length === 4 ? `0${end}` : end,
+    crosses_midnight: Boolean(release.shift_crosses_midnight),
+  };
+}
+
+function catalogShiftById(shifts, id) {
+  if (id == null || id === '') return null;
+  return (shifts || []).find((shift) => String(shift.id) === String(id)) || null;
+}
+
+function plannedShiftFromPolicy(policy) {
+  const catalog = Array.isArray(policy?.shifts) ? policy.shifts : [];
+  const fromId = catalogShiftById(catalog, policy?.planned_shift_id);
+  if (fromId) return fromId;
+  const planned = policy?.planned_shift;
+  if (!planned?.start_time) return null;
+  return {
+    id: planned.id,
+    name: planned.name,
+    start_time: String(planned.start_time).slice(0, 5),
+    end_time: String(planned.end_time || '18:00').slice(0, 5),
+    crosses_midnight: Boolean(planned.crosses_midnight),
+    days_of_week: Array.isArray(planned.days_of_week) ? planned.days_of_week : [1, 2, 3, 4, 5, 6, 7],
+  };
+}
+
+export function resolveShiftForLateClockIn(policy, date = new Date()) {
+  const overwrite = specialReleaseOverwriteShift(policy);
+  if (overwrite) return overwrite;
+
+  const planned = plannedShiftFromPolicy(policy);
+  if (planned) return planned;
+
+  const catalog = Array.isArray(policy?.shifts) ? policy.shifts : [];
+  if (!catalog.length) return null;
+
+  const zoned = zonedTimeParts(date, policy?.timezone);
+  const grace = Number(policy?.grace_period_minutes ?? 0);
+  const earlyWindow = Number(policy?.early_clock_in_window_minutes ?? 60);
+  const assignedIds = (Array.isArray(policy?.attendance_shift_ids)
+    ? policy.attendance_shift_ids
+    : (policy?.attendance_shift_id ? [policy.attendance_shift_id] : [])
+  ).map(String).filter(Boolean);
+
+  let candidates = catalog.filter((shift) => {
+    const days = shift?.days_of_week || [];
+    return !days.length || days.includes(zoned.isoDay);
+  });
+  if (assignedIds.length) {
+    const assigned = candidates.filter((shift) => assignedIds.includes(String(shift.id)));
+    if (assigned.length) candidates = assigned;
+  }
+  if (!candidates.length) {
+    candidates = catalog;
+  }
+
+  const within = candidates.find((candidate) => isWithinShiftAt(candidate, zoned, grace, earlyWindow));
+  if (within) return within;
+  if (candidates.length === 1) return candidates[0];
+
+  let shift = candidates[0];
+  let bestDistance = Infinity;
+  candidates.forEach((candidate) => {
+    const start = parseTimeToMinutes(candidate.start_time || '09:00');
+    const distance = Math.abs(zoned.minutes - start);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      shift = candidate;
+    }
+  });
+  return shift;
+}
+
 export function findActiveShift(policy, date = new Date()) {
-  if (!policy?.shifts?.length) return null;
-  const grace = policy.grace_period_minutes ?? 0;
-  const earlyWindow = policy.early_clock_in_window_minutes ?? 60;
-  return policy.shifts.find((shift) => isWithinShift(shift, date, grace, earlyWindow)) || null;
+  return resolveShiftForLateClockIn(policy, date);
+}
+
+function lateMinutesAgainstShift(shift, currentMinutes, grace) {
+  const start = parseTimeToMinutes(shift.start_time || '09:00');
+  const end = parseTimeToMinutes(shift.end_time || '18:00');
+  const crosses = Boolean(shift.crosses_midnight);
+  const endBound = Math.min((24 * 60) - 1, end + grace);
+  const onMorningLeg = crosses && currentMinutes <= endBound;
+  const startAbs = onMorningLeg ? start - (24 * 60) : start;
+  const late = currentMinutes - (startAbs + grace);
+  return late > 0 ? late : 0;
 }
 
 /**
- * Mirror backend AttendanceLateEvaluator: late only while still inside the
- * shift window (start−earlyWindow … end+grace) and after start + grace.
- * After the shift ends, clock-in is outside hours — not a late arrival.
+ * Mirror backend AttendanceLateEvaluator: late if after resolved shift start + grace.
+ * Uses overwrite / planned shift and department timezone when present.
  * @returns {{ is_late: boolean, late_minutes: number, scheduled_start: Date|null, shift_name: string|null }}
  */
 export function evaluateLateClockIn(policy, date = new Date()) {
@@ -145,43 +286,19 @@ export function evaluateLateClockIn(policy, date = new Date()) {
     shift_name: null,
   };
 
-  if (!policy?.shifts?.length) {
+  const shift = resolveShiftForLateClockIn(policy, date);
+  if (!shift) {
     return result;
   }
 
-  const grace = Number(policy.grace_period_minutes ?? 0);
-  const earlyWindow = Number(policy.early_clock_in_window_minutes ?? 60);
-  const current = (date.getHours() * 60) + date.getMinutes();
+  const grace = Number(policy?.grace_period_minutes ?? 0);
+  const zoned = zonedTimeParts(date, policy?.timezone);
+  const lateMinutes = lateMinutesAgainstShift(shift, zoned.minutes, grace);
 
-  for (const shift of policy.shifts) {
-    if (!isWithinShift(shift, date, grace, earlyWindow)) {
-      continue;
-    }
-
-    const start = parseTimeToMinutes(shift.start_time || '09:00');
-    const end = parseTimeToMinutes(shift.end_time || '17:00');
-    const crosses = Boolean(shift.crosses_midnight);
-    const endBound = Math.min((24 * 60) - 1, end + grace);
-
-    // Overnight morning leg is still the previous calendar day's start.
-    const onMorningLeg = crosses && current <= endBound;
-    const scheduledStart = new Date(date);
-    scheduledStart.setHours(0, 0, 0, 0);
-    scheduledStart.setMinutes(start);
-    if (onMorningLeg) {
-      scheduledStart.setDate(scheduledStart.getDate() - 1);
-    }
-
-    result.scheduled_start = scheduledStart;
-    result.shift_name = shift.name || null;
-
-    const deadlineMs = scheduledStart.getTime() + (grace * 60 * 1000);
-    if (date.getTime() > deadlineMs) {
-      result.is_late = true;
-      result.late_minutes = Math.max(1, Math.round((date.getTime() - deadlineMs) / 60000));
-    }
-
-    break;
+  result.shift_name = shift.name || null;
+  if (lateMinutes > 0) {
+    result.is_late = true;
+    result.late_minutes = lateMinutes;
   }
 
   return result;
