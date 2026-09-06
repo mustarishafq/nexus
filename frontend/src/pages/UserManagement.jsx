@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch, Gift } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch, Gift, LogOut } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,29 @@ const MCP_ACCESS_OPTIONS = [
   { value: 'write', label: 'Write only' },
   { value: 'both', label: 'Read & write' },
 ];
+
+function isUserResigned(user) {
+  return Boolean(user?.resigned_at);
+}
+
+function UserApprovalBadge({ user }) {
+  if (isUserResigned(user)) {
+    return (
+      <Badge variant="outline" className="text-xs capitalize border-muted-foreground/40 text-muted-foreground">
+        resigned
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      variant={user.is_approved ? 'default' : 'outline'}
+      className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
+    >
+      {user.is_approved ? 'approved' : 'pending'}
+    </Badge>
+  );
+}
 
 function McpAccessSelect({ value, onChange, disabled = false }) {
   return (
@@ -370,6 +393,8 @@ export default function UserManagement() {
   const [groupForm, setGroupForm] = useState({ name: '', description: '', allowedSlugs: new Set(), userIds: new Set() });
   const [groupSaving, setGroupSaving] = useState(false);
   const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
+  const [pendingResignUser, setPendingResignUser] = useState(null);
+  const [resignDate, setResignDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
   const [dashboardDialogOpen, setDashboardDialogOpen] = useState(false);
   const [editDashboard, setEditDashboard] = useState(null);
@@ -741,6 +766,18 @@ export default function UserManagement() {
     },
   });
 
+  const resignUserMut = useMutation({
+    mutationFn: ({ id, resigned_at }) => db.resignUser(id, { resigned_at }),
+    onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.error(err?.data?.message || err.message || 'Failed to mark user as resigned');
+    },
+    onSuccess: async (result, { name }) => {
+      await queryClient.refetchQueries({ queryKey: ['users'] });
+      toast.success(result?.message || `Marked ${name} as resigned`);
+    },
+  });
+
   const deleteGroupMut = useMutation({
     mutationFn: ({ id }) => db.entities.AccessGroup.delete(id),
     onError: (err, { id }) => {
@@ -910,6 +947,17 @@ export default function UserManagement() {
     const user = pendingDeleteUser;
     setPendingDeleteUser(null);
     deleteUserMut.mutate({ id: user.id, name: user.full_name || user.email });
+  };
+
+  const confirmResignUser = () => {
+    if (!pendingResignUser || resignUserMut.isPending || !resignDate) return;
+    const user = pendingResignUser;
+    setPendingResignUser(null);
+    resignUserMut.mutate({
+      id: user.id,
+      name: user.full_name || user.email,
+      resigned_at: resignDate,
+    });
   };
 
   const confirmDeleteGroup = () => {
@@ -1135,7 +1183,7 @@ export default function UserManagement() {
           </>
         ) : null}
         <DropdownMenuSeparator />
-        {user.is_approved ? (
+        {!isUserResigned(user) && user.is_approved ? (
           <DropdownMenuItem
             onClick={() => setPendingUserApproval({ user, isApproved: false })}
             disabled={approvingUser === user.id || (isHrUser && !isAdmin && user.role === 'admin')}
@@ -1143,7 +1191,8 @@ export default function UserManagement() {
             <UserX className="w-4 h-4 mr-2" />
             Revoke access
           </DropdownMenuItem>
-        ) : (
+        ) : null}
+        {!isUserResigned(user) && !user.is_approved ? (
           <DropdownMenuItem
             onClick={() => setPendingUserApproval({ user, isApproved: true })}
             disabled={approvingUser === user.id}
@@ -1151,7 +1200,22 @@ export default function UserManagement() {
             <UserCheck className="w-4 h-4 mr-2" />
             Approve user
           </DropdownMenuItem>
-        )}
+        ) : null}
+        {(isAdmin || isHrUser) && !isUserResigned(user) ? (
+          <DropdownMenuItem
+            onClick={() => {
+              setResignDate(new Date().toLocaleDateString('en-CA'));
+              setPendingResignUser(user);
+            }}
+            disabled={
+              String(user.id) === String(currentUser?.id)
+              || (isHrUser && !isAdmin && (user.role === 'admin' || user.role === 'hr'))
+            }
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Mark as resigned
+          </DropdownMenuItem>
+        ) : null}
         {isAdmin ? (
           <DropdownMenuItem
             onClick={() => setPendingDeleteUser(user)}
@@ -1663,7 +1727,7 @@ export default function UserManagement() {
 
   // Roster payloads are already approved and omit `is_approved`; admin list rows include it.
   const notifiableUsers = (pickerUsers.length > 0 ? pickerUsers : users)
-    .filter((user) => user.is_approved !== false)
+    .filter((user) => user.is_approved !== false && !isUserResigned(user))
     .sort((a, b) => (a.full_name || a.name || a.email || '').localeCompare(b.full_name || b.name || b.email || ''));
 
   const importBusy = importing || importingHr || assigningGroups;
@@ -1980,12 +2044,7 @@ export default function UserManagement() {
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <RoleBadge role={user.access_role?.slug || user.role} label={user.access_role?.name} size="sm" />
-                      <Badge
-                        variant={user.is_approved ? 'default' : 'outline'}
-                        className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
-                      >
-                        {user.is_approved ? 'approved' : 'pending'}
-                      </Badge>
+                      <UserApprovalBadge user={user} />
                       {!user.has_push_subscription && (
                         <Badge
                           variant="outline"
@@ -2040,12 +2099,7 @@ export default function UserManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge
-                            variant={user.is_approved ? 'default' : 'outline'}
-                            className={cn('text-xs capitalize', !user.is_approved && 'border-amber-500/40 text-amber-500')}
-                          >
-                            {user.is_approved ? 'approved' : 'pending'}
-                          </Badge>
+                          <UserApprovalBadge user={user} />
                           {!user.has_push_subscription && (
                             <Badge
                               variant="outline"
@@ -3140,6 +3194,48 @@ export default function UserManagement() {
               }}
             >
               {previewStarting ? 'Starting…' : 'Preview as user'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(pendingResignUser)} onOpenChange={(open) => !open && setPendingResignUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark as resigned?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingResignUser ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {pendingResignUser.full_name || pendingResignUser.email}
+                  </span>{' '}
+                  will be labeled as resigned in Brain and Resource, and will no longer be able to sign in. Their profile stays in the roster.
+                </>
+              ) : (
+                'This user will be labeled as resigned in Brain and Resource, and will no longer be able to sign in.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="brain-resign-ended-at">Resigned on</Label>
+            <Input
+              id="brain-resign-ended-at"
+              type="date"
+              value={resignDate}
+              disabled={resignUserMut.isPending}
+              onChange={(event) => setResignDate(event.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resignUserMut.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resignUserMut.isPending || !resignDate}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmResignUser();
+              }}
+            >
+              {resignUserMut.isPending ? 'Saving...' : 'Mark as resigned'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

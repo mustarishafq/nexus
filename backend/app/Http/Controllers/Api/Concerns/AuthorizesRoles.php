@@ -58,7 +58,7 @@ trait AuthorizesRoles
     {
         $user = ApiTokenAuth::userFromRequest($request);
 
-        if (! $user || ! $user->is_approved) {
+        if (! $user || $user->isResigned() || ! $user->is_approved) {
             return null;
         }
 

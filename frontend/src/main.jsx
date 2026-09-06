@@ -64,3 +64,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />
 )
+
+try {
+  sessionStorage.removeItem('nexus_boot_retry');
+} catch (e) {}

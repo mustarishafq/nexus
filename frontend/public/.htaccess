@@ -1,19 +1,11 @@
 <IfModule mod_headers.c>
-    # SPA HTML must revalidate so deploys pick up new hashed /assets/* URLs.
+    # HTML shell must revalidate so deploys pick up new hashed /assets/* URLs.
     Header always set Cache-Control "no-cache, no-store, must-revalidate" "expr=%{CONTENT_TYPE} =~ m#^text/html#"
 
     <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
-        Header unset ETag
-        Header always unset Expires
-        Header always set Cache-Control "no-cache, no-store, must-revalidate"
-        Header always set Pragma "no-cache"
-        Header always set Expires "0"
-    </FilesMatch>
-</IfModule>
-
-<IfModule mod_expires.c>
-    <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
-        ExpiresActive Off
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
     </FilesMatch>
 </IfModule>
 
@@ -21,8 +13,7 @@
     RewriteEngine On
     RewriteBase /
 
-    # Built assets must 404 when missing. Falling back to index.html makes the
-    # browser reject JS/CSS with: MIME type "text/html" is not a valid module/stylesheet.
+    # Missing /assets/* must 404, not fall back to index.html.
     RewriteRule ^assets/ - [L]
 
     RewriteRule ^index\.html$ - [L]
@@ -30,8 +21,3 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule . /index.html [L]
 </IfModule>
-
-# Missing /assets/* files 404 as plain text, not an HTML error page.
-<If "%{REQUEST_URI} =~ m#^/assets/#">
-    ErrorDocument 404 "Not found"
-</If>

@@ -388,7 +388,6 @@ export default function ApplicationUsage() {
   }, [userView]);
 
   useMetaTags({
-    title: 'Active Users - Applications - EMZI Nexus Brain',
     description: 'Monitor WAU and MAU with per-user launch activity',
   });
 

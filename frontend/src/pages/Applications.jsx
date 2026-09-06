@@ -302,7 +302,6 @@ export default function Applications() {
   const showUsage = canViewApplicationUsage(currentUser, systems);
 
   useMetaTags({
-    title: 'Applications - EMZI Nexus Brain',
     description: 'Browse and launch the systems available to you',
   });
 

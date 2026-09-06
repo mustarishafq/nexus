@@ -77,6 +77,7 @@ class EmployeeSyncApplyService
         foreach ($employees as $row) {
             if (! is_array($row)) {
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -93,6 +94,7 @@ class EmployeeSyncApplyService
 
             if (! $user) {
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -136,10 +138,12 @@ class EmployeeSyncApplyService
                 $value = $row[$field];
                 if (in_array($field, ['spouse_details', 'children'], true)) {
                     $fill[$field] = is_array($value) ? $value : null;
+
                     continue;
                 }
                 if ($field === 'personal_phone_visible') {
                     $fill[$field] = (bool) $value;
+
                     continue;
                 }
                 if (in_array($field, ['employee_id', 'job_title', 'employment_type', 'joined_at'], true)
@@ -181,6 +185,18 @@ class EmployeeSyncApplyService
                 $user->delete();
             } elseif (! $deleted && $user->trashed()) {
                 $user->restore();
+            }
+
+            if ((bool) ($row['resigned'] ?? false)) {
+                $endedAt = $user->resigned_at?->toDateString();
+                if (! $endedAt) {
+                    $raw = trim((string) ($row['resigned_at'] ?? ''));
+                    $endedAt = $raw !== '' ? $raw : now()->toDateString();
+                }
+                $user->forceFill([
+                    'resigned_at' => $endedAt,
+                    'is_approved' => false,
+                ])->save();
             }
 
             $pendingManagers[$user->id] = isset($row['manager_nexus_user_id']) && $row['manager_nexus_user_id'] !== ''

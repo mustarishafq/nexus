@@ -29,7 +29,6 @@ export default function People() {
   const debouncedSearch = useDebouncedValue(search.trim());
 
   useMetaTags({
-    title: 'People - EMZI Nexus Brain',
     description: 'Browse and connect with colleagues across your organization',
   });
 

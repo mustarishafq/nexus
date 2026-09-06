@@ -81,7 +81,6 @@ export const AuthProvider = ({ children }) => {
       setAppPublicSettings(publicSettings || { system_name: 'EMZI Nexus Brain' });
 
       if (publicSettings?.system_name) {
-        document.title = publicSettings.system_name;
         const appleTitle = document.getElementById('apple-app-title');
         if (appleTitle) {
           appleTitle.setAttribute('content', publicSettings.system_name);
@@ -112,7 +111,7 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
       setAuthError(null);
     } catch (error) {
-      if (silent && error?.status !== 401 && error?.data?.code !== 'account_not_approved') {
+      if (silent && error?.status !== 401 && error?.data?.code !== 'account_not_approved' && error?.data?.code !== 'account_resigned') {
         return;
       }
       console.error('User auth check failed:', error);
@@ -122,6 +121,13 @@ export const AuthProvider = ({ children }) => {
       setForcePasswordChange(false);
       setIsImpersonating(readIsImpersonating());
       setAuthChecked(true);
+      if (error?.status === 403 && error?.data?.code === 'account_resigned') {
+        setAuthError({
+          type: 'user_resigned',
+          message: 'This account has resigned and can no longer sign in.',
+        });
+        return;
+      }
       if (error?.status === 403 && error?.data?.code === 'account_not_approved') {
         setAuthError({
           type: 'user_not_approved',

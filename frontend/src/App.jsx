@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { LightboxStackProvider } from '@/components/media/LightboxStackContext';
 import { ApplicationLaunchProvider } from '@/lib/ApplicationLaunchContext';
 import { SplashGateProvider } from '@/lib/SplashGateContext';
+import DocumentTitle from '@/components/DocumentTitle';
 
 const AppLayout = lazy(() => import('@/components/layout/AppLayout'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -83,6 +84,9 @@ const ProtectedRoutes = () => {
     return <Navigate to="/login" replace />;
   }
 
+  if (authError?.type === 'user_resigned') {
+    return <Navigate to="/login?status=resigned" replace />;
+  }
   if (authError?.type === 'user_not_approved') {
     return <Navigate to="/login?status=pending_approval" replace />;
   }
@@ -171,6 +175,7 @@ function App() {
             <PwaSplashScreen />
           </Suspense>
           <Router>
+            <DocumentTitle />
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<Login />} />

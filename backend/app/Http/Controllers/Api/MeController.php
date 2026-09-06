@@ -33,6 +33,13 @@ class MeController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if ($user->isResigned()) {
+            return response()->json([
+                'message' => 'This account has resigned and can no longer sign in.',
+                'code' => 'account_resigned',
+            ], 403);
+        }
+
         if (! $user->is_approved) {
             return response()->json([
                 'message' => 'Your account is pending admin approval.',

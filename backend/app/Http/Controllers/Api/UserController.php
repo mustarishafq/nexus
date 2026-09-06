@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\PermissionService;
 use App\Services\ProfileNudgeService;
+use App\Services\ResourceEmployeeForwarder;
 use App\Services\UserPresenceService;
 use App\Support\ApiTokenAuth;
 use App\Support\McpUserAccess;
@@ -25,6 +26,7 @@ use App\Support\UserProfileSerializer;
 use App\Support\UserRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -693,10 +695,10 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'email'     => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
-            'password'  => ['required', 'string', 'min:8'],
-            'role'      => ['sometimes', 'string', Rule::exists('roles', 'slug')],
-            'role_id'   => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+            'role' => ['sometimes', 'string', Rule::exists('roles', 'slug')],
+            'role_id' => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
@@ -726,15 +728,15 @@ class UserController extends Controller
         $validated = $this->resolveCompanyFields($validated);
 
         $user = User::create([
-            'name'                   => '',
-            'full_name'              => $validated['full_name'],
-            'email'                  => $validated['email'] ?? null,
-            'password'               => Hash::make($validated['password']),
-            'role_id'                => $assignedRole->id,
-            'mcp_access'             => $validated['mcp_access'] ?? McpUserAccess::NONE,
-            'is_approved'            => $validated['is_approved'] ?? true,
-            'force_password_change'  => true,
-            'company_id'             => $validated['company_id'] ?? null,
+            'name' => '',
+            'full_name' => $validated['full_name'],
+            'email' => $validated['email'] ?? null,
+            'password' => Hash::make($validated['password']),
+            'role_id' => $assignedRole->id,
+            'mcp_access' => $validated['mcp_access'] ?? McpUserAccess::NONE,
+            'is_approved' => $validated['is_approved'] ?? true,
+            'force_password_change' => true,
+            'company_id' => $validated['company_id'] ?? null,
         ]);
 
         if ($groupIds !== null) {
@@ -747,7 +749,7 @@ class UserController extends Controller
     /**
      * Bulk-create users from a CSV upload.
      * Expected CSV columns: full_name, email (nullable), password (optional), role (optional), is_approved (optional)
-     * 
+     *
      * Features:
      * - Batch processing to avoid memory issues
      * - Full error tracking and reporting
@@ -765,35 +767,36 @@ class UserController extends Controller
         ]);
 
         try {
-            $file    = $request->file('file');
-            $handle  = fopen($file->getRealPath(), 'r');
-            if (!$handle) {
+            $file = $request->file('file');
+            $handle = fopen($file->getRealPath(), 'r');
+            if (! $handle) {
                 return response()->json([
                     'created' => [],
-                    'errors'  => ['Failed to open file'],
-                    'count'   => 0,
+                    'errors' => ['Failed to open file'],
+                    'count' => 0,
                 ], 400);
             }
 
             $headers = array_map('trim', fgetcsv($handle));
-            if (!$headers) {
+            if (! $headers) {
                 fclose($handle);
+
                 return response()->json([
                     'created' => [],
-                    'errors'  => ['Empty CSV file or invalid format'],
-                    'count'   => 0,
+                    'errors' => ['Empty CSV file or invalid format'],
+                    'count' => 0,
                 ], 400);
             }
 
             $created = [];
-            $errors  = [];
-            $batch   = [];
-            $row     = 1;
+            $errors = [];
+            $batch = [];
+            $row = 1;
             $batchSize = 100; // Process 100 users at a time
 
             while (($data = fgetcsv($handle)) !== false) {
                 $row++;
-                
+
                 // Skip empty rows
                 if (empty(array_filter($data))) {
                     continue;
@@ -803,12 +806,14 @@ class UserController extends Controller
                     $record = array_combine($headers, array_map('trim', $data));
                     if ($record === false) {
                         $errors[] = "Row {$row}: CSV column count mismatch";
+
                         continue;
                     }
 
                     // Validate required fields
                     if (empty($record['full_name'])) {
                         $errors[] = "Row {$row}: missing full_name";
+
                         continue;
                     }
 
@@ -816,30 +821,32 @@ class UserController extends Controller
                     $email = $record['email'] ?? null;
                     if ($email) {
                         $email = trim($email);
-                        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        if (empty($email) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                             $errors[] = "Row {$row}: invalid email format '{$email}'";
+
                             continue;
                         }
 
                         if (User::where('email', $email)->exists()) {
                             $errors[] = "Row {$row}: email '{$email}' already exists";
+
                             continue;
                         }
                     }
 
-                    $password = !empty($record['password']) ? trim($record['password']) : 'Password@123';
+                    $password = ! empty($record['password']) ? trim($record['password']) : 'Password@123';
 
                     // Add to batch
                     $batch[] = [
-                        'name'                   => '',
-                        'full_name'              => $record['full_name'],
-                        'email'                  => $email,
-                        'password'               => Hash::make($password),
-                        'role'                   => $record['role'] ?? 'user',
-                        'is_approved'            => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
-                        'force_password_change'  => true,
-                        'created_at'             => now(),
-                        'updated_at'             => now(),
+                        'name' => '',
+                        'full_name' => $record['full_name'],
+                        'email' => $email,
+                        'password' => Hash::make($password),
+                        'role' => $record['role'] ?? 'user',
+                        'is_approved' => isset($record['is_approved']) ? filter_var($record['is_approved'], FILTER_VALIDATE_BOOLEAN) : true,
+                        'force_password_change' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ];
 
                     // Execute batch if it reaches batch size
@@ -848,12 +855,12 @@ class UserController extends Controller
                         $batch = [];
                     }
                 } catch (\Exception $e) {
-                    $errors[] = "Row {$row}: " . $e->getMessage();
+                    $errors[] = "Row {$row}: ".$e->getMessage();
                 }
             }
 
             // Insert remaining batch
-            if (!empty($batch)) {
+            if (! empty($batch)) {
                 $this->insertBatch($batch, $created, $errors);
             }
 
@@ -861,15 +868,15 @@ class UserController extends Controller
 
             return response()->json([
                 'created' => $created,
-                'errors'  => $errors,
-                'count'   => count($created),
+                'errors' => $errors,
+                'count' => count($created),
                 'total_rows' => $row - 1,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'created' => [],
-                'errors'  => ['Import failed: ' . $e->getMessage()],
-                'count'   => 0,
+                'errors' => ['Import failed: '.$e->getMessage()],
+                'count' => 0,
             ], 500);
         }
     }
@@ -888,7 +895,7 @@ class UserController extends Controller
         ]);
 
         try {
-            $result = (new UserHrCsvImporter())->import($request->file('file')->getRealPath());
+            $result = (new UserHrCsvImporter)->import($request->file('file')->getRealPath());
 
             return response()->json($result);
         } catch (\Exception $e) {
@@ -919,7 +926,7 @@ class UserController extends Controller
         try {
             $file = $request->file('file');
             $handle = fopen($file->getRealPath(), 'r');
-            if (!$handle) {
+            if (! $handle) {
                 return response()->json([
                     'updated' => [],
                     'errors' => ['Failed to open file'],
@@ -931,7 +938,7 @@ class UserController extends Controller
                 fn ($header) => strtolower(trim((string) $header)),
                 fgetcsv($handle) ?: []
             );
-            if (!$headers) {
+            if (! $headers) {
                 fclose($handle);
 
                 return response()->json([
@@ -974,23 +981,27 @@ class UserController extends Controller
 
                 if ($email === '') {
                     $errors[] = "Row {$row}: missing email";
+
                     continue;
                 }
 
                 if ($groupName === '') {
                     $errors[] = "Row {$row}: missing access_group for '{$email}'";
+
                     continue;
                 }
 
                 $user = User::where('email', $email)->first();
-                if (!$user) {
+                if (! $user) {
                     $errors[] = "Row {$row}: user not found for email '{$email}'";
+
                     continue;
                 }
 
                 $group = $groupsByName->get(strtolower($groupName));
-                if (!$group) {
+                if (! $group) {
                     $errors[] = "Row {$row}: access group '{$groupName}' not found for '{$email}'";
+
                     continue;
                 }
 
@@ -1012,7 +1023,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'updated' => [],
-                'errors' => ['Import failed: ' . $e->getMessage()],
+                'errors' => ['Import failed: '.$e->getMessage()],
                 'count' => 0,
             ], 500);
         }
@@ -1031,12 +1042,14 @@ class UserController extends Controller
                     $created[] = $user->email ?? $user->name;
                     $inserted++;
                 } catch (\Exception $e) {
-                    $errors[] = "Failed to create user '{$userData['full_name']}': " . $e->getMessage();
+                    $errors[] = "Failed to create user '{$userData['full_name']}': ".$e->getMessage();
                 }
             }
+
             return $inserted;
         } catch (\Exception $e) {
-            $errors[] = "Batch insert error: " . $e->getMessage();
+            $errors[] = 'Batch insert error: '.$e->getMessage();
+
             return 0;
         }
     }
@@ -1170,9 +1183,76 @@ class UserController extends Controller
             $user->accessGroups()->sync($groupIds);
         }
 
-        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+        app(ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
 
         return response()->json($user->fresh()->load(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences', 'userSkills']));
+    }
+
+    public function resign(Request $request, User $user): JsonResponse
+    {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
+            return $response;
+        }
+
+        $actor = ApiTokenAuth::userFromRequest($request);
+        $canAssignRole = $actor && PermissionService::can($actor, PermissionCatalog::PEOPLE_ASSIGN_ROLE);
+
+        if ($actor && (int) $actor->id === (int) $user->id) {
+            return response()->json([
+                'message' => 'You cannot resign your own account.',
+            ], 422);
+        }
+
+        if ($actor && ! $canAssignRole && $this->userHoldsProtectedPeopleRole($user)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($user->isResigned()) {
+            return response()->json([
+                'message' => 'This user has already resigned.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'resigned_at' => ['sometimes', 'nullable', 'date'],
+        ]);
+
+        $previousResignedAt = $user->resigned_at;
+        $previousApproved = $user->is_approved;
+
+        $user->forceFill([
+            'resigned_at' => $validated['resigned_at'] ?? now()->toDateString(),
+            'is_approved' => false,
+        ])->save();
+
+        $result = app(ResourceEmployeeForwarder::class)->pushUsers([$user->fresh()]);
+        if (! ($result['ok'] ?? false) && ! ($result['skipped'] ?? false)) {
+            $user->forceFill([
+                'resigned_at' => $previousResignedAt,
+                'is_approved' => $previousApproved,
+            ])->save();
+
+            return response()->json([
+                'message' => $result['message'] ?? 'Resource resign label failed.',
+            ], 422);
+        }
+
+        $insan = null;
+        if (($result['ok'] ?? false) && ! ($result['skipped'] ?? false)) {
+            $insan = ['resigned' => true];
+        }
+
+        return response()->json([
+            'message' => $insan
+                ? 'User resigned in Brain and Resource'
+                : 'User marked as resigned.',
+            'insan' => $insan,
+            'user' => $this->adminUserPayload(
+                $user->fresh()
+                    ->load(['accessGroups', 'department', 'company', 'manager', 'educations', 'workExperiences', 'assignedRole'])
+                    ->loadExists('pushSubscriptions')
+            ),
+        ]);
     }
 
     public function destroy(Request $request, User $user): JsonResponse
@@ -1191,13 +1271,13 @@ class UserController extends Controller
 
         $user->delete();
 
-        app(\App\Services\ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
+        app(ResourceEmployeeForwarder::class)->pushUserAfterResponse($user);
 
         return response()->json(['message' => 'User removed.']);
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     private function orgChartUsers(?int $departmentId)
     {
@@ -1263,6 +1343,7 @@ class UserController extends Controller
 
                 if ($manager->department_id === $departmentId) {
                     $current = $manager;
+
                     continue;
                 }
 
@@ -1302,8 +1383,8 @@ class UserController extends Controller
      * Keep only users that belong to a reporting line:
      * assigned to a manager, or leading at least one direct report.
      *
-     * @param  \Illuminate\Support\Collection<int, User>  $users
-     * @return \Illuminate\Support\Collection<int, User>
+     * @param  Collection<int, User>  $users
+     * @return Collection<int, User>
      */
     private function filterUsersInOrgStructure($users)
     {
@@ -1410,5 +1491,4 @@ class UserController extends Controller
 
         return null;
     }
-
 }

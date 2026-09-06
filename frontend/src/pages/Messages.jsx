@@ -159,7 +159,6 @@ export default function Messages() {
   const isSearchActive = trimmedSearchQuery.length > 0;
 
   useMetaTags({
-    title: 'Messages - EMZI Nexus Brain',
     description: 'Direct messages with your colleagues',
   });
 

@@ -5,31 +5,24 @@
 
 export const updateMetaTags = (config = {}) => {
   const {
-    title = 'EMZI Nexus Brain',
+    title,
     description = 'EMZI unified system access, simplified',
     image = `${typeof window !== 'undefined' ? window.location.origin : ''}/icons/pwa-icon-512.png`,
     url = typeof window !== 'undefined' ? window.location.href : '',
   } = config;
 
-  // Update document title
-  document.title = title;
-  const pageTitle = document.getElementById('page-title');
-  if (pageTitle) {
-    pageTitle.textContent = title;
+  // Browser tab title is owned by DocumentTitle. Only sync share tags when a page
+  // still passes an explicit title.
+  if (title) {
+    updateMetaTag('og:title', title);
+    updateMetaTag('twitter:title', title);
   }
 
-  // Update OG tags
-  updateMetaTag('og:title', title);
   updateMetaTag('og:description', description);
   updateMetaTag('og:image', image);
   updateMetaTag('og:url', url);
-
-  // Update Twitter tags
-  updateMetaTag('twitter:title', title);
   updateMetaTag('twitter:description', description);
   updateMetaTag('twitter:image', image);
-
-  // Update general meta tags
   updateMetaTag('description', description);
 };
 
@@ -62,7 +55,7 @@ const updateMetaTag = (property, content) => {
  * Get the system name from environment or use default
  */
 export const getSystemName = () => {
-  return import.meta.env.VITE_SYSTEM_NAME || 'Nexus';
+  return import.meta.env.VITE_SYSTEM_NAME || 'EMZI Nexus Brain';
 };
 
 /**

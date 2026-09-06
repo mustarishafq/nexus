@@ -2,6 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Classic script (not type=module) so a MIME failure on hashed JS cannot block recovery.
+      // Users never hard-reload: one automatic refresh, PWA stays installed.
+      (function () {
+        var FLAG = 'nexus_boot_retry';
+
+        function retryOnce() {
+          try {
+            if (sessionStorage.getItem(FLAG) === '1') return;
+            sessionStorage.setItem(FLAG, '1');
+          } catch (e) {
+            return;
+          }
+          window.location.reload();
+        }
+
+        window.addEventListener('error', function (event) {
+          var el = event.target;
+          if (!el || (el.tagName !== 'SCRIPT' && el.tagName !== 'LINK')) return;
+          var href = el.src || el.href || '';
+          if (href.indexOf('/assets/') === -1) return;
+          retryOnce();
+        }, true);
+
+        if (!('serviceWorker' in navigator)) return;
+
+        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function () {});
+
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            retryOnce();
+          });
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/icons/pwa-icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
@@ -84,23 +119,6 @@
           document.body.style.backgroundColor = resolvedSplashColor;
         }
       } catch (e) {}
-    </script>
-    <script>
-      // Same /sw.js registration the installed PWA already uses.
-      // Do not unregister — that would drop the install and push subscription.
-      (function () {
-        if (!('serviceWorker' in navigator)) return;
-
-        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function () {});
-
-        // After an in-place SW update, reload once so this window uses the new worker.
-        // Existing installed PWAs stay installed.
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.addEventListener('controllerchange', function () {
-            window.location.reload();
-          });
-        }
-      })();
     </script>
   </head>
   <body>

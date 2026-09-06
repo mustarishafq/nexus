@@ -15,7 +15,6 @@ import ProfileStaffDetails from '@/components/profile/ProfileStaffDetails';
 import ProfileHrDetailsView from '@/components/profile/ProfileHrDetailsView';
 import ProfileUserPosts from '@/components/profile/ProfileUserPosts';
 import { useGoBack } from '@/hooks/useGoBack';
-import { getDisplayName } from '@/lib/profile';
 import { canManageUsers } from '@/lib/roles';
 
 export default function PersonProfile() {
@@ -38,7 +37,6 @@ export default function PersonProfile() {
   const user = data?.user;
 
   useMetaTags({
-    title: user ? `${getDisplayName(user)} - People` : 'Colleague Profile',
     description: user?.bio || user?.department || 'View colleague profile on EMZI Nexus Brain',
   });
 

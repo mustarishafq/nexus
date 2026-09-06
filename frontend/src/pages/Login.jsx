@@ -45,7 +45,9 @@ export default function Login() {
       const safeRedirect = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/';
       navigate(safeRedirect, { replace: true });
     } catch (err) {
-      if (err?.status === 403 && err?.data?.code === 'account_not_approved') {
+      if (err?.status === 403 && err?.data?.code === 'account_resigned') {
+        setError('This account has resigned and can no longer sign in.');
+      } else if (err?.status === 403 && err?.data?.code === 'account_not_approved') {
         setError('Your account is pending admin approval.');
       } else {
         setError(err?.data?.message || err.message || 'Login failed.');
@@ -143,6 +145,14 @@ export default function Login() {
                   <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                 </svg>
                 <p className="text-sm text-amber-700">Your account is pending admin approval.</p>
+              </div>
+            )}
+            {status === 'resigned' && (
+              <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+                <svg className="w-4 h-4 text-destructive mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
+                <p className="text-sm text-destructive">This account has resigned and can no longer sign in.</p>
               </div>
             )}
             {error && (
@@ -269,6 +279,14 @@ export default function Login() {
                   <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                 </svg>
                 <p className="text-sm text-amber-700 dark:text-amber-400">Your account is pending admin approval.</p>
+              </div>
+            )}
+            {status === 'resigned' && (
+              <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+                <svg className="w-4 h-4 text-destructive mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
+                <p className="text-sm text-destructive">This account has resigned and can no longer sign in.</p>
               </div>
             )}
             {error && (

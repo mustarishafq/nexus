@@ -238,7 +238,6 @@ export default function CompanyFeed() {
   const isViewingFocusedPost = Boolean(pinnedFocus?.postId);
 
   useMetaTags({
-    title: 'Company Feed - EMZI Nexus Brain',
     description: 'Announcements from leadership and updates shared by your colleagues.',
   });
 

@@ -657,7 +657,6 @@ export default function Email() {
   }, [uid]);
 
   useMetaTags({
-    title: 'Email - EMZI Nexus Brain',
     description: 'Company email inbox and compose',
   });
 

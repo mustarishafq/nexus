@@ -1552,6 +1552,10 @@ export const db = {
 		return request(`/users/${userId}/profile`);
 	},
 
+	async resignUser(id, data = {}) {
+		return request(`/users/${id}/resign`, { method: 'POST', body: data });
+	},
+
 	async getOrgChart(filters = {}) {
 		const queryString = buildQuery(filters);
 		return request(`/users/org-chart${queryString}`);

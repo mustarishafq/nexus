@@ -166,7 +166,6 @@ export default function Analytics() {
   });
 
   useMetaTags({
-    title: 'Analytics - EMZI Nexus Brain',
     description: 'Metabase analytics dashboards organized by category',
   });
 

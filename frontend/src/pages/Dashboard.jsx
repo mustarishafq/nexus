@@ -4,7 +4,6 @@ import React from 'react';
 import ActionItemsWidget from '@/components/dashboard/ActionItemsWidget';
 import SystemHealthWidget from '@/components/dashboard/SystemHealthWidget';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
-import { getDisplayName } from '@/lib/profile';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
 import CompanyFeedWidget from '@/components/dashboard/CompanyFeedWidget';
 import ProfileRecentApplicationsWidget from '@/components/dashboard/ProfileRecentApplicationsWidget';
@@ -36,7 +35,6 @@ export default function Dashboard() {
   });
 
   useMetaTags({
-    title: `${getDisplayName(user, 'Dashboard')} - EMZI Nexus Brain`,
     description: 'Your EMZI Nexus Brain dashboard',
   });
 

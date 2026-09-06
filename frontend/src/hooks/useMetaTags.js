@@ -10,7 +10,6 @@ import { updateMetaTags } from '@/lib/MetaTagManager';
  * @param {string} config.url - Page URL
  * @example
  * useMetaTags({
- *   title: 'Notifications - Nexus',
  *   description: '3 unread notifications pending',
  * });
  */

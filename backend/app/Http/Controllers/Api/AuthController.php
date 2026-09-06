@@ -54,6 +54,13 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isResigned()) {
+            return response()->json([
+                'message' => 'This account has resigned and can no longer sign in.',
+                'code' => 'account_resigned',
+            ], 403);
+        }
+
         if (! $user->is_approved) {
             return response()->json([
                 'message' => 'Your account is pending admin approval.',
@@ -66,11 +73,11 @@ class AuthController extends Controller
         $user->forceFill(['last_login_at' => now()])->save();
 
         ActivityLog::create([
-            'user_id'     => (string) $user->id,
-            'user_name'   => $user->full_name ?? $user->name ?? $user->email,
-            'action'      => 'login',
+            'user_id' => (string) $user->id,
+            'user_name' => $user->full_name ?? $user->name ?? $user->email,
+            'action' => 'login',
             'description' => 'Logged in to '.config('app.name', 'EMZI Nexus Brain'),
-            'ip_address'  => $request->ip(),
+            'ip_address' => $request->ip(),
         ]);
 
         return response()->json([
@@ -137,11 +144,11 @@ class AuthController extends Controller
 
         if ($user) {
             ActivityLog::create([
-                'user_id'     => (string) $user->id,
-                'user_name'   => $user->full_name ?? $user->name ?? $user->email,
-                'action'      => 'logout',
+                'user_id' => (string) $user->id,
+                'user_name' => $user->full_name ?? $user->name ?? $user->email,
+                'action' => 'logout',
                 'description' => 'Logged out of '.config('app.name', 'EMZI Nexus Brain'),
-                'ip_address'  => $request->ip(),
+                'ip_address' => $request->ip(),
             ]);
             ApiTokenAuth::revoke($user, $request->bearerToken());
         }

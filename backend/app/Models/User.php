@@ -77,6 +77,7 @@ class User extends Authenticatable
         'role_id',
         'mcp_access',
         'is_approved',
+        'resigned_at',
         'force_password_change',
         'notification_settings',
         'date_of_birth',
@@ -114,6 +115,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_approved' => 'boolean',
+            'resigned_at' => 'date',
             'force_password_change' => 'boolean',
             'notification_settings' => 'array',
             'cover_picture_crops' => 'array',
@@ -136,6 +138,11 @@ class User extends Authenticatable
         $name = trim((string) ($this->name ?: $this->full_name ?: $this->email ?: ''));
 
         return $name !== '' ? $name : 'User';
+    }
+
+    public function isResigned(): bool
+    {
+        return $this->resigned_at !== null;
     }
 
     protected function profilePicture(): Attribute

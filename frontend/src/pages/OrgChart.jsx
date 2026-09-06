@@ -70,7 +70,6 @@ export default function OrgChart() {
   const viewingDepartment = department !== 'all';
 
   useMetaTags({
-    title: 'Organization - EMZI Nexus Brain',
     description: 'Explore department reporting structures and org chart across your organization',
   });
 

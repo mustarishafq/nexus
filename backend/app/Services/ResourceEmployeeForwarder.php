@@ -107,6 +107,7 @@ class ResourceEmployeeForwarder
 
             return [
                 'ok' => true,
+                'skipped' => false,
                 'status' => $response->status(),
                 'stats' => is_array($response->json('stats')) ? $response->json('stats') : [],
             ];

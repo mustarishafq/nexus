@@ -227,6 +227,7 @@ Route::post('/profile-media-comments/{profileMediaComment}/reactions', [ProfileM
 Route::delete('/profile-media-comments/{profileMediaComment}/reactions', [ProfileMediaController::class, 'destroyCommentReaction']);
 Route::get('/users/{user}', [UserController::class, 'show']);
 Route::patch('/users/{user}', [UserController::class, 'update']);
+Route::post('/users/{user}/resign', [UserController::class, 'resign']);
 Route::delete('/users/{user}', [UserController::class, 'destroy']);
 
 Route::get('/roles/options', [RoleController::class, 'options']);

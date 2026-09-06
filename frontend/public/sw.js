@@ -44,8 +44,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
       keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    )).then(() => self.clients.claim())
+    ))
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -54,8 +55,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
-  // Hashed Vite files are immutable and must never be served from a SW cache.
-  // Intercepting them is how HTML (SPA fallback / 404 page) gets executed as JS.
+  // Let the browser load hashed Vite files directly. A SW cache of those URLs
+  // is how an HTML fallback gets executed as a module script.
   if (url.pathname.startsWith('/assets/')) return;
 
   // Never cache dev-server and HMR assets; stale modules can break exports during development.
@@ -89,11 +90,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for remaining same-origin static files (icons, manifest, etc.).
+  // Use network-first for static assets so new deploys replace old bundles promptly.
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (!response.ok) return response;
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;

@@ -44,7 +44,6 @@ import { useIsXlUp } from '@/hooks/use-mobile';
 import {
   formatBirthdayLabel,
   formatTenure,
-  getDisplayName,
   normalizeSkills,
   skillsAreEqual,
   normalizeEducationHistory,
@@ -169,7 +168,6 @@ export default function Profile() {
   }, [user]);
 
   useMetaTags({
-    title: `${getDisplayName(user, 'Profile')} - EMZI Nexus Brain`,
     description: 'Manage your personal information and account security',
   });
 

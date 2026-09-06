@@ -690,7 +690,6 @@ export default function Missions() {
   const { user } = useAuth();
 
   useMetaTags({
-    title: 'Missions - EMZI Nexus Brain',
     description: 'Earn EXP from missions and climb the leaderboard',
   });
 
