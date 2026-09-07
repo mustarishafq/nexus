@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { normalizePhoneNumber } from '@/lib/phone';
-import { normalizeIcNumber } from '@/lib/ic';
+import { applyIcDateOfBirth, normalizeIcNumber } from '@/lib/ic';
 
 export const EMPLOYMENT_TYPE_LABELS = {
   full_time: 'Full-time',
@@ -47,16 +47,44 @@ export const EMPTY_SPOUSE_DETAILS = {
   occupation: '',
   employer_name: '',
   employer_address: '',
+  date_of_birth: '',
+};
+
+export const EMPTY_CHILD = {
+  name: '',
+  ic_number: '',
+  school: '',
+  date_of_birth: '',
+};
+
+export const HEALTH_STATUS_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'high_blood_pressure', label: 'High blood pressure' },
+  { value: 'cholesterol', label: 'Cholesterol' },
+  { value: 'kidney', label: 'Kidney' },
+  { value: 'migraine', label: 'Migraine' },
+  { value: 'gout', label: 'Gout' },
+  { value: 'gerd', label: 'GERD' },
+  { value: 'gastric', label: 'Gastric' },
+  { value: 'others', label: 'Others' },
+];
+
+export const EMPTY_HEALTH_STATUS = {
+  conditions: [],
+  others: '',
 };
 
 export const CHILDREN_FIELDS = [
   { key: 'name', label: 'Child name', placeholder: 'Full name' },
-  { key: 'age', label: 'Age', placeholder: 'e.g. 8' },
+  { key: 'ic_number', label: 'IC no.', placeholder: 'e.g. 120101-01-1234' },
+  { key: 'school', label: 'School', placeholder: 'School name' },
+  { key: 'date_of_birth', label: 'Date of birth', type: 'date' },
 ];
 
 export const SPOUSE_FIELDS = [
   { key: 'full_name', label: 'Full name', placeholder: 'Spouse full name' },
   { key: 'ic_number', label: 'IC no.', placeholder: 'e.g. 900101-01-1234' },
+  { key: 'date_of_birth', label: 'Date of birth', type: 'date' },
   { key: 'phone', label: 'Phone no.', placeholder: 'e.g. +60123456789' },
   { key: 'occupation', label: 'Occupation', placeholder: 'e.g. Teacher' },
   { key: 'employer_name', label: "Employer's name", placeholder: 'Company or organisation' },
@@ -125,16 +153,107 @@ export function getRaceLabel(value) {
   return RACE_OPTIONS.find((option) => option.value === value)?.label || value || null;
 }
 
+export function formatFullDate(value) {
+  if (!value) return null;
+  try {
+    return format(parseISO(String(value).slice(0, 10)), 'd MMM yyyy');
+  } catch {
+    return String(value);
+  }
+}
+
+export function ageFromDateOfBirth(value, now = new Date()) {
+  const dob = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return null;
+
+  const [year, month, day] = dob.split('-').map(Number);
+  let age = now.getFullYear() - year;
+  const currentMonth = now.getMonth() + 1;
+  const currentDay = now.getDate();
+  if (currentMonth < month || (currentMonth === month && currentDay < day)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
+export function formatAgeLabel(value) {
+  const age = ageFromDateOfBirth(value);
+  if (age == null) return '';
+  return age === 1 ? '1 year' : `${age} years`;
+}
+
+export function normalizeHealthStatus(value) {
+  const source = value && typeof value === 'object' ? value : EMPTY_HEALTH_STATUS;
+  const allowed = new Set(HEALTH_STATUS_OPTIONS.map((option) => option.value));
+  let conditions = Array.isArray(source.conditions)
+    ? source.conditions.map((item) => String(item).trim()).filter((item) => allowed.has(item))
+    : [];
+
+  if (conditions.includes('none')) {
+    conditions = ['none'];
+  } else {
+    conditions = [...new Set(conditions.filter((item) => item !== 'none'))];
+  }
+
+  const others = conditions.includes('others') ? String(source.others || '').trim() : '';
+
+  return {
+    conditions,
+    others,
+  };
+}
+
+export function healthStatusIsComplete(value) {
+  const status = normalizeHealthStatus(value);
+  if (status.conditions.length === 0) return false;
+  if (status.conditions.includes('others') && !status.others) return false;
+  return true;
+}
+
+export function healthStatusLabels(value) {
+  const status = normalizeHealthStatus(value);
+  return status.conditions.map((key) => {
+    if (key === 'others') return status.others || 'Others';
+    return HEALTH_STATUS_OPTIONS.find((option) => option.value === key)?.label || key;
+  }).filter(Boolean);
+}
+
+export function healthStatusIsEqual(a, b) {
+  return JSON.stringify(normalizeHealthStatus(a)) === JSON.stringify(normalizeHealthStatus(b));
+}
+
+export function toggleHealthCondition(current, key, checked) {
+  const status = normalizeHealthStatus(current);
+
+  if (key === 'none') {
+    return checked ? { conditions: ['none'], others: '' } : { conditions: [], others: '' };
+  }
+
+  let conditions = status.conditions.filter((item) => item !== 'none' && item !== key);
+  if (checked) conditions.push(key);
+  if (key === 'others' && !checked) {
+    return { conditions, others: '' };
+  }
+
+  return {
+    conditions,
+    others: conditions.includes('others') ? status.others : '',
+  };
+}
+
 export function normalizeSpouseDetails(value) {
   const source = value && typeof value === 'object' ? value : EMPTY_SPOUSE_DETAILS;
+  const icNumber = normalizeIcNumber(source.ic_number) || '';
 
   return {
     full_name: String(source.full_name || '').trim(),
-    ic_number: normalizeIcNumber(source.ic_number) || '',
+    ic_number: icNumber,
     phone: normalizePhoneNumber(source.phone) || '',
     occupation: String(source.occupation || '').trim(),
     employer_name: String(source.employer_name || '').trim(),
     employer_address: String(source.employer_address || '').trim(),
+    date_of_birth: applyIcDateOfBirth(String(source.date_of_birth || '').slice(0, 10), icNumber),
   };
 }
 
@@ -142,10 +261,15 @@ export function normalizeChildren(value) {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item) => ({
-      name: String(item?.name || '').trim(),
-      age: String(item?.age || '').trim(),
-    }))
+    .map((item) => {
+      const icNumber = normalizeIcNumber(item?.ic_number) || '';
+      return {
+        name: String(item?.name || '').trim(),
+        ic_number: icNumber,
+        school: String(item?.school || '').trim(),
+        date_of_birth: applyIcDateOfBirth(String(item?.date_of_birth || '').slice(0, 10), icNumber),
+      };
+    })
     .filter((item) => item.name)
     .slice(0, 10);
 }
@@ -180,6 +304,7 @@ export function buildHrProfileForm(user) {
     next_of_kin_address: user?.next_of_kin_address || '',
     spouse_details: normalizeSpouseDetails(user?.spouse_details),
     children: normalizeChildren(user?.children),
+    health_status: normalizeHealthStatus(user?.health_status),
     gender: user?.gender || '',
   };
 }
@@ -210,13 +335,17 @@ export function hrProfileFormIsDirty(form, user) {
     form.next_of_kin_address !== baseline.next_of_kin_address ||
     form.gender !== baseline.gender ||
     !spouseDetailsIsEqual(form.spouse_details, baseline.spouse_details) ||
-    !childrenAreEqual(form.children, baseline.children)
+    !childrenAreEqual(form.children, baseline.children) ||
+    !healthStatusIsEqual(form.health_status, baseline.health_status)
   );
 }
 
 export function buildHrProfilePayload(form) {
   const spouse = normalizeSpouseDetails(form.spouse_details);
   const hasSpouse = Object.values(spouse).some(Boolean);
+  const children = normalizeChildren(form.children);
+  const health = normalizeHealthStatus(form.health_status);
+  const hasHealth = health.conditions.length > 0 || Boolean(health.others);
 
   return {
     place_of_birth: form.place_of_birth?.trim() || null,
@@ -239,7 +368,8 @@ export function buildHrProfilePayload(form) {
     next_of_kin_address: form.next_of_kin_address?.trim() || null,
     gender: form.gender || null,
     spouse_details: hasSpouse ? spouse : null,
-    children: normalizeChildren(form.children).length > 0 ? normalizeChildren(form.children) : null,
+    children: children.length > 0 ? children : null,
+    health_status: hasHealth ? { conditions: health.conditions, others: health.others || null } : null,
   };
 }
 
@@ -283,7 +413,8 @@ function isProfileCheckDone(user, key) {
         && Boolean(user.current_address?.trim())
         && Boolean(user.emergency_contact_name?.trim())
         && Boolean(user.emergency_contact_phone?.trim())
-        && Boolean(user.next_of_kin_relationship?.trim());
+        && Boolean(user.next_of_kin_relationship?.trim())
+        && healthStatusIsComplete(user.health_status);
     default:
       return false;
   }

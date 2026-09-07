@@ -65,6 +65,7 @@ class EmployeeSyncSerializer
             'next_of_kin_address' => $user->next_of_kin_address,
             'spouse_details' => $user->spouse_details,
             'children' => $user->children,
+            'health_status' => $user->health_status,
             'gender' => $user->gender,
             'place_of_birth' => $user->place_of_birth,
             'nationality' => $user->nationality,

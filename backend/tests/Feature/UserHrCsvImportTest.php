@@ -42,6 +42,7 @@ class UserHrCsvImportTest extends TestCase
         $this->assertSame('Jane Doe', $user->full_name);
         $this->assertSame('Sales Executive', $user->job_title);
         $this->assertSame('900101-01-1234', $user->ic_number);
+        $this->assertSame('1990-01-01', $user->date_of_birth?->toDateString());
         $this->assertSame('+60192704323', $user->work_phone);
         $this->assertSame('female', $user->gender);
         $this->assertSame('Malaysian', $user->nationality);

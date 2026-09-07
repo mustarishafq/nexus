@@ -58,6 +58,7 @@ class EmployeeSyncApplyService
         'next_of_kin_address',
         'spouse_details',
         'children',
+        'health_status',
     ];
 
     /**
@@ -136,7 +137,7 @@ class EmployeeSyncApplyService
                     continue;
                 }
                 $value = $row[$field];
-                if (in_array($field, ['spouse_details', 'children'], true)) {
+                if (in_array($field, ['spouse_details', 'children', 'health_status'], true)) {
                     $fill[$field] = is_array($value) ? $value : null;
 
                     continue;

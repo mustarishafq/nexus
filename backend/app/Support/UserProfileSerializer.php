@@ -34,6 +34,7 @@ class UserProfileSerializer
         'next_of_kin_address',
         'spouse_details',
         'children',
+        'health_status',
         'employee_id',
         'employment_type',
         'personal_phone',

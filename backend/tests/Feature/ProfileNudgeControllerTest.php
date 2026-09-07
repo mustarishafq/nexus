@@ -143,6 +143,7 @@ class ProfileNudgeControllerTest extends TestCase
             'emergency_contact_name' => 'Kin',
             'emergency_contact_phone' => '456',
             'next_of_kin_relationship' => 'Spouse',
+            'health_status' => ['conditions' => ['none'], 'others' => null],
         ]);
         $target->educations()->create([
             'institution' => 'Test University',

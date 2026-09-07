@@ -2768,6 +2768,7 @@ export default function UserManagement() {
                 <ProfileHrDetailsForm
                   value={editForm}
                   onChange={(next) => setEditForm((prev) => ({ ...prev, ...next }))}
+                  variant="admin"
                 />
               </div>
               <div className="px-6 py-4 border-t border-border/70 flex justify-end gap-2">

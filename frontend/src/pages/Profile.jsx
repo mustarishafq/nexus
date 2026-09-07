@@ -53,6 +53,7 @@ import {
   buildHrProfileForm,
   buildHrProfilePayload,
   hrProfileFormIsDirty,
+  formatAgeLabel,
 } from '@/lib/profile';
 import ProfileDashboardHero from '@/components/dashboard/ProfileDashboardHero';
 import ProfileAboutCard from '@/components/dashboard/ProfileAboutCard';
@@ -567,6 +568,9 @@ export default function Profile() {
                               {birthdayPreview ? (
                                 <p className="text-xs text-muted-foreground">
                                   Shown as {birthdayPreview} on the dashboard
+                                  {formatAgeLabel(profileForm.date_of_birth)
+                                    ? ` · Age ${formatAgeLabel(profileForm.date_of_birth)}`
+                                    : ''}
                                 </p>
                               ) : (
                                 <p className="text-xs text-muted-foreground">Used for birthday celebrations</p>

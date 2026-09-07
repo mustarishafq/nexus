@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Concerns\ResolvesDepartmentInput;
 use App\Models\AccessGroup;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use App\Support\IcNumber;
 use App\Support\SyncUserProfileRecords;
 
 class UserHrCsvImporter
@@ -261,6 +262,13 @@ class UserHrCsvImporter
             }
         }
 
+        if (empty($attributes['date_of_birth']) && ! empty($attributes['ic_number'])) {
+            $fromIc = IcNumber::dateOfBirth($attributes['ic_number']);
+            if ($fromIc !== null) {
+                $attributes['date_of_birth'] = $fromIc;
+            }
+        }
+
         $department = $this->valueFromRecord($record, 'department');
         if ($department !== null) {
             $attributes['department_id'] = $this->resolveDepartmentId(null, $department);
@@ -296,13 +304,18 @@ class UserHrCsvImporter
      */
     private function mapSpouseDetails(array $record): ?array
     {
+        $icNumber = ContactNormalizer::ic($this->valueFromRecord($record, 'spouse_ic_number') ?? '');
+        $dateOfBirth = $this->parseDate($this->valueFromRecord($record, 'spouse_date_of_birth') ?? '');
+        $dateOfBirth = IcNumber::fillDateOfBirth($dateOfBirth, $icNumber);
+
         $details = [
             'full_name' => $this->valueFromRecord($record, 'spouse_full_name'),
-            'ic_number' => ContactNormalizer::ic($this->valueFromRecord($record, 'spouse_ic_number') ?? ''),
+            'ic_number' => $icNumber,
             'phone' => ContactNormalizer::phone($this->valueFromRecord($record, 'spouse_phone') ?? ''),
             'occupation' => $this->valueFromRecord($record, 'spouse_occupation'),
             'employer_name' => $this->valueFromRecord($record, 'spouse_employer_name'),
             'employer_address' => $this->valueFromRecord($record, 'spouse_employer_address'),
+            'date_of_birth' => $dateOfBirth,
         ];
 
         $hasContent = collect($details)->filter(fn ($value) => filled($value))->isNotEmpty();

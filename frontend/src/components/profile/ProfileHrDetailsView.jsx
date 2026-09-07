@@ -1,11 +1,15 @@
 import React from 'react';
-import { HeartPulse, Home, IdCard, Shield, Users } from 'lucide-react';
+import { Activity, HeartPulse, Home, IdCard, Shield, Users } from 'lucide-react';
 import { formatPhoneNumber, phoneTelHref } from '@/lib/phone';
 import {
+  formatAgeLabel,
+  formatFullDate,
   getGenderLabel,
   getMaritalStatusLabel,
   getRaceLabel,
   getReligionLabel,
+  healthStatusLabels,
+  normalizeHealthStatus,
   normalizeSpouseDetails,
   SPOUSE_FIELDS,
 } from '@/lib/profile';
@@ -55,16 +59,29 @@ function hasAnyValue(values) {
   });
 }
 
+function spouseDisplayValue(field, spouse) {
+  if (field.key === 'date_of_birth') {
+    const formatted = formatFullDate(spouse.date_of_birth);
+    const age = formatAgeLabel(spouse.date_of_birth);
+    if (!formatted) return '';
+    return age ? `${formatted} (${age})` : formatted;
+  }
+  return spouse[field.key];
+}
+
 export default function ProfileHrDetailsView({ user }) {
   const spouse = normalizeSpouseDetails(user?.spouse_details);
   const children = Array.isArray(user?.children)
-    ? user.children.filter((child) => child?.name || child?.age)
+    ? user.children.filter((child) => child?.name || child?.ic_number || child?.school || child?.date_of_birth)
     : [];
+  const healthLabels = healthStatusLabels(user?.health_status);
 
   const demographics = [
     { label: 'Full legal name', value: user?.full_name },
     { label: 'Gender', value: getGenderLabel(user?.gender) },
     { label: 'Marital status', value: getMaritalStatusLabel(user?.marital_status) },
+    { label: 'Date of birth', value: formatFullDate(user?.date_of_birth) },
+    { label: 'Age', value: formatAgeLabel(user?.date_of_birth) },
     { label: 'Place of birth', value: user?.place_of_birth },
     { label: 'Nationality', value: user?.nationality },
     { label: 'Religion', value: getReligionLabel(user?.religion) },
@@ -94,7 +111,7 @@ export default function ProfileHrDetailsView({ user }) {
 
   const spouseFields = SPOUSE_FIELDS.map((field) => ({
     label: field.label,
-    value: spouse[field.key],
+    value: spouseDisplayValue(field, spouse),
     href: field.key === 'phone' ? phoneTelHref(spouse[field.key]) : undefined,
     multiline: field.type === 'textarea',
   }));
@@ -105,8 +122,9 @@ export default function ProfileHrDetailsView({ user }) {
   const showNextOfKin = hasAnyValue(nextOfKin.map((field) => field.value));
   const showSpouse = hasAnyValue(spouseFields.map((field) => field.value));
   const showChildren = children.length > 0;
+  const showHealth = healthLabels.length > 0 || Boolean(normalizeHealthStatus(user?.health_status).conditions.length);
 
-  if (!showDemographics && !showAddress && !showIdentity && !showNextOfKin && !showSpouse && !showChildren) {
+  if (!showDemographics && !showAddress && !showIdentity && !showNextOfKin && !showSpouse && !showChildren && !showHealth) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5">
         <div className="flex items-start gap-3">
@@ -200,18 +218,30 @@ export default function ProfileHrDetailsView({ user }) {
       {showChildren ? (
         <Section icon={Users} title="Children">
           <div className="space-y-3">
-            {children.map((child, index) => (
-              <div
-                key={`${child.name || 'child'}-${index}`}
-                className="rounded-xl border border-border/80 bg-muted/20 p-4"
-              >
-                <p className="text-sm font-medium">{child.name || 'Unnamed'}</p>
-                {child.age ? (
-                  <p className="text-xs text-muted-foreground mt-0.5">Age {child.age}</p>
-                ) : null}
-              </div>
-            ))}
+            {children.map((child, index) => {
+              const age = formatAgeLabel(child.date_of_birth);
+              return (
+                <div
+                  key={`${child.name || 'child'}-${index}`}
+                  className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2"
+                >
+                  <p className="text-sm font-medium">{child.name || 'Unnamed'}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Field label="IC no." value={child.ic_number} />
+                    <Field label="School" value={child.school} />
+                    <Field label="Date of birth" value={formatFullDate(child.date_of_birth)} />
+                    <Field label="Age" value={age} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </Section>
+      ) : null}
+
+      {showHealth ? (
+        <Section icon={Activity} title="Health status">
+          <p className="text-sm font-medium">{healthLabels.join(', ') || 'Not specified'}</p>
         </Section>
       ) : null}
     </div>

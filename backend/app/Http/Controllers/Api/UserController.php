@@ -212,7 +212,9 @@ class UserController extends Controller
                 ->whereRaw("TRIM(COALESCE(current_address, '')) != ''")
                 ->whereRaw("TRIM(COALESCE(emergency_contact_name, '')) != ''")
                 ->whereRaw("TRIM(COALESCE(emergency_contact_phone, '')) != ''")
-                ->whereRaw("TRIM(COALESCE(next_of_kin_relationship, '')) != ''");
+                ->whereRaw("TRIM(COALESCE(next_of_kin_relationship, '')) != ''")
+                ->whereNotNull('health_status')
+                ->whereRaw("json_extract(health_status, '$.conditions[0]') is not null");
         };
 
         if ($profile === 'complete') {
@@ -1164,7 +1166,10 @@ class UserController extends Controller
 
         $validated = $this->resolveDepartmentFields($validated);
         $validated = $this->resolveCompanyFields($validated);
-        $validated = $this->normalizeHrProfilePayload($validated);
+        $validated = $this->normalizeHrProfilePayload(
+            $validated,
+            $user->date_of_birth?->toDateString()
+        );
         $user->update($validated);
 
         if ($educationHistory !== null) {

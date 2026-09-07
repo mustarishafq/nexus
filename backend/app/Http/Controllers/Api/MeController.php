@@ -153,7 +153,10 @@ class MeController extends Controller
                 'skills',
             ])
             ->toArray();
-        $profileData = $this->normalizeHrProfilePayload($profileData);
+        $profileData = $this->normalizeHrProfilePayload(
+            $profileData,
+            $user->date_of_birth?->toDateString()
+        );
         $profileData = $this->resolveDepartmentFields($profileData);
 
         if (array_key_exists('quiz_accessory_id', $profileData)) {

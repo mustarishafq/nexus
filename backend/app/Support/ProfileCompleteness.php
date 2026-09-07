@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Support\HealthStatus;
 
 class ProfileCompleteness
 {
@@ -65,7 +66,8 @@ class ProfileCompleteness
                 && filled(trim((string) $user->current_address))
                 && filled(trim((string) $user->emergency_contact_name))
                 && filled(trim((string) $user->emergency_contact_phone))
-                && filled(trim((string) $user->next_of_kin_relationship)),
+                && filled(trim((string) $user->next_of_kin_relationship))
+                && HealthStatus::isComplete($user->health_status),
             default => false,
         };
     }
