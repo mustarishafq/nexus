@@ -667,8 +667,10 @@ export default function Email() {
   });
 
   const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
-  const activeAccount = status?.account
-    || accounts.find((account) => account.id === accountId)
+  // Prefer the locally selected account over status.account (server primary).
+  // Otherwise the switcher updates accountId but the UI/inbox stay on primary.
+  const activeAccount = accounts.find((account) => Number(account.id) === Number(accountId))
+    || status?.account
     || accounts[0]
     || null;
   const activeAccountId = activeAccount?.id || null;
@@ -677,7 +679,7 @@ export default function Email() {
   useEffect(() => {
     if (!status?.connected || !accounts.length) return;
 
-    const matched = accountId && accounts.some((account) => account.id === accountId);
+    const matched = accountId && accounts.some((account) => Number(account.id) === Number(accountId));
     if (!matched) {
       const nextId = status.account?.id || accounts[0]?.id || null;
       setAccountId(nextId);
@@ -928,7 +930,7 @@ export default function Email() {
                     onClick={() => selectAccount(account.id)}
                     className="flex items-start gap-2"
                   >
-                    <Check className={cn('mt-0.5 h-4 w-4 shrink-0', account.id === activeAccountId ? 'opacity-100' : 'opacity-0')} />
+                    <Check className={cn('mt-0.5 h-4 w-4 shrink-0', Number(account.id) === Number(activeAccountId) ? 'opacity-100' : 'opacity-0')} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm">{account.email}</p>
                       {account.is_primary ? (

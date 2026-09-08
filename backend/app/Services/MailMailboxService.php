@@ -554,7 +554,7 @@ class MailMailboxService
                 $messages[] = $this->summarizeListMessage($message, $includeAttachments);
             }
 
-            return $messages;
+            return $this->sortMessagesNewestFirst($messages);
         }
 
         try {
@@ -580,7 +580,31 @@ class MailMailboxService
             $messages[] = $this->summarizeListMessage($message, $includeAttachments);
         }
 
-        return $messages;
+        // Webklex may return header batches in ascending UID order even when
+        // setFetchOrder('desc') selected the newest page — re-sort for the UI.
+        return $this->sortMessagesNewestFirst($messages);
+    }
+
+    /**
+     * Newest date first; higher UID wins ties (later arrivals).
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    protected function sortMessagesNewestFirst(array $messages): array
+    {
+        usort($messages, static function (array $left, array $right): int {
+            $leftTs = strtotime((string) ($left['date'] ?? '')) ?: 0;
+            $rightTs = strtotime((string) ($right['date'] ?? '')) ?: 0;
+
+            if ($leftTs !== $rightTs) {
+                return $rightTs <=> $leftTs;
+            }
+
+            return ((int) ($right['uid'] ?? 0)) <=> ((int) ($left['uid'] ?? 0));
+        });
+
+        return array_values($messages);
     }
 
     /**
