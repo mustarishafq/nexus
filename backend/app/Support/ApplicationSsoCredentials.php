@@ -77,6 +77,30 @@ class ApplicationSsoCredentials
     }
 
     /**
+     * Nexus Campus receives extended primary-email profile claims (full_name, department).
+     */
+    public static function isCampusApplication(Application $application): bool
+    {
+        $slugs = config('nexus.sso_campus_slugs', []);
+        if (! is_array($slugs) || $slugs === []) {
+            return false;
+        }
+
+        $target = strtolower(trim((string) $application->slug));
+        if ($target === '') {
+            return false;
+        }
+
+        foreach ($slugs as $slug) {
+            if ($target === strtolower(trim((string) $slug))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return Collection<int, ApplicationSsoCredential>
      */
     public static function storedCredentials(User $user, Application $application): Collection
