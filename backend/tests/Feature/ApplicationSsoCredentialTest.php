@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Application;
 use App\Models\ApplicationSsoCredential;
+use App\Models\Department;
 use App\Models\Notification;
 use App\Models\User;
 use Firebase\JWT\JWT;
@@ -171,6 +172,203 @@ class ApplicationSsoCredentialTest extends TestCase
 
         $this->assertSame('primary@example.com', $payload['email']);
         $this->assertSame('Primary User', $payload['name']);
+    }
+
+    public function test_campus_primary_launch_includes_extended_profile_claims(): void
+    {
+        $department = Department::query()->create(['name' => 'Computer Science']);
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => 'John Michael Doe',
+            'department_id' => $department->id,
+            'profile_picture' => 'https://cdn.example.com/storage/avatars/john.jpg',
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'emzi-nexus-campus',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://campus.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('John', $payload['name']);
+        $this->assertSame('John Michael Doe', $payload['full_name']);
+        $this->assertSame('Computer Science', $payload['department']);
+        $this->assertSame('/storage/avatars/john.jpg', $payload['profile_picture']);
+    }
+
+    public function test_campus_additional_email_launch_omits_profile_claims(): void
+    {
+        $department = Department::query()->create(['name' => 'Computer Science']);
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => 'John Michael Doe',
+            'department_id' => $department->id,
+            'profile_picture' => '/storage/avatars/john.jpg',
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'emzi-nexus-campus',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://campus.example.com',
+            'visibility' => 'public',
+        ]);
+
+        ApplicationSsoCredential::create([
+            'user_id' => $user->id,
+            'application_id' => $application->id,
+            'email' => 'alt@example.com',
+            'label' => 'Campus alt',
+            'status' => ApplicationSsoCredential::STATUS_APPROVED,
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch", [
+                'sso_email' => 'alt@example.com',
+            ])
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('alt@example.com', $payload['email']);
+        $this->assertArrayNotHasKey('name', $payload);
+        $this->assertArrayNotHasKey('full_name', $payload);
+        $this->assertArrayNotHasKey('department', $payload);
+        $this->assertArrayNotHasKey('profile_picture', $payload);
+    }
+
+    public function test_non_campus_launch_does_not_receive_campus_profile_claims(): void
+    {
+        $department = Department::query()->create(['name' => 'Computer Science']);
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => 'John Michael Doe',
+            'department_id' => $department->id,
+            'profile_picture' => '/storage/avatars/john.jpg',
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'other-lms',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://other.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('John', $payload['name']);
+        $this->assertSame('/storage/avatars/john.jpg', $payload['profile_picture']);
+        $this->assertArrayNotHasKey('full_name', $payload);
+        $this->assertArrayNotHasKey('department', $payload);
+    }
+
+    public function test_campus_primary_launch_omits_empty_full_name(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => null,
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'emzi-nexus-campus',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://campus.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('John', $payload['name']);
+        $this->assertArrayNotHasKey('full_name', $payload);
+    }
+
+    public function test_campus_primary_launch_omits_missing_department(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => 'John Michael Doe',
+            'department_id' => null,
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'emzi-nexus-campus',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://campus.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('John Michael Doe', $payload['full_name']);
+        $this->assertArrayNotHasKey('department', $payload);
+    }
+
+    public function test_campus_primary_launch_omits_missing_profile_picture(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'primary@example.com',
+            'name' => 'John',
+            'full_name' => 'John Michael Doe',
+            'profile_picture' => null,
+            'role' => 'admin',
+            'is_approved' => true,
+        ]);
+        $token = $this->issueToken($user);
+        $application = Application::factory()->create([
+            'slug' => 'emzi-nexus-campus',
+            'auth_mode' => 'jwt',
+            'api_key' => 'test-api-key-with-at-least-32-characters',
+            'base_url' => 'https://campus.example.com',
+            'visibility' => 'public',
+        ]);
+
+        $response = $this->withToken($token)
+            ->postJson("/api/applications/{$application->id}/launch")
+            ->assertOk();
+
+        $payload = (array) JWT::decode($response->json('token'), new Key($application->api_key, 'HS256'));
+
+        $this->assertSame('John', $payload['name']);
+        $this->assertSame('John Michael Doe', $payload['full_name']);
+        $this->assertArrayNotHasKey('profile_picture', $payload);
     }
 
     public function test_launch_rejects_unapproved_sso_email(): void
