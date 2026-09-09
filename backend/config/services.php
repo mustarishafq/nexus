@@ -33,6 +33,15 @@ return [
         'public_url' => env('MCP_PUBLIC_URL', env('FRONTEND_URL')),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'default_model' => env('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
+        'http_referer' => env('OPENROUTER_HTTP_REFERER', env('FRONTEND_URL', env('APP_URL'))),
+        'app_title' => env('OPENROUTER_APP_TITLE', env('APP_NAME', 'EMZI Nexus Brain')),
+        'timeout' => (int) env('OPENROUTER_TIMEOUT', 55),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

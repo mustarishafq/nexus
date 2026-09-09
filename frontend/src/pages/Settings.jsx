@@ -130,8 +130,8 @@ export default function Settings() {
         const next = new URLSearchParams(current);
         next.set('tab', 'admin');
         const allowedSections = isAdmin
-          ? ['branding', 'splash', 'launch', 'attendance', 'email']
-          : ['attendance'];
+          ? ['branding', 'splash', 'launch', 'feed', 'gamification', 'attendance', 'email', 'ai']
+          : ['attendance', 'feed'];
         const defaultSection = isAdmin ? 'branding' : 'attendance';
         if (!next.get('section') || !allowedSections.includes(next.get('section'))) {
           next.set('section', defaultSection);

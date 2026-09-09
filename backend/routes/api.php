@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\ApiTokenController;
 use App\Http\Controllers\Api\ApplicationCalendarWebhookController;
 use App\Http\Controllers\Api\ApplicationController;
 use App\Http\Controllers\Api\ApplicationEventWebhookController;
+use App\Http\Controllers\Api\AssistantController;
+use App\Http\Controllers\Api\LlmUsageLogController;
 use App\Http\Controllers\Api\ApplicationHealthController;
 use App\Http\Controllers\Api\ApplicationMcpCatalogController;
 use App\Http\Controllers\Api\ApplicationReleaseNoteController;
@@ -191,6 +193,7 @@ Route::get('/admin/sso-credentials', [ApplicationSsoCredentialAdminController::c
 Route::patch('/admin/sso-credentials/{ssoCredential}', [ApplicationSsoCredentialAdminController::class, 'update']);
 Route::get('/admin/app-settings', [AppSettingController::class, 'show']);
 Route::patch('/admin/app-settings', [AppSettingController::class, 'update']);
+Route::get('/admin/llm-usage-logs', [LlmUsageLogController::class, 'index']);
 Route::get('/admin/attendance-locations', [AttendanceLocationController::class, 'index']);
 Route::post('/admin/attendance-locations', [AttendanceLocationController::class, 'store']);
 Route::put('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'update']);
@@ -254,6 +257,11 @@ Route::post('/push-subscriptions', function () {
 Route::delete('/push-subscriptions', function () {
     return app()->make('App\\Http\\Controllers\\Api\\PushSubscriptionController')->destroy(request());
 });
+
+Route::get('assistant/applications', [AssistantController::class, 'applications']);
+Route::get('assistant/conversation', [AssistantController::class, 'conversation']);
+Route::delete('assistant/conversation', [AssistantController::class, 'clearConversation']);
+Route::post('assistant/chat', [AssistantController::class, 'chat']);
 
 Route::post('applications/reorder', [ApplicationController::class, 'reorder']);
 Route::get('applications/usage-stats', [ApplicationController::class, 'usageStats']);

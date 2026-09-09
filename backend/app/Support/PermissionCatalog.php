@@ -38,6 +38,8 @@ class PermissionCatalog
 
     public const APPLICATIONS_MANAGE = 'applications.manage';
 
+    public const ASSISTANT_USE = 'assistant.use';
+
     public const BROADCAST_MANAGE = 'broadcast.manage';
 
     public const NETWORK_VIEW = 'network.view';
@@ -81,6 +83,8 @@ class PermissionCatalog
 
             ['key' => self::APPLICATIONS_MANAGE, 'module' => 'applications', 'name' => 'Manage application catalog', 'sort_order' => 10],
 
+            ['key' => self::ASSISTANT_USE, 'module' => 'assistant', 'name' => 'Use Assistant', 'sort_order' => 10],
+
             ['key' => self::BROADCAST_MANAGE, 'module' => 'broadcast', 'name' => 'Send broadcasts', 'sort_order' => 10],
 
             ['key' => self::NETWORK_VIEW, 'module' => 'network', 'name' => 'View network page', 'sort_order' => 10],
@@ -106,6 +110,7 @@ class PermissionCatalog
             'gamification' => 'Gamification',
             'analytics' => 'Analytics',
             'applications' => 'Applications',
+            'assistant' => 'Assistant',
             'broadcast' => 'Broadcast',
             'network' => 'Network',
         ];
@@ -205,9 +210,11 @@ class PermissionCatalog
                 self::ATTENDANCE_VIEW_ALL,
                 self::ATTENDANCE_MANAGE_POLICY,
                 self::GAMIFICATION_AWARD_MANUAL,
+                self::ASSISTANT_USE,
                 self::NETWORK_VIEW,
             ],
             UserRoles::USER => [
+                self::ASSISTANT_USE,
                 self::NETWORK_VIEW,
             ],
         ];

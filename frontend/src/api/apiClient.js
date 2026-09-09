@@ -1402,6 +1402,43 @@ export const db = {
 		return request('/applications/health-check/run', { method: 'POST' });
 	},
 
+	async listAssistantApplications() {
+		return request('/assistant/applications');
+	},
+
+	async getAssistantConversation(application_slug) {
+		const params = new URLSearchParams();
+		params.set('application_slug', application_slug);
+		return request(`/assistant/conversation?${params.toString()}`);
+	},
+
+	async clearAssistantConversation(application_slug) {
+		return request('/assistant/conversation', {
+			method: 'DELETE',
+			body: { application_slug },
+		});
+	},
+
+	async assistantChat({ application_slug, message, history } = {}) {
+		return request('/assistant/chat', {
+			method: 'POST',
+			body: {
+				application_slug,
+				message,
+				...(Array.isArray(history) && history.length > 0 ? { history } : {}),
+			},
+		});
+	},
+
+	async listLlmUsageLogs({ page = 1, per_page = 25, feature, application_slug } = {}) {
+		const params = new URLSearchParams();
+		params.set('page', String(page));
+		params.set('per_page', String(per_page));
+		if (feature) params.set('feature', feature);
+		if (application_slug) params.set('application_slug', application_slug);
+		return request(`/admin/llm-usage-logs?${params.toString()}`);
+	},
+
 	async getApplicationReleaseNoteUnreadCounts() {
 		return request('/application-release-notes/unread-counts');
 	},

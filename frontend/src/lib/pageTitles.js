@@ -25,6 +25,7 @@ const PAGE_TITLES = [
   ['/people/org-chart', 'Organization'],
   ['/organization', 'Organization'],
   ['/applications', 'Applications'],
+  ['/assistant', 'Assistant'],
   ['/leaderboard', 'Missions'],
   ['/attendance', 'Attendance'],
   ['/analytics', 'Analytics'],

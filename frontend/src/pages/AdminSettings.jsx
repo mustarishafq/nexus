@@ -1,7 +1,7 @@
 import db from '@/api/apiClient';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock, Newspaper, Zap } from 'lucide-react';
+import { PenLine, Save, Server, Sparkles, Rocket, Shield, Clock, Newspaper, Zap, Bot } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,7 @@ import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel'
 import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettingsPanel';
 import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
 import EarlyClockInBackfillPanel from '@/components/admin/EarlyClockInBackfillPanel';
+import OpenRouterUsageLogPanel from '@/components/admin/OpenRouterUsageLogPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ const ADMIN_SECTIONS = [
   { id: 'gamification', label: 'EXP', icon: Zap },
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'email', label: 'Email', icon: Server },
+  { id: 'ai', label: 'AI', icon: Bot },
 ];
 
 const ATTENDANCE_TAB_IDS = new Set(ATTENDANCE_SETTING_TABS.map((tab) => tab.id));
@@ -64,6 +66,8 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     imap_host: payload?.imap_host || '',
     imap_port: payload?.imap_port || 993,
     imap_encryption: payload?.imap_encryption || 'ssl',
+    openrouter_api_key: payload?.openrouter_api_key || '',
+    openrouter_model: payload?.openrouter_model || fallback.openrouter_model || 'openai/gpt-4o-mini',
     feed_posts_require_approval: Boolean(
       payload?.feed_posts_require_approval ?? fallback.feed_posts_require_approval ?? false
     ),
@@ -523,6 +527,50 @@ export default function AdminSettings({ embedded = false }) {
                 </CardContent>
               </Card>
               </>
+            ) : null}
+
+            {activeSection === 'ai' ? (
+              <div className="space-y-4">
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">OpenRouter</CardTitle>
+                  <CardDescription>
+                    Powers the in-app Assistant. Settings values override the server environment when set.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="openrouter_api_key">API key</Label>
+                    <Input
+                      id="openrouter_api_key"
+                      type="password"
+                      value={settings.openrouter_api_key}
+                      onChange={(event) => setSettings((current) => ({ ...current, openrouter_api_key: event.target.value }))}
+                      placeholder="sk-or-…"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank to use <code className="rounded bg-muted px-1 py-0.5">OPENROUTER_API_KEY</code> from the server environment.
+                    </p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="openrouter_model">Default model</Label>
+                    <Input
+                      id="openrouter_model"
+                      value={settings.openrouter_model}
+                      onChange={(event) => setSettings((current) => ({ ...current, openrouter_model: event.target.value }))}
+                      placeholder="openai/gpt-4o-mini"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      OpenRouter model id, e.g. <code className="rounded bg-muted px-1 py-0.5">openai/gpt-4o-mini</code>.
+                      Assistant needs a <span className="font-medium text-foreground">tool-capable</span> model;
+                      free `:free` providers often return “Provider returned error” during tool calls.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <OpenRouterUsageLogPanel />
+              </div>
             ) : null}
 
             {activeSection !== 'attendance'

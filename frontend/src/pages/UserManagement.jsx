@@ -61,6 +61,13 @@ const MCP_ACCESS_OPTIONS = [
   { value: 'both', label: 'Read & write' },
 ];
 
+const ASSISTANT_ACCESS_OPTIONS = [
+  { value: 'none', label: 'No Assistant access' },
+  { value: 'read', label: 'Read only' },
+  { value: 'write', label: 'Write only' },
+  { value: 'both', label: 'Read & write' },
+];
+
 function isUserResigned(user) {
   return Boolean(user?.resigned_at);
 }
@@ -90,6 +97,19 @@ function McpAccessSelect({ value, onChange, disabled = false }) {
       <SelectTrigger><SelectValue /></SelectTrigger>
       <SelectContent>
         {MCP_ACCESS_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function AssistantAccessSelect({ value, onChange, disabled = false }) {
+  return (
+    <Select value={value || 'read'} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {ASSISTANT_ACCESS_OPTIONS.map((option) => (
           <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
         ))}
       </SelectContent>
@@ -365,6 +385,7 @@ export default function UserManagement() {
   const [assigningGroups, setAssigningGroups] = useState(false);
   const [newUserRole, setNewUserRole] = useState('user');
   const [newUserMcpAccess, setNewUserMcpAccess] = useState('none');
+  const [newUserAssistantAccess, setNewUserAssistantAccess] = useState('read');
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
   const [newUserCompanyId, setNewUserCompanyId] = useState(null);
   const [newUserCompanyName, setNewUserCompanyName] = useState('');
@@ -1259,6 +1280,7 @@ export default function UserManagement() {
         password: form.get('password'),
         role: newUserRole,
         mcp_access: newUserMcpAccess,
+        assistant_access: newUserAssistantAccess,
         access_group_ids: [...newUserGroupIds].map(Number),
         company_id: newUserCompanyId,
         is_approved: true,
@@ -1270,6 +1292,7 @@ export default function UserManagement() {
       setCreateOpen(false);
       setNewUserRole('user');
       setNewUserMcpAccess('none');
+      setNewUserAssistantAccess('read');
       setNewUserGroupIds(new Set());
       setNewUserCompanyId(null);
       setNewUserCompanyName('');
@@ -1288,6 +1311,7 @@ export default function UserManagement() {
       name: user.name || '',
       role: user.access_role?.slug || user.role || 'user',
       mcp_access: user.mcp_access || 'none',
+      assistant_access: user.assistant_access || 'read',
       is_approved: Boolean(user.is_approved),
       access_group_ids: new Set(getUserGroupIds(user)),
       password: '',
@@ -1316,6 +1340,7 @@ export default function UserManagement() {
         name: editForm.name,
         role: editForm.role,
         mcp_access: editForm.mcp_access || 'none',
+        assistant_access: editForm.assistant_access || 'read',
         is_approved: editForm.is_approved,
         access_group_ids: [...(editForm.access_group_ids || new Set())].map(Number),
         date_of_birth: editForm.date_of_birth || null,
@@ -2615,6 +2640,18 @@ export default function UserManagement() {
                     </p>
                   </div>
                 ) : null}
+                {isAdmin ? (
+                  <div className="space-y-2">
+                    <Label>Assistant access</Label>
+                    <AssistantAccessSelect
+                      value={editForm.assistant_access || 'read'}
+                      onChange={(value) => setEditForm((prev) => ({ ...prev, assistant_access: value }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Controls whether Assistant can read and/or write through connected system APIs. Roles still need the “Use Assistant” permission.
+                    </p>
+                  </div>
+                ) : null}
                 {isAdmin && editForm.role !== 'admin' && editForm.role !== 'hr' && (
                   <div className="space-y-2">
                     <Label>Access Groups</Label>
@@ -2831,6 +2868,15 @@ export default function UserManagement() {
                 <McpAccessSelect value={newUserMcpAccess} onChange={setNewUserMcpAccess} />
                 <p className="text-xs text-muted-foreground">
                   Controls which MCP tools this user can use via API tokens or OAuth.
+                </p>
+              </div>
+            ) : null}
+            {isAdmin ? (
+              <div className="space-y-2">
+                <Label>Assistant access</Label>
+                <AssistantAccessSelect value={newUserAssistantAccess} onChange={setNewUserAssistantAccess} />
+                <p className="text-xs text-muted-foreground">
+                  Controls whether Assistant can read and/or write through connected system APIs.
                 </p>
               </div>
             ) : null}

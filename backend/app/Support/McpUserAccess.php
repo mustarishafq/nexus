@@ -75,6 +75,75 @@ class McpUserAccess
         return self::effectiveLevelForApplication($user, $application) !== self::NONE;
     }
 
+    /**
+     * In-app Assistant: session users who can access an MCP-enabled app may use it
+     * when their assistant_access is not "none". Explicit per-app MCP "none"
+     * overrides still block Assistant for that app.
+     */
+    public static function canUseAssistantForApplication(User $user, Application $application): bool
+    {
+        if (! $application->mcp_enabled || ! $application->is_enabled) {
+            return false;
+        }
+
+        if (! UserApplicationAccess::canAccess($user, $application)) {
+            return false;
+        }
+
+        if (self::assistantAccessLevel($user) === self::NONE) {
+            return false;
+        }
+
+        $override = self::applicationOverrideLevel($user, $application);
+        if ($override === self::NONE) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function assistantHttpMethodsForApplication(User $user, Application $application): array
+    {
+        if (! self::canUseAssistantForApplication($user, $application)) {
+            return [];
+        }
+
+        $level = self::assistantAccessLevel($user);
+        $methods = [];
+
+        if (in_array($level, [self::READ, self::BOTH], true)) {
+            $methods[] = 'GET';
+        }
+
+        if (in_array($level, [self::WRITE, self::BOTH], true)) {
+            array_push($methods, 'POST', 'PUT', 'PATCH', 'DELETE');
+        }
+
+        return $methods;
+    }
+
+    public static function assistantAccessLevel(User $user): string
+    {
+        $level = (string) ($user->assistant_access ?? self::READ);
+
+        return in_array($level, self::LEVELS, true) ? $level : self::READ;
+    }
+
+    public static function canAssistantReadForApplication(User $user, Application $application): bool
+    {
+        return in_array('GET', self::assistantHttpMethodsForApplication($user, $application), true);
+    }
+
+    public static function canAssistantWriteForApplication(User $user, Application $application): bool
+    {
+        $methods = self::assistantHttpMethodsForApplication($user, $application);
+
+        return array_intersect($methods, ['POST', 'PUT', 'PATCH', 'DELETE']) !== [];
+    }
+
     public static function canRead(User $user): bool
     {
         if (in_array(self::effectiveLevel($user), [self::READ, self::BOTH], true)) {
@@ -165,6 +234,18 @@ class McpUserAccess
         return self::filterCatalogEndpointsForMethods(
             $endpoints,
             self::allowedHttpMethodsForApplication($user, $application)
+        );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $endpoints
+     * @return list<array<string, mixed>>
+     */
+    public static function filterCatalogEndpointsForAssistant(User $user, Application $application, array $endpoints): array
+    {
+        return self::filterCatalogEndpointsForMethods(
+            $endpoints,
+            self::assistantHttpMethodsForApplication($user, $application)
         );
     }
 

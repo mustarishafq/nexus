@@ -82,6 +82,8 @@ class AppSettingController extends Controller
             'imap_host' => ['nullable', 'string', 'max:255'],
             'imap_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'imap_encryption' => ['nullable', 'in:ssl,tls,null'],
+            'openrouter_api_key' => ['nullable', 'string', 'max:2048'],
+            'openrouter_model' => ['nullable', 'string', 'max:255'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
         ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules(), GamificationSettings::validationRules()));
 
@@ -109,6 +111,8 @@ class AppSettingController extends Controller
                 'imap_host' => $validated['imap_host'] ?? null,
                 'imap_port' => $validated['imap_port'] ?? null,
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
+                'openrouter_api_key' => $validated['openrouter_api_key'] ?? null,
+                'openrouter_model' => $validated['openrouter_model'] ?? null,
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
         } else {
@@ -124,6 +128,8 @@ class AppSettingController extends Controller
                 'imap_host' => $validated['imap_host'] ?? null,
                 'imap_port' => $validated['imap_port'] ?? null,
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
+                'openrouter_api_key' => $validated['openrouter_api_key'] ?? null,
+                'openrouter_model' => $validated['openrouter_model'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
@@ -323,6 +329,9 @@ class AppSettingController extends Controller
             'imap_host' => $settings->imap_host ?? null,
             'imap_port' => $settings->imap_port ?? 993,
             'imap_encryption' => $settings->imap_encryption ?? 'ssl',
+            'openrouter_api_key' => $settings->openrouter_api_key ?? null,
+            'openrouter_model' => $settings->openrouter_model
+                ?: config('services.openrouter.default_model', 'openai/gpt-4o-mini'),
             'splash' => $splash,
             'splash_animations' => SplashAnimationSettings::catalog(),
             'splash_system_name_animations' => SplashAnimationSettings::systemNameCatalog(),

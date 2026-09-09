@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, BarChart3, Monitor, Bell, User, Wifi, Calendar,
   Settings, Megaphone, Shield, Users, Newspaper, Mail, GitBranch, Grip, Clock, MessageSquare,
-  Sparkles, QrCode, Target, Gamepad2,
+  Sparkles, QrCode, Target, Gamepad2, Bot,
 } from 'lucide-react';
 
 export const MOBILE_BOTTOM_NAV_ITEMS = [
@@ -18,7 +18,7 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
   { type: 'more', icon: Grip, label: 'More' },
 ];
 
-export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames }) {
+export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames, canUseAssistant }) {
   return [
     {
       type: 'whats-new',
@@ -36,6 +36,7 @@ export function buildMobileMoreItems({ showAnalytics, isAdmin, canManageUsers, c
     }] : []),
     { path: '/messages', icon: MessageSquare, label: 'Messages', match: (path) => path === '/messages' || path.startsWith('/messages/'), badge: 'messages' },
     { path: '/email', icon: Mail, label: 'Email', match: (path) => path === '/email' || path.startsWith('/email/'), badge: 'email' },
+    ...(canUseAssistant ? [{ path: '/assistant', icon: Bot, label: 'Assistant', match: (path) => path === '/assistant' || path.startsWith('/assistant/') }] : []),
     ...(showAnalytics ? [{
       path: '/analytics',
       icon: BarChart3,
@@ -66,7 +67,7 @@ export function matchMobileMorePath(pathname, moreItems) {
   return moreItems.some((item) => item.match(pathname));
 }
 
-export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames }) {
+export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, canBroadcast, canViewNetwork, canViewGames, canUseAssistant }) {
   return [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', match: (path) => path === '/' },
     { path: '/people', icon: Users, label: 'People', match: (path) => path === '/people' || /^\/people\/\d+$/.test(path) },
@@ -91,6 +92,7 @@ export function buildDesktopNavItems({ showAnalytics, isAdmin, canManageUsers, c
       label: 'Application',
       match: (path) => path === '/applications' || path.startsWith('/applications/'),
     },
+    ...(canUseAssistant ? [{ path: '/assistant', icon: Bot, label: 'Assistant', match: (path) => path === '/assistant' || path.startsWith('/assistant/') }] : []),
     ...(canViewNetwork ? [{ path: '/network-health', icon: Wifi, label: 'Network', match: (path) => path === '/network-health' }] : []),
     { path: '/attendance', icon: Clock, label: 'Attendance', match: (path) => path === '/attendance' || path.startsWith('/attendance/') },
     { path: '/missions', icon: Target, label: 'Missions', match: (path) => path === '/missions' || path === '/leaderboard', badge: 'missions' },

@@ -27,6 +27,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const NotificationCenter = lazy(() => import('@/pages/NotificationCenter'));
 const ActivityTimeline = lazy(() => import('@/pages/ActivityTimeline'));
 const Applications = lazy(() => import('@/pages/Applications'));
+const Assistant = lazy(() => import('@/pages/Assistant'));
 const ApplicationUsage = lazy(() => import('@/pages/ApplicationUsage'));
 const ApplicationBrowser = lazy(() => import('@/pages/ApplicationBrowser'));
 const BroadcastCenter = lazy(() => import('@/pages/BroadcastCenter'));
@@ -62,6 +63,7 @@ const QuizPreview = lazy(() => import('@/pages/QuizPreview'));
 const QuizGameSettings = lazy(() => import('@/pages/QuizGameSettings'));
 const QuizJoinPublic = lazy(() => import('@/pages/QuizJoinPublic'));
 const GamesAccessGate = lazy(() => import('@/components/games/GamesAccessGate'));
+const AssistantAccessGate = lazy(() => import('@/components/assistant/AssistantAccessGate'));
 
 function LegacyUserDashboardRedirect() {
   const { userId } = useParams();
@@ -132,6 +134,9 @@ const ProtectedRoutes = () => {
           <Route path="/applications/usage" element={<ApplicationUsage />} />
           <Route path="/applications" element={<Applications />} />
           <Route path="/applications/:id/view" element={<ApplicationBrowser />} />
+          <Route element={<AssistantAccessGate />}>
+            <Route path="/assistant" element={<Assistant />} />
+          </Route>
           <Route path="/admin/broadcast" element={<BroadcastCenter />} />
           <Route path="/admin/events" element={<SystemEvents />} />
           <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />

@@ -702,6 +702,7 @@ class UserController extends Controller
             'role' => ['sometimes', 'string', Rule::exists('roles', 'slug')],
             'role_id' => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
+            'assistant_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
@@ -718,7 +719,7 @@ class UserController extends Controller
         if (! $canAssignRole) {
             $assignedRole = Role::query()->where('slug', UserRoles::USER)->first();
             $groupIds = null;
-            unset($validated['mcp_access']);
+            unset($validated['mcp_access'], $validated['assistant_access']);
         } else {
             $assignedRole = $this->resolveRoleFromInput($validated) ?? Role::query()->where('slug', UserRoles::USER)->first();
         }
@@ -736,6 +737,7 @@ class UserController extends Controller
             'password' => Hash::make($validated['password']),
             'role_id' => $assignedRole->id,
             'mcp_access' => $validated['mcp_access'] ?? McpUserAccess::NONE,
+            'assistant_access' => $validated['assistant_access'] ?? McpUserAccess::READ,
             'is_approved' => $validated['is_approved'] ?? true,
             'force_password_change' => true,
             'company_id' => $validated['company_id'] ?? null,
@@ -1076,6 +1078,7 @@ class UserController extends Controller
             'role' => ['sometimes', 'string', Rule::exists('roles', 'slug')],
             'role_id' => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
             'mcp_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
+            'assistant_access' => ['sometimes', 'string', Rule::in(McpUserAccess::LEVELS)],
             'access_group_ids' => ['sometimes', 'array'],
             'access_group_ids.*' => ['integer', 'exists:access_groups,id'],
             'is_approved' => ['sometimes', 'boolean'],
@@ -1117,7 +1120,7 @@ class UserController extends Controller
         ], $this->hrProfileValidationRules()));
 
         if (! $canAssignRole) {
-            unset($validated['role'], $validated['role_id'], $validated['mcp_access']);
+            unset($validated['role'], $validated['role_id'], $validated['mcp_access'], $validated['assistant_access']);
             if (array_key_exists('role', $request->all()) && $request->input('role') !== UserRoles::USER) {
                 return response()->json([
                     'message' => 'HR users can only manage standard user accounts.',

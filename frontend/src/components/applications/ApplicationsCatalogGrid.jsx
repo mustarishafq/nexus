@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -19,7 +20,7 @@ import ApplicationCard from '@/components/applications/ApplicationCard';
 import ApplicationDetailsSheet from '@/components/applications/ApplicationDetailsSheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { canManageApplications } from '@/lib/roles';
+import { canManageApplications, canUseAssistant } from '@/lib/roles';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { APPLICATION_TILE_ICON_CLASS } from '@/lib/applicationIcon';
@@ -30,6 +31,7 @@ import { applicationCalendarSyncEnabled } from '@/lib/calendarEventMapping';
 import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping';
 import { getApplicationStatus } from '@/lib/applicationStatus';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/AuthContext';
 
 function CatalogSkeleton({ viewMode }) {
   if (viewMode === 'list') {
@@ -82,6 +84,8 @@ function ApplicationListRow({
   onWhatsNew,
   unreadReleaseNotes = 0,
 }) {
+  const { user } = useAuth();
+  const showAssistantAsk = canUseAssistant(user);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const logoUrl = system.icon_url ? toAbsoluteUrl(system.icon_url) : null;
   const brandColor = system.color || DEFAULT_BRAND_COLOR;
@@ -223,6 +227,29 @@ function ApplicationListRow({
                 </span>
               ) : null}
             </Button>
+          ) : null}
+
+          {showAssistantAsk && mcpEnabled && system.slug ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  title="Ask Assistant"
+                >
+                  <Link
+                    to={`/assistant?app=${encodeURIComponent(system.slug)}`}
+                    aria-label={`Ask Assistant about ${system.name}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Ask Assistant</TooltipContent>
+            </Tooltip>
           ) : null}
 
           {canManageSystem && onEdit && onDelete ? (

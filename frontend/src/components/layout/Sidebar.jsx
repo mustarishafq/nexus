@@ -4,10 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import db from '@/api/apiClient';
 import { 
   LayoutDashboard, Bell, Shield, Settings, 
-  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2,
+  Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2, Bot,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { can, canManageUsers, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canUseAssistant, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -38,6 +38,7 @@ export default function Sidebar({
     { path: '/email', icon: Mail, label: 'Email' },
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
+    ...(canUseAssistant(user) ? [{ path: '/assistant', icon: Bot, label: 'Assistant' }] : []),
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     ...(canViewNetworkHealth(user) ? [{ path: '/network-health', icon: Wifi, label: 'Network Health' }] : []),
     { path: '/calendar', icon: Calendar, label: 'Calendar' },

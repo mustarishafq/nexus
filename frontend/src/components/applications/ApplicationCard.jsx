@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Activity, Bell, Bot, Calendar as CalendarIcon, ExternalLink, Info, KeyRound, Maximize2, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ import { getEnvironmentBadge } from '@/lib/applicationEnvironment';
 import { toAbsoluteUrl } from '@/lib/media';
 import { applicationNotificationsEnabled } from '@/lib/notificationEventMapping';
 import { applicationCalendarSyncEnabled } from '@/lib/calendarEventMapping';
+import { useAuth } from '@/lib/AuthContext';
+import { canUseAssistant } from '@/lib/roles';
 
 const hoverRevealClass =
   'opacity-100 transition-all duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100';
@@ -36,6 +39,8 @@ export default function ApplicationCard({
   footerOutside = false,
   hideOverlays = false,
 }) {
+  const { user } = useAuth();
+  const showAssistantAsk = canUseAssistant(user);
   const logoUrl = system.icon_url ? toAbsoluteUrl(system.icon_url) : null;
   const brandColor = system.color || DEFAULT_BRAND_COLOR;
   const isOnline = system.status === 'online';
@@ -149,6 +154,29 @@ export default function ApplicationCard({
                   Open in same tab
                 </TooltipContent>
               </Tooltip>
+              {showAssistantAsk && mcpEnabled && system.slug ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-white hover:bg-white/15 hover:text-white"
+                    >
+                      <Link
+                        to={`/assistant?app=${encodeURIComponent(system.slug)}`}
+                        aria-label={`Ask Assistant about ${system.name}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Bot className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="bg-popover text-popover-foreground border border-border shadow-md">
+                    Ask Assistant
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
             </div>
           </TooltipProvider>
         </div>
@@ -216,6 +244,23 @@ export default function ApplicationCard({
                 )}
               </Button>
             )}
+            {showAssistantAsk && mcpEnabled && system.slug ? (
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-white hover:bg-white/15 hover:text-white"
+                title="Ask Assistant"
+              >
+                <Link
+                  to={`/assistant?app=${encodeURIComponent(system.slug)}`}
+                  aria-label={`Ask Assistant about ${system.name}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Bot className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
 
           {canManageSystem && onEdit && onDelete && (

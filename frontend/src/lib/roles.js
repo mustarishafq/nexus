@@ -98,3 +98,7 @@ export function canViewAllNetworkHealth(user) {
 export function canViewGames(user) {
   return can(user, 'quiz.view');
 }
+
+export function canUseAssistant(user) {
+  return can(user, 'assistant.use');
+}

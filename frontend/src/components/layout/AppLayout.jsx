@@ -23,6 +23,7 @@ import {
 } from '@/hooks/useAttendanceReminder';
 import { useNetworkHealthMonitor } from '@/hooks/useNetworkHealthMonitor';
 import { useEmailFullscreen, setEmailFullscreen } from '@/hooks/useEmailFullscreen';
+import { useAssistantFullscreen, setAssistantFullscreen } from '@/hooks/useAssistantFullscreen';
 
 export default function AppLayout() {
   useNetworkHealthMonitor();
@@ -31,15 +32,25 @@ export default function AppLayout() {
   const isCompactNav = useIsCompactNav();
   const location = useLocation();
   const { isFullscreen: emailFullscreen } = useEmailFullscreen();
+  const { isFullscreen: assistantFullscreen } = useAssistantFullscreen();
 
   const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
+  const isAssistantPage = /^\/assistant(\/|$)/.test(location.pathname);
   const isEmailFullscreen = isEmailPage && emailFullscreen;
+  const isAssistantFullscreen = isAssistantPage && assistantFullscreen;
+  const isImmersiveFullscreen = isEmailFullscreen || isAssistantFullscreen;
 
   useEffect(() => {
     if (!isEmailPage && emailFullscreen) {
       setEmailFullscreen(false);
     }
   }, [isEmailPage, emailFullscreen]);
+
+  useEffect(() => {
+    if (!isAssistantPage && assistantFullscreen) {
+      setAssistantFullscreen(false);
+    }
+  }, [isAssistantPage, assistantFullscreen]);
 
   if (shouldRedirect) {
     return (
@@ -52,13 +63,13 @@ export default function AppLayout() {
   }
 
   const isAppViewer = /^\/applications\/\d+\/view$/.test(location.pathname);
-  const isFullBleed = isAppViewer || isEmailFullscreen;
+  const isFullBleed = isAppViewer || isImmersiveFullscreen;
   // Host / play / preview: keep TopBar, but stage fills main edge-to-edge (no page padding gap)
   const isGameImmersive = /^\/games\/(sessions\/[^/]+\/host|play\/[^/]+|[^/]+\/preview)$/.test(location.pathname);
   const isAnalyticsPage = location.pathname === '/analytics';
   const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
   const isOrganizationPage = location.pathname === '/organization' || location.pathname.startsWith('/organization/');
-  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage || isOrganizationPage) && !isFullBleed;
+  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage || isAssistantPage || isOrganizationPage) && !isFullBleed;
   const showBottomNav = !isFullBleed;
 
   const lockToViewport = isFullBleed || isViewportFillPage;
@@ -107,7 +118,7 @@ export default function AppLayout() {
               showBottomNav && !isGameImmersive && 'pb-[var(--nexus-dock-clearance)]',
             )}
           >
-            {isEmailFullscreen ? (
+            {isImmersiveFullscreen ? (
               <div className="flex h-full min-h-0 flex-col overflow-hidden p-2 sm:p-3">
                 <Outlet />
               </div>
@@ -118,7 +129,7 @@ export default function AppLayout() {
                 <Outlet />
               </div>
             ) : isViewportFillPage ? (
-              <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden px-4 pt-4 sm:px-6 sm:pt-6">
+              <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 sm:py-6">
                 <Outlet />
               </div>
             ) : (

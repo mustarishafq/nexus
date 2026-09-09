@@ -65,6 +65,16 @@ class AppServiceProvider extends ServiceProvider
             }
 
             Config::set('mail.from.name', $settings?->smtp_from_name ?: $systemName);
+
+            $openRouterKey = trim((string) ($settings->openrouter_api_key ?? ''));
+            if ($openRouterKey !== '') {
+                Config::set('services.openrouter.api_key', $openRouterKey);
+            }
+
+            $openRouterModel = trim((string) ($settings->openrouter_model ?? ''));
+            if ($openRouterModel !== '') {
+                Config::set('services.openrouter.default_model', $openRouterModel);
+            }
         } catch (Throwable) {
             // Keep booting with environment defaults when the settings table is unavailable.
         }

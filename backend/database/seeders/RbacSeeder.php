@@ -138,5 +138,28 @@ class RbacSeeder extends Seeder
                 }
             }
         }
+
+        // Preserve current Assistant availability: grant to every role once.
+        // Admins can revoke it per role in the Roles UI afterward.
+        if (in_array(PermissionCatalog::ASSISTANT_USE, $createdPermissionKeys, true)) {
+            $assistantUseId = $permissionIds[PermissionCatalog::ASSISTANT_USE] ?? null;
+            if ($assistantUseId) {
+                foreach (DB::table('roles')->pluck('id') as $roleId) {
+                    $exists = DB::table('role_permission')
+                        ->where('role_id', $roleId)
+                        ->where('permission_id', $assistantUseId)
+                        ->exists();
+
+                    if (! $exists) {
+                        DB::table('role_permission')->insert([
+                            'role_id' => $roleId,
+                            'permission_id' => $assistantUseId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+                    }
+                }
+            }
+        }
     }
 }

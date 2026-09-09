@@ -77,6 +77,7 @@ class User extends Authenticatable
         'role',
         'role_id',
         'mcp_access',
+        'assistant_access',
         'is_approved',
         'resigned_at',
         'force_password_change',
@@ -412,6 +413,11 @@ class User extends Authenticatable
     public function applicationMcpAccess(): HasMany
     {
         return $this->hasMany(UserApplicationMcpAccess::class);
+    }
+
+    public function assistantConversations(): HasMany
+    {
+        return $this->hasMany(AssistantConversation::class);
     }
 
     public function networkHealthLogs(): HasMany
