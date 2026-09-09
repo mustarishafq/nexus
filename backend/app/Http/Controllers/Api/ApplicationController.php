@@ -785,6 +785,20 @@ class ApplicationController extends Controller
             if ($user->profile_picture) {
                 $payload['profile_picture'] = $user->profile_picture;
             }
+
+            // Campus-only formal profile fields; other apps keep the base payload.
+            if (ApplicationSsoCredentials::isCampusApplication($application)) {
+                $fullName = trim((string) ($user->full_name ?? ''));
+                if ($fullName !== '') {
+                    $payload['full_name'] = $fullName;
+                }
+
+                $user->loadMissing('department');
+                $departmentName = trim((string) ($user->department?->name ?? ''));
+                if ($departmentName !== '') {
+                    $payload['department'] = $departmentName;
+                }
+            }
         }
 
         if ($redirectTo) {

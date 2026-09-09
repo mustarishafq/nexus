@@ -65,13 +65,38 @@ value in the JWT `redirect_to` claim.
    |---------|--------|----------------------------------------------|
    | `sub`   | string | Nexus user ID                                |
    | `email` | string | User's email address (use this to look up)   |
-   | `name`  | string | User's SSO display name (`users.name` in Nexus, not `full_name`). **Omitted** when the user launches with an additional approved SSO email — only `email` is sent so your app can sign in without overwriting the local account profile. |
+   | `name`  | string | User's SSO **display name** (`users.name` in Nexus, not `full_name`). **Omitted** when the user launches with an additional approved SSO email — only `email` is sent so your app can sign in without overwriting the local account profile. |
    | `profile_picture` | string | Absolute URL to the user's profile picture in Nexus. **Omitted** when no picture is set or when the user launches with an additional SSO email. Use this to sync the avatar into your system on each login. |
    | `sys`   | string | Slug of the application being launched  |
     | `return_to` | string | Nexus URL to redirect user to after logout |
    | `redirect_to` | string | Optional in-app URL to open after SSO login |
    | `iat`   | int    | Issued-at timestamp (Unix seconds)           |
    | `exp`   | int    | Expiry timestamp (Unix seconds, iat + 60)    |
+
+### Nexus Campus–specific profile claims
+
+Applications whose slug is listed in `config/nexus.php` → `sso_campus_slugs`
+(default: `emzi-nexus-campus`) receive two **additional** claims on **primary-email**
+launches only:
+
+| Claim | Type | Description |
+|---------|--------|----------------------------------------------|
+| `full_name` | string | Formal / full name (`users.full_name`). **Omitted** when empty — Nexus does not invent a fallback. |
+| `department` | string | Department display name (`departments.name` via `users.department_id`). **Omitted** when the user has no department. |
+
+Campus primary launches therefore may include:
+
+- `name` — Display Name
+- `full_name` — Formal / Full Name
+- `department` — Department name
+- `profile_picture` — profile picture URL (unchanged shared claim)
+
+**Other applications do not receive `full_name` or `department`.** Their JWT payload stays
+the base set above.
+
+**Additional-email launches** (approved alternate SSO email) continue to omit **all**
+profile claims for every application, including Campus: no `name`, `full_name`,
+`department`, or `profile_picture`.
 
 4. **Find or provision the user** by `email`
 5. **Sync profile picture** — if `profile_picture` is present, store or update the user's avatar URL in your system
