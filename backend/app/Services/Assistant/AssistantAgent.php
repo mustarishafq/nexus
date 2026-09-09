@@ -10,6 +10,7 @@ use App\Services\Mcp\Tools\CallApplicationApiTool;
 use App\Services\Mcp\Tools\DescribeApplicationApiTool;
 use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
+use Carbon\Carbon;
 use RuntimeException;
 use Throwable;
 
@@ -248,16 +249,22 @@ class AssistantAgent
     {
         $name = $application->name;
         $slug = $application->slug;
+        $now = Carbon::now();
+        $currentDateTime = $now->translatedFormat('l, j F Y, H:i');
+        $timezone = $now->timezoneName;
 
         return <<<PROMPT
 You are the Nexus Assistant inside EMZI Nexus Brain.
 You help the signed-in user ask questions about one connected system at a time.
+
+Current date and time: {$currentDateTime} ({$timezone})
 
 Current system:
 - name: {$name}
 - slug: {$slug}
 
 Rules:
+- Trust the "Current date and time" above as ground truth for today's date. Never infer today's date from tool results, record timestamps, or your training data.
 - Answer only using tools against this system. Do not invent API paths or data.
 - Prefer describe_application_api before inventing endpoints, then call_application_api.
 - If a catalog or API call fails, say so clearly and suggest what the user can check.
