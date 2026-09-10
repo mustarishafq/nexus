@@ -28,3 +28,22 @@ Broadcast::channel('quiz-session.{sessionId}', function ($user, int $sessionId) 
 
     return false;
 });
+
+// Host-only channel for lightweight, high-frequency progress signals (e.g.
+// live answer counts) that must never fan out to every participant.
+Broadcast::channel('quiz-session.{sessionId}.host', function ($user, int $sessionId) {
+    if (! $user?->is_approved) {
+        return false;
+    }
+
+    $session = QuizSession::query()->find($sessionId);
+    if (! $session) {
+        return false;
+    }
+
+    if ((int) $session->host_user_id === (int) $user->id) {
+        return ['id' => $user->id, 'role' => 'host'];
+    }
+
+    return false;
+});

@@ -1,21 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
 import { ChevronLeft, ExternalLink, Loader2, Send, X } from 'lucide-react';
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  glassDialogFaintText,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   glassDialogIconButton,
   glassDialogInputStyles,
   glassDialogMutedText,
   glassDialogPanelStyles,
   glassDialogTitleText,
 } from '@/components/layout/glassStyles';
-import { displayMentionText } from '@/lib/mentions';
+import { useMessageActions } from '@/hooks/useMessageActions';
+import MessageThread from '@/components/messages/MessageThread';
 import { getDisplayName } from '@/lib/profile';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
@@ -24,24 +33,6 @@ import { useIsUserOnline } from '@/components/presence/UserPresenceGate';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-
-function MessageBubble({ message }) {
-  return (
-    <div className={cn('flex', message.is_mine ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
-          message.is_mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-        )}
-      >
-        <p className="whitespace-pre-wrap break-words">{displayMentionText(message.body)}</p>
-        <p className={cn('mt-1 text-[10px]', message.is_mine ? 'text-primary-foreground/70' : glassDialogFaintText)}>
-          {formatDistanceToNow(new Date(message.created_date), { addSuffix: true })}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export default function MiniChatPanel({
   user,
@@ -53,12 +44,16 @@ export default function MiniChatPanel({
 }) {
   const [draft, setDraft] = useState('');
   const [conversationId, setConversationId] = useState(initialConversationId);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const bottomRef = useRef(null);
   const queryClient = useQueryClient();
   const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
   useEffect(() => {
     setConversationId(initialConversationId);
+    setEditingMessage(null);
+    setDraft('');
   }, [initialConversationId, user?.id]);
 
   const { data: threadData, isLoading: threadLoading } = useQuery({
@@ -79,6 +74,25 @@ export default function MiniChatPanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, conversationId]);
+
+  const { updateMessage, deleteMessage } = useMessageActions(conversationId);
+
+  const beginEditMessage = (message) => {
+    setEditingMessage(message);
+    setDraft(message.body || '');
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessage(null);
+    setDraft('');
+  };
+
+  const confirmDeleteMessage = () => {
+    if (!deleteMessageTarget?.id) return;
+    deleteMessage.mutate(deleteMessageTarget.id, {
+      onSuccess: () => setDeleteMessageTarget(null),
+    });
+  };
 
   const sendMessage = useMutation({
     mutationFn: (body) => {
@@ -105,12 +119,23 @@ export default function MiniChatPanel({
     },
   });
 
+  const isSubmitting = editingMessage ? updateMessage.isPending : sendMessage.isPending;
+
   const handleSubmit = (event) => {
     event.preventDefault();
     const body = draft.trim();
-    if (!body || sendMessage.isPending) {
+    if (!body || isSubmitting) {
       return;
     }
+
+    if (editingMessage) {
+      updateMessage.mutate(
+        { id: editingMessage.id, body },
+        { onSuccess: () => { setEditingMessage(null); setDraft(''); } }
+      );
+      return;
+    }
+
     sendMessage.mutate(body);
   };
 
@@ -201,11 +226,29 @@ export default function MiniChatPanel({
             No messages yet. Say hello!
           </div>
         ) : (
-          messages.map((message) => <MessageBubble key={message.id} message={message} />)
+          <MessageThread
+            messages={messages}
+            conversationId={conversationId}
+            onEdit={beginEditMessage}
+            onDelete={setDeleteMessageTarget}
+            compactReactions
+            bottomRef={bottomRef}
+          />
         )}
-        <div ref={bottomRef} />
       </div>
 
+      {editingMessage ? (
+        <p className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-3 py-1 text-[11px]">
+          <span className={glassDialogMutedText}>Editing message</span>
+          <button
+            type="button"
+            onClick={cancelEditMessage}
+            className={cn('font-medium hover:underline', glassDialogTitleText)}
+          >
+            Cancel
+          </button>
+        </p>
+      ) : null}
       <form
         onSubmit={handleSubmit}
         className="flex shrink-0 gap-2 border-t border-border/60 p-3"
@@ -213,24 +256,59 @@ export default function MiniChatPanel({
         <Input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Write a message..."
+          placeholder={editingMessage ? 'Edit your message...' : 'Write a message...'}
           className={cn('h-9 text-sm', glassDialogInputStyles)}
           maxLength={2000}
+          autoFocus={Boolean(editingMessage)}
         />
+        {editingMessage ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={cancelEditMessage}
+            disabled={updateMessage.isPending}
+            aria-label="Cancel edit"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : null}
         <Button
           type="submit"
           size="icon"
           className="h-9 w-9 shrink-0"
-          disabled={!draft.trim() || sendMessage.isPending}
-          aria-label="Send message"
+          disabled={!draft.trim() || isSubmitting}
+          aria-label={editingMessage ? 'Save message' : 'Send message'}
         >
-          {sendMessage.isPending ? (
+          {isSubmitting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Send className="h-4 w-4" />
           )}
         </Button>
       </form>
+
+      <AlertDialog open={Boolean(deleteMessageTarget)} onOpenChange={(open) => !open && setDeleteMessageTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will show as &quot;This message has been deleted&quot; for both participants. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMessage.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteMessage}
+              disabled={deleteMessage.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMessage.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

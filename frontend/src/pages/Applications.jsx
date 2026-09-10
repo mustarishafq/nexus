@@ -659,8 +659,8 @@ export default function Applications() {
                   data-form-type="other"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {isAdmin ? (
+              {isAdmin && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Application Type</Label>
                     <Select value={authMode} onValueChange={setAuthMode}>
@@ -671,45 +671,18 @@ export default function Applications() {
                       </SelectContent>
                     </Select>
                   </div>
-                ) : (
                   <div className="space-y-2">
-                    <Label>Application Type</Label>
-                    <Input value="Redirect URL" disabled />
-                    <p className="text-[11px] text-muted-foreground">Non-admin users can only register redirect URL apps.</p>
+                    <Label>Visibility</Label>
+                    <Select value={visibility} onValueChange={setVisibility}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">Public</SelectItem>
+                        <SelectItem value="private">Private</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-                <div className="space-y-2">
-                  <Label>Visibility</Label>
-                  <Select
-                    value={visibility}
-                    onValueChange={setVisibility}
-                    disabled={!isAdmin}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="public">Public</SelectItem>
-                      <SelectItem value="private">Private</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {!isAdmin && (
-                    <p className="text-[11px] text-muted-foreground">Only admin can make systems public.</p>
-                  )}
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Open mode</Label>
-                <Select value={openMode} onValueChange={setOpenMode}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="same_window">Same tab</SelectItem>
-                    <SelectItem value="new_tab">New tab</SelectItem>
-                    <SelectItem value="embedded">In-app browser</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Default when clicking the app tile. Hover shortcuts can still override per launch.
-                </p>
-              </div>
+              )}
               {isAdmin && authMode === 'jwt' && (
                 <div className="space-y-2">
                 <Label>API Key <span className="text-muted-foreground font-normal">(shared secret for SSO)</span></Label>

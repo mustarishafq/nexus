@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import UserDirectoryCard from '@/components/people/UserDirectoryCard';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
@@ -22,15 +23,25 @@ function useDebouncedValue(value, delay = 300) {
   return debounced;
 }
 
+const PEOPLE_FILTER_DEFAULTS = { q: '', department: 'all', access_group: 'all' };
+
 export default function People() {
-  const [search, setSearch] = useState('');
-  const [department, setDepartment] = useState('all');
-  const [accessGroupId, setAccessGroupId] = useState('all');
+  // Filters are seeded from the URL on mount so following a shared link, or
+  // navigating into a colleague's profile and clicking Back, restores the
+  // same search/department/access-group state instead of resetting it.
+  const [urlFilters, setUrlFilters] = useUrlFilters(PEOPLE_FILTER_DEFAULTS);
+  const [search, setSearch] = useState(urlFilters.q);
+  const [department, setDepartment] = useState(urlFilters.department);
+  const [accessGroupId, setAccessGroupId] = useState(urlFilters.access_group);
   const debouncedSearch = useDebouncedValue(search.trim());
 
   useMetaTags({
     description: 'Browse and connect with colleagues across your organization',
   });
+
+  useEffect(() => {
+    setUrlFilters({ q: debouncedSearch, department, access_group: accessGroupId });
+  }, [debouncedSearch, department, accessGroupId, setUrlFilters]);
 
   const filters = useMemo(() => {
     const next = { limit: 50, sort: '-last_login_at' };

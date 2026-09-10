@@ -53,6 +53,18 @@ import { useAuth } from '@/lib/AuthContext';
 import { can, getRoleLabel, isAdmin as userIsAdmin, isHr, ROLE_OPTIONS } from '@/lib/roles';
 import RolesPanel from '@/components/users/RolesPanel';
 import RoleBadge from '@/components/users/RoleBadge';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+
+const USER_MANAGEMENT_FILTER_DEFAULTS = {
+  q: '',
+  role: 'all',
+  status: 'all',
+  profile: 'all',
+  login: 'all',
+  department: 'all',
+  access_group: 'all',
+  page: '1',
+};
 
 const MCP_ACCESS_OPTIONS = [
   { value: 'none', label: 'No MCP access' },
@@ -368,14 +380,19 @@ export default function UserManagement() {
   const [newUserGroupIds, setNewUserGroupIds] = useState(new Set());
   const [newUserCompanyId, setNewUserCompanyId] = useState(null);
   const [newUserCompanyName, setNewUserCompanyName] = useState('');
-  const [search, setSearch] = useState(() => searchParams.get('q') || '');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [profileFilter, setProfileFilter] = useState('all');
-  const [loginFilter, setLoginFilter] = useState('all');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [accessGroupFilter, setAccessGroupFilter] = useState('all');
-  const [page, setPage] = useState(1);
+  // Filters are seeded from the URL on mount so navigating into a user's
+  // profile (e.g. "View profile") and clicking Back restores the same
+  // search/role/status/department/access-group/page state instead of
+  // resetting it. See useUrlFilters for the shared reusable pattern.
+  const [userListUrlFilters, setUserListUrlFilters] = useUrlFilters(USER_MANAGEMENT_FILTER_DEFAULTS);
+  const [search, setSearch] = useState(userListUrlFilters.q);
+  const [roleFilter, setRoleFilter] = useState(userListUrlFilters.role);
+  const [statusFilter, setStatusFilter] = useState(userListUrlFilters.status);
+  const [profileFilter, setProfileFilter] = useState(userListUrlFilters.profile);
+  const [loginFilter, setLoginFilter] = useState(userListUrlFilters.login);
+  const [departmentFilter, setDepartmentFilter] = useState(userListUrlFilters.department);
+  const [accessGroupFilter, setAccessGroupFilter] = useState(userListUrlFilters.access_group);
+  const [page, setPage] = useState(() => Math.max(1, Number(userListUrlFilters.page) || 1));
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const pageSize = 20;
   const [assignDialogUser, setAssignDialogUser] = useState(null);
@@ -587,7 +604,15 @@ export default function UserManagement() {
   const currentPage = Math.min(page, totalPages);
   const paginatedUsers = users;
 
+  const skipNextPageResetRef = useRef(true);
   useEffect(() => {
+    // Skip the run that fires right after mount — page was just restored
+    // from the URL and shouldn't be reset back to 1 before the user has
+    // actually changed a filter.
+    if (skipNextPageResetRef.current) {
+      skipNextPageResetRef.current = false;
+      return;
+    }
     setPage(1);
   }, [debouncedSearch, roleFilter, statusFilter, profileFilter, loginFilter, departmentFilter, accessGroupFilter]);
 
@@ -596,6 +621,22 @@ export default function UserManagement() {
       setPage(totalPages);
     }
   }, [page, totalPages]);
+
+  useEffect(() => {
+    setUserListUrlFilters({
+      q: debouncedSearch,
+      role: roleFilter,
+      status: statusFilter,
+      profile: profileFilter,
+      login: loginFilter,
+      department: departmentFilter,
+      access_group: accessGroupFilter,
+      page,
+    });
+  }, [
+    debouncedSearch, roleFilter, statusFilter, profileFilter, loginFilter,
+    departmentFilter, accessGroupFilter, page, setUserListUrlFilters,
+  ]);
 
   const getGroupById = (groupId) => accessGroups.find((group) => String(group.id) === String(groupId));
 

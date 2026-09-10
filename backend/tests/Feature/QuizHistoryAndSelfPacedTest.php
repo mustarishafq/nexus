@@ -238,6 +238,34 @@ class QuizHistoryAndSelfPacedTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_self_paced_eligible_count_reflects_all_active_staff_not_just_creators_company(): void
+    {
+        $companyA = Company::create(['name' => 'Marvel Corp']);
+        $companyB = Company::create(['name' => 'Stark Industries']);
+        $owner = User::factory()->create(['is_approved' => true, 'company_id' => $companyA->id]);
+        User::factory()->create(['is_approved' => true, 'company_id' => $companyA->id]);
+        User::factory()->create(['is_approved' => true, 'company_id' => $companyB->id]);
+        User::factory()->create(['is_approved' => true, 'company_id' => null]);
+        User::factory()->create(['is_approved' => false, 'company_id' => $companyA->id]);
+        // Resigning always flips is_approved to false too (see
+        // UserController::resign), so a resigned user is already excluded by
+        // the is_approved filter — asserted explicitly here for clarity.
+        User::factory()->create(['is_approved' => false, 'company_id' => $companyA->id, 'resigned_at' => now()]);
+        $quiz = $this->makeQuiz($owner, 1);
+
+        $report = $this->withToken($this->token($owner))
+            ->getJson("/api/quizzes/{$quiz->id}/self-paced-analytics")
+            ->assertOk()
+            ->json();
+
+        // Every approved user counts toward the eligible population, regardless
+        // of which company they belong to — matching the same "current staff"
+        // definition the admin Users list uses (is_approved = true). Users who
+        // are not approved (including resigned staff, whose resignation flips
+        // is_approved to false) are excluded.
+        $this->assertSame(4, $report['summary']['eligible_count']);
+    }
+
     public function test_admin_sees_own_self_paced_results_not_overall_analytics(): void
     {
         $owner = User::factory()->create(['is_approved' => true, 'role' => 'user']);

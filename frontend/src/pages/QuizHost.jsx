@@ -9,7 +9,7 @@ import {
   Users, Play, Eye, Trophy, SkipForward, Square, Music, Music2, VolumeX, Volume2, Copy, Headphones, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { subscribeQuizSession } from '@/lib/echo';
+import { subscribeQuizSession, subscribeQuizHostProgress } from '@/lib/echo';
 import {
   unlockAudio, playSfxOnce, emitTimerTick, syncGameMusic, stopLobby, isMusicMuted, isSfxMuted,
   setMusicMuted, setSfxMuted, setSessionAudio, phaseForSessionStatus, armUnlockOnGesture,
@@ -46,6 +46,7 @@ export default function QuizHost() {
   const [muteMusic, setMuteMusicLocal] = useState(isMusicMuted());
   const [muteSfx, setMuteSfxLocal] = useState(isSfxMuted());
   const [showAudio, setShowAudio] = useState(false);
+  const [liveAnswerCount, setLiveAnswerCount] = useState(null);
   const stageRef = useRef(null);
 
   const sessionQuery = useQuery({
@@ -80,10 +81,24 @@ export default function QuizHost() {
 
   useEffect(() => {
     if (!id) return undefined;
-    return subscribeQuizSession(id, () => {
-      queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
-    });
+    const reconcile = () => queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
+    return subscribeQuizSession(id, reconcile, reconcile);
   }, [id, queryClient]);
+
+  // Host-only, count-only progress channel — deliberately separate from the
+  // main session channel so this never fans out to participants and never
+  // requires a full-session refetch: the count arrives directly in the push.
+  useEffect(() => {
+    if (!id || !session?.is_host) return undefined;
+    return subscribeQuizHostProgress(id, (payload) => {
+      if (Number(payload?.question_id) !== Number(session?.current_question_id)) return;
+      setLiveAnswerCount(Number(payload?.answer_count) || 0);
+    });
+  }, [id, session?.is_host, session?.current_question_id]);
+
+  useEffect(() => {
+    setLiveAnswerCount(null);
+  }, [session?.current_question_id]);
 
   useEffect(() => {
     if (!id || !session || session.status === 'finished' || !session.is_host) return undefined;
@@ -397,7 +412,7 @@ export default function QuizHost() {
               <TimerRing seconds={remainingSeconds} total={currentQuestion.time_limit_seconds || 20} />
             </div>
             <div className="flex-1 min-w-[160px] max-w-xs ml-auto">
-              <AnswerProgress answered={session.answer_count} total={session.player_count} />
+              <AnswerProgress answered={liveAnswerCount ?? session.answer_count} total={session.player_count} />
             </div>
           </div>
           <QuestionTitle key={currentQuestion.id}>{currentQuestion.prompt}</QuestionTitle>
