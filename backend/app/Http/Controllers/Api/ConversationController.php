@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\SerializesFeedAuthors;
+use App\Http\Controllers\Api\Concerns\SerializesMessages;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\MessageEdit;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use App\Services\DirectMessageNotifier;
@@ -17,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 class ConversationController extends Controller
 {
     use SerializesFeedAuthors;
+    use SerializesMessages;
 
     public function index(Request $request): JsonResponse
     {
@@ -142,7 +145,7 @@ class ConversationController extends Controller
         $conversation->load('participants');
 
         $messages = $conversation->messages()
-            ->with('sender.department')
+            ->with(['sender.department', 'reactions'])
             ->orderBy('created_at')
             ->limit(100)
             ->get()
@@ -195,6 +198,73 @@ class ConversationController extends Controller
         return response()->json([
             'message' => $this->serializeMessage($message, $viewer),
         ], 201);
+    }
+
+    public function updateMessage(Request $request, Message $message): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($response = $this->authorizeOwnMessage($message, $viewer)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $body = trim($validated['body']);
+        if ($body === '') {
+            return response()->json(['message' => 'Message cannot be empty.'], 422);
+        }
+
+        $previousBody = (string) $message->body;
+        if ($previousBody !== $body) {
+            DB::transaction(function () use ($message, $viewer, $body, $previousBody) {
+                MessageEdit::query()->create([
+                    'message_id' => $message->id,
+                    'editor_user_id' => $viewer->id,
+                    'body' => $previousBody,
+                ]);
+
+                $message->forceFill([
+                    'body' => $body,
+                    'edited_at' => now(),
+                ])->save();
+            });
+        }
+
+        $message->load(['sender.department', 'reactions']);
+
+        return response()->json([
+            'message' => $this->serializeMessage($message, $viewer),
+        ]);
+    }
+
+    public function destroyMessage(Request $request, Message $message): JsonResponse
+    {
+        $viewer = $this->authenticatedUser($request);
+
+        if (! $viewer) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($response = $this->authorizeOwnMessage($message, $viewer)) {
+            return $response;
+        }
+
+        // The row (and its original body) is kept for moderation/audit —
+        // only the API-facing serialization redacts it once deleted_at is set.
+        $message->forceFill(['deleted_at' => now()])->save();
+
+        $message->load('sender.department');
+
+        return response()->json([
+            'message' => $this->serializeMessage($message, $viewer),
+        ]);
     }
 
     public function markRead(Request $request, Conversation $conversation): JsonResponse
@@ -257,6 +327,32 @@ class ConversationController extends Controller
         }
 
         return $conversation->participants()->where('users.id', $viewer->id)->exists();
+    }
+
+    /**
+     * Shared guard for editing/deleting a message: the viewer must
+     * participate in the message's conversation and be its original sender,
+     * and the message must not already be deleted. Never trust a
+     * client-supplied sender id — identity always comes from the message row.
+     */
+    private function authorizeOwnMessage(Message $message, User $viewer): ?JsonResponse
+    {
+        $message->loadMissing('conversation');
+        $conversation = $message->conversation;
+
+        if (! $conversation || ! $this->participant($conversation, $viewer)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ((int) $message->sender_user_id !== (int) $viewer->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($message->deleted_at !== null) {
+            return response()->json(['message' => 'This message has been deleted.'], 422);
+        }
+
+        return null;
     }
 
     private function markConversationRead(Conversation $conversation, User $viewer): void
@@ -330,21 +426,6 @@ class ConversationController extends Controller
             'unread_count' => $unreadCount,
             'last_message_at' => $conversation->last_message_at?->toISOString(),
             'updated_date' => $conversation->updated_date,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeMessage(Message $message, User $viewer): array
-    {
-        return [
-            'id' => $message->id,
-            'conversation_id' => $message->conversation_id,
-            'body' => $message->body,
-            'sender' => $this->serializeFeedAuthor($message->sender),
-            'created_date' => $message->created_date,
-            'is_mine' => (int) $message->sender_user_id === (int) $viewer->id,
         ];
     }
 

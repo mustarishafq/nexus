@@ -135,9 +135,11 @@ export default function QuizPlay() {
 
   useEffect(() => {
     if (!id || isAsync) return undefined;
-    return subscribeQuizSession(id, () => {
-      queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
-    });
+    const reconcile = () => queryClient.invalidateQueries({ queryKey: ['quiz-session', id] });
+    // Same reconciliation on a missed-then-recovered socket connection as on
+    // a normal broadcast — a dropped connection must not leave this
+    // participant behind until the next poll tick.
+    return subscribeQuizSession(id, reconcile, reconcile);
   }, [id, queryClient, isAsync]);
 
   useEffect(() => {

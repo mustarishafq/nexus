@@ -15,4 +15,8 @@ return [
     'async_feedback_seconds' => (int) env('QUIZ_ASYNC_FEEDBACK_SECONDS', 2),
     // A live player must have been seen this recently at finish to receive quiz EXP.
     'player_presence_grace_seconds' => (int) env('QUIZ_PLAYER_PRESENCE_GRACE_SECONDS', 20),
+    // Minimum gap between last_seen_at DB writes for a given player poll —
+    // keeps presence tracking well within player_presence_grace_seconds
+    // while avoiding a write on every single poll at high player counts.
+    'player_presence_throttle_seconds' => (int) env('QUIZ_PLAYER_PRESENCE_THROTTLE_SECONDS', 10),
 ];

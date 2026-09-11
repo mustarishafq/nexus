@@ -16,3 +16,7 @@ Schedule::command('mail:check-inbox-push')
     ->when(fn () => (bool) config('mail.imap.enabled'));
 Schedule::command('conversations:prune-empty')->hourly();
 Schedule::command('calendar:spawn-next-recurring')->everyFiveMinutes()->withoutOverlapping(5);
+// Backstop only — the live quiz's real transitions are driven by
+// AdvanceQuizSessionJob (queue, delayed to the exact deadline). This just
+// catches a session whose job was somehow lost.
+Schedule::command('quiz:sweep-stale-sessions')->everyMinute()->withoutOverlapping(1);

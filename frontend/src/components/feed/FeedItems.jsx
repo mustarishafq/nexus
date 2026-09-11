@@ -462,6 +462,7 @@ function PostComments({
   const [commentBody, setCommentBody] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [showAllComments, setShowAllComments] = useState(false);
+  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState(null);
   const [expandedReplyIds, setExpandedReplyIds] = useState(() => new Set());
   const commentInputRef = useRef(null);
   const replyComposerRef = useRef(null);
@@ -764,7 +765,7 @@ function PostComments({
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => deleteComment.mutate(comment.id)}
+                    onClick={() => setPendingDeleteCommentId(comment.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -799,7 +800,7 @@ function PostComments({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => deleteComment.mutate(comment.id)}
+                  onClick={() => setPendingDeleteCommentId(comment.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -884,29 +885,63 @@ function PostComments({
     </div>
   );
 
+  const deleteCommentDialog = (
+    <AlertDialog
+      open={pendingDeleteCommentId != null}
+      onOpenChange={(open) => !open && !deleteComment.isPending && setPendingDeleteCommentId(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this comment?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This also removes any replies to it. This can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteComment.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={deleteComment.isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              const commentId = pendingDeleteCommentId;
+              setPendingDeleteCommentId(null);
+              deleteComment.mutate(commentId);
+            }}
+          >
+            {deleteComment.isPending ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (isSheet) {
     return (
-      <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
-          <p className="text-sm font-semibold text-foreground">
-            {commentsCount > 0
-              ? `${commentsCount} comment${commentsCount === 1 ? '' : 's'}`
-              : 'Comments'}
-          </p>
-          <DrawerClose asChild>
-            <button
-              type="button"
-              onClick={onCollapse}
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Close comments"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </DrawerClose>
+      <>
+        <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
+            <p className="text-sm font-semibold text-foreground">
+              {commentsCount > 0
+                ? `${commentsCount} comment${commentsCount === 1 ? '' : 's'}`
+                : 'Comments'}
+            </p>
+            <DrawerClose asChild>
+              <button
+                type="button"
+                onClick={onCollapse}
+                className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Close comments"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </DrawerClose>
+          </div>
+          {commentsList}
+          {!readOnly ? renderComposer({ sticky: true }) : null}
         </div>
-        {commentsList}
-        {!readOnly ? renderComposer({ sticky: true }) : null}
-      </div>
+        {deleteCommentDialog}
+      </>
     );
   }
 
@@ -936,6 +971,7 @@ function PostComments({
 
       {!readOnly && !replyingTo ? renderComposer() : null}
       {commentsList}
+      {deleteCommentDialog}
     </div>
   );
 }
@@ -1806,31 +1842,25 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
         optimisticItem.poll = optimisticItem.polls[0];
       }
 
-      const draft = {
-        body: text,
-        imageItems: files.map((file, index) => ({
-          file,
-          preview: imagePreviews?.[index] || null,
-        })),
-        draftPollsSnapshot: draftPolls,
-        imagePreviews: imagePreviews || [],
-      };
-
-      // Clear composer without revoking blob URLs — optimistic card still uses them.
-      setBody('');
-      setImageItems([]);
-      setDraftPolls([]);
+      // Keep the composer's own draft state untouched until the post is
+      // confirmed — only the feed list gets an optimistic card. If the
+      // request fails, the user's typed content/images/polls are still
+      // sitting in the composer exactly as they left them.
       prependFeedItem(queryClient, optimisticItem);
 
-      return { snapshots, tempId, draft };
+      return { snapshots, tempId };
     },
-    onSuccess: (payload, _variables, context) => {
+    onSuccess: (payload, variables, context) => {
       if (payload?.item && context?.tempId) {
         replaceFeedItem(queryClient, context.tempId, payload.item);
       }
-      (context?.draft?.imagePreviews || []).forEach((url) => {
+      (variables?.imagePreviews || []).forEach((url) => {
         if (url) URL.revokeObjectURL(url);
       });
+      // Only clear the composer once the backend has confirmed the post.
+      setBody('');
+      setImageItems([]);
+      setDraftPolls([]);
       notifyGamificationOffers(payload);
       const pending = payload?.item?.is_pending || payload?.item?.approval_status === 'pending';
       toast.success(pending ? 'Post submitted for approval.' : 'Post shared.');
@@ -1841,21 +1871,7 @@ export const FeedComposer = React.memo(function FeedComposer({ className }) {
       } else if (context?.tempId) {
         removeFeedItem(queryClient, context.tempId);
       }
-      if (context?.draft) {
-        setBody(context.draft.body || '');
-        if (Array.isArray(context.draft.draftPollsSnapshot)) {
-          setDraftPolls(context.draft.draftPollsSnapshot);
-        }
-        if (Array.isArray(context.draft.imageItems) && context.draft.imageItems.length > 0) {
-          setImageItems(
-            context.draft.imageItems.map((entry, index) => ({
-              id: `restore-${Date.now()}-${index}`,
-              file: entry.file,
-              preview: entry.preview || (entry.file ? URL.createObjectURL(entry.file) : null),
-            }))
-          );
-        }
-      }
+      // Composer state was never cleared, so the user's content is already preserved.
       toast.error(error?.message || 'Failed to share post.');
     },
     onSettled: () => {

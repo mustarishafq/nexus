@@ -97,7 +97,15 @@ export default function TextEditor({
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(editable);
+    // Toggling editability (e.g. disabling the composer while a post is
+    // submitting) is not a content change. `setEditable`'s default
+    // `emitUpdate: true` fires a synthetic "update" event that re-reports
+    // the editor's *current* HTML through onChange — if that happens to
+    // land on the same render where a parent just cleared its value (e.g.
+    // right as a mutation settles and re-enables the editor), it echoes the
+    // stale pre-clear content straight back into state, undoing the clear.
+    // Passing `false` here keeps editable toggles silent.
+    editor.setEditable(editable, false);
   }, [editor, editable]);
 
   useEffect(() => {
