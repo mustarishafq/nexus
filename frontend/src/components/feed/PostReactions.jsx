@@ -509,6 +509,10 @@ export default function PostReactions({
   invalidateKeys = null,
   expHintActionKey = null,
   disabled = false,
+  // Feed/Comments show "❤️ 5"; one-to-one Messages only show which
+  // reaction(s) are present, no aggregate counts. Defaulting to true
+  // preserves the existing Feed/Comment look exactly.
+  showCounts = true,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState('quick');
@@ -609,7 +613,7 @@ export default function PostReactions({
             transition={reactionMotion.chipEnter.transition}
             className="inline-flex"
           >
-            {reactionButton(reaction, { showCount: true })}
+            {reactionButton(reaction, { showCount: showCounts })}
           </motion.div>
         ))}
       </AnimatePresence>

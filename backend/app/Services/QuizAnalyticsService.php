@@ -420,19 +420,16 @@ class QuizAnalyticsService
         }
     }
 
+    /**
+     * Total current/active staff who are eligible to take the self-paced
+     * quiz. Uses the same "is_approved" definition of active staff as the
+     * admin Users list (see UserController::index's `approved` stat) — not
+     * scoped to the quiz creator's company, since that previously
+     * undercounted the real staff population.
+     */
     protected function eligibleSelfPacedCount(Quiz $quiz): ?int
     {
-        $companyId = $quiz->relationLoaded('owner') && array_key_exists('company_id', $quiz->owner?->getAttributes() ?? [])
-            ? $quiz->owner?->company_id
-            : User::query()->whereKey($quiz->user_id)->value('company_id');
-        if (! $companyId) {
-            return null;
-        }
-
-        return User::query()
-            ->where('is_approved', true)
-            ->where('company_id', $companyId)
-            ->count();
+        return User::query()->where('is_approved', true)->count();
     }
 
     /**

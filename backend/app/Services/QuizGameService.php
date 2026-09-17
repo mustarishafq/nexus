@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Events\QuizSessionAnswerCountChanged;
 use App\Events\QuizSessionStateChanged;
+use App\Jobs\AdvanceQuizSessionJob;
 use App\Models\ExpReward;
 use App\Models\Quiz;
 use App\Models\QuizOption;
@@ -20,6 +22,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -331,6 +334,20 @@ class QuizGameService
     {
         $this->assertHost($session, $host);
 
+        // A normal host poll (every few seconds) doesn't need to take the
+        // session row lock if we already recorded a recent heartbeat and
+        // there's nothing to resume — this is the main source of avoidable
+        // lock contention on the session row at scale, since it previously
+        // ran on every single host GET request regardless of staleness.
+        $throttleSeconds = max(1, (int) config('quiz.host_heartbeat_interval_seconds', 5));
+        if (
+            ! $session->isPaused()
+            && $session->host_last_seen_at
+            && $session->host_last_seen_at->gt(now()->subSeconds($throttleSeconds))
+        ) {
+            return $session;
+        }
+
         return $this->mutateLockedSession($session, function (QuizSession $locked) {
             $event = null;
             $wasPaused = $locked->isPaused();
@@ -600,7 +617,15 @@ class QuizGameService
             throw $e;
         }
 
-        $this->broadcast($session, 'answer.received');
+        // Deliberately not a session-wide broadcast: the answering player's
+        // own HTTP response already carries everything they need (answer
+        // result, updated score/streak — see the controller/frontend, which
+        // applies this response directly without refetching). Broadcasting
+        // to every other participant here would mean N answers fan out into
+        // up to N*(N-1) full-session refetches. Only the host, who
+        // genuinely needs a live progress count, is notified, and only with
+        // the count itself — no refetch required on their end either.
+        $this->notifyHostAnswerProgress($session);
 
         return [
             'answer' => $answer,
@@ -749,7 +774,10 @@ class QuizGameService
             return $powerUp;
         });
 
-        $this->broadcast($session, 'powerup.used');
+        // Player-local like submitAnswer() above: the using player's own
+        // response already carries the updated session/power-up state, and
+        // no other viewer's UI depends on learning about this in real time.
+        // Intentionally not broadcast.
 
         return [
             'power_up' => $powerUp->fresh(),
@@ -981,8 +1009,10 @@ class QuizGameService
             'phase_ends_at' => null,
             'paused_at' => null,
             'pause_remaining_ms' => null,
+            'state_version' => $session->state_version + 1,
         ]);
         $session->unsetRelation('currentQuestion');
+        $this->dispatchNextTick($session, $endsAt);
     }
 
     protected function applyAsyncTimeoutLocked(QuizSession $session): void
@@ -1054,10 +1084,13 @@ class QuizGameService
         $this->markMissingAnswersAsWrong($session);
 
         $seconds = max(1, (int) config('quiz.distribution_seconds', 4));
+        $endsAt = now()->addSeconds($seconds);
         $session->update([
             'status' => QuizSession::STATUS_REVEAL,
-            'phase_ends_at' => now()->addSeconds($seconds),
+            'phase_ends_at' => $endsAt,
+            'state_version' => $session->state_version + 1,
         ]);
+        $this->dispatchNextTick($session, $endsAt);
     }
 
     protected function enterLeaderboardLocked(QuizSession $session): void
@@ -1067,10 +1100,13 @@ class QuizGameService
         }
 
         $seconds = max(1, (int) config('quiz.recap_seconds', 5));
+        $endsAt = now()->addSeconds($seconds);
         $session->update([
             'status' => QuizSession::STATUS_LEADERBOARD,
-            'phase_ends_at' => now()->addSeconds($seconds),
+            'phase_ends_at' => $endsAt,
+            'state_version' => $session->state_version + 1,
         ]);
+        $this->dispatchNextTick($session, $endsAt);
     }
 
     /**
@@ -1102,6 +1138,7 @@ class QuizGameService
             'paused_at' => null,
             'pause_remaining_ms' => null,
             'finished_at' => $session->finished_at ?? now(),
+            'state_version' => $session->state_version + 1,
         ]);
     }
 
@@ -1134,6 +1171,10 @@ class QuizGameService
             'pause_remaining_ms' => $remaining,
             'question_ends_at' => $session->status === QuizSession::STATUS_QUESTION ? null : $session->question_ends_at,
             'phase_ends_at' => $this->isPostQuestionStatus($session->status) ? null : $session->phase_ends_at,
+            // Bumping here means any tick job already scheduled for the
+            // deadline that just got frozen will see a version mismatch and
+            // cheaply no-op instead of firing into a paused session.
+            'state_version' => $session->state_version + 1,
         ]);
     }
 
@@ -1163,7 +1204,37 @@ class QuizGameService
             'question_started_at' => $questionStartedAt,
             'question_ends_at' => $questionEndsAt,
             'phase_ends_at' => $phaseEndsAt,
+            'state_version' => $session->state_version + 1,
         ]);
+
+        $deadline = $session->status === QuizSession::STATUS_QUESTION ? $questionEndsAt : $phaseEndsAt;
+        $this->dispatchNextTick($session, $deadline);
+    }
+
+    /**
+     * Schedule the server-authoritative tick for this session's next
+     * deadline. A no-op for self-paced (async) sessions, which are driven
+     * entirely by lazy on-request hydration and must not be affected by
+     * this live-only mechanism.
+     */
+    private function dispatchNextTick(QuizSession $session, mixed $deadline): void
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE || ! $deadline) {
+            return;
+        }
+
+        try {
+            AdvanceQuizSessionJob::dispatch($session->id, (int) $session->state_version)
+                ->delay($deadline);
+        } catch (\Throwable $e) {
+            // Never let a queueing hiccup roll back an otherwise-valid state
+            // transition — the scheduled sweep command and normal
+            // lazy-on-request hydration remain as fallbacks.
+            Log::warning('Failed to schedule live quiz tick job.', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected function touchHostLastSeen(QuizSession $session): void
@@ -1492,6 +1563,7 @@ class QuizGameService
             'pin' => $isHost || $session->status === QuizSession::STATUS_LOBBY ? $session->pin : null,
             'join_token' => $isHost ? $session->join_token : null,
             'status' => $session->status,
+            'state_version' => (int) $session->state_version,
             'current_question_id' => $session->current_question_id,
             'question_started_at' => $session->question_started_at?->toIso8601String(),
             'question_ends_at' => $session->question_ends_at?->toIso8601String(),
@@ -1563,29 +1635,37 @@ class QuizGameService
     {
         $currentQuestionId = $session->current_question_id ? (int) $session->current_question_id : null;
         $previousQuestionId = $this->previousQuestionId($session);
+        // Built once per call instead of re-scanning the full answers
+        // collection with ->first(fn...) for every player (up to 3x each) —
+        // at 200 players that repeated linear scan is the dominant cost of
+        // serializing a live session, and it gets worse every question as
+        // the loaded answer history grows. This is a pure lookup-speed
+        // fix — every score/tie-break value below is still computed live
+        // from the same rows, nothing is cached across requests.
+        $answersByQuestionAndUser = $this->indexAnswersByQuestionAndUser($session);
 
         $currentRows = [];
         $previousRows = [];
 
         foreach ($session->players as $player) {
-            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores);
+            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores, $answersByQuestionAndUser, $previousQuestionId);
             $trueScore = (int) $player->score;
-            $pointsThis = $this->pointsForQuestion($session, (int) $player->user_id, $currentQuestionId);
+            $pointsThis = $this->pointsForQuestion($answersByQuestionAndUser, (int) $player->user_id, $currentQuestionId);
             $previousScore = max(0, $trueScore - $pointsThis);
 
             $currentRows[] = [
                 'player' => $player,
                 'score' => $hideLiveScores ? $visibleScore : $trueScore,
                 'response_ms' => $hideLiveScores
-                    ? $this->responseMsForQuestion($session, (int) $player->user_id, $previousQuestionId)
-                    : $this->responseMsForQuestion($session, (int) $player->user_id, $currentQuestionId),
+                    ? $this->responseMsForQuestion($answersByQuestionAndUser, (int) $player->user_id, $previousQuestionId)
+                    : $this->responseMsForQuestion($answersByQuestionAndUser, (int) $player->user_id, $currentQuestionId),
                 'joined_ts' => $player->joined_at?->getTimestampMs() ?? 0,
             ];
 
             $previousRows[] = [
                 'player' => $player,
                 'score' => $previousScore,
-                'response_ms' => $this->responseMsForQuestion($session, (int) $player->user_id, $previousQuestionId),
+                'response_ms' => $this->responseMsForQuestion($answersByQuestionAndUser, (int) $player->user_id, $previousQuestionId),
                 'joined_ts' => $player->joined_at?->getTimestampMs() ?? 0,
             ];
         }
@@ -1602,9 +1682,9 @@ class QuizGameService
             /** @var QuizSessionPlayer $player */
             $player = $row['player'];
             $userId = (int) $player->user_id;
-            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores);
+            [$visibleScore, $streak] = $this->visiblePlayerStats($session, $player, $hideLiveScores, $answersByQuestionAndUser, $previousQuestionId);
             $trueScore = $hideLiveScores ? $visibleScore : (int) $player->score;
-            $pointsThis = $this->pointsForQuestion($session, $userId, $currentQuestionId);
+            $pointsThis = $this->pointsForQuestion($answersByQuestionAndUser, $userId, $currentQuestionId);
             $previousScore = $hideLiveScores ? $visibleScore : max(0, (int) $player->score - $pointsThis);
             $previousRank = $previousByUser[$userId] ?? $row['rank'];
             $rankDelta = $previousRank - $row['rank'];
@@ -1612,10 +1692,10 @@ class QuizGameService
             $ahead = $currentRanked[$index - 1] ?? null;
             $behind = $currentRanked[$index + 1] ?? null;
             $aheadScore = $ahead ? (int) ($hideLiveScores
-                ? $this->visiblePlayerStats($session, $ahead['player'], true)[0]
+                ? $this->visiblePlayerStats($session, $ahead['player'], true, $answersByQuestionAndUser, $previousQuestionId)[0]
                 : $ahead['player']->score) : null;
             $behindScore = $behind ? (int) ($hideLiveScores
-                ? $this->visiblePlayerStats($session, $behind['player'], true)[0]
+                ? $this->visiblePlayerStats($session, $behind['player'], true, $answersByQuestionAndUser, $previousQuestionId)[0]
                 : $behind['player']->score) : null;
 
             $result[] = [
@@ -1700,16 +1780,16 @@ class QuizGameService
         return $previous?->id ? (int) $previous->id : null;
     }
 
-    protected function responseMsForQuestion(QuizSession $session, int $userId, ?int $questionId): ?int
+    /**
+     * @param  array<int, array<int, QuizSessionAnswer>>  $answersByQuestionAndUser
+     */
+    protected function responseMsForQuestion(array $answersByQuestionAndUser, int $userId, ?int $questionId): ?int
     {
         if (! $questionId) {
             return null;
         }
 
-        $answer = $session->answers->first(
-            fn (QuizSessionAnswer $a) => (int) $a->user_id === $userId
-                && (int) $a->quiz_question_id === $questionId
-        );
+        $answer = $answersByQuestionAndUser[$questionId][$userId] ?? null;
 
         if (! $answer || $answer->response_ms === null) {
             return null;
@@ -1718,18 +1798,36 @@ class QuizGameService
         return (int) $answer->response_ms;
     }
 
-    protected function pointsForQuestion(QuizSession $session, int $userId, ?int $questionId): int
+    /**
+     * @param  array<int, array<int, QuizSessionAnswer>>  $answersByQuestionAndUser
+     */
+    protected function pointsForQuestion(array $answersByQuestionAndUser, int $userId, ?int $questionId): int
     {
         if (! $questionId) {
             return 0;
         }
 
-        $answer = $session->answers->first(
-            fn (QuizSessionAnswer $a) => (int) $a->user_id === $userId
-                && (int) $a->quiz_question_id === $questionId
-        );
+        $answer = $answersByQuestionAndUser[$questionId][$userId] ?? null;
 
         return $answer ? (int) $answer->points_awarded : 0;
+    }
+
+    /**
+     * Index a session's loaded answers as [question_id][user_id] => answer
+     * for O(1) lookups in rankLivePlayers()/visiblePlayerStats(), instead of
+     * a linear Collection::first() scan per player per lookup.
+     *
+     * @return array<int, array<int, QuizSessionAnswer>>
+     */
+    protected function indexAnswersByQuestionAndUser(QuizSession $session): array
+    {
+        $index = [];
+
+        foreach ($session->answers as $answer) {
+            $index[(int) $answer->quiz_question_id][(int) $answer->user_id] = $answer;
+        }
+
+        return $index;
     }
 
     /**
@@ -1790,27 +1888,30 @@ class QuizGameService
     }
 
     /**
+     * @param  array<int, array<int, QuizSessionAnswer>>  $answersByQuestionAndUser
      * @return array{0: int, 1: int}
      */
-    protected function visiblePlayerStats(QuizSession $session, QuizSessionPlayer $player, bool $hideLiveScores): array
-    {
+    protected function visiblePlayerStats(
+        QuizSession $session,
+        QuizSessionPlayer $player,
+        bool $hideLiveScores,
+        array $answersByQuestionAndUser = [],
+        ?int $previousQuestionId = null,
+    ): array {
         if (! $hideLiveScores || ! $session->current_question_id) {
             return [(int) $player->score, (int) $player->streak];
         }
 
-        $current = $session->answers
-            ->first(fn (QuizSessionAnswer $a) => (int) $a->user_id === (int) $player->user_id
-                && (int) $a->quiz_question_id === (int) $session->current_question_id);
+        $userId = (int) $player->user_id;
+        $current = $answersByQuestionAndUser[(int) $session->current_question_id][$userId] ?? null;
 
         if (! $current) {
             return [(int) $player->score, (int) $player->streak];
         }
 
-        $previous = $session->answers
-            ->filter(fn (QuizSessionAnswer $a) => (int) $a->user_id === (int) $player->user_id
-                && (int) $a->quiz_question_id !== (int) $session->current_question_id)
-            ->sortByDesc('id')
-            ->first();
+        $previous = $previousQuestionId !== null
+            ? ($answersByQuestionAndUser[$previousQuestionId][$userId] ?? null)
+            : null;
 
         return [
             max(0, (int) $player->score - (int) $current->points_awarded),
@@ -2097,12 +2198,39 @@ class QuizGameService
         ];
     }
 
+    /**
+     * Record that a player is actively viewing the session — throttled so a
+     * normal poll (every ~1.5s per player) doesn't turn into an unconditional
+     * DB write every single time. At 200 concurrent players that write was
+     * the single largest source of avoidable DB load: this cuts it from
+     * "every poll" to at most once per player per throttle window, while
+     * keeping last_seen_at comfortably fresh relative to the presence grace
+     * period used at finish (player_presence_grace_seconds).
+     *
+     * The throttle check reads the player's own already-loaded last_seen_at
+     * (session->players is loaded fresh per request by serializeSession)
+     * rather than an independent cache flag, so it can never suppress a
+     * genuine "player is back" write just because an earlier request
+     * happened to run moments ago — the DB row itself is always the truth.
+     */
     protected function touchPlayerLastSeen(QuizSession $session, User $user): void
     {
+        $throttleSeconds = max(1, (int) config('quiz.player_presence_throttle_seconds', 10));
+        $player = $session->players->first(fn (QuizSessionPlayer $p) => (int) $p->user_id === (int) $user->id);
+
+        if ($player?->last_seen_at && $player->last_seen_at->gt(now()->subSeconds($throttleSeconds))) {
+            return;
+        }
+
+        $now = now();
         QuizSessionPlayer::query()
             ->where('quiz_session_id', $session->id)
             ->where('user_id', $user->id)
-            ->update(['last_seen_at' => now()]);
+            ->update(['last_seen_at' => $now]);
+
+        if ($player) {
+            $player->last_seen_at = $now;
+        }
     }
 
     protected function playerWasPresentAtFinish(?QuizSessionPlayer $player): bool
@@ -2245,8 +2373,53 @@ class QuizGameService
 
     protected function broadcast(QuizSession $session, string $event): void
     {
+        if ($session->mode === QuizSession::MODE_LIVE) {
+            // One lightweight line per authoritative transition (a handful
+            // per question, not per answer/poll) — enough to diagnose a
+            // future sync issue without noisy per-request logging.
+            Log::info('Live quiz session transition.', [
+                'session_id' => $session->id,
+                'event' => $event,
+                'status' => $session->status,
+                'state_version' => (int) $session->state_version,
+                'current_question_id' => $session->current_question_id,
+                'player_count' => $session->relationLoaded('players') ? $session->players->count() : null,
+            ]);
+        }
+
         try {
-            event(new QuizSessionStateChanged($session->id, $event));
+            event(new QuizSessionStateChanged(
+                $session->id,
+                $event,
+                $session->status,
+                $session->current_question_id,
+                (int) $session->state_version,
+            ));
+        } catch (\Throwable) {
+            // Broadcasting may be unavailable in local/test without Reverb.
+        }
+    }
+
+    /**
+     * Host-only, count-only progress signal — see QuizSessionAnswerCountChanged.
+     */
+    private function notifyHostAnswerProgress(QuizSession $session): void
+    {
+        if ($session->mode !== QuizSession::MODE_LIVE || ! $session->current_question_id) {
+            return;
+        }
+
+        try {
+            $answerCount = QuizSessionAnswer::query()
+                ->where('quiz_session_id', $session->id)
+                ->where('quiz_question_id', $session->current_question_id)
+                ->count();
+
+            event(new QuizSessionAnswerCountChanged(
+                $session->id,
+                (int) $session->current_question_id,
+                $answerCount,
+            ));
         } catch (\Throwable) {
             // Broadcasting may be unavailable in local/test without Reverb.
         }

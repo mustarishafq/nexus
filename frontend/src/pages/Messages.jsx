@@ -3,9 +3,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Loader2, Mail, MessageSquare, Search, Send, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, MessageSquare, RefreshCw, Search, Send, ShieldAlert, Trash2, Users, X } from 'lucide-react';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { useMessageActions } from '@/hooks/useMessageActions';
+import MessageThread from '@/components/messages/MessageThread';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +24,6 @@ import {
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { displayMentionText } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
@@ -97,27 +98,6 @@ function ConversationListItem({ conversation, active, onClick, onDelete, deletin
   );
 }
 
-function MessageBubble({ message }) {
-  return (
-    <div className={cn('flex', message.is_mine ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-          message.is_mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-        )}
-      >
-        {!message.is_mine ? (
-          <p className="mb-1 text-[11px] font-semibold opacity-80">{getDisplayName(message.sender)}</p>
-        ) : null}
-        <p className="whitespace-pre-wrap break-words">{displayMentionText(message.body)}</p>
-        <p className={cn('mt-1 text-[10px]', message.is_mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-          {formatDistanceToNow(new Date(message.created_date), { addSuffix: true })}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function PeopleSearchResultItem({ user, onSelect, disabled, loading }) {
   return (
     <button
@@ -149,6 +129,8 @@ export default function Messages() {
   const { user: authUser } = useAuth();
   const [draft, setDraft] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [peopleResults, setPeopleResults] = useState([]);
   const [peopleSearching, setPeopleSearching] = useState(false);
@@ -164,7 +146,13 @@ export default function Messages() {
 
   const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
-  const { data: inboxData, isLoading: inboxLoading } = useQuery({
+  const {
+    data: inboxData,
+    isLoading: inboxLoading,
+    isError: inboxError,
+    error: inboxErrorDetail,
+    refetch: refetchInbox,
+  } = useQuery({
     queryKey: MESSAGES_INBOX_QUERY_KEY,
     queryFn: () => db.messages.listConversations(),
     refetchInterval: pollInterval,
@@ -192,7 +180,13 @@ export default function Messages() {
 
   const composeUser = composeUserData?.user;
 
-  const { data: threadData, isLoading: threadLoading } = useQuery({
+  const {
+    data: threadData,
+    isLoading: threadLoading,
+    isError: threadError,
+    error: threadErrorDetail,
+    refetch: refetchThread,
+  } = useQuery({
     queryKey: ['messages-thread', conversationId],
     queryFn: () => db.messages.getThread(conversationId),
     enabled: Boolean(conversationId) && !isCompose,
@@ -207,6 +201,11 @@ export default function Messages() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, conversationId]);
+
+  useEffect(() => {
+    setEditingMessage(null);
+    setDraft('');
+  }, [conversationId]);
 
   useEffect(() => {
     if (!shouldSearchPeople || debouncedSearchQuery.length < 1) {
@@ -307,6 +306,25 @@ export default function Messages() {
   });
 
   const showThread = Boolean(conversationId) || isCompose;
+
+  const { updateMessage, deleteMessage } = useMessageActions(conversationId);
+
+  const beginEditMessage = (message) => {
+    setEditingMessage(message);
+    setDraft(message.body || '');
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessage(null);
+    setDraft('');
+  };
+
+  const confirmDeleteMessage = () => {
+    if (!deleteMessageTarget?.id) return;
+    deleteMessage.mutate(deleteMessageTarget.id, {
+      onSuccess: () => setDeleteMessageTarget(null),
+    });
+  };
 
   const deleteConversation = useMutation({
     mutationFn: (id) => db.messages.deleteConversation(id),
@@ -416,6 +434,19 @@ export default function Messages() {
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
+            ) : inboxError ? (
+              <EmptyState
+                variant="compact"
+                icon={ShieldAlert}
+                title="Couldn't load conversations"
+                description={inboxErrorDetail?.message || 'Something went wrong. Please try again.'}
+                action={(
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchInbox()}>
+                    <RefreshCw className="h-4 w-4" />
+                    Try again
+                  </Button>
+                )}
+              />
             ) : conversations.length === 0 ? (
               <EmptyState
                 variant="compact"
@@ -511,30 +542,87 @@ export default function Messages() {
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
+                ) : threadError ? (
+                  <EmptyState
+                    variant="compact"
+                    icon={ShieldAlert}
+                    title="Couldn't load this conversation"
+                    description={threadErrorDetail?.message || 'Something went wrong. Please try again.'}
+                    action={(
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchThread()}>
+                        <RefreshCw className="h-4 w-4" />
+                        Try again
+                      </Button>
+                    )}
+                  />
                 ) : (
-                  messages.map((message) => <MessageBubble key={message.id} message={message} />)
+                  <MessageThread
+                    messages={messages}
+                    conversationId={conversationId}
+                    onEdit={beginEditMessage}
+                    onDelete={setDeleteMessageTarget}
+                    bottomRef={bottomRef}
+                  />
                 )}
-                <div ref={bottomRef} />
               </div>
 
+              {editingMessage ? (
+                <p className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+                  Editing message
+                  <button
+                    type="button"
+                    onClick={cancelEditMessage}
+                    className="font-medium text-foreground hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </p>
+              ) : null}
               <form
                 className="flex shrink-0 gap-2 border-t border-border/60 p-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const body = draft.trim();
                   if (!body) return;
+                  if (editingMessage) {
+                    updateMessage.mutate(
+                      { id: editingMessage.id, body },
+                      { onSuccess: () => { setEditingMessage(null); setDraft(''); } }
+                    );
+                    return;
+                  }
                   sendMessage.mutate(body);
                 }}
               >
                 <Input
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Write a message..."
+                  placeholder={editingMessage ? 'Edit your message...' : 'Write a message...'}
                   maxLength={2000}
                   className="h-10"
+                  autoFocus={Boolean(editingMessage)}
                 />
-                <Button type="submit" disabled={sendMessage.isPending || !draft.trim()}>
-                  {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {editingMessage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={cancelEditMessage}
+                    disabled={updateMessage.isPending}
+                    aria-label="Cancel edit"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                ) : null}
+                <Button
+                  type="submit"
+                  disabled={(editingMessage ? updateMessage.isPending : sendMessage.isPending) || !draft.trim()}
+                >
+                  {(editingMessage ? updateMessage.isPending : sendMessage.isPending) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
               </form>
             </>
@@ -559,6 +647,27 @@ export default function Messages() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteConversation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(deleteMessageTarget)} onOpenChange={(open) => !open && setDeleteMessageTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will show as &quot;This message has been deleted&quot; for both participants. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMessage.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteMessage}
+              disabled={deleteMessage.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMessage.isPending ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

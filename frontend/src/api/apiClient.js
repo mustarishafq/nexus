@@ -972,6 +972,22 @@ export const db = {
 		async deleteConversation(conversationId) {
 			return request(`/conversations/${conversationId}`, { method: 'DELETE' });
 		},
+
+		async updateMessage(messageId, body) {
+			return request(`/messages/${messageId}`, { method: 'PUT', body: { body } });
+		},
+
+		async deleteMessage(messageId) {
+			return request(`/messages/${messageId}`, { method: 'DELETE' });
+		},
+
+		async reactToMessage(messageId, reaction) {
+			return request(`/messages/${messageId}/reactions`, { method: 'POST', body: { reaction } });
+		},
+
+		async removeMessageReaction(messageId) {
+			return request(`/messages/${messageId}/reactions`, { method: 'DELETE' });
+		},
 	},
 
 	mail: {

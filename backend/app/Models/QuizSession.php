@@ -40,6 +40,7 @@ class QuizSession extends Model
         'paused_at',
         'pause_remaining_ms',
         'finished_at',
+        'state_version',
     ];
 
     protected function casts(): array
@@ -54,6 +55,7 @@ class QuizSession extends Model
             'music_enabled' => 'boolean',
             'is_preview' => 'boolean',
             'finished_at' => 'datetime',
+            'state_version' => 'integer',
         ];
     }
 

@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\LlmUsageLogController;
 use App\Http\Controllers\Api\MailController;
 use App\Http\Controllers\Api\McpController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\MessageReactionController;
 use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\Nexus\V1\AttendanceController as NexusV1AttendanceController;
@@ -180,6 +181,10 @@ Route::get('/conversations/{conversation}/messages', [ConversationController::cl
 Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
 Route::patch('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
 Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
+Route::put('/messages/{message}', [ConversationController::class, 'updateMessage']);
+Route::delete('/messages/{message}', [ConversationController::class, 'destroyMessage']);
+Route::post('/messages/{message}/reactions', [MessageReactionController::class, 'store']);
+Route::delete('/messages/{message}/reactions', [MessageReactionController::class, 'destroy']);
 Route::post('/admin/notifications/send', [AdminNotificationController::class, 'send']);
 Route::get('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'index']);
 Route::post('/admin/gamification/manual-awards', [AdminManualExpAwardController::class, 'store']);
