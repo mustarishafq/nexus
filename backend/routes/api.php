@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\MetabaseDashboardController;
 use App\Http\Controllers\Api\NetworkHealthController;
 use App\Http\Controllers\Api\Nexus\V1\AttendanceController as NexusV1AttendanceController;
 use App\Http\Controllers\Api\Nexus\V1\AttendancePolicyController as NexusV1AttendancePolicyController;
+use App\Http\Controllers\Api\Nexus\V1\AiController as NexusV1AiController;
 use App\Http\Controllers\Api\Nexus\V1\EmployeeController as NexusV1EmployeeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OAuthController;
@@ -85,6 +86,8 @@ Route::prefix('nexus/v1')->group(function () {
     Route::post('attendance/ingest', [NexusV1AttendanceController::class, 'ingest']);
     Route::get('attendance/policy', [NexusV1AttendancePolicyController::class, 'show']);
     Route::put('attendance/policy', [NexusV1AttendancePolicyController::class, 'update']);
+    Route::get('ai/models', [NexusV1AiController::class, 'models']);
+    Route::post('ai/chat/completions', [NexusV1AiController::class, 'chatCompletions']);
 });
 
 Route::post('/oauth/register', [OAuthController::class, 'register']);

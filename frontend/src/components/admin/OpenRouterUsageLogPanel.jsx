@@ -209,6 +209,7 @@ export default function OpenRouterUsageLogPanel() {
                 { id: 'assistant', label: 'Assistant' },
                 { id: 'general_chat', label: 'Chat' },
                 { id: 'mail_draft', label: 'Email draft' },
+                { id: 'satellite_ai', label: 'Apps' },
               ].map((item) => (
                 <Button
                   key={item.id}

@@ -26,6 +26,7 @@ class ApplicationFactory extends Factory
             'visibility' => 'public',
             'created_by_user_id' => User::factory(),
             'is_enabled' => true,
+            'ai_enabled' => false,
             'health_check_enabled' => true,
             'health_check_path' => '/api/health',
             'health_check_mode' => 'json_ok',

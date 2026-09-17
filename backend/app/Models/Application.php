@@ -40,6 +40,7 @@ class Application extends Model
         'mcp_api_key',
         'mcp_auth_mode',
         'mcp_enabled',
+        'ai_enabled',
         'color',
         'sort_order',
     ];
@@ -57,6 +58,7 @@ class Application extends Model
             'is_enabled' => 'boolean',
             'health_check_enabled' => 'boolean',
             'mcp_enabled' => 'boolean',
+            'ai_enabled' => 'boolean',
             'last_heartbeat' => 'datetime',
             'notification_config' => 'array',
             'calendar_config' => 'array',

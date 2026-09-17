@@ -16,9 +16,14 @@ class OpenRouterClient
     /**
      * @param  list<array<string, mixed>>  $messages
      * @param  list<array<string, mixed>>  $tools
+     * @param  array{
+     *     response_format?: mixed,
+     *     temperature?: float|int|null,
+     *     max_tokens?: int|null,
+     * }  $options
      * @return array<string, mixed>
      */
-    public function chat(array $messages, array $tools = [], ?string $model = null): array
+    public function chat(array $messages, array $tools = [], ?string $model = null, array $options = []): array
     {
         $apiKey = $this->resolveApiKey();
 
@@ -29,7 +34,7 @@ class OpenRouterClient
         }
 
         $baseUrl = rtrim((string) config('services.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
-        $model ??= $this->resolveModel();
+        $model ??= $this->defaultModel();
         $timeout = max(10, (int) config('services.openrouter.timeout', 90));
 
         $payload = [
@@ -40,6 +45,18 @@ class OpenRouterClient
         if ($tools !== []) {
             $payload['tools'] = $tools;
             $payload['tool_choice'] = 'auto';
+        }
+
+        if (isset($options['response_format']) && is_array($options['response_format'])) {
+            $payload['response_format'] = $options['response_format'];
+        }
+
+        if (array_key_exists('temperature', $options) && is_numeric($options['temperature'])) {
+            $payload['temperature'] = max(0, min(2, (float) $options['temperature']));
+        }
+
+        if (array_key_exists('max_tokens', $options) && is_numeric($options['max_tokens'])) {
+            $payload['max_tokens'] = max(1, min(8192, (int) $options['max_tokens']));
         }
 
         $headers = [
@@ -151,7 +168,7 @@ class OpenRouterClient
         return trim((string) config('services.openrouter.api_key'));
     }
 
-    private function resolveModel(): string
+    public function defaultModel(): string
     {
         try {
             $fromSettings = trim((string) (AppSettings::row()?->openrouter_model ?? ''));
@@ -163,6 +180,11 @@ class OpenRouterClient
         }
 
         return (string) config('services.openrouter.default_model', 'openai/gpt-4o-mini');
+    }
+
+    private function resolveModel(): string
+    {
+        return $this->defaultModel();
     }
 
     private function formatErrorMessage(mixed $body, ?int $status = null, ?string $rawBody = null): string

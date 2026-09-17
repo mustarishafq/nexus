@@ -384,10 +384,13 @@ function ComposeForm({
   onSend,
   sending,
   onCancel,
+  onDraftSaved,
+  flushRef,
 }) {
   const fileInputRef = useRef(null);
   const draftUidRef = useRef(initialDraftUid || null);
   const skipNextAutosaveRef = useRef(true);
+  const autosaveTimerRef = useRef(null);
   const [to, setTo] = useState(initialDraft?.to || '');
   const [cc, setCc] = useState(initialDraft?.cc || '');
   const [subject, setSubject] = useState(initialDraft?.subject || '');
@@ -434,37 +437,78 @@ function ComposeForm({
     });
   }, [accountId, to, cc, subject, body, draftUid, initialDraft]);
 
+  const persistDraft = async () => {
+    const isEmpty = !to.trim() && !cc.trim() && !subject.trim() && !body.trim();
+    if (isEmpty && !draftUidRef.current) {
+      setDraftStatus('idle');
+      return { saved: false, cleared: true };
+    }
+
+    setDraftStatus('saving');
+    const result = await db.mail.saveDraft({
+      to,
+      cc: cc || undefined,
+      subject,
+      body,
+      accountId: accountId || undefined,
+      uid: draftUidRef.current || undefined,
+      in_reply_to: initialDraft?.in_reply_to || undefined,
+      references: initialDraft?.references || undefined,
+    });
+    const nextUid = result?.uid ?? null;
+    setDraftUid(nextUid);
+    draftUidRef.current = nextUid;
+    setDraftStatus(result?.cleared ? 'idle' : 'saved');
+    if (!result?.cleared) {
+      onDraftSaved?.();
+    }
+    return {
+      saved: !result?.cleared,
+      cleared: Boolean(result?.cleared),
+    };
+  };
+
+  const flushDraft = async ({ keepSession = false } = {}) => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    try {
+      const result = await persistDraft();
+      if (!keepSession) {
+        clearComposeSession(accountId);
+      }
+      return result;
+    } catch {
+      setDraftStatus('error');
+      return { saved: false, error: true };
+    }
+  };
+
+  useEffect(() => {
+    if (flushRef) {
+      flushRef.current = () => flushDraft({ keepSession: false });
+    }
+    return () => {
+      if (flushRef) {
+        flushRef.current = null;
+      }
+    };
+  });
+
   useEffect(() => {
     if (skipNextAutosaveRef.current) {
       skipNextAutosaveRef.current = false;
       return undefined;
     }
 
-    const isEmpty = !to.trim() && !cc.trim() && !subject.trim() && !body.trim();
-    if (isEmpty && !draftUidRef.current) {
-      setDraftStatus('idle');
-      return undefined;
-    }
-
     let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setDraftStatus('saving');
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      autosaveTimerRef.current = null;
       try {
-        const result = await db.mail.saveDraft({
-          to,
-          cc: cc || undefined,
-          subject,
-          body,
-          accountId: accountId || undefined,
-          uid: draftUidRef.current || undefined,
-          in_reply_to: initialDraft?.in_reply_to || undefined,
-          references: initialDraft?.references || undefined,
-        });
         if (cancelled) return;
-        const nextUid = result?.uid ?? null;
-        setDraftUid(nextUid);
-        draftUidRef.current = nextUid;
-        setDraftStatus(result?.cleared ? 'idle' : 'saved');
+        await persistDraft();
       } catch {
         if (!cancelled) setDraftStatus('error');
       }
@@ -472,7 +516,10 @@ function ComposeForm({
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
     };
   }, [to, cc, subject, body, accountId, initialDraft]);
 
@@ -511,16 +558,12 @@ function ComposeForm({
   };
 
   const handleCancel = async () => {
-    const uid = draftUidRef.current;
-    clearLocalDraft();
-    if (uid) {
-      try {
-        await db.mail.deleteDraft(uid, { accountId: accountId || undefined });
-      } catch {
-        // best-effort
-      }
+    const result = await flushDraft({ keepSession: false });
+    if (result?.error) {
+      toast.error('Could not save this draft. Try again, or wait a moment.');
+      return;
     }
-    onCancel?.();
+    onCancel?.(result);
   };
 
   const handleAiDraft = async () => {
@@ -702,7 +745,9 @@ function ComposeForm({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={handleCancel}>
+            {to.trim() || cc.trim() || subject.trim() || body.trim() || draftUid ? 'Save draft' : 'Cancel'}
+          </Button>
           <Button type="submit" className="gap-2" disabled={sending}>
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Send
@@ -814,6 +859,7 @@ export default function Email() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const composeFlushRef = useRef(null);
 
   useEffect(() => {
     const fromState = location.state?.folder;
@@ -862,7 +908,13 @@ export default function Email() {
     }
   }, [status, accounts, accountId]);
 
-  const selectAccount = (nextId) => {
+  const leaveComposeIfNeeded = async () => {
+    if (!isCompose) return;
+    await composeFlushRef.current?.();
+  };
+
+  const selectAccount = async (nextId) => {
+    await leaveComposeIfNeeded();
     setAccountId(nextId);
     storeAccountId(nextId);
     setFolder('inbox');
@@ -931,6 +983,10 @@ export default function Email() {
     queryClient.invalidateQueries({ queryKey: MAIL_STATUS_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: ['mail-inbox'] });
     queryClient.invalidateQueries({ queryKey: ['mail-unread-count'] });
+  };
+
+  const invalidateDrafts = () => {
+    queryClient.invalidateQueries({ queryKey: ['mail-inbox'] });
   };
 
   const connectMailbox = useMutation({
@@ -1023,12 +1079,21 @@ export default function Email() {
   const ActiveFolderIcon = activeFolder.icon;
 
   const openCompose = (draft = null, options = {}) => {
+    if (!draft && !options.draftUid) {
+      clearComposeSession(activeAccountId);
+    }
     navigate('/email/compose', {
       state: {
         ...(draft ? { composeDraft: draft } : {}),
         ...(options.draftUid ? { draftUid: options.draftUid } : {}),
         ...(options.openAiDraft ? { openAiDraft: true } : {}),
       },
+    });
+  };
+
+  const closeCompose = (result = {}) => {
+    navigate('/email', {
+      state: { folder: result?.saved ? 'drafts' : folder },
     });
   };
 
@@ -1044,10 +1109,11 @@ export default function Email() {
     }, { draftUid: message.uid });
   };
 
-  const switchFolder = (nextFolder) => {
+  const switchFolder = async (nextFolder) => {
+    await leaveComposeIfNeeded();
     setFolder(nextFolder);
     setUnreadOnly(false);
-    navigate('/email');
+    navigate('/email', { state: { folder: nextFolder } });
   };
 
   if (statusLoading) {
@@ -1317,7 +1383,21 @@ export default function Email() {
                   message={message}
                   folder={folder}
                   active={String(message.uid) === String(uid)}
-                  onClick={() => navigate(`/email/${message.uid}`)}
+                  onClick={async () => {
+                    if (folder !== 'drafts') {
+                      navigate(`/email/${message.uid}`);
+                      return;
+                    }
+                    try {
+                      const full = await db.mail.getMessage(message.uid, {
+                        accountId: activeAccountId,
+                        folder: 'drafts',
+                      });
+                      editDraftMessage(full);
+                    } catch {
+                      navigate(`/email/${message.uid}`);
+                    }
+                  }}
                 />
               ))
             )}
@@ -1328,7 +1408,7 @@ export default function Email() {
           {isCompose ? (
             <>
               <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2 sm:px-4 sm:py-3">
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 lg:hidden" onClick={goBack}>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 lg:hidden" onClick={() => composeFlushRef.current?.().then((result) => closeCompose(result || {})).catch(() => closeCompose())}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold">New message</p>
@@ -1340,7 +1420,9 @@ export default function Email() {
                 accountId={activeAccountId}
                 openAiDraft={openAiDraft}
                 sending={sendEmail.isPending}
-                onCancel={() => navigate('/email')}
+                flushRef={composeFlushRef}
+                onDraftSaved={invalidateDrafts}
+                onCancel={closeCompose}
                 onSend={(payload) => sendEmail.mutate(payload)}
               />
             </>

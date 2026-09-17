@@ -40,6 +40,10 @@ After a successful Brain clock (`POST /api/attendance/clock`), Brain fail-soft f
 
 Failures are logged only — Brain clock still returns 201.
 
+## AI provider
+
+Satellites that need LLM access should call Brain’s chat completions API instead of OpenRouter. See [`AI_GATEWAY.md`](./AI_GATEWAY.md).
+
 ## Related docs
 
 - Satellite bootstrap: [`INITIAL_SETUP.md`](./INITIAL_SETUP.md)

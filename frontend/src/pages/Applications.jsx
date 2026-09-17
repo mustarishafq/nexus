@@ -50,6 +50,7 @@ import ApplicationsCatalogToolbar from '@/components/applications/ApplicationsCa
 import ApplicationsNav from '@/components/applications/ApplicationsNav';
 import ApplicationIntegrationsSection from '@/components/applications/ApplicationIntegrationsSection';
 import ApplicationMcpConfigEditor from '@/components/applications/ApplicationMcpConfigEditor';
+import ApplicationAiConfigEditor from '@/components/applications/ApplicationAiConfigEditor';
 import ApplicationHealthConfigEditor from '@/components/applications/ApplicationHealthConfigEditor';
 import SsoCredentialsDialog from '@/components/applications/SsoCredentialsDialog';
 import ApplicationWhatsNewSheet from '@/components/applications/ApplicationWhatsNewSheet';
@@ -200,6 +201,7 @@ export default function Applications() {
   const [mcpApiKey, setMcpApiKey] = useState('');
   const [mcpAuthMode, setMcpAuthMode] = useState('bearer');
   const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [healthCheckEnabled, setHealthCheckEnabled] = useState(true);
   const [healthCheckPath, setHealthCheckPath] = useState('/api/health');
   const [healthCheckMode, setHealthCheckMode] = useState('json_ok');
@@ -270,6 +272,7 @@ export default function Applications() {
     setMcpApiKey(system?.mcp_api_key || '');
     setMcpAuthMode(system?.mcp_auth_mode || 'bearer');
     setMcpEnabled(Boolean(system?.mcp_enabled));
+    setAiEnabled(Boolean(system?.ai_enabled));
     setHealthCheckEnabled(system?.health_check_enabled !== false);
     setHealthCheckPath(system?.health_check_path || '/api/health');
     setHealthCheckMode(system?.health_check_mode || 'json_ok');
@@ -522,6 +525,7 @@ export default function Applications() {
       data.mcp_api_key = mcpApiKey || undefined;
       data.mcp_auth_mode = mcpAuthMode || 'bearer';
       data.mcp_enabled = mcpEnabled;
+      data.ai_enabled = aiEnabled;
       data.health_check_enabled = healthCheckEnabled;
       data.health_check_path = healthCheckPath || undefined;
       data.health_check_mode = healthCheckMode || undefined;
@@ -828,6 +832,10 @@ export default function Applications() {
                     onHealthModeChange={setHealthCheckMode}
                     baseUrl={baseUrl}
                     resetKey={integrationResetKey}
+                  />
+                  <ApplicationAiConfigEditor
+                    enabled={aiEnabled}
+                    onEnabledChange={setAiEnabled}
                   />
                   <ApplicationMcpConfigEditor
                     applicationId={editSystem?.id}

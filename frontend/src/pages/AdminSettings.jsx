@@ -18,6 +18,7 @@ import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettin
 import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
 import EarlyClockInBackfillPanel from '@/components/admin/EarlyClockInBackfillPanel';
 import OpenRouterUsageLogPanel from '@/components/admin/OpenRouterUsageLogPanel';
+import AppAiAccessPanel from '@/components/admin/AppAiAccessPanel';
 import GeneralChatQuotaSettingsPanel from '@/components/admin/GeneralChatQuotaSettingsPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
@@ -528,7 +529,7 @@ export default function AdminSettings({ embedded = false }) {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">OpenRouter</CardTitle>
                   <CardDescription>
-                    Powers in-app Assistant and Chat. Settings values override the server environment when set.
+                    Powers in-app Assistant, Chat, and registered apps that use Brain as their AI provider. Settings values override the server environment when set.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2">
@@ -573,6 +574,7 @@ export default function AdminSettings({ embedded = false }) {
                   <GeneralChatQuotaSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
+              <AppAiAccessPanel />
               <OpenRouterUsageLogPanel />
               </div>
             ) : null}

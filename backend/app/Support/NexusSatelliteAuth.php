@@ -3,6 +3,9 @@
 namespace App\Support;
 
 use App\Models\Application;
+use App\Models\ApplicationSsoCredential;
+use App\Models\User;
+use App\Services\ApplicationApiClient;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Http\JsonResponse;
@@ -115,5 +118,86 @@ class NexusSatelliteAuth
         }
 
         return in_array((string) $aud, $allowedAudiences, true);
+    }
+
+    /**
+     * Who the satellite is calling on behalf of (optional).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function actingUser(Request $request, Application $application, array $payload = []): ?User
+    {
+        $userBlock = is_array($payload['user'] ?? null) ? $payload['user'] : [];
+
+        $id = trim((string) $request->header(ApplicationApiClient::ACTING_USER_ID_HEADER, ''));
+        if ($id === '') {
+            $id = trim((string) ($payload['user_id'] ?? $payload['nexus_user_id'] ?? $userBlock['id'] ?? $userBlock['user_id'] ?? ''));
+        }
+
+        $email = trim((string) $request->header(ApplicationApiClient::ACTING_EMAIL_HEADER, ''));
+        if ($email === '') {
+            $email = trim((string) ($payload['user_email'] ?? $userBlock['email'] ?? ''));
+        }
+
+        $bearer = $request->bearerToken();
+        if ($bearer) {
+            $claims = self::jwtPayload($bearer, $application);
+            if (is_array($claims)) {
+                if ($id === '') {
+                    $claimId = $claims['user_id'] ?? $claims['uid'] ?? $claims['nexus_user_id'] ?? null;
+                    $sub = $claims['sub'] ?? null;
+                    if ($claimId !== null && $claimId !== '') {
+                        $id = trim((string) $claimId);
+                    } elseif (is_numeric($sub)) {
+                        $id = (string) $sub;
+                    }
+                }
+                if ($email === '' && ! empty($claims['email'])) {
+                    $email = trim((string) $claims['email']);
+                }
+            }
+        }
+
+        if ($id !== '' && ctype_digit($id)) {
+            $user = User::query()->find((int) $id);
+            if ($user) {
+                return $user;
+            }
+        }
+
+        if ($email === '') {
+            return null;
+        }
+
+        $normalized = strtolower($email);
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$normalized])->first();
+        if ($user) {
+            return $user;
+        }
+
+        $credential = ApplicationSsoCredential::query()
+            ->where('application_id', $application->id)
+            ->where('status', ApplicationSsoCredential::STATUS_APPROVED)
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->first();
+
+        return $credential?->user;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function jwtPayload(string $token, Application $application): ?array
+    {
+        $apiKey = (string) ($application->api_key ?? '');
+        if ($apiKey === '') {
+            return null;
+        }
+
+        try {
+            return (array) JWT::decode($token, new Key($apiKey, 'HS256'));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

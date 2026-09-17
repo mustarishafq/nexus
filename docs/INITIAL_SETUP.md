@@ -971,3 +971,4 @@ For symptom → fix tables (404 on routes, HTML from API, CORS errors), see [REA
 | Nexus SSO (optional — Brain login) | [nexus-sso-setup.md](./nexus-sso-setup.md) |
 | Event webhooks (optional — Brain notifications) | [event-webhook-setup.md](./event-webhook-setup.md) |
 | MCP API catalog (optional — Brain AI / tools) | [emzi-nexus-mcp-catalog-spec.md](./emzi-nexus-mcp-catalog-spec.md) |
+| Brain AI provider (optional — satellite chat/completions) | [AI_GATEWAY.md](./AI_GATEWAY.md) |
