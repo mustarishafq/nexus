@@ -27,3 +27,26 @@ test('desktop and mobile nav hide Games without quiz.view', () => {
 	assert.equal(buildDesktopNavItems(shown).some((item) => item.path === '/games' && item.label === 'Games'), true);
 	assert.equal(buildMobileMoreItems(shown).some((item) => item.path === '/games' && item.label === 'Games'), true);
 });
+
+test('desktop and mobile nav merge Chat into Assistant', () => {
+	const neither = {
+		showAnalytics: false,
+		isAdmin: false,
+		canManageUsers: false,
+		canBroadcast: false,
+		canViewNetwork: false,
+		canViewGames: false,
+		canUseAssistant: false,
+		canUseGeneralChat: false,
+	};
+	const chatOnly = { ...neither, canUseGeneralChat: true };
+	const both = { ...neither, canUseAssistant: true, canUseGeneralChat: true };
+
+	assert.equal(buildDesktopNavItems(neither).some((item) => item.label === 'Chat' || item.path === '/assistant'), false);
+	assert.equal(buildDesktopNavItems(chatOnly).filter((item) => item.path === '/assistant' && item.label === 'Assistant').length, 1);
+	assert.equal(buildDesktopNavItems(chatOnly).some((item) => item.label === 'Chat'), false);
+	assert.equal(buildDesktopNavItems(both).filter((item) => item.path === '/assistant').length, 1);
+	assert.equal(buildDesktopNavItems(both).some((item) => item.path === '/chat'), false);
+	assert.equal(buildMobileMoreItems(both).filter((item) => item.path === '/assistant').length, 1);
+	assert.equal(buildMobileMoreItems(both).some((item) => item.path === '/chat'), false);
+});

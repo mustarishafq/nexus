@@ -38,18 +38,7 @@ class AssistantController extends Controller
         $applications = UserApplicationAccess::accessibleMcpApplicationsQuery($user)
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get([
-                'id',
-                'name',
-                'slug',
-                'description',
-                'icon_url',
-                'color',
-                'status',
-                'environment',
-                'mcp_enabled',
-                'is_enabled',
-            ])
+            ->get()
             ->filter(fn (Application $application) => McpUserAccess::canUseAssistantForApplication($user, $application))
             ->values()
             ->map(fn (Application $application) => [

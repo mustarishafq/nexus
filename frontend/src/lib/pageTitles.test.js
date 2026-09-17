@@ -25,6 +25,8 @@ test('getPageTitle maps each module path to its page heading', () => {
     ['/applications', 'Applications'],
     ['/applications/usage', 'Applications'],
     ['/applications/9/view', 'Applications'],
+    ['/assistant', 'Assistant'],
+    ['/chat', 'Assistant'],
     ['/admin/broadcast', 'Broadcast Center'],
     ['/admin/events', 'System Events'],
     ['/admin/users', 'User Management'],

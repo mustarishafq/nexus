@@ -18,6 +18,7 @@ import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettin
 import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
 import EarlyClockInBackfillPanel from '@/components/admin/EarlyClockInBackfillPanel';
 import OpenRouterUsageLogPanel from '@/components/admin/OpenRouterUsageLogPanel';
+import GeneralChatQuotaSettingsPanel from '@/components/admin/GeneralChatQuotaSettingsPanel';
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
@@ -68,6 +69,11 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     imap_encryption: payload?.imap_encryption || 'ssl',
     openrouter_api_key: payload?.openrouter_api_key || '',
     openrouter_model: payload?.openrouter_model || fallback.openrouter_model || 'openai/gpt-4o-mini',
+    general_chat_token_limit: payload?.general_chat_token_limit ?? fallback.general_chat_token_limit ?? 100000,
+    general_chat_reset_period: payload?.general_chat_reset_period || fallback.general_chat_reset_period || 'monthly',
+    general_chat_reset_time: payload?.general_chat_reset_time || fallback.general_chat_reset_time || '00:00',
+    general_chat_reset_weekday: payload?.general_chat_reset_weekday ?? fallback.general_chat_reset_weekday ?? 1,
+    general_chat_reset_month_day: payload?.general_chat_reset_month_day ?? fallback.general_chat_reset_month_day ?? 1,
     feed_posts_require_approval: Boolean(
       payload?.feed_posts_require_approval ?? fallback.feed_posts_require_approval ?? false
     ),
@@ -535,7 +541,7 @@ export default function AdminSettings({ embedded = false }) {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">OpenRouter</CardTitle>
                   <CardDescription>
-                    Powers the in-app Assistant. Settings values override the server environment when set.
+                    Powers in-app Assistant and Chat. Settings values override the server environment when set.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2">
@@ -567,6 +573,17 @@ export default function AdminSettings({ embedded = false }) {
                       free `:free` providers often return “Provider returned error” during tool calls.
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Chat token limits</CardTitle>
+                  <CardDescription>
+                    Default budget for general Chat. Individual overrides and top-ups are set in User Management.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <GeneralChatQuotaSettingsPanel settings={settings} onChange={setSettings} />
                 </CardContent>
               </Card>
               <OpenRouterUsageLogPanel />

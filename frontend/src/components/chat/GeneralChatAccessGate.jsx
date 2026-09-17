@@ -1,11 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { canUseAssistantNav } from '@/lib/roles';
+import { canUseGeneralChat } from '@/lib/roles';
 
-export default function AssistantAccessGate() {
+export default function GeneralChatAccessGate() {
   const { user } = useAuth();
 
-  if (!canUseAssistantNav(user)) {
+  if (!canUseGeneralChat(user)) {
     return <Navigate to="/" replace />;
   }
 

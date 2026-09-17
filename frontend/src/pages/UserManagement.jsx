@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch, Gift, LogOut } from 'lucide-react';
+import { Check, X, Shield, UserCheck, UserX, UserPlus, Upload, Search, ChevronLeft, ChevronRight, Users as UsersIcon, Download, Edit, Loader2, Plus, Trash2, Layers, BarChart3, ExternalLink, MoreHorizontal, Briefcase, BellRing, BellOff, Sparkles, KeyRound, Send, Key, Eye, UserRoundSearch, Gift, LogOut, Coins } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -485,6 +485,10 @@ export default function UserManagement() {
     reason: '',
     notify: true,
   });
+  const [chatTopupUser, setChatTopupUser] = useState(null);
+  const [chatTopupTokens, setChatTopupTokens] = useState('10000');
+  const [chatTopupNote, setChatTopupNote] = useState('');
+  const [chatTopupSaving, setChatTopupSaving] = useState(false);
   const [apiTokenCreateUserId, setApiTokenCreateUserId] = useState(null);
   const [apiTokenCreateSignal, setApiTokenCreateSignal] = useState(0);
   const csvRef = useRef(null);
@@ -561,6 +565,14 @@ export default function UserManagement() {
     queryFn: () => db.listDepartments(),
     staleTime: 60_000,
   });
+
+  const chatQuotaUserId = editUser?.id || chatTopupUser?.id || null;
+  const { data: chatQuotaPayload, isFetching: fetchingChatQuota } = useQuery({
+    queryKey: ['user-general-chat-quota', chatQuotaUserId],
+    queryFn: () => db.getUserGeneralChatQuota(chatQuotaUserId),
+    enabled: Boolean(chatQuotaUserId) && can(currentUser, 'people.manage_users'),
+  });
+  const chatQuota = chatQuotaPayload?.quota || null;
 
   const { data: metabaseDashboardsRaw = [], isLoading: loadingDashboards } = useQuery({
     queryKey: ['metabase-dashboards-admin'],
@@ -1185,6 +1197,16 @@ export default function UserManagement() {
             Award EXP
           </DropdownMenuItem>
         ) : null}
+        {can(currentUser, 'people.manage_users') && user.is_approved ? (
+          <DropdownMenuItem onClick={() => {
+            setChatTopupTokens('10000');
+            setChatTopupNote('');
+            setChatTopupUser(user);
+          }}>
+            <Coins className="w-4 h-4 mr-2" />
+            Top up Chat tokens
+          </DropdownMenuItem>
+        ) : null}
         {isAdmin ? (
           <DropdownMenuItem onClick={() => openApiTokenDialog(user)}>
             <Key className="w-4 h-4 mr-2" />
@@ -1326,6 +1348,7 @@ export default function UserManagement() {
       company_name: user.company || '',
       manager_id: user.manager_id ?? null,
       manager_name: user.manager?.name || user.manager?.full_name || '',
+      general_chat_token_limit: user.general_chat_token_limit ?? '',
       ...buildHrProfileForm(user),
     });
   };
@@ -1353,6 +1376,13 @@ export default function UserManagement() {
         manager_id: editForm.manager_id,
         ...buildHrProfilePayload(editForm),
       };
+      const limitRaw = editForm.general_chat_token_limit;
+      if (limitRaw === '' || limitRaw === null || limitRaw === undefined) {
+        updateData.general_chat_token_limit = null;
+      } else {
+        const parsed = Number.parseInt(String(limitRaw), 10);
+        updateData.general_chat_token_limit = Number.isFinite(parsed) ? parsed : null;
+      }
       if (editForm.password) {
         updateData.password = editForm.password;
       }
@@ -2652,6 +2682,36 @@ export default function UserManagement() {
                     </p>
                   </div>
                 ) : null}
+                {can(currentUser, 'people.manage_users') ? (
+                  <div className="space-y-2 rounded-xl border border-border/70 p-3">
+                    <Label>Chat token limit</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={editForm.general_chat_token_limit ?? ''}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, general_chat_token_limit: e.target.value }))}
+                      placeholder="Inherit company default"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank to use the general limit from Settings → AI.
+                      {chatQuota ? ` Currently ${Number(chatQuota.remaining || 0).toLocaleString()} of ${Number(chatQuota.effective_limit || 0).toLocaleString()} remaining this period.` : fetchingChatQuota ? ' Loading usage…' : ''}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => {
+                        setChatTopupTokens('10000');
+                        setChatTopupNote('');
+                        setChatTopupUser(editUser);
+                      }}
+                    >
+                      <Coins className="h-3.5 w-3.5" />
+                      Top up this period
+                    </Button>
+                  </div>
+                ) : null}
                 {isAdmin && editForm.role !== 'admin' && editForm.role !== 'hr' && (
                   <div className="space-y-2">
                     <Label>Access Groups</Label>
@@ -3453,6 +3513,74 @@ export default function UserManagement() {
                 </>
               )}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(chatTopupUser)} onOpenChange={(open) => !open && setChatTopupUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Top up Chat tokens</DialogTitle>
+            <DialogDescription>
+              Add extra tokens for {chatTopupUser?.full_name || chatTopupUser?.name || chatTopupUser?.email} in the current period. Unused extra expires at reset.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {chatQuota ? (
+              <p className="text-xs text-muted-foreground">
+                Remaining {Number(chatQuota.remaining || 0).toLocaleString()} of {Number(chatQuota.effective_limit || 0).toLocaleString()} tokens.
+              </p>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="chat-topup-tokens">Tokens</Label>
+              <Input
+                id="chat-topup-tokens"
+                type="number"
+                min={1}
+                value={chatTopupTokens}
+                onChange={(e) => setChatTopupTokens(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="chat-topup-note">Note (optional)</Label>
+              <Textarea
+                id="chat-topup-note"
+                rows={2}
+                maxLength={500}
+                value={chatTopupNote}
+                onChange={(e) => setChatTopupNote(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setChatTopupUser(null)}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={chatTopupSaving}
+                onClick={async () => {
+                  const tokens = Number.parseInt(String(chatTopupTokens), 10);
+                  if (!chatTopupUser || !Number.isFinite(tokens) || tokens < 1) {
+                    toast.error('Enter a token amount of at least 1.');
+                    return;
+                  }
+                  setChatTopupSaving(true);
+                  try {
+                    await db.topupUserGeneralChat(chatTopupUser.id, {
+                      tokens,
+                      note: chatTopupNote.trim() || null,
+                    });
+                    queryClient.invalidateQueries({ queryKey: ['user-general-chat-quota', chatTopupUser.id] });
+                    toast.success('Chat tokens added for this period.');
+                    setChatTopupUser(null);
+                  } catch (err) {
+                    toast.error(err?.data?.message || err.message || 'Failed to top up tokens');
+                  } finally {
+                    setChatTopupSaving(false);
+                  }
+                }}
+              >
+                {chatTopupSaving ? 'Adding…' : 'Add tokens'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

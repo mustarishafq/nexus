@@ -172,9 +172,15 @@ export default function OpenRouterUsageLogPanel() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState(null);
 
+  const [feature, setFeature] = useState('all');
+
   const { data, isLoading, isFetching, refetch, isError, error } = useQuery({
-    queryKey: ['admin-llm-usage-logs', page],
-    queryFn: () => db.listLlmUsageLogs({ page, per_page: 20, feature: 'assistant' }),
+    queryKey: ['admin-llm-usage-logs', page, feature],
+    queryFn: () => db.listLlmUsageLogs({
+      page,
+      per_page: 20,
+      feature: feature === 'all' ? undefined : feature,
+    }),
     placeholderData: (previous) => previous,
   });
 
@@ -197,6 +203,27 @@ export default function OpenRouterUsageLogPanel() {
             <CardDescription>
               Inbound (prompt) and outbound (completion) tokens, with a detail view of stored input/output.
             </CardDescription>
+            <div className="mt-3 flex flex-wrap gap-1">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'assistant', label: 'Assistant' },
+                { id: 'general_chat', label: 'Chat' },
+              ].map((item) => (
+                <Button
+                  key={item.id}
+                  type="button"
+                  size="sm"
+                  variant={feature === item.id ? 'secondary' : 'ghost'}
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => {
+                    setFeature(item.id);
+                    setPage(1);
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
           </div>
           <Button
             type="button"
@@ -230,7 +257,7 @@ export default function OpenRouterUsageLogPanel() {
           </p>
         ) : logs.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No Assistant usage yet. Ask a question in Assistant to generate the first log.
+            No AI usage yet for this filter.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border">

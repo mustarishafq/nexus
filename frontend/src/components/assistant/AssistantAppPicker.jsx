@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Maximize2, Minimize2, Search } from 'lucide-react';
+import { Bot, Maximize2, Minimize2, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,6 +14,11 @@ export default function AssistantAppPicker({
   searchQuery,
   onSearchChange,
   onSelect,
+  onSelectChat,
+  onSelectSystems,
+  showGeneralChat = false,
+  chatSelected = false,
+  chatSidebar = null,
   isLoading,
   isFullscreen,
   onToggleFullscreen,
@@ -28,7 +33,11 @@ export default function AssistantAppPicker({
             </div>
             <div className="min-w-0">
               <h1 className="text-base font-semibold tracking-tight">Assistant</h1>
-              <p className="text-[11px] text-muted-foreground">Ask connected systems</p>
+              <p className="text-[11px] text-muted-foreground">
+                {showGeneralChat
+                  ? (chatSelected ? 'General questions' : 'Ask a connected system')
+                  : 'Ask connected systems'}
+              </p>
             </div>
           </div>
           {onToggleFullscreen ? (
@@ -45,20 +54,54 @@ export default function AssistantAppPicker({
             </Button>
           ) : null}
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search systems…"
-            className="h-9 rounded-xl border-border/80 bg-background/80 pl-8"
-          />
-        </div>
+        {showGeneralChat ? (
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted/80 p-1">
+            <button
+              type="button"
+              onClick={onSelectChat}
+              className={cn(
+                'inline-flex h-8 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-colors',
+                chatSelected
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={onSelectSystems}
+              className={cn(
+                'inline-flex h-8 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-colors',
+                !chatSelected
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Bot className="h-3.5 w-3.5" />
+              Systems
+            </button>
+          </div>
+        ) : null}
+        {!chatSelected && (applications.length > 0 || isLoading) ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search systems…"
+              className="h-9 rounded-xl border-border/80 bg-background/80 pl-8"
+            />
+          </div>
+        ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {isLoading ? (
-          <div className="space-y-2 p-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {chatSelected ? (
+          <div className="h-full min-h-0">{chatSidebar}</div>
+        ) : isLoading ? (
+          <div className="space-y-2 p-3">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="h-16 animate-pulse rounded-xl bg-muted/70" />
             ))}
@@ -68,10 +111,10 @@ export default function AssistantAppPicker({
             variant="compact"
             icon={Bot}
             title="No systems ready"
-            description="Enable MCP on an application to ask it questions."
+            description="Ask an admin to enable MCP on an application assigned to you."
           />
         ) : (
-          <div className="space-y-1">
+          <div className="h-full min-h-0 space-y-1 overflow-y-auto p-2">
             {applications.map((app) => {
               const logoUrl = app.icon_url ? toAbsoluteUrl(app.icon_url) : null;
               const brandColor = app.color || DEFAULT_BRAND_COLOR;
@@ -106,17 +149,13 @@ export default function AssistantAppPicker({
                       <p className={cn('truncate text-sm font-semibold', active && 'text-primary')}>
                         {app.name}
                       </p>
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-700 dark:text-violet-300">
-                        <Bot className="h-2.5 w-2.5" />
-                        MCP
-                      </span>
                       {app.can_write ? (
                         <span className="inline-flex shrink-0 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          Read & write
+                          Write
                         </span>
                       ) : app.can_read ? (
                         <span className="inline-flex shrink-0 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          Read only
+                          Read
                         </span>
                       ) : null}
                     </div>

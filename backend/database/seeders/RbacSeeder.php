@@ -161,5 +161,26 @@ class RbacSeeder extends Seeder
                 }
             }
         }
+
+        if (in_array(PermissionCatalog::GENERAL_CHAT_USE, $createdPermissionKeys, true)) {
+            $chatUseId = $permissionIds[PermissionCatalog::GENERAL_CHAT_USE] ?? null;
+            if ($chatUseId) {
+                foreach (DB::table('roles')->pluck('id') as $roleId) {
+                    $exists = DB::table('role_permission')
+                        ->where('role_id', $roleId)
+                        ->where('permission_id', $chatUseId)
+                        ->exists();
+
+                    if (! $exists) {
+                        DB::table('role_permission')->insert([
+                            'role_id' => $roleId,
+                            'permission_id' => $chatUseId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+                    }
+                }
+            }
+        }
     }
 }

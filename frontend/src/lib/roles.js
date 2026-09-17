@@ -102,3 +102,11 @@ export function canViewGames(user) {
 export function canUseAssistant(user) {
   return can(user, 'assistant.use');
 }
+
+export function canUseGeneralChat(user) {
+  return can(user, 'general_chat.use');
+}
+
+export function canUseAssistantNav(user) {
+  return canUseAssistant(user) || canUseGeneralChat(user);
+}

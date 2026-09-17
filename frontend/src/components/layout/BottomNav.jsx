@@ -14,7 +14,7 @@ import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNot
 import { cn } from '@/lib/utils';
 import { isRunningStandalone } from '@/lib/pwa';
 import { MOBILE_BOTTOM_NAV_ITEMS, buildDesktopNavItems } from './navItems';
-import { can, canManageUsers, canUseAssistant, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canUseAssistant, canUseGeneralChat, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { glassBottomNavStyles, glassDockNavItemInactive, glassDockNavLabel, glassDockStyles } from './glassStyles';
 import AppsOrbNavItem from './AppsOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
@@ -89,6 +89,7 @@ export default function BottomNav() {
       canViewNetwork: canViewNetworkHealth(user),
       canViewGames: canViewGames(user),
       canUseAssistant: canUseAssistant(user),
+      canUseGeneralChat: canUseGeneralChat(user),
     });
   }, [isCompactNav, user, metabaseDashboards.length]);
 

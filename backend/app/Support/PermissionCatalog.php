@@ -40,6 +40,8 @@ class PermissionCatalog
 
     public const ASSISTANT_USE = 'assistant.use';
 
+    public const GENERAL_CHAT_USE = 'general_chat.use';
+
     public const BROADCAST_MANAGE = 'broadcast.manage';
 
     public const NETWORK_VIEW = 'network.view';
@@ -84,6 +86,7 @@ class PermissionCatalog
             ['key' => self::APPLICATIONS_MANAGE, 'module' => 'applications', 'name' => 'Manage application catalog', 'sort_order' => 10],
 
             ['key' => self::ASSISTANT_USE, 'module' => 'assistant', 'name' => 'Use Assistant', 'sort_order' => 10],
+            ['key' => self::GENERAL_CHAT_USE, 'module' => 'general_chat', 'name' => 'Use Chat', 'sort_order' => 10],
 
             ['key' => self::BROADCAST_MANAGE, 'module' => 'broadcast', 'name' => 'Send broadcasts', 'sort_order' => 10],
 
@@ -111,6 +114,7 @@ class PermissionCatalog
             'analytics' => 'Analytics',
             'applications' => 'Applications',
             'assistant' => 'Assistant',
+            'general_chat' => 'Chat',
             'broadcast' => 'Broadcast',
             'network' => 'Network',
         ];
@@ -211,10 +215,12 @@ class PermissionCatalog
                 self::ATTENDANCE_MANAGE_POLICY,
                 self::GAMIFICATION_AWARD_MANUAL,
                 self::ASSISTANT_USE,
+                self::GENERAL_CHAT_USE,
                 self::NETWORK_VIEW,
             ],
             UserRoles::USER => [
                 self::ASSISTANT_USE,
+                self::GENERAL_CHAT_USE,
                 self::NETWORK_VIEW,
             ],
         ];

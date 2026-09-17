@@ -36,8 +36,9 @@ export default function AppLayout() {
 
   const isEmailPage = /^\/email(\/|$)/.test(location.pathname);
   const isAssistantPage = /^\/assistant(\/|$)/.test(location.pathname);
+  const isChatPage = /^\/chat(\/|$)/.test(location.pathname);
   const isEmailFullscreen = isEmailPage && emailFullscreen;
-  const isAssistantFullscreen = isAssistantPage && assistantFullscreen;
+  const isAssistantFullscreen = (isAssistantPage || isChatPage) && assistantFullscreen;
   const isImmersiveFullscreen = isEmailFullscreen || isAssistantFullscreen;
 
   useEffect(() => {
@@ -47,10 +48,10 @@ export default function AppLayout() {
   }, [isEmailPage, emailFullscreen]);
 
   useEffect(() => {
-    if (!isAssistantPage && assistantFullscreen) {
+    if (!isAssistantPage && !isChatPage && assistantFullscreen) {
       setAssistantFullscreen(false);
     }
-  }, [isAssistantPage, assistantFullscreen]);
+  }, [isAssistantPage, isChatPage, assistantFullscreen]);
 
   if (shouldRedirect) {
     return (
@@ -69,7 +70,7 @@ export default function AppLayout() {
   const isAnalyticsPage = location.pathname === '/analytics';
   const isMessagesPage = /^\/messages(\/|$)/.test(location.pathname);
   const isOrganizationPage = location.pathname === '/organization' || location.pathname.startsWith('/organization/');
-  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage || isAssistantPage || isOrganizationPage) && !isFullBleed;
+  const isViewportFillPage = (isAnalyticsPage || isEmailPage || isMessagesPage || isAssistantPage || isChatPage || isOrganizationPage) && !isFullBleed;
   const showBottomNav = !isFullBleed;
 
   const lockToViewport = isFullBleed || isViewportFillPage;

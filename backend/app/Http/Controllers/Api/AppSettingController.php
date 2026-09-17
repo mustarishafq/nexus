@@ -4,14 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
 use App\Http\Controllers\Controller;
-use App\Services\ResourceAttendancePolicyForwarder;
 use App\Services\PermissionService;
+use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\FeedModerationSettings;
 use App\Support\GamificationSettings;
+use App\Support\GeneralChatSettings;
 use App\Support\PermissionCatalog;
 use App\Support\SplashAnimationSettings;
 use Illuminate\Http\JsonResponse;
@@ -85,7 +86,7 @@ class AppSettingController extends Controller
             'openrouter_api_key' => ['nullable', 'string', 'max:2048'],
             'openrouter_model' => ['nullable', 'string', 'max:255'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
-        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules(), GamificationSettings::validationRules()));
+        ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules(), GamificationSettings::validationRules(), GeneralChatSettings::validationRules()));
 
         $current = (array) DB::table('app_settings')->first();
         $splash = SplashAnimationSettings::normalizeConfig(array_merge($current, $validated));
@@ -95,6 +96,7 @@ class AppSettingController extends Controller
         $gamification = array_key_exists('gamification_overrides', $validated)
             ? GamificationSettings::toDatabaseColumns($validated['gamification_overrides'] ?? [])
             : [];
+        $generalChat = GeneralChatSettings::toDatabaseColumns($validated, (object) $current);
 
         $settings = DB::table('app_settings')->first();
 
@@ -114,7 +116,7 @@ class AppSettingController extends Controller
                 'openrouter_api_key' => $validated['openrouter_api_key'] ?? null,
                 'openrouter_model' => $validated['openrouter_model'] ?? null,
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification, $generalChat));
         } else {
             DB::table('app_settings')->insert(array_merge([
                 'system_name' => $validated['system_name'],
@@ -132,7 +134,7 @@ class AppSettingController extends Controller
                 'openrouter_model' => $validated['openrouter_model'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification));
+            ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification, $generalChat));
         }
 
         AppSettings::forget();
@@ -344,6 +346,6 @@ class AppSettingController extends Controller
         ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true), [
             'gamification' => GamificationSettings::adminPayload($settings),
             'gamification_overrides' => GamificationSettings::overrides($settings),
-        ]);
+        ], GeneralChatSettings::payload($settings));
     }
 }

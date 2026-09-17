@@ -1430,6 +1430,149 @@ export const db = {
 		});
 	},
 
+	async listGeneralChatConversations() {
+		return request('/general-chat/conversations');
+	},
+
+	async createGeneralChatConversation() {
+		return request('/general-chat/conversations', { method: 'POST' });
+	},
+
+	async getGeneralChatConversation(conversationId) {
+		return request(`/general-chat/conversations/${conversationId}`);
+	},
+
+	async updateGeneralChatConversation(conversationId, body = {}) {
+		return request(`/general-chat/conversations/${conversationId}`, {
+			method: 'PATCH',
+			body,
+		});
+	},
+
+	async deleteGeneralChatConversation(conversationId) {
+		return request(`/general-chat/conversations/${conversationId}`, { method: 'DELETE' });
+	},
+
+	async getGeneralChatQuota() {
+		return request('/general-chat/quota');
+	},
+
+	async listGeneralChatMemories() {
+		return request('/general-chat/memories');
+	},
+
+	async createGeneralChatMemory(body) {
+		return request('/general-chat/memories', {
+			method: 'POST',
+			body: { body },
+		});
+	},
+
+	async importGeneralChatMemories(markdown) {
+		return request('/general-chat/memories/import', {
+			method: 'POST',
+			body: { markdown },
+		});
+	},
+
+	async updateGeneralChatMemorySettings(auto_memory) {
+		return request('/general-chat/memory-settings', {
+			method: 'PATCH',
+			body: { auto_memory },
+		});
+	},
+
+	async deleteGeneralChatMemory(memoryId) {
+		return request(`/general-chat/memories/${memoryId}`, { method: 'DELETE' });
+	},
+
+	async clearGeneralChatMemories() {
+		return request('/general-chat/memories', { method: 'DELETE' });
+	},
+
+	async exportGeneralChatMemories() {
+		const token = getAuthToken();
+		const response = await fetch(`${API_BASE_URL}/general-chat/memories/export`, {
+			method: 'GET',
+			headers: {
+				Accept: 'text/markdown, text/plain, application/octet-stream',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+			credentials: 'include',
+		});
+
+		if (!response.ok) {
+			let payload = null;
+			try {
+				payload = await response.json();
+			} catch {
+				payload = null;
+			}
+			const error = new Error(payload?.message || `HTTP ${response.status}`);
+			error.status = response.status;
+			error.data = payload;
+			throw error;
+		}
+
+		const blob = await response.blob();
+		const url = window.URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `chat-memory-${new Date().toISOString().slice(0, 10)}.md`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		window.URL.revokeObjectURL(url);
+	},
+
+	async generalChat({ message, history, conversation_id, attachments, use_memory } = {}) {
+		const files = Array.isArray(attachments)
+			? attachments
+				.map((item) => {
+					if (!item || typeof item !== 'object') return null;
+					const url = String(item.url || item.file_url || '').trim();
+					if (!url || url.startsWith('blob:') || url.startsWith('data:')) return null;
+					return {
+						url,
+						name: item.name || 'attachment',
+						mime: item.mime || item.mime_type || '',
+						size: Number(item.size) || 0,
+						...(item.kind ? { kind: item.kind } : {}),
+					};
+				})
+				.filter(Boolean)
+			: [];
+
+		return request('/general-chat/chat', {
+			method: 'POST',
+			body: {
+				message,
+				...(conversation_id ? { conversation_id } : {}),
+				...(typeof use_memory === 'boolean' ? { use_memory } : {}),
+				...(Array.isArray(history) && history.length > 0 ? { history } : {}),
+				...(files.length > 0 ? { attachments: files } : {}),
+			},
+		});
+	},
+
+	async getUserGeneralChatQuota(userId) {
+		return request(`/admin/users/${userId}/general-chat-quota`);
+	},
+
+	async updateUserGeneralChatQuota(userId, token_limit) {
+		return request(`/admin/users/${userId}/general-chat-quota`, {
+			method: 'PATCH',
+			body: { token_limit },
+		});
+	},
+
+	async topupUserGeneralChat(userId, { tokens, note } = {}) {
+		return request(`/admin/users/${userId}/general-chat-topup`, {
+			method: 'POST',
+			body: { tokens, note },
+		});
+	},
+
 	async listLlmUsageLogs({ page = 1, per_page = 25, feature, application_slug } = {}) {
 		const params = new URLSearchParams();
 		params.set('page', String(page));

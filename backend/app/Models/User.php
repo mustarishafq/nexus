@@ -78,6 +78,8 @@ class User extends Authenticatable
         'role_id',
         'mcp_access',
         'assistant_access',
+        'general_chat_token_limit',
+        'general_chat_auto_memory',
         'is_approved',
         'resigned_at',
         'force_password_change',
@@ -133,7 +135,14 @@ class User extends Authenticatable
             'last_profile_nudge_at' => 'datetime',
             'last_login_at' => 'datetime',
             'exp_total' => 'integer',
+            'general_chat_token_limit' => 'integer',
+            'general_chat_auto_memory' => 'boolean',
         ];
+    }
+
+    public function generalChatAutoMemoryEnabled(): bool
+    {
+        return $this->general_chat_auto_memory !== false;
     }
 
     public function displayName(): string
@@ -418,6 +427,21 @@ class User extends Authenticatable
     public function assistantConversations(): HasMany
     {
         return $this->hasMany(AssistantConversation::class);
+    }
+
+    public function generalChatConversations(): HasMany
+    {
+        return $this->hasMany(GeneralChatConversation::class);
+    }
+
+    public function generalChatTokenGrants(): HasMany
+    {
+        return $this->hasMany(GeneralChatTokenGrant::class);
+    }
+
+    public function generalChatMemories(): HasMany
+    {
+        return $this->hasMany(GeneralChatMemory::class);
     }
 
     public function networkHealthLogs(): HasMany

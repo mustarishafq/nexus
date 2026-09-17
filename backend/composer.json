@@ -12,6 +12,7 @@
         "laravel/reverb": "^1.11",
         "laravel/tinker": "^2.10.1",
         "minishlink/web-push": "^9.0",
+        "smalot/pdfparser": "^2.12",
         "webklex/php-imap": "^6.2"
     },
     "require-dev": {

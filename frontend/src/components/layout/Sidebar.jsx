@@ -7,7 +7,7 @@ import {
   Monitor, Megaphone, ChevronLeft, ChevronRight, Users, Calendar, Wifi, BarChart3, Newspaper, Mail, MessageSquare, GitBranch, QrCode, Gamepad2, Bot,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { can, canManageUsers, canUseAssistant, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
+import { can, canManageUsers, canUseAssistantNav, canViewGames, canViewNetworkHealth, isAdmin as userIsAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -38,7 +38,7 @@ export default function Sidebar({
     { path: '/email', icon: Mail, label: 'Email' },
     ...(showAnalytics ? [{ path: '/analytics', icon: BarChart3, label: 'Analytics' }] : []),
     { path: '/applications', icon: Monitor, label: 'Application' },
-    ...(canUseAssistant(user) ? [{ path: '/assistant', icon: Bot, label: 'Assistant' }] : []),
+    ...(canUseAssistantNav(user) ? [{ path: '/assistant', icon: Bot, label: 'Assistant' }] : []),
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     ...(canViewNetworkHealth(user) ? [{ path: '/network-health', icon: Wifi, label: 'Network Health' }] : []),
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
@@ -94,6 +94,8 @@ export default function Sidebar({
                 ? location.pathname === '/messages' || location.pathname.startsWith('/messages/')
               : item.path === '/email'
                 ? location.pathname === '/email' || location.pathname.startsWith('/email/')
+              : item.path === '/assistant'
+                ? location.pathname === '/assistant' || location.pathname.startsWith('/assistant/') || location.pathname === '/chat' || location.pathname.startsWith('/chat/')
                 : location.pathname === item.path;
           return (
             <Link

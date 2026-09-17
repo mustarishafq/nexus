@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Bot, CheckCircle2, Loader2, Wrench, XCircle } from 'lucide-react';
+import { Bot, CheckCircle2, FileText, Loader2, Wrench, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import MediaLightbox from '@/components/media/MediaLightbox';
 import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
@@ -18,10 +18,69 @@ function isHttpUrl(value) {
 }
 
 function looksLikeImageUrl(value) {
-  if (!isHttpUrl(value)) return false;
+  if (!isHttpUrl(value) && !String(value || '').startsWith('/storage/')) return false;
   const href = String(value);
   if (IMAGE_URL_PATTERN.test(href)) return true;
   return /\/(storage|uploads|media|images?|files?|attachments?)\//i.test(href);
+}
+
+function isImageAttachment(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.kind === 'image') return true;
+  if (String(item.mime || item.mime_type || '').toLowerCase().startsWith('image/')) return true;
+  const haystack = `${item.url || ''} ${item.previewUrl || ''} ${item.name || ''}`;
+  return IMAGE_URL_PATTERN.test(haystack);
+}
+
+function attachmentSrc(item) {
+  return String(item?.previewUrl || item?.url || '');
+}
+
+function MessageAttachments({ attachments, isUser }) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return null;
+
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {attachments.map((item, index) => {
+        const url = attachmentSrc(item);
+        const name = String(item?.name || 'Attachment');
+        if (isImageAttachment(item) && url) {
+          return (
+            <a
+              key={`${url}-${index}`}
+              href={item?.url || url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block overflow-hidden rounded-xl border border-white/25 bg-black/10"
+            >
+              <img
+                src={url}
+                alt={name}
+                className="max-h-56 max-w-[min(100%,16rem)] object-cover"
+              />
+            </a>
+          );
+        }
+        return (
+          <a
+            key={`${url}-${index}`}
+            href={item?.url || url || undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]',
+              isUser
+                ? 'border-white/25 bg-white/15 text-primary-foreground'
+                : 'border-border/70 bg-muted/60 text-foreground',
+            )}
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{name}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 function MarkdownImage({ src, alt }) {
@@ -209,6 +268,8 @@ function AssistantMarkdown({ content }) {
 export default function AssistantMessage({ message }) {
   const isUser = message.role === 'user';
   const toolSteps = Array.isArray(message.tool_steps) ? message.tool_steps : [];
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  const pendingLabel = message.pendingLabel || 'Working with the system…';
 
   return (
     <motion.div
@@ -238,6 +299,7 @@ export default function AssistantMessage({ message }) {
         ) : null}
 
         <ToolSteps steps={toolSteps} />
+        {!message.pending ? <MessageAttachments attachments={attachments} isUser={isUser} /> : null}
 
         {message.pending ? (
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -246,10 +308,10 @@ export default function AssistantMessage({ message }) {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
             </span>
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span className="text-xs">Working with the system…</span>
+            <span className="text-xs">{pendingLabel}</span>
           </div>
         ) : isUser ? (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          message.content ? <p className="whitespace-pre-wrap break-words">{message.content}</p> : null
         ) : (
           <AssistantMarkdown content={message.content} />
         )}

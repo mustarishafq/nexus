@@ -26,6 +26,7 @@ const PAGE_TITLES = [
   ['/organization', 'Organization'],
   ['/applications', 'Applications'],
   ['/assistant', 'Assistant'],
+  ['/chat', 'Assistant'],
   ['/leaderboard', 'Missions'],
   ['/attendance', 'Attendance'],
   ['/analytics', 'Analytics'],

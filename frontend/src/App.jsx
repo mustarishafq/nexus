@@ -137,6 +137,7 @@ const ProtectedRoutes = () => {
           <Route element={<AssistantAccessGate />}>
             <Route path="/assistant" element={<Assistant />} />
           </Route>
+          <Route path="/chat" element={<Navigate to="/assistant" replace />} />
           <Route path="/admin/broadcast" element={<BroadcastCenter />} />
           <Route path="/admin/events" element={<SystemEvents />} />
           <Route path="/admin/network-health" element={<Navigate to="/network-health" replace />} />
