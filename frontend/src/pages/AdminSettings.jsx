@@ -22,7 +22,6 @@ import GeneralChatQuotaSettingsPanel from '@/components/admin/GeneralChatQuotaSe
 import { useAuth } from '@/lib/AuthContext';
 import { canManageAttendance, isAdmin as userIsAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { normalizeSplashAnimation } from '@/lib/splashAnimations';
 import { resetSplashFormState, splashConfigToFormState } from '@/lib/splashConfig';
 import { launchConfigToFormState, resetLaunchFormState } from '@/lib/launchConfig';
@@ -260,6 +259,7 @@ export default function AdminSettings({ embedded = false }) {
             items={visibleSections}
             value={activeSection}
             onChange={setActiveSection}
+            ariaLabel="Admin settings sections"
             className="md:w-48 lg:w-52 shrink-0"
           />
 
@@ -335,26 +335,13 @@ export default function AdminSettings({ embedded = false }) {
 
             {activeSection === 'gamification' && isAdmin ? (
               <div className="space-y-4">
-                <div className="flex gap-1 rounded-lg border bg-muted/40 p-1 w-full sm:w-auto">
-                  {GAMIFICATION_TABS.map((item) => {
-                    const selected = item.id === gamificationTab;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setGamificationTab(item.id)}
-                        className={cn(
-                          'min-h-[36px] flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none',
-                          selected
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <SettingsSectionNav
+                  type="underline"
+                  items={GAMIFICATION_TABS}
+                  value={gamificationTab}
+                  onChange={setGamificationTab}
+                  ariaLabel="EXP settings tabs"
+                />
                 {gamificationTab === 'recalculate' ? (
                   <Card className="rounded-2xl">
                     <CardHeader className="pb-3">

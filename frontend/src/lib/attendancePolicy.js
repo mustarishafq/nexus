@@ -358,12 +358,23 @@ export function findNearestAttendanceSite(sites, latitude, longitude) {
 }
 
 export function findMatchingAttendanceSite(sites, latitude, longitude, radiusMeters) {
-  const nearest = findNearestAttendanceSite(sites, latitude, longitude);
-  if (!nearest || nearest.distance > radiusMeters) {
+  if (!sites?.length || latitude == null || longitude == null) {
     return null;
   }
 
-  return nearest;
+  let matched = null;
+
+  sites.forEach((site) => {
+    const distance = haversineMeters(site.latitude, site.longitude, latitude, longitude);
+    const siteRadius = Number.isFinite(Number(site.radius_meters))
+      ? Number(site.radius_meters)
+      : radiusMeters;
+    if (distance <= siteRadius && (!matched || distance < matched.distance)) {
+      matched = { site, distance };
+    }
+  });
+
+  return matched;
 }
 
 export function resolveAttendanceSiteLabel(sites, latitude, longitude, radiusMeters) {

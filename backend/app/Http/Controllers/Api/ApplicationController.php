@@ -17,7 +17,6 @@ use App\Support\PermissionCatalog;
 use App\Support\SyncAssignmentRecords;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
-use Firebase\JWT\JWT;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -763,49 +762,14 @@ class ApplicationController extends Controller
             return response()->json(['message' => 'The selected SSO email is not allowed for this application.'], 422);
         }
 
-        $now = time();
-        $primaryEmail = strtolower(trim((string) ($user->email ?? '')));
-        $isAdditionalSsoEmail = $primaryEmail !== ''
-            && strtolower(trim($ssoEmail)) !== $primaryEmail;
-
-        $payload = [
-            'iss'   => config('app.url'),
-            'iat'   => $now,
-            'exp'   => $now + 60,
-            'sub'   => (string) $user->id,
-            'email' => $ssoEmail,
-            'sys'   => $application->slug,
-            'return_to' => $returnTo,
-        ];
-
-        // Additional SSO emails authenticate an existing app account — do not push Nexus profile fields.
-        if (! $isAdditionalSsoEmail) {
-            $payload['name'] = $user->name ?? '';
-
-            if ($user->profile_picture) {
-                $payload['profile_picture'] = $user->profile_picture;
-            }
-
-            // Campus-only formal profile fields; other apps keep the base payload.
-            if (ApplicationSsoCredentials::isCampusApplication($application)) {
-                $fullName = trim((string) ($user->full_name ?? ''));
-                if ($fullName !== '') {
-                    $payload['full_name'] = $fullName;
-                }
-
-                $user->loadMissing('department');
-                $departmentName = trim((string) ($user->department?->name ?? ''));
-                if ($departmentName !== '') {
-                    $payload['department'] = $departmentName;
-                }
-            }
-        }
-
-        if ($redirectTo) {
-            $payload['redirect_to'] = $redirectTo;
-        }
-
-        $token = JWT::encode($payload, $application->api_key, 'HS256');
+        $token = ApplicationSsoCredentials::mintLaunchToken(
+            $user,
+            $application,
+            $ssoEmail,
+            $returnTo,
+            $redirectTo,
+            ApplicationSsoCredentials::LAUNCH_TTL_SECONDS,
+        );
 
         $launchUrl = rtrim($application->base_url, '/')
             . '/sso/nexus?token=' . urlencode($token)

@@ -6,7 +6,7 @@ import { formatDistanceToNow, isValid } from 'date-fns';
 import {
   Archive, ArrowLeft, Check, ChevronDown, FileEdit, Forward, Inbox, Loader2, LogOut, Mail, MailOpen,
   Maximize2, Minimize2, MoreHorizontal, Paperclip, PenSquare, Plus, RefreshCw, Reply, ReplyAll,
-  Search, Send, ShieldAlert, Trash2, X,
+  Search, Send, ShieldAlert, Sparkles, Trash2, X,
 } from 'lucide-react';
 import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -132,6 +132,36 @@ function quoteBody(message) {
   return `\n\nOn ${message?.date || 'unknown date'}, ${message?.from || 'unknown sender'} wrote:\n${lines.join('\n')}`;
 }
 
+function splitComposeQuote(body) {
+  const text = body || '';
+  const replyMatch = text.match(/\n\nOn .+ wrote:\n/);
+  const fwdIdx = text.indexOf('\n\n--- Forwarded message ---\n');
+  let idx = -1;
+  if (replyMatch && typeof replyMatch.index === 'number') {
+    idx = replyMatch.index;
+  }
+  if (fwdIdx >= 0 && (idx < 0 || fwdIdx < idx)) {
+    idx = fwdIdx;
+  }
+  if (idx < 0) {
+    return { prefix: text, quote: '' };
+  }
+  return { prefix: text.slice(0, idx), quote: text.slice(idx) };
+}
+
+function composeModeFromDraft(draft) {
+  if (draft?.in_reply_to) return 'reply';
+  if (/^fwd:\s*/i.test(draft?.subject || '')) return 'forward';
+  if ((draft?.body || '').includes('--- Forwarded message ---')) return 'forward';
+  return 'compose';
+}
+
+function keepPrefixedSubject(current, next) {
+  const existing = (current || '').trim();
+  if (/^(re|fwd):\s*/i.test(existing)) return existing;
+  return (next || '').trim() || existing;
+}
+
 function buildReplyDraft(message, { replyAll = false, userEmail } = {}) {
   const ownEmail = (userEmail || '').toLowerCase();
   const sender = message?.reply_to || extractEmails(message?.from || '')[0] || '';
@@ -173,6 +203,7 @@ function buildForwardDraft(message) {
 function EmailMessageActions({
   markUnreadPending,
   onReply,
+  onReplyWithAi,
   onReplyAll,
   onForward,
   onMarkUnread,
@@ -193,10 +224,14 @@ function EmailMessageActions({
           {!compact ? 'Actions' : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onClick={onReply}>
           <Reply className="mr-2 h-4 w-4" />
           Reply
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onReplyWithAi}>
+          <Sparkles className="mr-2 h-4 w-4" />
+          Reply with AI
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onReplyAll}>
           <ReplyAll className="mr-2 h-4 w-4" />
@@ -345,6 +380,7 @@ function ComposeForm({
   initialDraft,
   initialDraftUid = null,
   accountId = null,
+  openAiDraft = false,
   onSend,
   sending,
   onCancel,
@@ -359,10 +395,19 @@ function ComposeForm({
   const [attachments, setAttachments] = useState([]);
   const [draftUid, setDraftUid] = useState(initialDraftUid || null);
   const [draftStatus, setDraftStatus] = useState('idle');
+  const [aiDialogOpen, setAiDialogOpen] = useState(Boolean(openAiDraft));
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiTone, setAiTone] = useState('');
+  const [aiLanguage, setAiLanguage] = useState('auto');
+  const [aiDrafting, setAiDrafting] = useState(false);
 
   useEffect(() => {
     draftUidRef.current = draftUid;
   }, [draftUid]);
+
+  useEffect(() => {
+    if (openAiDraft) setAiDialogOpen(true);
+  }, [openAiDraft]);
 
   useEffect(() => {
     const session = !initialDraft ? readComposeSession(accountId) : null;
@@ -476,6 +521,44 @@ function ComposeForm({
       }
     }
     onCancel?.();
+  };
+
+  const handleAiDraft = async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction) {
+      toast.error('Describe what the email should say.');
+      return;
+    }
+
+    setAiDrafting(true);
+    try {
+      const result = await db.mail.aiDraft({
+        instruction,
+        tone: aiTone || undefined,
+        language: aiLanguage || 'auto',
+        to,
+        cc,
+        subject,
+        body,
+        mode: composeModeFromDraft(initialDraft),
+      });
+      const generated = (result?.body || '').trim();
+      if (!generated) {
+        throw new Error('The AI did not return an email draft.');
+      }
+      const { quote } = splitComposeQuote(body);
+      setBody(quote ? `${generated}${quote}` : generated);
+      setSubject((current) => keepPrefixedSubject(current, result?.subject));
+      if (!to.trim() && result?.to) {
+        setTo(result.to);
+      }
+      setAiDialogOpen(false);
+      toast.success('Draft inserted. Review before sending.');
+    } catch (error) {
+      toast.error(error?.message || 'Could not draft this email.');
+    } finally {
+      setAiDrafting(false);
+    }
   };
 
   const draftStatusLabel = (() => {
@@ -593,17 +676,31 @@ function ComposeForm({
         }}
       />
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 bg-card p-3 sm:p-4">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={attachments.length >= MAX_ATTACHMENTS}
-        >
-          <Paperclip className="h-4 w-4" />
-          Attach
-        </Button>
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={attachments.length >= MAX_ATTACHMENTS}
+          >
+            <Paperclip className="h-4 w-4" />
+            Attach
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAiDialogOpen(true)}
+            disabled={aiDrafting}
+          >
+            {aiDrafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <span className="hidden sm:inline">Draft with AI</span>
+            <span className="sm:hidden">AI</span>
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button type="submit" className="gap-2" disabled={sending}>
@@ -612,6 +709,83 @@ function ComposeForm({
           </Button>
         </div>
       </div>
+      <Dialog open={aiDialogOpen} onOpenChange={(open) => !aiDrafting && setAiDialogOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Draft with AI</DialogTitle>
+            <DialogDescription>
+              Describe what this email should say. The draft follows the language of your instruction, or the language you pick below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="ai-draft-instruction">Instruction</Label>
+              <Textarea
+                id="ai-draft-instruction"
+                value={aiInstruction}
+                onChange={(event) => setAiInstruction(event.target.value)}
+                placeholder="Minta laporan Q3 sebelum Jumaat"
+                className="min-h-[96px] resize-none"
+                disabled={aiDrafting}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Language</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: 'auto', label: 'Match instruction' },
+                  { id: 'ms', label: 'Bahasa Melayu' },
+                  { id: 'en', label: 'English' },
+                ].map((item) => (
+                  <Button
+                    key={item.id}
+                    type="button"
+                    size="sm"
+                    variant={aiLanguage === item.id ? 'secondary' : 'outline'}
+                    className="h-7 px-2.5 text-xs"
+                    disabled={aiDrafting}
+                    onClick={() => setAiLanguage(item.id)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Tone</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: '', label: 'Default' },
+                  { id: 'professional', label: 'Professional' },
+                  { id: 'friendly', label: 'Friendly' },
+                  { id: 'brief', label: 'Brief' },
+                ].map((item) => (
+                  <Button
+                    key={item.id || 'default'}
+                    type="button"
+                    size="sm"
+                    variant={aiTone === item.id ? 'secondary' : 'outline'}
+                    className="h-7 px-2.5 text-xs"
+                    disabled={aiDrafting}
+                    onClick={() => setAiTone(item.id)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)} disabled={aiDrafting}>
+              Cancel
+            </Button>
+            <Button type="button" className="gap-2" onClick={handleAiDraft} disabled={aiDrafting || !aiInstruction.trim()}>
+              {aiDrafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Insert draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
@@ -628,6 +802,7 @@ export default function Email() {
   const isCompose = location.pathname.endsWith('/compose');
   const composeDraft = location.state?.composeDraft || null;
   const composeDraftUid = location.state?.draftUid || null;
+  const openAiDraft = Boolean(location.state?.openAiDraft);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -852,6 +1027,7 @@ export default function Email() {
       state: {
         ...(draft ? { composeDraft: draft } : {}),
         ...(options.draftUid ? { draftUid: options.draftUid } : {}),
+        ...(options.openAiDraft ? { openAiDraft: true } : {}),
       },
     });
   };
@@ -1162,6 +1338,7 @@ export default function Email() {
                 initialDraft={composeDraft}
                 initialDraftUid={composeDraftUid}
                 accountId={activeAccountId}
+                openAiDraft={openAiDraft}
                 sending={sendEmail.isPending}
                 onCancel={() => navigate('/email')}
                 onSend={(payload) => sendEmail.mutate(payload)}
@@ -1248,16 +1425,28 @@ export default function Email() {
                         Edit draft
                       </Button>
                     ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 md:hidden"
-                        onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
-                        aria-label="Reply"
-                      >
-                        <Reply className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 md:hidden"
+                          onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                          aria-label="Reply"
+                        >
+                          <Reply className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 md:hidden"
+                          onClick={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }), { openAiDraft: true })}
+                          aria-label="Reply with AI"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     {folder !== 'drafts' ? (
                       <>
@@ -1266,6 +1455,7 @@ export default function Email() {
                             compact
                             markUnreadPending={markUnread.isPending}
                             onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                            onReplyWithAi={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }), { openAiDraft: true })}
                             onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                             onForward={() => openCompose(buildForwardDraft(messageData))}
                             onMarkUnread={() => markUnread.mutate(uid)}
@@ -1276,6 +1466,7 @@ export default function Email() {
                           <EmailMessageActions
                             markUnreadPending={markUnread.isPending}
                             onReply={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }))}
+                            onReplyWithAi={() => openCompose(buildReplyDraft(messageData, { userEmail: activeEmail }), { openAiDraft: true })}
                             onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                             onForward={() => openCompose(buildForwardDraft(messageData))}
                             onMarkUnread={() => markUnread.mutate(uid)}

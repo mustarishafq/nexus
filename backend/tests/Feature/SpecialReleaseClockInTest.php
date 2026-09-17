@@ -114,15 +114,17 @@ class SpecialReleaseClockInTest extends TestCase
         ]);
     }
 
-    private function clock(string $token, float $lat, float $lng)
+    private function clock(string $token, float $lat, float $lng, string $type = 'clock_in')
     {
         return $this->withToken($token)->postJson('/api/attendance/clock', [
-            'type' => 'clock_in',
-            'photo_url' => 'https://example.com/selfie.jpg',
+            'type' => $type,
+            'photo_url' => $type === 'clock_out'
+                ? 'https://example.com/selfie-out.jpg'
+                : 'https://example.com/selfie.jpg',
             'latitude' => $lat,
             'longitude' => $lng,
             'timezone' => 'Asia/Kuala_Lumpur',
-            'captured_at' => now()->toIso8601String(),
+            'captured_at' => ($type === 'clock_out' ? now()->addMinute() : now())->toIso8601String(),
         ]);
     }
 
@@ -204,6 +206,68 @@ class SpecialReleaseClockInTest extends TestCase
         $farLng = $this->homeLng + 0.02;
 
         $response = $this->clock($token, $farLat, $farLng);
+        $response->assertStatus(422);
+        $this->assertStringContainsString('special release pin', (string) $response->json('message'));
+        $this->assertStringContainsString('registered site', (string) $response->json('message'));
+    }
+
+    public function test_approved_special_release_still_allows_clock_at_department_location(): void
+    {
+        $this->createInsanApplication();
+        [$employee] = $this->makeEmployeeWithGeofence(allowOutsideRadius: false);
+        $token = ApiTokenAuth::issueToken($employee);
+        $today = now('Asia/Kuala_Lumpur')->toDateString();
+
+        $this->fakeApprovedRelease($employee, $today);
+
+        $response = $this->clock($token, $this->officeLat, $this->officeLng);
+        $response->assertCreated();
+        $this->assertSame(99, (int) data_get($response->json('metadata'), 'policy.special_release_id'));
+        $this->assertSame('Primary', data_get($response->json('metadata'), 'policy.matched_site_name'));
+    }
+
+    public function test_special_release_honors_department_clock_out_outside_radius(): void
+    {
+        $this->createInsanApplication();
+        [$employee, $setting] = $this->makeEmployeeWithGeofence(allowOutsideRadius: false);
+        $setting->attendanceLocation->update([
+            'allow_clock_out_outside_radius' => true,
+        ]);
+        $token = ApiTokenAuth::issueToken($employee);
+        $today = now('Asia/Kuala_Lumpur')->toDateString();
+
+        $this->fakeApprovedRelease($employee, $today, [
+            'allow_outside_radius' => false,
+        ]);
+
+        $this->clock($token, $this->homeLat, $this->homeLng)->assertCreated();
+
+        $farLat = $this->homeLat + 0.02;
+        $farLng = $this->homeLng + 0.02;
+
+        $this->clock($token, $farLat, $farLng, 'clock_out')
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.special_release_id', 99)
+            ->assertJsonPath('metadata.policy.outside_radius', true);
+    }
+
+    public function test_special_release_blocks_clock_out_outside_when_department_disallows(): void
+    {
+        $this->createInsanApplication();
+        [$employee] = $this->makeEmployeeWithGeofence(allowOutsideRadius: false);
+        $token = ApiTokenAuth::issueToken($employee);
+        $today = now('Asia/Kuala_Lumpur')->toDateString();
+
+        $this->fakeApprovedRelease($employee, $today, [
+            'allow_outside_radius' => false,
+        ]);
+
+        $this->clock($token, $this->homeLat, $this->homeLng)->assertCreated();
+
+        $farLat = $this->homeLat + 0.02;
+        $farLng = $this->homeLng + 0.02;
+
+        $response = $this->clock($token, $farLat, $farLng, 'clock_out');
         $response->assertStatus(422);
         $this->assertStringContainsString('special release pin', (string) $response->json('message'));
     }

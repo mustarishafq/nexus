@@ -5,10 +5,15 @@ namespace App\Support;
 use App\Models\Application;
 use App\Models\ApplicationSsoCredential;
 use App\Models\User;
+use Firebase\JWT\JWT;
 use Illuminate\Support\Collection;
 
 class ApplicationSsoCredentials
 {
+    public const LAUNCH_TTL_SECONDS = 60;
+
+    public const API_TTL_SECONDS = 120;
+
     /**
      * @return array<int, array{id: string, email: string, label: string, primary: bool}>
      */
@@ -74,6 +79,82 @@ class ApplicationSsoCredentials
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function launchPayload(
+        User $user,
+        Application $application,
+        string $ssoEmail,
+        ?string $returnTo = null,
+        ?string $redirectTo = null,
+        int $ttlSeconds = self::LAUNCH_TTL_SECONDS,
+        ?int $now = null,
+    ): array {
+        $now ??= time();
+        $primaryEmail = strtolower(trim((string) ($user->email ?? '')));
+        $isAdditionalSsoEmail = $primaryEmail !== ''
+            && strtolower(trim($ssoEmail)) !== $primaryEmail;
+
+        $payload = [
+            'iss' => config('app.url'),
+            'iat' => $now,
+            'exp' => $now + max(1, $ttlSeconds),
+            'sub' => (string) $user->id,
+            'email' => $ssoEmail,
+            'sys' => $application->slug,
+            'return_to' => $returnTo ?: rtrim((string) config('app.url'), '/').'/applications',
+        ];
+
+        // Additional SSO emails authenticate an existing app account — do not push Nexus profile fields.
+        if (! $isAdditionalSsoEmail) {
+            $payload['name'] = $user->name ?? '';
+
+            if ($user->profile_picture) {
+                $payload['profile_picture'] = $user->profile_picture;
+            }
+
+            if (self::isCampusApplication($application)) {
+                $fullName = trim((string) ($user->full_name ?? ''));
+                if ($fullName !== '') {
+                    $payload['full_name'] = $fullName;
+                }
+
+                $user->loadMissing('department');
+                $departmentName = trim((string) ($user->department?->name ?? ''));
+                if ($departmentName !== '') {
+                    $payload['department'] = $departmentName;
+                }
+            }
+        }
+
+        if (is_string($redirectTo) && $redirectTo !== '') {
+            $payload['redirect_to'] = $redirectTo;
+        }
+
+        return $payload;
+    }
+
+    public static function mintLaunchToken(
+        User $user,
+        Application $application,
+        string $ssoEmail,
+        ?string $returnTo = null,
+        ?string $redirectTo = null,
+        int $ttlSeconds = self::LAUNCH_TTL_SECONDS,
+    ): string {
+        $apiKey = (string) ($application->api_key ?? '');
+        if ($apiKey === '') {
+            throw new \InvalidArgumentException('System has no api_key configured — cannot sign token.');
+        }
+
+        return JWT::encode(
+            self::launchPayload($user, $application, $ssoEmail, $returnTo, $redirectTo, $ttlSeconds),
+            $apiKey,
+            'HS256',
+        );
     }
 
     /**

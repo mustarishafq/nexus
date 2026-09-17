@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
@@ -161,16 +161,18 @@ export default function Settings() {
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:inline-flex sm:h-10 sm:w-auto">
-          <TabsTrigger value="user" className="gap-2 min-h-[40px] sm:min-h-0">
-            <SettingsIcon className="w-4 h-4 shrink-0" /> Settings
-          </TabsTrigger>
-          {canAccessHrSettings ? (
-            <TabsTrigger value="admin" className="gap-2 min-h-[40px] sm:min-h-0">
-              <Shield className="w-4 h-4 shrink-0" /> {isAdmin ? 'Admin' : 'HR'}
-            </TabsTrigger>
-          ) : null}
-        </TabsList>
+        {canAccessHrSettings ? (
+          <SettingsSectionNav
+            type="underline"
+            items={[
+              { id: 'user', label: 'Settings', icon: SettingsIcon },
+              { id: 'admin', label: isAdmin ? 'Admin' : 'HR', icon: Shield },
+            ]}
+            value={activeTab}
+            onChange={handleTabChange}
+            ariaLabel="Settings tabs"
+          />
+        ) : null}
 
         <TabsContent value="user" className="mt-4 min-w-0">
           <div className="flex flex-col gap-4 md:flex-row md:items-start">
@@ -178,6 +180,7 @@ export default function Settings() {
               items={USER_SECTIONS}
               value={userSection}
               onChange={setUserSection}
+              ariaLabel="User settings sections"
               className="md:w-48 lg:w-52 shrink-0"
             />
 

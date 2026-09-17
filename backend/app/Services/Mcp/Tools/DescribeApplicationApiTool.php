@@ -66,7 +66,10 @@ class DescribeApplicationApiTool implements McpTool
         }
 
         $endpoints = $this->client->parseCatalogEndpoints($response->json());
-        $endpoints = McpUserAccess::filterCatalogEndpointsForAssistant($user, $application, $endpoints);
+        $forAssistant = (bool) ($arguments['assistant'] ?? false);
+        $endpoints = $forAssistant
+            ? McpUserAccess::filterCatalogEndpointsForAssistant($user, $application, $endpoints)
+            : McpUserAccess::filterCatalogEndpointsForApplication($user, $application, $endpoints);
 
         return ['slug' => $slug, 'endpoints' => $endpoints];
     }

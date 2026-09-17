@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Mail\MailAiDraftService;
 use App\Services\MailMailboxService;
 use App\Support\ApiTokenAuth;
 use Illuminate\Database\QueryException;
@@ -17,6 +18,7 @@ class MailController extends Controller
 {
     public function __construct(
         protected MailMailboxService $mail,
+        protected MailAiDraftService $aiDraft,
     ) {}
 
     public function status(Request $request): JsonResponse
@@ -392,6 +394,59 @@ class MailController extends Controller
         );
 
         return response()->json(['suggestions' => $suggestions]);
+    }
+
+    public function aiDraft(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'instruction' => ['required', 'string', 'max:2000'],
+            'tone' => ['sometimes', 'nullable', 'string', 'in:professional,friendly,brief'],
+            'language' => ['sometimes', 'nullable', 'string', 'in:auto,en,ms,english,malay,melayu,bm'],
+            'to' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'cc' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'subject' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'body' => ['sometimes', 'nullable', 'string', 'max:50000'],
+            'mode' => ['sometimes', 'nullable', 'string', 'in:compose,reply,forward'],
+        ]);
+
+        $instruction = trim((string) $validated['instruction']);
+        if ($instruction === '') {
+            return response()->json(['message' => 'Describe what the email should say.'], 422);
+        }
+
+        $validated['instruction'] = $instruction;
+
+        try {
+            $draft = $this->aiDraft->draft($user, $validated);
+        } catch (RuntimeException $exception) {
+            $messageText = $exception->getMessage();
+            $timedOut = str_contains(strtolower($messageText), 'maximum execution time')
+                || str_contains(strtolower($messageText), 'timed out')
+                || str_contains(strtolower($messageText), 'curl error 28');
+
+            $errorText = $timedOut
+                ? 'The AI took too long to draft this email. Try a shorter instruction, or switch to a faster model in Settings → AI.'
+                : $messageText;
+
+            $status = $timedOut
+                ? 504
+                : (str_contains($messageText, 'OpenRouter is not configured')
+                    || str_contains($messageText, 'OpenRouter request failed')
+                    ? 503
+                    : 422);
+
+            return response()->json(['message' => $errorText], $status);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to draft email.'], 500);
+        }
+
+        return response()->json($draft);
     }
 
     public function saveDraft(Request $request): JsonResponse

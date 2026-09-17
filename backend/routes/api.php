@@ -171,6 +171,7 @@ Route::get('/mail/messages/{uid}/attachments/{part}', [MailController::class, 'd
     ->where('part', '[0-9.]+');
 Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);
 Route::patch('/mail/messages/{uid}/unread', [MailController::class, 'markUnread']);
+Route::post('/mail/ai-draft', [MailController::class, 'aiDraft']);
 Route::put('/mail/drafts', [MailController::class, 'saveDraft']);
 Route::delete('/mail/drafts/{uid}', [MailController::class, 'deleteDraft']);
 Route::post('/mail/send', [MailController::class, 'send']);

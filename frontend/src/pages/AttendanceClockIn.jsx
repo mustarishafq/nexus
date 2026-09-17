@@ -49,11 +49,11 @@ export default function AttendanceClockIn() {
   const isClockIn = nextType === 'clock_in';
   const policy = status?.policy;
   const activeSpecialRelease = policy?.active_special_release || null;
-  const allowOutsideRadius = activeSpecialRelease
-    ? Boolean(activeSpecialRelease.allow_outside_radius)
-    : (isClockIn
-      ? Boolean(policy?.allow_outside_radius)
-      : Boolean(policy?.allow_clock_out_outside_radius));
+  const allowOutsideRadius = isClockIn
+    ? Boolean(activeSpecialRelease
+      ? activeSpecialRelease.allow_outside_radius
+      : policy?.allow_outside_radius)
+    : Boolean(policy?.allow_clock_out_outside_radius || activeSpecialRelease?.allow_outside_radius);
 
   const lateClockIn = useMemo(() => {
     if (!isClockIn || !policy?.require_late_clock_in_reason) {
@@ -175,21 +175,33 @@ export default function AttendanceClockIn() {
   ) : null;
 
   const attendanceSites = useMemo(() => {
+    const departmentRadius = Number(policy?.radius_meters);
+    const departmentSites = resolveAttendanceSites(policy).map((site) => ({
+      ...site,
+      radius_meters: Number.isFinite(departmentRadius) ? departmentRadius : undefined,
+    }));
     if (activeSpecialRelease?.center_latitude != null && activeSpecialRelease?.center_longitude != null) {
       const typeLabel = activeSpecialRelease.type === 'wfh'
         ? 'WFH'
         : activeSpecialRelease.type === 'outstation'
           ? 'Outstation'
           : 'Other';
-      return [{
-        name: `Special release (${typeLabel})`,
-        latitude: Number(activeSpecialRelease.center_latitude),
-        longitude: Number(activeSpecialRelease.center_longitude),
-      }];
+      return [
+        {
+          name: `Special release (${typeLabel})`,
+          latitude: Number(activeSpecialRelease.center_latitude),
+          longitude: Number(activeSpecialRelease.center_longitude),
+          radius_meters: Number(activeSpecialRelease.radius_meters) || 100,
+        },
+        ...departmentSites,
+      ];
     }
-    return resolveAttendanceSites(policy);
+    return departmentSites;
   }, [policy, activeSpecialRelease]);
-  const siteRadiusMeters = activeSpecialRelease?.radius_meters ?? policy?.radius_meters ?? 200;
+  const siteRadiusMeters = [
+    Number(activeSpecialRelease?.radius_meters),
+    Number(policy?.radius_meters),
+  ].reduce((max, value) => (Number.isFinite(value) && value > max ? value : max), 0) || 200;
   const liveLocation = capture?.location;
   const nearestSite = useMemo(() => (
     findNearestAttendanceSite(attendanceSites, liveLocation?.latitude, liveLocation?.longitude)
@@ -233,8 +245,8 @@ export default function AttendanceClockIn() {
               Special release active ({specialReleaseTypeLabel})
             </CardTitle>
             <CardDescription className="text-pretty">
-              Clock within {activeSpecialRelease.radius_meters}m of your approved pin
-              {allowOutsideRadius ? ' (outstation outside pin still allowed with warning)' : ''}.
+              Clock within {activeSpecialRelease.radius_meters}m of your approved pin or at your department location
+              {allowOutsideRadius ? ' (outstation outside those sites still allowed with warning)' : ''}.
               {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
                 ? ` Shift hours: ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}${activeSpecialRelease.shift_crosses_midnight ? ' (overnight)' : ''}.`
                 : ''}

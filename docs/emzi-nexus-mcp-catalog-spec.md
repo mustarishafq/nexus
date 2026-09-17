@@ -81,10 +81,33 @@ Every MCP v1 route (including the catalog) requires one of:
 
 | Method | Header | When |
 |--------|--------|------|
-| API Key | `X-API-Key: <secret>` | Server-to-server (Nexus Brain) — **recommended** |
-| Bearer token | `Authorization: Bearer <sanctum-token>` | Acting on behalf of a logged-in user; permissions enforced |
+| API Key | `X-API-Key: <secret>` | Server-to-server (Nexus Brain) — catalog/health and client authentication |
+| Bearer token | `Authorization: Bearer <sanctum-token>` | Acting on behalf of a logged-in user; **permissions and data visibility enforced** |
 
 Reject missing, invalid, or expired credentials with HTTP 401.
+
+### Acting system account (required for Brain Assistant / `call_application_api`)
+
+Nexus Brain calls domain APIs **as the signed-in user's system account**, not as an org-wide admin.
+
+When Brain has exchanged the user's SSO JWT (`POST /api/sso/nexus/verify`), the request uses **only** that user's Bearer token. List/show endpoints must return what **that user** can see.
+
+When SSO verify is unavailable, Brain still sends the shared API key **and** these headers. The API key authenticates Brain as a client only. **It must not imply admin visibility.**
+
+| Header | Meaning |
+|--------|---------|
+| `X-Nexus-Acting-User-Id` | Nexus Brain user id |
+| `X-Nexus-Acting-Email` | System-account email (primary Nexus email or an approved SSO email for this app) |
+| `X-Nexus-Acting-Name` | Display name (primary account only) |
+| `X-Nexus-Acting-Mode` | `assistant` when the caller is Nexus Assistant / MCP |
+| `X-Nexus-Sso-Token` | Short-lived Nexus SSO JWT (fallback when no Sanctum token was issued) |
+
+Implementation rules for satellites:
+
+1. Resolve the acting user from Bearer token, then `X-Nexus-Acting-Email` / `X-Nexus-Sso-Token`.
+2. Scope every list, show, and mutation to that account's existing ACL (the same rules as the signed-in web app).
+3. Do not return other users' records just because the request presented `MCP_API_KEY`.
+4. Catalog (`GET /api/mcp/v1/catalog`) may stay service-authenticated; domain data must not.
 
 ---
 

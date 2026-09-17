@@ -8,6 +8,7 @@ use App\Services\Llm\LlmUsageRecorder;
 use App\Services\Llm\OpenRouterClient;
 use App\Services\Mcp\Tools\CallApplicationApiTool;
 use App\Services\Mcp\Tools\DescribeApplicationApiTool;
+use App\Support\ApplicationSsoCredentials;
 use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
@@ -49,7 +50,7 @@ class AssistantAgent
         }
 
         $messages = [
-            ['role' => 'system', 'content' => $this->systemPrompt($application)],
+            ['role' => 'system', 'content' => $this->systemPrompt($user, $application)],
             ...$this->normalizeHistory($history),
             ['role' => 'user', 'content' => $message],
         ];
@@ -118,6 +119,9 @@ class AssistantAgent
                     $rawArgs = $toolCall['function']['arguments'] ?? '{}';
                     $arguments = $this->decodeArguments($rawArgs);
                     $arguments['slug'] = $application->slug;
+                    if ($name === 'describe_application_api') {
+                        $arguments['assistant'] = true;
+                    }
 
                     $step = $this->executeTool($user, $application, $name, $arguments);
                     $toolSteps[] = [
@@ -245,13 +249,15 @@ class AssistantAgent
         ];
     }
 
-    private function systemPrompt(Application $application): string
+    private function systemPrompt(User $user, Application $application): string
     {
         $name = $application->name;
         $slug = $application->slug;
         $now = Carbon::now();
         $currentDateTime = $now->translatedFormat('l, j F Y, H:i');
         $timezone = $now->timezoneName;
+        $accountEmail = ApplicationSsoCredentials::resolveLaunchEmail($user, $application, null)
+            ?: trim((string) ($user->email ?? ''));
 
         return <<<PROMPT
 You are the Nexus Assistant inside EMZI Nexus Brain.
@@ -263,10 +269,16 @@ Current system:
 - name: {$name}
 - slug: {$slug}
 
+Acting system account:
+- email: {$accountEmail}
+
 Rules:
 - Trust the "Current date and time" above as ground truth for today's date. Never infer today's date from tool results, record timestamps, or your training data.
 - Answer only using tools against this system. Do not invent API paths or data.
 - Prefer describe_application_api before inventing endpoints, then call_application_api.
+- You are acting as the signed-in user's system account ({$accountEmail}), not as an org-wide admin.
+- For lists (tasks, delayed/overdue work, tickets, projects), always filter to this account: pass scope=mine and assigned_to / assignee / user_id for this user. Prefer /api/tasks (or equivalent user APIs) over unscoped collection dumps.
+- Do not list the whole organization unless the user explicitly asks for team-wide or all records (then pass scope=all or scope=team).
 - If a catalog or API call fails, say so clearly and suggest what the user can check.
 - Do not claim access to other Nexus applications in this conversation.
 - Be concise and practical. Prefer clear summaries over dumping raw JSON unless asked.
@@ -363,7 +375,7 @@ PROMPT;
                 'type' => 'function',
                 'function' => [
                     'name' => 'call_application_api',
-                    'description' => 'Call an endpoint on this connected system using Nexus MCP credentials. Use describe_application_api first when unsure which path to call.',
+                    'description' => 'Call an endpoint on this connected system as the signed-in user\'s system account. Use describe_application_api first when unsure which path to call.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => $properties,

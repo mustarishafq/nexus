@@ -20,8 +20,8 @@ class CallApplicationApiTool implements McpTool
 
     public function description(): string
     {
-        return 'Call a connected system\'s API using the SSO-linked credentials Nexus already holds for it. '
-            .'Use list_applications first to find the right "slug".';
+        return 'Call a connected system\'s API as the signed-in user\'s system account. '
+            .'Results are scoped to that account\'s access. Use list_applications first to find the right "slug".';
     }
 
     public function descriptionForUser(User $user): string
@@ -95,11 +95,24 @@ class CallApplicationApiTool implements McpTool
             $options['json'] = $body;
         }
 
-        $response = $this->client->request($application, $method, $path, $options);
+        $response = $this->client->requestForUser($user, $application, $method, $path, $options);
+        $body = $response->json() ?? $response->body();
+        if (is_array($body)) {
+            $body = $this->client->scopePayloadToActingUser(
+                $body,
+                $this->client->lastActingIdentity(),
+                $method,
+                $options['query'] ?? null,
+            );
+        }
 
         return [
             'status' => $response->status(),
-            'body' => $response->json() ?? $response->body(),
+            'acting_as' => [
+                'email' => $this->client->lastActingIdentity()['email'] ?? null,
+                'user_id' => $this->client->lastActingIdentity()['user_id'] ?? null,
+            ],
+            'body' => $body,
         ];
     }
 

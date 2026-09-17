@@ -1103,6 +1103,22 @@ export const db = {
 			})}`);
 		},
 
+		async aiDraft(payload = {}) {
+			return request('/mail/ai-draft', {
+				method: 'POST',
+				body: {
+					instruction: payload.instruction || '',
+					tone: payload.tone || undefined,
+					language: payload.language || undefined,
+					to: payload.to || undefined,
+					cc: payload.cc || undefined,
+					subject: payload.subject || undefined,
+					body: payload.body || undefined,
+					mode: payload.mode || undefined,
+				},
+			});
+		},
+
 		async saveDraft(payload = {}) {
 			return request('/mail/drafts', {
 				method: 'PUT',
