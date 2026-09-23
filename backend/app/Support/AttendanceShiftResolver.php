@@ -223,11 +223,12 @@ class AttendanceShiftResolver
             return null;
         }
 
-        return DepartmentAttendanceSetting::query()
+        $setting = DepartmentAttendanceSetting::query()
             ->with('attendanceLocation')
             ->where('department_id', $user->department_id)
-            ->where('enabled', true)
             ->first();
+
+        return AttendanceRulesSettings::applyToNullable($setting, (int) $user->department_id);
     }
 
     /**

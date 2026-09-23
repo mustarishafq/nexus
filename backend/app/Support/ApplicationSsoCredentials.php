@@ -112,21 +112,19 @@ class ApplicationSsoCredentials
         if (! $isAdditionalSsoEmail) {
             $payload['name'] = $user->name ?? '';
 
+            $fullName = trim((string) ($user->full_name ?? ''));
+            if ($fullName !== '') {
+                $payload['full_name'] = $fullName;
+            }
+
             if ($user->profile_picture) {
                 $payload['profile_picture'] = $user->profile_picture;
             }
 
-            if (self::isCampusApplication($application)) {
-                $fullName = trim((string) ($user->full_name ?? ''));
-                if ($fullName !== '') {
-                    $payload['full_name'] = $fullName;
-                }
-
-                $user->loadMissing('department');
-                $departmentName = trim((string) ($user->department?->name ?? ''));
-                if ($departmentName !== '') {
-                    $payload['department'] = $departmentName;
-                }
+            $user->loadMissing('department');
+            $departmentName = trim((string) ($user->department?->name ?? ''));
+            if ($departmentName !== '') {
+                $payload['department'] = $departmentName;
             }
         }
 
@@ -155,30 +153,6 @@ class ApplicationSsoCredentials
             $apiKey,
             'HS256',
         );
-    }
-
-    /**
-     * Nexus Campus receives extended primary-email profile claims (full_name, department).
-     */
-    public static function isCampusApplication(Application $application): bool
-    {
-        $slugs = config('nexus.sso_campus_slugs', []);
-        if (! is_array($slugs) || $slugs === []) {
-            return false;
-        }
-
-        $target = strtolower(trim((string) $application->slug));
-        if ($target === '') {
-            return false;
-        }
-
-        foreach ($slugs as $slug) {
-            if ($target === strtolower(trim((string) $slug))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

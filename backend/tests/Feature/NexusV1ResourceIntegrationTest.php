@@ -472,6 +472,7 @@ class NexusV1ResourceIntegrationTest extends TestCase
         $this->assertTrue($export->json('locations.0.allow_outside_radius'));
         $this->assertFalse($export->json('locations.0.allow_clock_out_outside_radius'));
         $this->assertSame('Operations', $export->json('departments.0.department_name'));
+        $this->assertSame(10, $export->json('rules.grace_period_minutes'));
         $this->assertFalse($export->json('watermark.show_location'));
     }
 

@@ -22,6 +22,27 @@ class DepartmentAttendanceSettings
         'shifts' => [],
     ];
 
+    /** @var list<string> */
+    public const RULE_KEYS = [
+        'enabled',
+        'attendance_location_id',
+        'timezone',
+        'grace_period_minutes',
+        'require_early_clock_out_reason',
+        'require_late_clock_in_reason',
+        'allow_outside_shift_hours',
+        'overtime_enabled',
+        'standard_hours_per_day',
+        'overtime_threshold_minutes',
+    ];
+
+    /** @var list<string> */
+    public const EXTRA_RULE_KEYS = [
+        'allow_different_shift_clock_in',
+        'shortage_enabled',
+        'count_work_from_scheduled_start',
+    ];
+
     /** @var array<int, string> */
     public const WEEKDAYS = [
         1 => 'Monday',
@@ -80,6 +101,8 @@ class DepartmentAttendanceSettings
             'shifts.*.start_time' => ['required_with:shifts', 'date_format:H:i'],
             'shifts.*.end_time' => ['required_with:shifts', 'date_format:H:i'],
             'shifts.*.crosses_midnight' => ['nullable', 'boolean'],
+            'shifts.*.unpaid_break_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
+            'shifts.*.attendance_location_id' => ['nullable', 'integer', 'exists:attendance_locations,id'],
         ];
     }
 
@@ -102,6 +125,18 @@ class DepartmentAttendanceSettings
             'overtime_threshold_minutes' => $config['overtime_threshold_minutes'],
             'shifts' => $config['shifts'],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    public static function toRuleColumns(array $config): array
+    {
+        $columns = self::toDatabaseColumns($config + ['shifts' => $config['shifts'] ?? []]);
+        unset($columns['shifts']);
+
+        return $columns;
     }
 
     /**
@@ -144,6 +179,7 @@ class DepartmentAttendanceSettings
                 'start_time' => $start,
                 'end_time' => $end,
                 'crosses_midnight' => (bool) ($shift['crosses_midnight'] ?? false),
+                'unpaid_break_minutes' => max(0, min(240, (int) ($shift['unpaid_break_minutes'] ?? 0))),
                 'attendance_location_id' => self::toNullableInt($shift['attendance_location_id'] ?? null),
             ];
         }

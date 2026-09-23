@@ -35,12 +35,15 @@ class AttendancePolicyController extends Controller
             'departments.*.department_name' => ['required_with:departments', 'string', 'max:255'],
             'departments.*.location_name' => ['nullable', 'string', 'max:120'],
             'watermark' => ['nullable', 'array'],
+            'rules' => ['nullable', 'array'],
+            'rules.location_name' => ['nullable', 'string', 'max:120'],
             'prune_missing' => ['nullable', 'boolean'],
         ]);
 
         $payload = [
             'locations' => $request->input('locations', []),
             'departments' => $request->input('departments', []),
+            'rules' => $request->input('rules'),
             'watermark' => $request->input('watermark'),
             'prune_missing' => $request->boolean('prune_missing', true),
         ];

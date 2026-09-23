@@ -85,11 +85,15 @@ class AttendancePersonalLocationTest extends TestCase
         $shared = $this->location('EMZI HQ');
         $personal = $this->location('Owner Home', $owner->id);
 
-        $this->withToken($token)->putJson('/api/admin/department-attendance/'.$department->id, [
+        $this->withToken($token)->putJson('/api/admin/attendance-rules', [
             'enabled' => true,
             'attendance_location_id' => $personal->id,
             'timezone' => 'Asia/Kuala_Lumpur',
             'grace_period_minutes' => 15,
+        ])->assertOk()
+            ->assertJsonPath('settings.attendance_location_id', null);
+
+        $this->withToken($token)->putJson('/api/admin/department-attendance/'.$department->id, [
             'shifts' => [[
                 'name' => 'Day',
                 'days_of_week' => [1, 2, 3, 4, 5],
@@ -99,10 +103,9 @@ class AttendancePersonalLocationTest extends TestCase
                 'attendance_location_id' => $personal->id,
             ]],
         ])->assertOk()
-            ->assertJsonPath('settings.attendance_location_id', null)
             ->assertJsonPath('settings.shifts.0.attendance_location_id', null);
 
-        $this->withToken($token)->putJson('/api/admin/department-attendance/'.$department->id, [
+        $this->withToken($token)->putJson('/api/admin/attendance-rules', [
             'enabled' => true,
             'attendance_location_id' => $shared->id,
             'timezone' => 'Asia/Kuala_Lumpur',

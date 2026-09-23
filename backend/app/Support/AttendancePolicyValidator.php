@@ -14,15 +14,7 @@ class AttendancePolicyValidator
 {
     public static function resolveForUser(User $user): ?DepartmentAttendanceSetting
     {
-        if (! $user->department_id) {
-            return null;
-        }
-
-        return DepartmentAttendanceSetting::query()
-            ->with('attendanceLocation')
-            ->where('department_id', $user->department_id)
-            ->where('enabled', true)
-            ->first();
+        return AttendanceShiftResolver::settingForUser($user);
     }
 
     /**
