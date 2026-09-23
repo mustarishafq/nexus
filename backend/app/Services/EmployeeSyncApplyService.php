@@ -44,6 +44,7 @@ class EmployeeSyncApplyService
         'religion',
         'race',
         'marital_status',
+        'marriage_leave_entitlement',
         'current_address',
         'ic_number',
         'epf_number',

@@ -221,7 +221,7 @@ class UserHrCsvImporter
 
         $stringFields = [
             'name', 'full_name', 'bio', 'job_title', 'employee_id', 'employment_type',
-            'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'gender',
+            'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'marriage_leave_entitlement', 'gender',
             'current_address', 'epf_number', 'socso_number', 'income_tax_number', 'location', 'ask_me_about',
             'emergency_contact_name', 'next_of_kin_relationship', 'next_of_kin_nationality',
             'next_of_kin_occupation', 'next_of_kin_address',
@@ -316,6 +316,7 @@ class UserHrCsvImporter
             'employer_name' => $this->valueFromRecord($record, 'spouse_employer_name'),
             'employer_address' => $this->valueFromRecord($record, 'spouse_employer_address'),
             'date_of_birth' => $dateOfBirth,
+            'marriage_date' => $this->parseDate($this->valueFromRecord($record, 'spouse_marriage_date') ?? ''),
         ];
 
         $hasContent = collect($details)->filter(fn ($value) => filled($value))->isNotEmpty();

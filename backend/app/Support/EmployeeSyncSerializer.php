@@ -72,6 +72,7 @@ class EmployeeSyncSerializer
             'religion' => $user->religion,
             'race' => $user->race,
             'marital_status' => $user->marital_status,
+            'marriage_leave_entitlement' => $user->marriage_leave_entitlement,
             'current_address' => $user->current_address,
             'ic_number' => $user->ic_number,
             'epf_number' => $user->epf_number,

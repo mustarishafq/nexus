@@ -29,7 +29,9 @@ class ProfileHrFieldsTest extends TestCase
                 'spouse_details' => [
                     'full_name' => 'Aisha',
                     'ic_number' => '880202-14-5678',
+                    'marriage_date' => '2012-06-15',
                 ],
+                'marriage_leave_entitlement' => 'already_utilised',
                 'children' => [
                     [
                         'name' => 'Ali',
@@ -46,6 +48,8 @@ class ProfileHrFieldsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('spouse_details.full_name', 'Aisha')
             ->assertJsonPath('spouse_details.date_of_birth', '1988-02-02')
+            ->assertJsonPath('spouse_details.marriage_date', '2012-06-15')
+            ->assertJsonPath('marriage_leave_entitlement', 'already_utilised')
             ->assertJsonPath('children.0.name', 'Ali')
             ->assertJsonPath('children.0.school', 'SK Ampang')
             ->assertJsonPath('children.0.date_of_birth', '2016-03-15')

@@ -6,6 +6,7 @@ import {
   formatFullDate,
   getGenderLabel,
   getMaritalStatusLabel,
+  getMarriageLeaveEntitlementLabel,
   getRaceLabel,
   getReligionLabel,
   healthStatusLabels,
@@ -66,6 +67,9 @@ function spouseDisplayValue(field, spouse) {
     if (!formatted) return '';
     return age ? `${formatted} (${age})` : formatted;
   }
+  if (field.key === 'marriage_date') {
+    return formatFullDate(spouse.marriage_date) || '';
+  }
   return spouse[field.key];
 }
 
@@ -80,6 +84,7 @@ export default function ProfileHrDetailsView({ user }) {
     { label: 'Full legal name', value: user?.full_name },
     { label: 'Gender', value: getGenderLabel(user?.gender) },
     { label: 'Marital status', value: getMaritalStatusLabel(user?.marital_status) },
+    { label: 'Marriage leave entitlement', value: getMarriageLeaveEntitlementLabel(user?.marriage_leave_entitlement) },
     { label: 'Date of birth', value: formatFullDate(user?.date_of_birth) },
     { label: 'Age', value: formatAgeLabel(user?.date_of_birth) },
     { label: 'Place of birth', value: user?.place_of_birth },

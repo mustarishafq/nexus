@@ -19,6 +19,12 @@ trait ValidatesHrProfileFields
             'religion' => ['sometimes', 'nullable', 'string', 'max:50'],
             'race' => ['sometimes', 'nullable', 'string', 'max:50'],
             'marital_status' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'marriage_leave_entitlement' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::in(['not_yet_utilised', 'already_utilised']),
+            ],
             'current_address' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'home_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
             'ic_number' => ['sometimes', 'nullable', 'string', 'max:20'],
@@ -38,6 +44,7 @@ trait ValidatesHrProfileFields
             'spouse_details.employer_name' => ['sometimes', 'nullable', 'string', 'max:150'],
             'spouse_details.employer_address' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'spouse_details.date_of_birth' => ['sometimes', 'nullable', 'date'],
+            'spouse_details.marriage_date' => ['sometimes', 'nullable', 'date'],
             'children' => ['sometimes', 'nullable', 'array', 'max:10'],
             'children.*.name' => ['required_with:children', 'string', 'max:150'],
             'children.*.ic_number' => ['sometimes', 'nullable', 'string', 'max:20'],
@@ -112,6 +119,8 @@ trait ValidatesHrProfileFields
         $dateOfBirth = trim((string) ($value['date_of_birth'] ?? ''));
         $dateOfBirth = $dateOfBirth !== '' ? substr($dateOfBirth, 0, 10) : null;
         $dateOfBirth = IcNumber::fillDateOfBirth($dateOfBirth, $icNumber);
+        $marriageDate = trim((string) ($value['marriage_date'] ?? ''));
+        $marriageDate = $marriageDate !== '' ? substr($marriageDate, 0, 10) : null;
 
         $details = [
             'full_name' => trim((string) ($value['full_name'] ?? '')),
@@ -121,6 +130,7 @@ trait ValidatesHrProfileFields
             'employer_name' => trim((string) ($value['employer_name'] ?? '')),
             'employer_address' => trim((string) ($value['employer_address'] ?? '')),
             'date_of_birth' => $dateOfBirth ?? '',
+            'marriage_date' => $marriageDate ?? '',
         ];
 
         $hasContent = collect($details)->contains(fn (string $item) => $item !== '');
@@ -131,6 +141,7 @@ trait ValidatesHrProfileFields
 
         $details['ic_number'] = $icNumber;
         $details['date_of_birth'] = $dateOfBirth;
+        $details['marriage_date'] = $marriageDate;
 
         return $details;
     }

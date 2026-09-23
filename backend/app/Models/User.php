@@ -64,6 +64,7 @@ class User extends Authenticatable
         'religion',
         'race',
         'marital_status',
+        'marriage_leave_entitlement',
         'current_address',
         'home_phone',
         'ic_number',

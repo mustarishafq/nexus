@@ -18,6 +18,7 @@ import {
   GENDER_OPTIONS,
   HEALTH_STATUS_OPTIONS,
   MARITAL_STATUS_OPTIONS,
+  MARRIAGE_LEAVE_ENTITLEMENT_OPTIONS,
   RACE_OPTIONS,
   RELIGION_OPTIONS,
   formatAgeLabel,
@@ -122,6 +123,16 @@ function SpouseDetailsEditor({ value, onChange, today }) {
           onChange={(next) => updateField('date_of_birth', next)}
           today={today}
         />
+        <div className="space-y-1.5">
+          <Label htmlFor="spouse-marriage_date">Marriage date</Label>
+          <Input
+            id="spouse-marriage_date"
+            type="date"
+            max={today}
+            value={formatDateForInput(spouse.marriage_date)}
+            onChange={(e) => updateField('marriage_date', e.target.value)}
+          />
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="spouse-phone">Phone no.</Label>
           <PhoneInput
@@ -338,6 +349,13 @@ export default function ProfileHrDetailsForm({ value, onChange, variant = 'self'
           value={value.marital_status}
           options={MARITAL_STATUS_OPTIONS}
           onChange={(next) => setField('marital_status', next)}
+        />
+        <SelectField
+          id="marriage_leave_entitlement"
+          label="Marriage leave entitlement"
+          value={value.marriage_leave_entitlement}
+          options={MARRIAGE_LEAVE_ENTITLEMENT_OPTIONS}
+          onChange={(next) => setField('marriage_leave_entitlement', next)}
         />
         <DateOfBirthField
           id="hr-date_of_birth"

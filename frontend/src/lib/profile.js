@@ -23,6 +23,11 @@ export const MARITAL_STATUS_OPTIONS = [
   { value: 'separated', label: 'Separated' },
 ];
 
+export const MARRIAGE_LEAVE_ENTITLEMENT_OPTIONS = [
+  { value: 'not_yet_utilised', label: 'Not Yet Utilised' },
+  { value: 'already_utilised', label: 'Already Utilised' },
+];
+
 export const RELIGION_OPTIONS = [
   { value: 'islam', label: 'Islam' },
   { value: 'buddhism', label: 'Buddhism' },
@@ -48,6 +53,7 @@ export const EMPTY_SPOUSE_DETAILS = {
   employer_name: '',
   employer_address: '',
   date_of_birth: '',
+  marriage_date: '',
 };
 
 export const EMPTY_CHILD = {
@@ -85,6 +91,7 @@ export const SPOUSE_FIELDS = [
   { key: 'full_name', label: 'Full name', placeholder: 'Spouse full name' },
   { key: 'ic_number', label: 'IC no.', placeholder: 'e.g. 900101-01-1234' },
   { key: 'date_of_birth', label: 'Date of birth', type: 'date' },
+  { key: 'marriage_date', label: 'Marriage date', type: 'date' },
   { key: 'phone', label: 'Phone no.', placeholder: 'e.g. +60123456789' },
   { key: 'occupation', label: 'Occupation', placeholder: 'e.g. Teacher' },
   { key: 'employer_name', label: "Employer's name", placeholder: 'Company or organisation' },
@@ -143,6 +150,10 @@ export function getGenderLabel(value) {
 
 export function getMaritalStatusLabel(value) {
   return MARITAL_STATUS_OPTIONS.find((option) => option.value === value)?.label || value || null;
+}
+
+export function getMarriageLeaveEntitlementLabel(value) {
+  return MARRIAGE_LEAVE_ENTITLEMENT_OPTIONS.find((option) => option.value === value)?.label || value || null;
 }
 
 export function getReligionLabel(value) {
@@ -254,6 +265,7 @@ export function normalizeSpouseDetails(value) {
     employer_name: String(source.employer_name || '').trim(),
     employer_address: String(source.employer_address || '').trim(),
     date_of_birth: applyIcDateOfBirth(String(source.date_of_birth || '').slice(0, 10), icNumber),
+    marriage_date: String(source.marriage_date || '').slice(0, 10),
   };
 }
 
@@ -289,6 +301,7 @@ export function buildHrProfileForm(user) {
     religion: user?.religion || '',
     race: user?.race || '',
     marital_status: user?.marital_status || '',
+    marriage_leave_entitlement: user?.marriage_leave_entitlement || '',
     current_address: user?.current_address || '',
     home_phone: user?.home_phone || '',
     ic_number: user?.ic_number || '',
@@ -320,6 +333,7 @@ export function hrProfileFormIsDirty(form, user) {
     form.religion !== baseline.religion ||
     form.race !== baseline.race ||
     form.marital_status !== baseline.marital_status ||
+    form.marriage_leave_entitlement !== baseline.marriage_leave_entitlement ||
     form.current_address !== baseline.current_address ||
     form.home_phone !== baseline.home_phone ||
     form.ic_number !== baseline.ic_number ||
@@ -353,6 +367,7 @@ export function buildHrProfilePayload(form) {
     religion: form.religion || null,
     race: form.race || null,
     marital_status: form.marital_status || null,
+    marriage_leave_entitlement: form.marriage_leave_entitlement || null,
     current_address: form.current_address?.trim() || null,
     home_phone: normalizePhoneNumber(form.home_phone) || null,
     ic_number: normalizeIcNumber(form.ic_number) || null,

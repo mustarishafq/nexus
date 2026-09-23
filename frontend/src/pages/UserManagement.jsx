@@ -1571,12 +1571,12 @@ export default function UserManagement() {
     const headers = [
       'email', 'full_name', 'name', 'password', 'role', 'is_approved',
       'job_title', 'company', 'department', 'manager_email', 'employee_id', 'employment_type', 'joined_at', 'date_of_birth',
-      'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'gender',
+      'place_of_birth', 'nationality', 'religion', 'race', 'marital_status', 'marriage_leave_entitlement', 'gender',
       'current_address', 'home_phone', 'ic_number', 'epf_number', 'socso_number', 'income_tax_number',
       'work_phone', 'personal_phone', 'personal_phone_visible',
       'emergency_contact_name', 'next_of_kin_relationship', 'emergency_contact_phone',
       'next_of_kin_ic_number', 'next_of_kin_nationality', 'next_of_kin_occupation', 'next_of_kin_address',
-      'spouse_full_name', 'spouse_ic_number', 'spouse_phone', 'spouse_occupation', 'spouse_employer_name', 'spouse_employer_address',
+      'spouse_full_name', 'spouse_ic_number', 'spouse_phone', 'spouse_occupation', 'spouse_employer_name', 'spouse_employer_address', 'spouse_marriage_date',
       'access_groups', 'skills',
     ];
     const sample = [
@@ -1584,11 +1584,11 @@ export default function UserManagement() {
       [
         'jane.doe@example.com', 'Jane Doe', 'Jane', 'Password@123', 'user', 'true',
         'Online Sales Executive', 'Acme Sdn Bhd', 'Customer Success Management', 'manager@example.com', 'EMP-001', 'full_time', '2023-07-24', '1990-01-15',
-        'Selangor', 'Malaysian', 'islam', 'malay', 'single', 'female',
+        'Selangor', 'Malaysian', 'islam', 'malay', 'single', '', 'female',
         'C-1-11 Kenanga Apartment, Taman Putra Perdana, 47130 Puchong Selangor', '03-12345678', '900101-01-1234', '12345678', 'SOC123', 'IG123456',
         '+60192704323', '+601999990607', 'false',
         'John Doe Sr', 'Father', '+60123456789', '630510-71-6305', 'Malaysian', 'Retired', 'Same as employee address',
-        '', '', '', '', '',
+        '', '', '', '', '', '',
         'R&F', 'Sales,CRM',
       ].join(','),
     ].join('\n');
