@@ -8,7 +8,6 @@ use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\AttendanceLocationSettings;
-use App\Support\AttendanceRulesSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\DepartmentAttendanceSettings;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
 class AttendancePolicySnapshotService
 {
     /**
-     * @return array{locations: list<array<string, mixed>>, rules: array<string, mixed>, departments: list<array<string, mixed>>, watermark: array<string, mixed>}
+     * @return array{locations: list<array<string, mixed>>, departments: list<array<string, mixed>>, watermark: array<string, mixed>}
      */
     public function export(bool $absolutizeLogo = true): array
     {
@@ -65,11 +64,11 @@ class AttendancePolicySnapshotService
                 continue;
             }
 
-            $serialized = AttendanceRulesSettings::serializeDepartment($setting, (int) $setting->department_id);
+            $serialized = DepartmentAttendanceSettings::serializeForApi($setting);
             $departments[] = [
                 'department_name' => $departmentName,
                 'enabled' => (bool) $serialized['enabled'],
-                'location_name' => $serialized['attendance_location']['name'] ?? $setting->attendanceLocation?->name,
+                'location_name' => $setting->attendanceLocation?->name,
                 'timezone' => $serialized['timezone'],
                 'grace_period_minutes' => $serialized['grace_period_minutes'],
                 'require_early_clock_out_reason' => $serialized['require_early_clock_out_reason'],
@@ -89,7 +88,6 @@ class AttendancePolicySnapshotService
 
         return [
             'locations' => $locations,
-            'rules' => AttendanceRulesSettings::serializeForSnapshot(),
             'departments' => $departments,
             'watermark' => $watermark,
         ];
@@ -97,7 +95,7 @@ class AttendancePolicySnapshotService
 
     /**
      * @param  array<string, mixed>  $payload
-     * @return array{locations_upserted: int, locations_pruned: int, departments_upserted: int, rules_updated: bool, watermark_updated: bool}
+     * @return array{locations_upserted: int, locations_pruned: int, departments_upserted: int, watermark_updated: bool}
      */
     public function apply(array $payload): array
     {
@@ -105,7 +103,6 @@ class AttendancePolicySnapshotService
             'locations_upserted' => 0,
             'locations_pruned' => 0,
             'departments_upserted' => 0,
-            'rules_updated' => false,
             'watermark_updated' => false,
         ];
 
@@ -121,7 +118,6 @@ class AttendancePolicySnapshotService
             $departmentRows,
             $pruneMissing,
             $watermarkInput,
-            $payload,
             &$stats,
             &$keptLocationNames,
         ) {
@@ -160,12 +156,6 @@ class AttendancePolicySnapshotService
                     fn (AttendanceLocation $location) => mb_strtolower((string) $location->name)
                 );
 
-            $rulesInput = $this->resolveSnapshotRules($payload, $departmentRows, $locationsByName);
-            if ($rulesInput !== null) {
-                AttendanceRulesSettings::store($rulesInput);
-                $stats['rules_updated'] = true;
-            }
-
             foreach ($departmentRows as $row) {
                 if (! is_array($row)) {
                     continue;
@@ -177,6 +167,12 @@ class AttendancePolicySnapshotService
                 }
 
                 $department = Department::query()->firstOrCreate(['name' => $departmentName]);
+                $locationName = trim((string) ($row['location_name'] ?? ''));
+                $locationId = null;
+                if ($locationName !== '') {
+                    $location = $locationsByName->get(mb_strtolower($locationName));
+                    $locationId = $location?->id;
+                }
 
                 $shifts = is_array($row['shifts'] ?? null) ? $row['shifts'] : [];
                 $normalizedShifts = [];
@@ -197,12 +193,10 @@ class AttendancePolicySnapshotService
                     ]);
                 }
 
-                $config = DepartmentAttendanceSettings::normalizeConfig(array_merge(
-                    AttendanceRulesSettings::current(),
-                    [
-                        'shifts' => $normalizedShifts,
-                    ],
-                ));
+                $config = DepartmentAttendanceSettings::normalizeConfig(array_merge($row, [
+                    'attendance_location_id' => $locationId,
+                    'shifts' => $normalizedShifts,
+                ]));
 
                 DepartmentAttendanceSetting::query()->updateOrCreate(
                     ['department_id' => $department->id],
@@ -277,39 +271,5 @@ class AttendancePolicySnapshotService
         $relative = str_starts_with($url, '/') ? $url : '/'.$url;
 
         return $origin.$relative;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @param  list<mixed>  $departmentRows
-     * @param  \Illuminate\Support\Collection<string, AttendanceLocation>  $locationsByName
-     * @return array<string, mixed>|null
-     */
-    private function resolveSnapshotRules(array $payload, array $departmentRows, $locationsByName): ?array
-    {
-        $rules = is_array($payload['rules'] ?? null) ? $payload['rules'] : null;
-        if ($rules === null) {
-            foreach ($departmentRows as $row) {
-                if (is_array($row)) {
-                    $rules = $row;
-                    break;
-                }
-            }
-        }
-
-        if (! is_array($rules)) {
-            return null;
-        }
-
-        $locationName = trim((string) ($rules['location_name'] ?? ''));
-        $locationId = $rules['attendance_location_id'] ?? null;
-        if ($locationName !== '') {
-            $locationId = $locationsByName->get(mb_strtolower($locationName))?->id;
-        }
-
-        return array_merge($rules, [
-            'attendance_location_id' => $locationId,
-            'shifts' => [],
-        ]);
     }
 }

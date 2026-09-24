@@ -8,7 +8,6 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Support\AttendanceReminderEvaluator;
 use App\Support\AttendancePolicyValidator;
-use App\Support\AttendanceRulesSettings;
 use App\Support\AppSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -26,14 +25,9 @@ class AttendanceReminderService
             return ['sent' => 0, 'skipped' => 0];
         }
 
-        $rules = AttendanceRulesSettings::current();
-        if (! ($rules['enabled'] ?? true)) {
-            return ['sent' => 0, 'skipped' => 0];
-        }
-
         $settingsByDepartment = DepartmentAttendanceSetting::query()
+            ->where('enabled', true)
             ->get()
-            ->map(fn (DepartmentAttendanceSetting $setting) => AttendanceRulesSettings::applyTo($setting))
             ->keyBy('department_id');
 
         if ($settingsByDepartment->isEmpty()) {

@@ -92,16 +92,6 @@ export function departmentAttendanceSettingsToPayload(form) {
   };
 }
 
-export function departmentAttendanceShiftsToPayload(form) {
-  return { shifts: departmentAttendanceSettingsToPayload(form).shifts };
-}
-
-export function attendanceRulesToPayload(form) {
-  const payload = departmentAttendanceSettingsToPayload(form);
-  delete payload.shifts;
-  return payload;
-}
-
 function parseTimeToMinutes(time) {
   const [hour, minute] = String(time).slice(0, 5).split(':').map(Number);
   return (hour * 60) + minute;

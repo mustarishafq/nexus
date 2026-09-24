@@ -8,7 +8,6 @@ use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
 use App\Services\ResourceAttendancePolicyForwarder;
-use App\Support\AttendanceRulesSettings;
 use App\Support\DepartmentAttendanceSettings;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
@@ -46,7 +45,9 @@ class DepartmentAttendanceController extends Controller
                         'name' => $department->name,
                         'company_ids' => $companyIdsByDepartment->get($department->id, []),
                     ],
-                    'settings' => AttendanceRulesSettings::serializeDepartment($setting, (int) $department->id),
+                    'settings' => $setting
+                        ? DepartmentAttendanceSettings::serializeForApi($setting)
+                        : DepartmentAttendanceSettings::normalizeConfig([]),
                 ];
             })->values(),
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
@@ -70,7 +71,9 @@ class DepartmentAttendanceController extends Controller
                 'name' => $department->name,
                 'company_ids' => $this->companyIdsByDepartment()->get($department->id, []),
             ],
-            'settings' => AttendanceRulesSettings::serializeDepartment($setting, (int) $department->id),
+            'settings' => $setting
+                ? DepartmentAttendanceSettings::serializeForApi($setting)
+                : DepartmentAttendanceSettings::normalizeConfig([]),
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
         ]);
     }
@@ -82,10 +85,14 @@ class DepartmentAttendanceController extends Controller
         }
 
         $validated = $request->validate(DepartmentAttendanceSettings::validationRules());
-        $setting = AttendanceRulesSettings::persistDepartmentShifts(
-            (int) $department->id,
-            $validated['shifts'] ?? [],
+        $config = DepartmentAttendanceSettings::normalizeConfig($validated);
+
+        $setting = DepartmentAttendanceSetting::query()->updateOrCreate(
+            ['department_id' => $department->id],
+            DepartmentAttendanceSettings::toDatabaseColumns($config),
         );
+
+        $setting->load('attendanceLocation');
 
         app(ResourceAttendancePolicyForwarder::class)->pushAfterResponse();
 
@@ -95,7 +102,7 @@ class DepartmentAttendanceController extends Controller
                 'name' => $department->name,
                 'company_ids' => $this->companyIdsByDepartment()->get($department->id, []),
             ],
-            'settings' => AttendanceRulesSettings::serializeDepartment($setting, (int) $department->id),
+            'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             'weekdays' => DepartmentAttendanceSettings::WEEKDAYS,
         ]);
     }
@@ -117,9 +124,8 @@ class DepartmentAttendanceController extends Controller
         $departmentIds = array_values(array_unique(array_map('intval', $validated['department_ids'])));
         unset($validated['department_ids']);
 
-        if (self::payloadHasRuleFields($validated)) {
-            AttendanceRulesSettings::store($validated);
-        }
+        $config = DepartmentAttendanceSettings::normalizeConfig($validated);
+        $columns = DepartmentAttendanceSettings::toDatabaseColumns($config);
 
         $departments = Department::query()
             ->whereIn('id', $departmentIds)
@@ -129,7 +135,6 @@ class DepartmentAttendanceController extends Controller
 
         $companyIdsByDepartment = $this->companyIdsByDepartment();
         $results = [];
-        $hasShifts = array_key_exists('shifts', $validated);
 
         foreach ($departmentIds as $departmentId) {
             $department = $departments->get($departmentId);
@@ -137,17 +142,11 @@ class DepartmentAttendanceController extends Controller
                 continue;
             }
 
-            if ($hasShifts) {
-                $setting = AttendanceRulesSettings::persistDepartmentShifts(
-                    (int) $departmentId,
-                    is_array($validated['shifts'] ?? null) ? $validated['shifts'] : [],
-                );
-            } else {
-                $setting = DepartmentAttendanceSetting::query()
-                    ->with('attendanceLocation')
-                    ->where('department_id', $departmentId)
-                    ->first();
-            }
+            $setting = DepartmentAttendanceSetting::query()->updateOrCreate(
+                ['department_id' => $departmentId],
+                $columns,
+            );
+            $setting->load('attendanceLocation');
 
             $results[] = [
                 'department' => [
@@ -155,7 +154,7 @@ class DepartmentAttendanceController extends Controller
                     'name' => $department->name,
                     'company_ids' => $companyIdsByDepartment->get($department->id, []),
                 ],
-                'settings' => AttendanceRulesSettings::serializeDepartment($setting, (int) $departmentId),
+                'settings' => DepartmentAttendanceSettings::serializeForApi($setting),
             ];
         }
 
@@ -185,19 +184,5 @@ class DepartmentAttendanceController extends Controller
                 ->unique()
                 ->values()
                 ->all());
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private static function payloadHasRuleFields(array $payload): bool
-    {
-        foreach (DepartmentAttendanceSettings::RULE_KEYS as $key) {
-            if (array_key_exists($key, $payload)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

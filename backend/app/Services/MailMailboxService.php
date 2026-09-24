@@ -7,12 +7,14 @@ use App\Models\UserMailCredential;
 use App\Models\UserMailRecipientSuggestion;
 use App\Support\AppSettings;
 use App\Support\MailImapSession;
+use App\Support\MailPlainTextHtml;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\HtmlString;
 use RuntimeException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
@@ -825,8 +827,14 @@ class MailMailboxService
             'mail.from.name' => $fromName,
         ]);
 
-        Mail::mailer('smtp')->raw(
-            $payload['body'],
+        $body = (string) $payload['body'];
+
+        Mail::mailer('smtp')->send(
+            [
+                'html' => new HtmlString(MailPlainTextHtml::toHtml($body)),
+                'raw' => $body,
+            ],
+            [],
             function ($message) use ($credential, $fromName, $payload) {
                 $message->to($this->parseAddresses($payload['to']))
                     ->subject($payload['subject'])
@@ -1139,11 +1147,13 @@ class MailMailboxService
      */
     protected function buildSentMimeMessage(string $fromEmail, string $fromName, array $payload): string
     {
+        $body = (string) $payload['body'];
         $email = (new Email)
             ->from(new Address($fromEmail, $fromName))
             ->subject((string) $payload['subject'])
             ->date(new \DateTimeImmutable('now'))
-            ->text((string) $payload['body']);
+            ->text($body)
+            ->html(MailPlainTextHtml::toHtml($body));
 
         $to = $this->parseAddresses((string) ($payload['to'] ?? ''));
         if ($to !== []) {

@@ -18,7 +18,6 @@ use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceLocationController;
-use App\Http\Controllers\Api\AttendanceRulesController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BroadcastAuthController;
 use App\Http\Controllers\Api\BroadcastController;
@@ -210,8 +209,6 @@ Route::get('/admin/attendance-locations', [AttendanceLocationController::class, 
 Route::post('/admin/attendance-locations', [AttendanceLocationController::class, 'store']);
 Route::put('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'update']);
 Route::delete('/admin/attendance-locations/{attendanceLocation}', [AttendanceLocationController::class, 'destroy']);
-Route::get('/admin/attendance-rules', [AttendanceRulesController::class, 'show']);
-Route::put('/admin/attendance-rules', [AttendanceRulesController::class, 'update']);
 Route::get('/admin/department-attendance', [DepartmentAttendanceController::class, 'index']);
 Route::put('/admin/department-attendance', [DepartmentAttendanceController::class, 'bulkUpdate']);
 Route::get('/admin/department-attendance/{department}', [DepartmentAttendanceController::class, 'show']);

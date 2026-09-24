@@ -47,7 +47,10 @@ class AttendanceLateEvaluator
             return $result;
         }
 
-        $setting = AttendanceShiftResolver::settingForUser($user);
+        $setting = DepartmentAttendanceSetting::query()
+            ->where('department_id', $user->department_id)
+            ->where('enabled', true)
+            ->first();
 
         if (! $setting) {
             return $result;

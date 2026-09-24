@@ -6,7 +6,6 @@ use App\Models\AttendanceRecord;
 use App\Models\ExpReward;
 use App\Models\User;
 use App\Models\UserStreak;
-use App\Support\AttendanceRulesSettings;
 use App\Support\GamificationCatalog;
 use App\Support\GamificationSettings;
 use Carbon\Carbon;
@@ -867,9 +866,15 @@ class GamificationService
 
     private function resolveTimezone(User $user): string
     {
-        $tz = AttendanceRulesSettings::current()['timezone'] ?? null;
-        if (is_string($tz) && $tz !== '' && in_array($tz, timezone_identifiers_list(), true)) {
-            return $tz;
+        if ($user->department_id) {
+            $tz = DB::table('department_attendance_settings')
+                ->where('department_id', $user->department_id)
+                ->where('enabled', true)
+                ->value('timezone');
+
+            if (is_string($tz) && $tz !== '' && in_array($tz, timezone_identifiers_list(), true)) {
+                return $tz;
+            }
         }
 
         return (string) config('app.timezone');

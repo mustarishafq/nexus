@@ -472,8 +472,48 @@ class NexusV1ResourceIntegrationTest extends TestCase
         $this->assertTrue($export->json('locations.0.allow_outside_radius'));
         $this->assertFalse($export->json('locations.0.allow_clock_out_outside_radius'));
         $this->assertSame('Operations', $export->json('departments.0.department_name'));
-        $this->assertSame(10, $export->json('rules.grace_period_minutes'));
+        $this->assertSame('EMZI HQ', $export->json('departments.0.location_name'));
         $this->assertFalse($export->json('watermark.show_location'));
+
+        $this->putJson('/api/nexus/v1/attendance/policy', [
+            'locations' => [
+                [
+                    'name' => 'EMZI HQ',
+                    'geofence_enabled' => true,
+                    'center_latitude' => 5.64,
+                    'center_longitude' => 100.48,
+                    'radius_meters' => 150,
+                ],
+                [
+                    'name' => 'Penang Office',
+                    'geofence_enabled' => false,
+                    'center_latitude' => 5.41,
+                    'center_longitude' => 100.33,
+                    'radius_meters' => 80,
+                ],
+            ],
+            'departments' => [[
+                'department_name' => 'Operations',
+                'enabled' => true,
+                'location_name' => 'Penang Office',
+                'timezone' => 'Asia/Kuala_Lumpur',
+                'grace_period_minutes' => 10,
+                'shifts' => [[
+                    'name' => 'Day',
+                    'days_of_week' => [1, 2, 3, 4, 5],
+                    'start_time' => '09:00',
+                    'end_time' => '18:00',
+                    'crosses_midnight' => false,
+                ]],
+            ]],
+            'prune_missing' => false,
+        ], $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $updated = $this->getJson('/api/nexus/v1/attendance/policy', $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $this->assertSame('Penang Office', $updated->json('departments.0.location_name'));
     }
 
     public function test_attendance_policy_requires_auth(): void

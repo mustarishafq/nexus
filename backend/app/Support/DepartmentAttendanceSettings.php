@@ -22,27 +22,6 @@ class DepartmentAttendanceSettings
         'shifts' => [],
     ];
 
-    /** @var list<string> */
-    public const RULE_KEYS = [
-        'enabled',
-        'attendance_location_id',
-        'timezone',
-        'grace_period_minutes',
-        'require_early_clock_out_reason',
-        'require_late_clock_in_reason',
-        'allow_outside_shift_hours',
-        'overtime_enabled',
-        'standard_hours_per_day',
-        'overtime_threshold_minutes',
-    ];
-
-    /** @var list<string> */
-    public const EXTRA_RULE_KEYS = [
-        'allow_different_shift_clock_in',
-        'shortage_enabled',
-        'count_work_from_scheduled_start',
-    ];
-
     /** @var array<int, string> */
     public const WEEKDAYS = [
         1 => 'Monday',
@@ -125,18 +104,6 @@ class DepartmentAttendanceSettings
             'overtime_threshold_minutes' => $config['overtime_threshold_minutes'],
             'shifts' => $config['shifts'],
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    public static function toRuleColumns(array $config): array
-    {
-        $columns = self::toDatabaseColumns($config + ['shifts' => $config['shifts'] ?? []]);
-        unset($columns['shifts']);
-
-        return $columns;
     }
 
     /**
