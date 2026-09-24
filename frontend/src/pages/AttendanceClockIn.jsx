@@ -3,9 +3,16 @@ import db from '@/api/apiClient';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { MapPin, Shield } from 'lucide-react';
+import {
+  Loader2,
+  LogIn,
+  LogOut,
+  MapPin,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AttendanceCamera from '@/components/attendance/AttendanceCamera';
-import { Badge } from '@/components/ui/badge';
+import ExpActionHint from '@/components/gamification/ExpActionHint';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,17 +24,58 @@ import {
   findActiveShift,
   findMatchingAttendanceSite,
   findNearestAttendanceSite,
-  listAttendancePolicyParts,
   resolveAttendanceSites,
 } from '@/lib/attendancePolicy';
 import { getDeviceInfo } from '@/lib/deviceInfo';
 import { formatDurationMinutes } from '@/lib/formatDuration';
 import { notifyGamificationOffers } from '@/lib/gamification';
-import ExpActionHint from '@/components/gamification/ExpActionHint';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 function formatRecordType(type) {
-  return type === 'clock_in' ? 'Clock In' : 'Clock Out';
+  return type === 'clock_in' ? 'Clock in' : 'Clock out';
+}
+
+const TONE = {
+  muted: {
+    softCard: 'border-border/80 bg-card',
+    iconWell: 'bg-muted text-muted-foreground',
+  },
+  info: {
+    softCard: 'border-info/25 bg-info/5',
+    iconWell: 'bg-info/10 text-info',
+    chip: 'border-info/30 bg-info/10 text-info',
+  },
+  success: {
+    softCard: 'border-success/25 bg-success/5',
+    iconWell: 'bg-success/10 text-success',
+    chip: 'border-success/30 bg-success/10 text-success',
+  },
+  warning: {
+    softCard: 'border-warning/30 bg-warning/5',
+    iconWell: 'bg-warning/10 text-warning',
+    chip: 'border-warning/35 bg-warning/10 text-warning',
+  },
+  primary: {
+    chip: 'border-primary/25 bg-primary/10 text-primary',
+  },
+};
+
+function ContextChip({ children, tone = 'muted', className }) {
+  const palette = tone === 'muted'
+    ? 'border-border/80 bg-muted/60 text-foreground'
+    : TONE[tone]?.chip || TONE.primary.chip;
+  return (
+    <span
+      className={cn(
+        'inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2.5 py-1 text-xs font-medium',
+        palette,
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function AttendanceClockIn() {
@@ -147,32 +195,6 @@ export default function AttendanceClockIn() {
   }, [capture, clockMutation, lateClockInReason, needsLateReason, reasonReady]);
 
   const submitHint = !reasonReady ? 'Enter a late clock-in reason first' : '';
-  const reasonFields = needsLateReason ? (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
-      <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-        <CardTitle className="text-base">Late clock-in reason</CardTitle>
-        <CardDescription className="text-pretty">
-          You are clocking in
-          {lateClockIn.late_minutes
-            ? ` ${formatDurationMinutes(lateClockIn.late_minutes, { style: 'long' })} late`
-            : ' late'}
-          . A reason is required.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 p-4 pt-0 sm:p-6 sm:pt-0">
-        <Label htmlFor="late-clock-in-reason">Reason</Label>
-        <Textarea
-          id="late-clock-in-reason"
-          value={lateClockInReason}
-          onChange={(event) => setLateClockInReason(event.target.value)}
-          placeholder="Why are you clocking in late?"
-          maxLength={500}
-          rows={3}
-          disabled={clockMutation.isPending}
-        />
-      </CardContent>
-    </Card>
-  ) : null;
 
   const attendanceSites = useMemo(() => {
     const departmentRadius = Number(policy?.radius_meters);
@@ -216,7 +238,6 @@ export default function AttendanceClockIn() {
   ), [attendanceSites, liveLocation?.latitude, liveLocation?.longitude, siteRadiusMeters]);
 
   const scheduleHint = status?.schedule_hint;
-  const policyParts = useMemo(() => listAttendancePolicyParts(policy), [policy]);
   const activeShift = policy ? findActiveShift(policy) : null;
   const specialReleaseTypeLabel = activeSpecialRelease
     ? (activeSpecialRelease.type === 'wfh'
@@ -226,97 +247,133 @@ export default function AttendanceClockIn() {
         : 'Other')
     : null;
 
+  const statusTone = statusLoading ? 'muted' : (isClockIn ? 'info' : 'success');
+  const StatusIcon = isClockIn ? LogIn : LogOut;
+  const statusTitle = statusLoading
+    ? 'Checking status…'
+    : isClockIn
+      ? 'Ready to clock in'
+      : 'You are clocked in';
+  const statusSubtitle = statusLoading
+    ? 'Loading your shift and last punch.'
+    : scheduleHint?.message
+      || (isClockIn
+        ? 'Take a selfie to start your shift.'
+        : 'Take a selfie when you leave.');
+
+  const lastRecord = status?.last_record;
+  const todayIns = status?.today_summary?.clock_ins ?? 0;
+  const todayOuts = status?.today_summary?.clock_outs ?? 0;
+  const showContextChips = Boolean(
+    activeShift
+    || policy?.planned_shift?.name
+    || nearestSite
+    || activeSpecialRelease
+    || (policy?.shifts?.length && !activeShift)
+    || policy?.grace_period_minutes,
+  );
+
   return (
-    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
-      {!status?.reminder && scheduleHint ? (
-        <Card className="min-w-0 rounded-2xl border-dashed">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="text-base">Shift schedule</CardTitle>
-            <CardDescription className="text-pretty">{scheduleHint.message}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : null}
-
-      {activeSpecialRelease ? (
-        <Card className="min-w-0 rounded-2xl border-dashed border-primary/30 bg-primary/5">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <MapPin className="h-4 w-4 shrink-0 text-primary" />
-              Special release active ({specialReleaseTypeLabel})
-            </CardTitle>
-            <CardDescription className="text-pretty">
-              Clock within {activeSpecialRelease.radius_meters}m of your approved pin or at your department location
-              {allowOutsideRadius ? ' (outstation outside those sites still allowed with warning)' : ''}.
-              {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
-                ? ` Shift hours: ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}${activeSpecialRelease.shift_crosses_midnight ? ' (overnight)' : ''}.`
-                : ''}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : null}
-
-      {policy ? (
-        <Card className="min-w-0 rounded-2xl border-primary/20 bg-primary/5">
-          <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Shield className="h-4 w-4 shrink-0 text-primary" /> Department rules
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
-            <div className="flex flex-wrap gap-2 text-sm">
-              {activeShift ? (
-                <Badge variant="secondary">Active shift: {activeShift.name}</Badge>
-              ) : policy.shifts?.length ? (
-                <Badge variant="outline">Outside scheduled shift</Badge>
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
+      <div className={cn('overflow-hidden rounded-2xl border shadow-sm', TONE[statusTone].softCard)}>
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <div
+              className={cn(
+                'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                TONE[statusTone].iconWell,
+              )}
+            >
+              {statusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <StatusIcon className="h-5 w-5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-base font-semibold tracking-tight">{statusTitle}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground text-pretty">{statusSubtitle}</p>
+              {!statusLoading ? (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <ExpActionHint actionKey={isClockIn ? 'clock_in' : 'clock_out'} />
+                  {isClockIn ? <ExpActionHint actionKey="clock_in_early" /> : null}
+                </div>
               ) : null}
-              {nearestSite ? (
-                <Badge variant={matchedSite ? 'secondary' : 'destructive'} className="max-w-full truncate">
-                  {matchedSite
-                    ? `At ${matchedSite.site.name}`
-                    : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
-                </Badge>
-              ) : null}
-              {allowOutsideRadius && !matchedSite && nearestSite ? (
-                <Badge variant="outline">Outstation allowed</Badge>
-              ) : null}
-              {activeSpecialRelease ? (
-                <Badge variant="secondary">
-                  Special release ({specialReleaseTypeLabel}) · {activeSpecialRelease.radius_meters}m pin
-                  {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
-                    ? ` · ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}`
-                    : ''}
-                </Badge>
+              {lastRecord ? (
+                <p className="mt-2 truncate text-xs text-muted-foreground">
+                  Last {formatRecordType(lastRecord.type).toLowerCase()} ·{' '}
+                  {format(new Date(lastRecord.captured_at), 'MMM d, h:mm a')}
+                  {lastRecord.location_label ? ` · ${lastRecord.location_label}` : ''}
+                </p>
               ) : null}
             </div>
-            {policyParts.length ? (
-              <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm">
-                {policyParts.map((part) => (
-                  <li
-                    key={part}
-                    className="rounded-md border border-border/60 bg-background/40 px-2 py-0.5"
-                  >
-                    {part}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No department attendance rules apply.</p>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+          </div>
 
-      <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
-        {needsLateReason ? (
-          <div className="order-1 min-w-0 lg:col-start-2 lg:row-start-1">
-            {reasonFields}
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[12rem]">
+            <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-center">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">In</p>
+              <p className="mt-0.5 text-xl font-semibold tabular-nums">{todayIns}</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-center">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Out</p>
+              <p className="mt-0.5 text-xl font-semibold tabular-nums">{todayOuts}</p>
+            </div>
+          </div>
+        </div>
+
+        {showContextChips ? (
+          <div className="flex flex-wrap gap-1.5 border-t border-border/60 bg-background/40 px-4 py-3 sm:px-5">
+            {activeShift ? (
+              <ContextChip tone="primary">Shift · {activeShift.name}</ContextChip>
+            ) : policy?.shifts?.length ? (
+              <ContextChip tone="warning">Outside scheduled shift</ContextChip>
+            ) : null}
+            {policy?.planned_shift?.name ? (
+              <ContextChip>Rostered · {policy.planned_shift.name}</ContextChip>
+            ) : null}
+            {activeSpecialRelease ? (
+              <ContextChip tone="info">
+                {specialReleaseTypeLabel} · {activeSpecialRelease.radius_meters}m pin
+                {activeSpecialRelease.overwrite_shift && activeSpecialRelease.shift_start_time && activeSpecialRelease.shift_end_time
+                  ? ` · ${activeSpecialRelease.shift_start_time}–${activeSpecialRelease.shift_end_time}`
+                  : ''}
+              </ContextChip>
+            ) : null}
+            {nearestSite ? (
+              <ContextChip tone={matchedSite ? 'success' : 'warning'} className="max-w-[18rem]">
+                <MapPin className="h-3 w-3 shrink-0 opacity-80" />
+                {matchedSite
+                  ? `At ${matchedSite.site.name}`
+                  : `~${Math.round(nearestSite.distance)}m from ${nearestSite.site.name}`}
+              </ContextChip>
+            ) : null}
+            {allowOutsideRadius && !matchedSite && nearestSite ? (
+              <ContextChip>Outside radius allowed</ContextChip>
+            ) : null}
+            {policy?.grace_period_minutes ? (
+              <ContextChip>
+                {formatDurationMinutes(policy.grace_period_minutes, { style: 'long' })} grace
+              </ContextChip>
+            ) : null}
           </div>
         ) : null}
-        <Card className={
-          needsLateReason
-            ? 'order-2 min-w-0 overflow-hidden rounded-2xl p-0 lg:col-start-1 lg:row-start-1 lg:row-span-2'
-            : 'min-w-0 overflow-hidden rounded-2xl p-0 lg:col-start-1 lg:row-start-1'
-        }>
+      </div>
+
+      {activeSpecialRelease ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <p className="font-medium">Special release · {specialReleaseTypeLabel}</p>
+            <p className="mt-0.5 text-muted-foreground text-pretty">
+              Clock within {activeSpecialRelease.radius_meters}m of your approved pin or at your department location
+              {allowOutsideRadius ? ' (outstation outside those sites still allowed with a warning)' : ''}.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
+        <Card className="order-1 min-w-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm">
           <CardContent className="p-0">
             <AttendanceCamera
               key={cameraKey}
@@ -337,75 +394,59 @@ export default function AttendanceClockIn() {
           </CardContent>
         </Card>
 
-        <div className={
-          needsLateReason
-            ? 'order-3 min-w-0 space-y-3 sm:space-y-4 lg:col-start-2 lg:row-start-2'
-            : 'min-w-0 space-y-3 sm:space-y-4 lg:col-start-2 lg:row-start-1'
-        }>
-          <Card className="min-w-0 overflow-hidden rounded-2xl">
-            <CardHeader className="space-y-1 p-4 pb-3 sm:p-6 sm:pb-3">
-              <CardTitle className="text-base">Current status</CardTitle>
-              <CardDescription className="text-pretty">
-                {statusLoading
-                  ? 'Loading status…'
-                  : isClockIn
-                    ? 'You are ready to clock in.'
-                    : 'You are clocked in.'}
-              </CardDescription>
-              {!statusLoading ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
-                  <ExpActionHint actionKey={isClockIn ? 'clock_in' : 'clock_out'} />
-                  {isClockIn ? <ExpActionHint actionKey="clock_in_early" /> : null}
-                </div>
-              ) : null}
-            </CardHeader>
-            <CardContent className="space-y-3 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
-              {status?.last_record ? (
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate font-medium">{formatRecordType(status.last_record.type)}</span>
-                    <Badge variant="secondary" className="shrink-0">
-                      {format(new Date(status.last_record.captured_at), 'MMM d, h:mm a')}
-                    </Badge>
-                  </div>
-                  {status.last_record.location_label ? (
-                    <p className="mt-2 flex items-start gap-1.5 text-muted-foreground">
-                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 break-words">{status.last_record.location_label}</span>
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No attendance records yet.</p>
-              )}
-
-              <div className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-muted-foreground sm:text-sm">Today clock-ins</div>
-                  <div className="mt-1 text-2xl font-semibold tabular-nums">{status?.today_summary?.clock_ins ?? 0}</div>
-                </div>
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-muted-foreground sm:text-sm">Today clock-outs</div>
-                  <div className="mt-1 text-2xl font-semibold tabular-nums">{status?.today_summary?.clock_outs ?? 0}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {capture?.watermarkLines?.length ? (
-            <Card className="hidden min-w-0 overflow-hidden rounded-2xl sm:block">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Watermark preview</CardTitle>
+        <div className="order-2 min-w-0 space-y-3">
+          {needsLateReason ? (
+            <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
+              <CardHeader className="space-y-1 p-4 pb-3 sm:p-5 sm:pb-3">
+                <CardTitle className="text-base">Late clock-in reason</CardTitle>
+                <CardDescription className="text-pretty">
+                  You are clocking in
+                  {lateClockIn.late_minutes
+                    ? ` ${formatDurationMinutes(lateClockIn.late_minutes, { style: 'long' })} late`
+                    : ' late'}
+                  . A reason is required.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-1 overflow-x-auto rounded-xl border bg-muted/20 p-3 font-mono text-xs">
-                  {capture.watermarkLines.map((line) => (
-                    <div key={line} className="whitespace-nowrap sm:whitespace-normal sm:break-words">{line}</div>
-                  ))}
-                </div>
+              <CardContent className="space-y-2 p-4 pt-0 sm:p-5 sm:pt-0">
+                <Label htmlFor="late-clock-in-reason">Reason</Label>
+                <Textarea
+                  id="late-clock-in-reason"
+                  value={lateClockInReason}
+                  onChange={(event) => setLateClockInReason(event.target.value)}
+                  placeholder="Why are you clocking in late?"
+                  maxLength={500}
+                  rows={3}
+                  disabled={clockMutation.isPending}
+                />
               </CardContent>
             </Card>
-          ) : null}
+          ) : (
+            <Card className="rounded-2xl border-border/80 shadow-sm">
+              <CardHeader className="space-y-1 p-4 pb-3 sm:p-5 sm:pb-3">
+                <CardTitle className="text-base">Before you punch</CardTitle>
+                <CardDescription className="text-pretty">
+                  Face the camera, wait for GPS, then capture. Your photo is stamped with time and location.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 p-4 pt-0 text-sm text-muted-foreground sm:p-5 sm:pt-0">
+                {policy?.geofence_enabled ? (
+                  <p>
+                    Stay within {siteRadiusMeters}m of your assigned site
+                    {allowOutsideRadius ? ', or clock outside with a warning' : ''}.
+                  </p>
+                ) : null}
+                {policy?.require_late_clock_in_reason ? (
+                  <p>Late clock-in needs a reason.</p>
+                ) : null}
+                {policy?.require_early_clock_out_reason ? (
+                  <p>Early clock-out needs a reason.</p>
+                ) : null}
+                <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-muted-foreground">
+                  <Link to="/attendance/records">View today’s punches</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

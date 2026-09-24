@@ -16,7 +16,10 @@ class DepartmentAttendanceSettings
         'require_early_clock_out_reason' => false,
         'require_late_clock_in_reason' => false,
         'allow_outside_shift_hours' => false,
+        'allow_different_shift_clock_in' => false,
         'overtime_enabled' => true,
+        'shortage_enabled' => true,
+        'count_work_from_scheduled_start' => true,
         'standard_hours_per_day' => 8.0,
         'overtime_threshold_minutes' => 0,
         'shifts' => [],
@@ -48,7 +51,10 @@ class DepartmentAttendanceSettings
         $config['require_early_clock_out_reason'] = self::toBool($input['require_early_clock_out_reason'] ?? false);
         $config['require_late_clock_in_reason'] = self::toBool($input['require_late_clock_in_reason'] ?? false);
         $config['allow_outside_shift_hours'] = self::toBool($input['allow_outside_shift_hours'] ?? false);
+        $config['allow_different_shift_clock_in'] = self::toBool($input['allow_different_shift_clock_in'] ?? false);
         $config['overtime_enabled'] = self::toBool($input['overtime_enabled'] ?? true);
+        $config['shortage_enabled'] = self::toBool($input['shortage_enabled'] ?? true);
+        $config['count_work_from_scheduled_start'] = self::toBool($input['count_work_from_scheduled_start'] ?? true);
         $config['standard_hours_per_day'] = max(0.5, min(24, (float) ($input['standard_hours_per_day'] ?? 8)));
         $config['overtime_threshold_minutes'] = max(0, min(480, (int) ($input['overtime_threshold_minutes'] ?? 0)));
         $config['shifts'] = self::normalizeShifts($input['shifts'] ?? []);
@@ -70,7 +76,10 @@ class DepartmentAttendanceSettings
             'require_early_clock_out_reason' => ['nullable', 'boolean'],
             'require_late_clock_in_reason' => ['nullable', 'boolean'],
             'allow_outside_shift_hours' => ['nullable', 'boolean'],
+            'allow_different_shift_clock_in' => ['nullable', 'boolean'],
             'overtime_enabled' => ['nullable', 'boolean'],
+            'shortage_enabled' => ['nullable', 'boolean'],
+            'count_work_from_scheduled_start' => ['nullable', 'boolean'],
             'standard_hours_per_day' => ['nullable', 'numeric', 'min:0.5', 'max:24'],
             'overtime_threshold_minutes' => ['nullable', 'integer', 'min:0', 'max:480'],
             'shifts' => ['nullable', 'array'],
@@ -99,11 +108,35 @@ class DepartmentAttendanceSettings
             'require_early_clock_out_reason' => $config['require_early_clock_out_reason'],
             'require_late_clock_in_reason' => $config['require_late_clock_in_reason'],
             'allow_outside_shift_hours' => $config['allow_outside_shift_hours'],
+            'allow_different_shift_clock_in' => $config['allow_different_shift_clock_in'],
             'overtime_enabled' => $config['overtime_enabled'],
+            'shortage_enabled' => $config['shortage_enabled'],
+            'count_work_from_scheduled_start' => $config['count_work_from_scheduled_start'],
             'standard_hours_per_day' => $config['standard_hours_per_day'],
             'overtime_threshold_minutes' => $config['overtime_threshold_minutes'],
             'shifts' => $config['shifts'],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    public static function preserveClockRules(array $config, ?DepartmentAttendanceSetting $existing = null): array
+    {
+        if (AttendanceClockRulesSettings::hasStored()) {
+            return array_merge($config, AttendanceClockRulesSettings::applied());
+        }
+
+        if ($existing) {
+            foreach (AttendanceClockRulesSettings::KEYS as $key) {
+                if (isset($existing->{$key})) {
+                    $config[$key] = $existing->{$key};
+                }
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -236,11 +269,16 @@ class DepartmentAttendanceSettings
             'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
             'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
+            'allow_different_shift_clock_in' => (bool) ($setting->allow_different_shift_clock_in ?? false),
             'overtime_enabled' => $setting->overtime_enabled,
+            'shortage_enabled' => (bool) ($setting->shortage_enabled ?? true),
+            'count_work_from_scheduled_start' => (bool) ($setting->count_work_from_scheduled_start ?? true),
             'standard_hours_per_day' => (float) $setting->standard_hours_per_day,
             'overtime_threshold_minutes' => $setting->overtime_threshold_minutes,
             'shifts' => $setting->shifts ?? [],
         ];
+
+        $payload = AttendanceClockRulesSettings::overlay($payload);
 
         if ($location) {
             $payload['attendance_location'] = AttendanceLocationSettings::serializeForApi($location);

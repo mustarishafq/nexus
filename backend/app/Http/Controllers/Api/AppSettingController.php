@@ -9,6 +9,7 @@ use App\Services\ResourceAttendancePolicyForwarder;
 use App\Support\ApiTokenAuth;
 use App\Support\ApplicationLaunchSettings;
 use App\Support\AppSettings;
+use App\Support\AttendancePolicySyncMeta;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\FeedModerationSettings;
 use App\Support\GamificationSettings;
@@ -219,6 +220,7 @@ class AppSettingController extends Controller
             'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
             'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
             'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
+            'attendance_policy_sync' => AttendancePolicySyncMeta::current(),
         ], AttendanceWatermarkSettings::toDatabaseColumns($attendance), FeedModerationSettings::payload($settings, true));
     }
 
@@ -321,6 +323,7 @@ class AppSettingController extends Controller
             'attendance_datetime_formats' => AttendanceWatermarkSettings::datetimeFormatCatalog(),
             'attendance_watermark_positions' => AttendanceWatermarkSettings::positionCatalog(),
             'attendance_logo_positions' => AttendanceWatermarkSettings::logoPositionCatalog(),
+            'attendance_policy_sync' => AttendancePolicySyncMeta::current(),
             'smtp_host' => $settings->smtp_host,
             'smtp_port' => $settings->smtp_port,
             'smtp_username' => $settings->smtp_username,

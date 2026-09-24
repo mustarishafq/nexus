@@ -1,4 +1,4 @@
-import { formatDecimalHours, formatDurationMinutes } from '@/lib/formatDuration';
+import { formatDurationMinutes } from '@/lib/formatDuration';
 
 export const WEEKDAYS = [
   { value: 1, label: 'Mon' },
@@ -32,7 +32,10 @@ export const DEFAULT_DEPARTMENT_ATTENDANCE_SETTINGS = {
   require_early_clock_out_reason: false,
   require_late_clock_in_reason: false,
   allow_outside_shift_hours: false,
+  allow_different_shift_clock_in: false,
   overtime_enabled: true,
+  shortage_enabled: true,
+  count_work_from_scheduled_start: true,
   standard_hours_per_day: 8,
   overtime_threshold_minutes: 0,
   shifts: [{ ...DEFAULT_SHIFT }],
@@ -58,7 +61,10 @@ export function normalizeDepartmentAttendanceSettings(input = {}) {
     require_early_clock_out_reason: Boolean(input.require_early_clock_out_reason),
     require_late_clock_in_reason: Boolean(input.require_late_clock_in_reason),
     allow_outside_shift_hours: Boolean(input.allow_outside_shift_hours),
+    allow_different_shift_clock_in: Boolean(input.allow_different_shift_clock_in),
     overtime_enabled: input.overtime_enabled !== false,
+    shortage_enabled: input.shortage_enabled !== false,
+    count_work_from_scheduled_start: input.count_work_from_scheduled_start !== false,
     standard_hours_per_day: Number(input.standard_hours_per_day ?? 8),
     overtime_threshold_minutes: Number(input.overtime_threshold_minutes ?? 0),
     shifts,
@@ -85,7 +91,10 @@ export function departmentAttendanceSettingsToPayload(form) {
     require_early_clock_out_reason: normalized.require_early_clock_out_reason,
     require_late_clock_in_reason: normalized.require_late_clock_in_reason,
     allow_outside_shift_hours: normalized.allow_outside_shift_hours,
+    allow_different_shift_clock_in: normalized.allow_different_shift_clock_in,
     overtime_enabled: normalized.overtime_enabled,
+    shortage_enabled: normalized.shortage_enabled,
+    count_work_from_scheduled_start: normalized.count_work_from_scheduled_start,
     standard_hours_per_day: normalized.standard_hours_per_day,
     overtime_threshold_minutes: normalized.overtime_threshold_minutes,
     shifts: normalized.shifts,
@@ -419,7 +428,7 @@ export function listAttendancePolicyParts(policy) {
     parts.push(...policy.shifts.map((shift) => formatShiftSummary(shift)));
   }
   if (policy.overtime_enabled) {
-    parts.push(`Overtime after ${formatDecimalHours(policy.standard_hours_per_day)} standard day`);
+    parts.push('Overtime after assigned shift hours');
   }
   if (policy.grace_period_minutes) {
     parts.push(`${formatDurationMinutes(policy.grace_period_minutes, { style: 'long' })} grace period`);

@@ -338,6 +338,16 @@ export const db = {
 		},
 	},
 
+	attendanceClockRules: {
+		async get() {
+			return request('/admin/attendance-clock-rules');
+		},
+
+		async update(data) {
+			return request('/admin/attendance-clock-rules', { method: 'PUT', body: data });
+		},
+	},
+
 	attendanceLocations: {
 		async list() {
 			return request('/admin/attendance-locations');

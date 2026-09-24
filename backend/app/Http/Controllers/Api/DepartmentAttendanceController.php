@@ -85,7 +85,13 @@ class DepartmentAttendanceController extends Controller
         }
 
         $validated = $request->validate(DepartmentAttendanceSettings::validationRules());
-        $config = DepartmentAttendanceSettings::normalizeConfig($validated);
+        $existing = DepartmentAttendanceSetting::query()
+            ->where('department_id', $department->id)
+            ->first();
+        $config = DepartmentAttendanceSettings::preserveClockRules(
+            DepartmentAttendanceSettings::normalizeConfig($validated),
+            $existing,
+        );
 
         $setting = DepartmentAttendanceSetting::query()->updateOrCreate(
             ['department_id' => $department->id],
@@ -124,8 +130,7 @@ class DepartmentAttendanceController extends Controller
         $departmentIds = array_values(array_unique(array_map('intval', $validated['department_ids'])));
         unset($validated['department_ids']);
 
-        $config = DepartmentAttendanceSettings::normalizeConfig($validated);
-        $columns = DepartmentAttendanceSettings::toDatabaseColumns($config);
+        $base = DepartmentAttendanceSettings::normalizeConfig($validated);
 
         $departments = Department::query()
             ->whereIn('id', $departmentIds)
@@ -141,6 +146,13 @@ class DepartmentAttendanceController extends Controller
             if (! $department) {
                 continue;
             }
+
+            $existing = DepartmentAttendanceSetting::query()
+                ->where('department_id', $departmentId)
+                ->first();
+            $columns = DepartmentAttendanceSettings::toDatabaseColumns(
+                DepartmentAttendanceSettings::preserveClockRules($base, $existing)
+            );
 
             $setting = DepartmentAttendanceSetting::query()->updateOrCreate(
                 ['department_id' => $departmentId],

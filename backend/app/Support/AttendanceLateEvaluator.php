@@ -47,10 +47,12 @@ class AttendanceLateEvaluator
             return $result;
         }
 
-        $setting = DepartmentAttendanceSetting::query()
-            ->where('department_id', $user->department_id)
-            ->where('enabled', true)
-            ->first();
+        $setting = AttendanceClockRulesSettings::applyTo(
+            DepartmentAttendanceSetting::query()
+                ->where('department_id', $user->department_id)
+                ->where('enabled', true)
+                ->first()
+        );
 
         if (! $setting) {
             return $result;

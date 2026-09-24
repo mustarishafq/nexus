@@ -83,7 +83,7 @@ export default function Attendance() {
           </h1>
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
             {activeSection === 'clock-in'
-              ? 'Take a selfie, then clock in or out with date, time, and location.'
+              ? 'Punch in or out with a photo and location.'
               : 'Review your attendance history and export organization-wide records.'}
           </p>
         </div>

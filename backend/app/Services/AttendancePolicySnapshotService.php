@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DepartmentAttendanceSetting;
 use App\Models\User;
 use App\Support\AppSettings;
+use App\Support\AttendanceClockRulesSettings;
 use App\Support\AttendanceLocationSettings;
 use App\Support\AttendanceWatermarkSettings;
 use App\Support\DepartmentAttendanceSettings;
@@ -53,6 +54,8 @@ class AttendancePolicySnapshotService
             ->values()
             ->all();
 
+        $locationsById = AttendanceLocation::query()->get(['id', 'name'])->keyBy('id');
+
         $departments = [];
         $settings = DepartmentAttendanceSetting::query()
             ->with(['department:id,name', 'attendanceLocation:id,name'])
@@ -65,6 +68,22 @@ class AttendancePolicySnapshotService
             }
 
             $serialized = DepartmentAttendanceSettings::serializeForApi($setting);
+            $shifts = [];
+            foreach ($serialized['shifts'] ?? [] as $shift) {
+                if (! is_array($shift)) {
+                    continue;
+                }
+                $shiftLocationId = isset($shift['attendance_location_id'])
+                    ? (int) $shift['attendance_location_id']
+                    : null;
+                $shiftOut = $shift;
+                unset($shiftOut['attendance_location_id']);
+                $shiftOut['location_name'] = $shiftLocationId
+                    ? ($locationsById->get($shiftLocationId)?->name)
+                    : null;
+                $shifts[] = $shiftOut;
+            }
+
             $departments[] = [
                 'department_name' => $departmentName,
                 'enabled' => (bool) $serialized['enabled'],
@@ -74,10 +93,13 @@ class AttendancePolicySnapshotService
                 'require_early_clock_out_reason' => $serialized['require_early_clock_out_reason'],
                 'require_late_clock_in_reason' => $serialized['require_late_clock_in_reason'],
                 'allow_outside_shift_hours' => $serialized['allow_outside_shift_hours'],
+                'allow_different_shift_clock_in' => $serialized['allow_different_shift_clock_in'] ?? false,
                 'overtime_enabled' => $serialized['overtime_enabled'],
+                'shortage_enabled' => $serialized['shortage_enabled'] ?? true,
+                'count_work_from_scheduled_start' => $serialized['count_work_from_scheduled_start'] ?? true,
                 'standard_hours_per_day' => $serialized['standard_hours_per_day'],
                 'overtime_threshold_minutes' => $serialized['overtime_threshold_minutes'],
-                'shifts' => $serialized['shifts'] ?? [],
+                'shifts' => $shifts,
             ];
         }
 
@@ -88,6 +110,9 @@ class AttendancePolicySnapshotService
 
         return [
             'locations' => $locations,
+            'clock_rules' => AttendanceClockRulesSettings::hasStored()
+                ? AttendanceClockRulesSettings::current()
+                : null,
             'departments' => $departments,
             'watermark' => $watermark,
         ];
@@ -103,6 +128,7 @@ class AttendancePolicySnapshotService
             'locations_upserted' => 0,
             'locations_pruned' => 0,
             'departments_upserted' => 0,
+            'clock_rules_updated' => false,
             'watermark_updated' => false,
         ];
 
@@ -118,6 +144,7 @@ class AttendancePolicySnapshotService
             $departmentRows,
             $pruneMissing,
             $watermarkInput,
+            $payload,
             &$stats,
             &$keptLocationNames,
         ) {
@@ -156,6 +183,11 @@ class AttendancePolicySnapshotService
                     fn (AttendanceLocation $location) => mb_strtolower((string) $location->name)
                 );
 
+            if (is_array($payload['clock_rules'] ?? null)) {
+                AttendanceClockRulesSettings::store($payload['clock_rules']);
+                $stats['clock_rules_updated'] = true;
+            }
+
             foreach ($departmentRows as $row) {
                 if (! is_array($row)) {
                     continue;
@@ -193,10 +225,13 @@ class AttendancePolicySnapshotService
                     ]);
                 }
 
-                $config = DepartmentAttendanceSettings::normalizeConfig(array_merge($row, [
-                    'attendance_location_id' => $locationId,
-                    'shifts' => $normalizedShifts,
-                ]));
+                $config = DepartmentAttendanceSettings::preserveClockRules(
+                    DepartmentAttendanceSettings::normalizeConfig(array_merge($row, [
+                        'attendance_location_id' => $locationId,
+                        'shifts' => $normalizedShifts,
+                    ])),
+                    DepartmentAttendanceSetting::query()->where('department_id', $department->id)->first(),
+                );
 
                 DepartmentAttendanceSetting::query()->updateOrCreate(
                     ['department_id' => $department->id],

@@ -18,11 +18,13 @@ class AttendancePolicyValidator
             return null;
         }
 
-        return DepartmentAttendanceSetting::query()
+        $setting = DepartmentAttendanceSetting::query()
             ->with('attendanceLocation')
             ->where('department_id', $user->department_id)
             ->where('enabled', true)
             ->first();
+
+        return AttendanceClockRulesSettings::applyTo($setting);
     }
 
     /**
@@ -78,7 +80,7 @@ class AttendancePolicyValidator
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
             $metadata = array_merge(
                 $metadata,
-                self::calculateOvertime($lastRecord->captured_at, $capturedAt, $setting),
+                self::calculateOvertime($lastRecord->captured_at, $capturedAt, $setting, is_array($resolvedShift) ? $resolvedShift : null),
             );
         }
 
@@ -130,7 +132,7 @@ class AttendancePolicyValidator
             'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'overtime_enabled' => $setting->overtime_enabled,
-            'standard_hours_per_day' => (float) $setting->standard_hours_per_day,
+            'overtime_threshold_minutes' => (int) $setting->overtime_threshold_minutes,
             'shifts' => $shifts,
             'attendance_shift_ids' => $user->assignedAttendanceShiftIds(),
             'attendance_shift_location_ids' => $user->attendanceShiftLocationMap(),
@@ -413,17 +415,34 @@ class AttendancePolicyValidator
     }
 
     /**
+     * @param  array<string, mixed>|null  $shift
      * @return array<string, int|bool>
      */
-    private static function calculateOvertime(Carbon $clockIn, Carbon $clockOut, DepartmentAttendanceSetting $setting): array
+    private static function calculateOvertime(Carbon $clockIn, Carbon $clockOut, DepartmentAttendanceSetting $setting, ?array $shift = null): array
     {
         $workedMinutes = (int) $clockIn->diffInMinutes($clockOut);
-        $standardMinutes = (int) round((float) $setting->standard_hours_per_day * 60);
-        $overtimeMinutes = max(0, $workedMinutes - $standardMinutes - $setting->overtime_threshold_minutes);
+        $standardMinutes = $workedMinutes;
+        $hasShiftWindow = false;
+
+        if (is_array($shift) && ($shift['start_time'] ?? '') !== '' && ($shift['end_time'] ?? '') !== '') {
+            $start = self::parseTimeToMinutes((string) $shift['start_time']);
+            $end = self::parseTimeToMinutes((string) $shift['end_time']);
+            $crosses = (bool) ($shift['crosses_midnight'] ?? false) || $end <= $start;
+            $span = $crosses ? ($end + (24 * 60)) - $start : $end - $start;
+            $unpaid = max(0, min(240, (int) ($shift['unpaid_break_minutes'] ?? 0)));
+            if ($span > 0) {
+                $standardMinutes = max(0, $span - $unpaid);
+                $hasShiftWindow = true;
+            }
+        }
+
+        $overtimeMinutes = $hasShiftWindow
+            ? max(0, $workedMinutes - $standardMinutes - (int) $setting->overtime_threshold_minutes)
+            : 0;
 
         return [
             'worked_minutes' => $workedMinutes,
-            'standard_minutes' => $standardMinutes,
+            'standard_minutes' => $hasShiftWindow ? $standardMinutes : $workedMinutes,
             'overtime_minutes' => $overtimeMinutes,
             'is_overtime' => $overtimeMinutes > 0,
         ];

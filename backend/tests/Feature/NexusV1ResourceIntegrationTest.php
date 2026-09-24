@@ -516,6 +516,122 @@ class NexusV1ResourceIntegrationTest extends TestCase
         $this->assertSame('Penang Office', $updated->json('departments.0.location_name'));
     }
 
+    public function test_clock_rules_apply_company_wide_without_changing_department_locations(): void
+    {
+        $this->createResourceApplication();
+        \App\Models\Department::query()->create(['name' => 'Operations']);
+        \App\Models\Department::query()->create(['name' => 'HR']);
+
+        $this->putJson('/api/nexus/v1/attendance/policy', [
+            'locations' => [
+                [
+                    'name' => 'EMZI HQ',
+                    'geofence_enabled' => true,
+                    'center_latitude' => 5.64,
+                    'center_longitude' => 100.48,
+                    'radius_meters' => 120,
+                ],
+                [
+                    'name' => 'Penang Office',
+                    'geofence_enabled' => false,
+                    'center_latitude' => 5.41,
+                    'center_longitude' => 100.33,
+                    'radius_meters' => 80,
+                ],
+            ],
+            'clock_rules' => [
+                'allow_outside_shift_hours' => true,
+                'require_early_clock_out_reason' => true,
+                'require_late_clock_in_reason' => true,
+                'overtime_enabled' => false,
+                'overtime_threshold_minutes' => 15,
+                'grace_period_minutes' => 20,
+            ],
+            'departments' => [
+                [
+                    'department_name' => 'Operations',
+                    'enabled' => true,
+                    'location_name' => 'EMZI HQ',
+                    'require_late_clock_in_reason' => false,
+                    'grace_period_minutes' => 5,
+                    'shifts' => [[
+                        'name' => 'Day',
+                        'days_of_week' => [1, 2, 3, 4, 5],
+                        'start_time' => '09:00',
+                        'end_time' => '18:00',
+                    ]],
+                ],
+                [
+                    'department_name' => 'HR',
+                    'enabled' => true,
+                    'location_name' => 'Penang Office',
+                    'require_late_clock_in_reason' => false,
+                    'grace_period_minutes' => 5,
+                    'shifts' => [[
+                        'name' => 'Office',
+                        'days_of_week' => [1, 2, 3, 4, 5],
+                        'start_time' => '08:30',
+                        'end_time' => '17:30',
+                    ]],
+                ],
+            ],
+            'prune_missing' => false,
+        ], $this->authHeaders('brain-attendance-policy'))
+            ->assertOk()
+            ->assertJsonPath('stats.clock_rules_updated', true);
+
+        $export = $this->getJson('/api/nexus/v1/attendance/policy', $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $byName = collect($export->json('departments'))->keyBy('department_name');
+        $this->assertSame('EMZI HQ', $byName['Operations']['location_name']);
+        $this->assertSame('Penang Office', $byName['HR']['location_name']);
+        $this->assertTrue($byName['Operations']['require_late_clock_in_reason']);
+        $this->assertTrue($byName['HR']['require_early_clock_out_reason']);
+        $this->assertFalse($byName['HR']['overtime_enabled']);
+        $this->assertSame(20, (int) $byName['Operations']['grace_period_minutes']);
+        $this->assertSame(20, (int) $byName['HR']['grace_period_minutes']);
+        $this->assertTrue($export->json('clock_rules.require_late_clock_in_reason'));
+        $this->assertFalse($export->json('clock_rules.overtime_enabled'));
+        $this->assertSame(20, (int) $export->json('clock_rules.grace_period_minutes'));
+    }
+
+    public function test_older_clock_rules_do_not_overwrite_department_grace(): void
+    {
+        $this->createResourceApplication();
+        $operations = \App\Models\Department::query()->create(['name' => 'Operations']);
+        \App\Models\DepartmentAttendanceSetting::query()->create([
+            'department_id' => $operations->id,
+            'grace_period_minutes' => 30,
+            'shifts' => [],
+        ]);
+
+        $this->putJson('/api/nexus/v1/attendance/policy', [
+            'clock_rules' => [
+                'require_late_clock_in_reason' => true,
+            ],
+            'departments' => [[
+                'department_name' => 'Operations',
+                'enabled' => true,
+                'grace_period_minutes' => 30,
+                'shifts' => [[
+                    'name' => 'Day',
+                    'days_of_week' => [1, 2, 3, 4, 5],
+                    'start_time' => '09:00',
+                    'end_time' => '18:00',
+                ]],
+            ]],
+            'prune_missing' => false,
+        ], $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $setting = \App\Models\DepartmentAttendanceSetting::query()
+            ->where('department_id', $operations->id)
+            ->first();
+        $this->assertSame(30, (int) $setting->grace_period_minutes);
+        $this->assertTrue((bool) $setting->require_late_clock_in_reason);
+    }
+
     public function test_attendance_policy_requires_auth(): void
     {
         $this->createResourceApplication();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Nexus\V1;
 use App\Http\Controllers\Controller;
 use App\Services\AttendancePolicySnapshotService;
 use App\Support\AttendancePolicySyncGuard;
+use App\Support\AttendancePolicySyncMeta;
 use App\Support\NexusSatelliteAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,7 @@ class AttendancePolicyController extends Controller
             'departments.*.department_name' => ['required_with:departments', 'string', 'max:255'],
             'departments.*.location_name' => ['nullable', 'string', 'max:120'],
             'watermark' => ['nullable', 'array'],
+            'clock_rules' => ['nullable', 'array'],
             'prune_missing' => ['nullable', 'boolean'],
         ]);
 
@@ -42,12 +44,15 @@ class AttendancePolicyController extends Controller
             'locations' => $request->input('locations', []),
             'departments' => $request->input('departments', []),
             'watermark' => $request->input('watermark'),
+            'clock_rules' => $request->input('clock_rules'),
             'prune_missing' => $request->boolean('prune_missing', true),
         ];
 
         $stats = AttendancePolicySyncGuard::runWithoutPush(
             fn () => $snapshot->apply($payload)
         );
+
+        AttendancePolicySyncMeta::mark('inbound', is_array($stats) ? $stats : []);
 
         return response()->json([
             'message' => 'Attendance policy applied',

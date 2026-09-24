@@ -176,7 +176,7 @@ export default function GeofenceMapPicker({
         ) : null}
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
+      <div className="relative z-0 isolate overflow-hidden rounded-lg border">
         <MapContainer
           center={center}
           zoom={DEFAULT_ZOOM}

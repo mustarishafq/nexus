@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronsUpDown, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,10 +34,10 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
   };
 
   return (
-    <div className="rounded-xl border bg-muted/10 p-3 space-y-3">
+    <div className="space-y-3 rounded-xl border bg-muted/10 p-3">
       <div className="flex items-start gap-2">
-        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-3">
-          <div className="space-y-1.5 sm:col-span-3">
+        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5 sm:col-span-2">
             <Label className="text-xs">Shift name</Label>
             <Input
               value={shift.name}
@@ -60,9 +61,9 @@ function ShiftEditor({ shift, index, onChange, onRemove, canRemove }) {
               onChange={(event) => onChange(index, { ...shift, end_time: event.target.value })}
             />
           </div>
-          <div className="sm:col-span-3">
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
             <AdminSettingsToggleRow
-              className="p-3"
+              className="h-full p-3"
               label={<Label className="text-xs">Crosses midnight</Label>}
             >
               <Switch
@@ -373,192 +374,138 @@ export default function DepartmentAttendancePolicyPanel({ peerHint = 'Insan' }) 
   const selectedNames = selectedDepartments.map((department) => department.name);
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label>Company</Label>
-        <Select value={companyId} onValueChange={setCompanyId}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="All companies" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All companies</SelectItem>
-            {companies.map((company) => (
-              <SelectItem key={company.id} value={String(company.id)}>
-                {company.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <Label>Departments</Label>
-          <DepartmentMultiSelect
-            departments={filteredDepartments}
-            selectedIds={selectedDepartmentIds}
-            onChange={setSelectedDepartmentIds}
-          />
-          {selectedDepartments.length > 1 ? (
-            <p className="text-xs text-muted-foreground">
-              Saving applies to {formatDepartmentNames(selectedNames)}.
-            </p>
-          ) : null}
-        </div>
-        <Button
-          type="button"
-          onClick={() => saveMutation.mutate()}
-          disabled={!selectedDepartmentIds.length || saveMutation.isPending}
-          className="min-h-[40px] gap-2"
-        >
-          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {selectedDepartmentIds.length > 1 ? `Save (${selectedDepartmentIds.length})` : 'Save'}
-        </Button>
-      </div>
-
-      <AdminSettingsToggleRow
-        className="border-0 bg-transparent p-0"
-        label={<Label>Enable rules</Label>}
-      >
-        <Switch
-          checked={form.enabled}
-          onCheckedChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))}
-        />
-      </AdminSettingsToggleRow>
-
-      <div className="space-y-1.5">
-        <Label>Location</Label>
-        <Select
-          value={form.attendance_location_id ? String(form.attendance_location_id) : 'none'}
-          onValueChange={(value) => setForm((current) => ({
-            ...current,
-            attendance_location_id: value === 'none' ? null : Number(value),
-          }))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="No location" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No location</SelectItem>
-            {locations.map((location) => (
-              <SelectItem key={location.id} value={String(location.id)}>
-                {location.name}
-                {location.geofence_enabled ? ` · ${location.radius_meters}m` : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>Timezone</Label>
-          <TimezoneSelect
-            value={form.timezone}
-            onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Grace period (min)</Label>
-          <Input
-            type="number"
-            min={0}
-            max={180}
-            value={form.grace_period_minutes}
-            onChange={(event) => setForm((current) => ({
-              ...current,
-              grace_period_minutes: Number(event.target.value || 0),
-            }))}
-          />
-        </div>
-      </div>
-
-      <AdminSettingsToggleRow
-        className="border-0 bg-transparent p-0"
-        label={<Label>Allow outside shift hours</Label>}
-      >
-        <Switch
-          checked={form.allow_outside_shift_hours}
-          onCheckedChange={(checked) => setForm((current) => ({ ...current, allow_outside_shift_hours: checked }))}
-        />
-      </AdminSettingsToggleRow>
-
-      <AdminSettingsToggleRow
-        className="border-0 bg-transparent p-0"
-        label={<Label>Require early clock-out reason</Label>}
-      >
-        <Switch
-          checked={form.require_early_clock_out_reason}
-          onCheckedChange={(checked) => setForm((current) => ({ ...current, require_early_clock_out_reason: checked }))}
-        />
-      </AdminSettingsToggleRow>
-
-      <AdminSettingsToggleRow
-        className="border-0 bg-transparent p-0"
-        label={<Label>Require late clock-in reason</Label>}
-      >
-        <Switch
-          checked={form.require_late_clock_in_reason}
-          onCheckedChange={(checked) => setForm((current) => ({ ...current, require_late_clock_in_reason: checked }))}
-        />
-      </AdminSettingsToggleRow>
-
-      <div className="space-y-2">
-        <Label>Shifts</Label>
-        {form.shifts.map((shift, index) => (
-          <ShiftEditor
-            key={`${shift.name}-${index}`}
-            shift={shift}
-            index={index}
-            onChange={updateShift}
-            onRemove={removeShift}
-            canRemove={form.shifts.length > 1}
-          />
-        ))}
-        <Button type="button" variant="outline" size="sm" onClick={addShift} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add shift
-        </Button>
-      </div>
-
-      <div className="space-y-3 border-t pt-4">
-        <AdminSettingsToggleRow className="border-0 bg-transparent p-0" label={<Label>Track overtime</Label>}>
-          <Switch
-            checked={form.overtime_enabled}
-            onCheckedChange={(checked) => setForm((current) => ({ ...current, overtime_enabled: checked }))}
-          />
-        </AdminSettingsToggleRow>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Standard hours / day</Label>
-            <Input
-              type="number"
-              min={0.5}
-              max={24}
-              step={0.5}
-              value={form.standard_hours_per_day}
-              onChange={(event) => setForm((current) => ({
-                ...current,
-                standard_hours_per_day: Number(event.target.value || 8),
-              }))}
-            />
+    <div className="space-y-4">
+      <Card className="rounded-2xl">
+        <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="text-base">Departments</CardTitle>
+            <CardDescription>
+              Filter by company, then select one or more departments to edit together.
+            </CardDescription>
           </div>
-          <div className="space-y-1.5">
-            <Label>OT threshold (min)</Label>
-            <Input
-              type="number"
-              min={0}
-              max={480}
-              value={form.overtime_threshold_minutes}
-              onChange={(event) => setForm((current) => ({
-                ...current,
-                overtime_threshold_minutes: Number(event.target.value || 0),
-              }))}
-            />
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={!selectedDepartmentIds.length || saveMutation.isPending}
+            className="min-h-[40px] shrink-0 gap-2"
+          >
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {selectedDepartmentIds.length > 1 ? `Save (${selectedDepartmentIds.length})` : 'Save'}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Company</Label>
+              <Select value={companyId} onValueChange={setCompanyId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All companies" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All companies</SelectItem>
+                  {companies.map((company) => (
+                    <SelectItem key={company.id} value={String(company.id)}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Departments</Label>
+              <DepartmentMultiSelect
+                departments={filteredDepartments}
+                selectedIds={selectedDepartmentIds}
+                onChange={setSelectedDepartmentIds}
+              />
+              {selectedDepartments.length > 1 ? (
+                <p className="text-xs text-muted-foreground">
+                  Saving applies to {formatDepartmentNames(selectedNames)}.
+                </p>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Policy</CardTitle>
+          <CardDescription>
+            Enable rules, assign a shared location, and set the department timezone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <AdminSettingsToggleRow className="p-3" label={<Label>Enable rules</Label>}>
+            <Switch
+              checked={form.enabled}
+              onCheckedChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))}
+            />
+          </AdminSettingsToggleRow>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Location</Label>
+              <Select
+                value={form.attendance_location_id ? String(form.attendance_location_id) : 'none'}
+                onValueChange={(value) => setForm((current) => ({
+                  ...current,
+                  attendance_location_id: value === 'none' ? null : Number(value),
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No location</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={String(location.id)}>
+                      {location.name}
+                      {location.geofence_enabled ? ` · ${location.radius_meters}m` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Timezone</Label>
+              <TimezoneSelect
+                value={form.timezone}
+                onChange={(timezone) => setForm((current) => ({ ...current, timezone }))}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="flex flex-col gap-2 space-y-0 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Shifts</CardTitle>
+            <CardDescription>
+              Working hours and days for the selected department(s).
+            </CardDescription>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={addShift} className="gap-2 self-start">
+            <Plus className="h-4 w-4" />
+            Add shift
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {form.shifts.map((shift, index) => (
+            <ShiftEditor
+              key={`${shift.name}-${index}`}
+              shift={shift}
+              index={index}
+              onChange={updateShift}
+              onRemove={removeShift}
+              canRemove={form.shifts.length > 1}
+            />
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

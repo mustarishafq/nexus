@@ -13,6 +13,7 @@ import SplashSettingsPanel from '@/components/admin/SplashSettingsPanel';
 import LaunchSettingsPanel from '@/components/admin/LaunchSettingsPanel';
 import WatermarkSettingsPanel from '@/components/admin/WatermarkSettingsPanel';
 import DepartmentAttendancePolicyPanel from '@/components/admin/DepartmentAttendancePolicyPanel';
+import AttendanceClockRulesPanel from '@/components/admin/AttendanceClockRulesPanel';
 import AttendanceLocationPanel from '@/components/admin/AttendanceLocationPanel';
 import FeedModerationSettingsPanel from '@/components/admin/FeedModerationSettingsPanel';
 import GamificationSettingsPanel from '@/components/admin/GamificationSettingsPanel';
@@ -98,6 +99,7 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     attendance_datetime_formats: payload?.attendance_datetime_formats || fallback.attendance_datetime_formats || [],
     attendance_watermark_positions: payload?.attendance_watermark_positions || fallback.attendance_watermark_positions || [],
     attendance_logo_positions: payload?.attendance_logo_positions || fallback.attendance_logo_positions || [],
+    attendance_policy_sync: payload?.attendance_policy_sync || fallback.attendance_policy_sync || null,
     ...splashDefaults,
     ...launchDefaults,
     ...attendanceDefaults,
@@ -377,7 +379,7 @@ export default function AdminSettings({ embedded = false }) {
             {activeSection === 'attendance' ? (
               <AttendanceSettingsShell
                 peerLocal="brain"
-                syncMeta={null}
+                syncMeta={settings?.attendance_policy_sync || null}
                 tab={attendanceTab}
                 onTabChange={setAttendanceTab}
               >
@@ -385,17 +387,28 @@ export default function AdminSettings({ embedded = false }) {
                   <AttendanceLocationPanel peerHint="Insan" />
                 ) : null}
                 {attendanceTab === 'rules' ? (
+                  <AttendanceClockRulesPanel peerHint="Insan" />
+                ) : null}
+                {attendanceTab === 'departments' ? (
                   <DepartmentAttendancePolicyPanel peerHint="Insan" />
                 ) : null}
                 {attendanceTab === 'watermark' ? (
-                  <div className="space-y-4">
-                    <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
-                    <div className="flex justify-end border-t pt-4">
-                      <Button onClick={save} disabled={saving} className="min-h-[44px] w-full gap-2 sm:w-auto">
-                        <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save watermark'}
-                      </Button>
-                    </div>
-                  </div>
+                  <Card className="overflow-visible rounded-2xl">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Overlay & preview</CardTitle>
+                      <CardDescription>
+                        Fields, styling, and live preview for the clock in/out camera watermark.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="min-w-0 space-y-4 overflow-visible">
+                      <WatermarkSettingsPanel settings={settings} onChange={setSettings} />
+                      <div className="flex justify-end border-t pt-4">
+                        <Button onClick={save} disabled={saving} className="min-h-[44px] w-full gap-2 sm:w-auto">
+                          <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save watermark'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ) : null}
               </AttendanceSettingsShell>
             ) : null}

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\AttendancePolicySyncGuard;
+use App\Support\AttendancePolicySyncMeta;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -96,10 +97,14 @@ class ResourceAttendancePolicyForwarder
                 ];
             }
 
+            $stats = $response->json('stats') ?? [];
+            AttendancePolicySyncMeta::mark('outbound', is_array($stats) ? $stats : []);
+
             return [
                 'ok' => true,
                 'status' => $response->status(),
                 'body' => $response->json(),
+                'stats' => is_array($stats) ? $stats : [],
             ];
         } catch (\Throwable $e) {
             Log::warning('Resource attendance policy push error', [
