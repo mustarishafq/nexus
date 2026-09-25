@@ -250,21 +250,35 @@ export function resolveShiftForLateClockIn(policy, date = new Date()) {
     candidates = catalog;
   }
 
-  const within = candidates.find((candidate) => isWithinShiftAt(candidate, zoned, grace, earlyWindow));
-  if (within) return within;
+  return selectArrivalShift(candidates, zoned, grace, earlyWindow);
+}
+
+function selectArrivalShift(candidates, zoned, grace, earlyWindow) {
+  if (!candidates.length) return null;
   if (candidates.length === 1) return candidates[0];
 
-  let shift = candidates[0];
-  let bestDistance = Infinity;
-  candidates.forEach((candidate) => {
-    const start = parseTimeToMinutes(candidate.start_time || '09:00');
-    const distance = Math.abs(zoned.minutes - start);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      shift = candidate;
-    }
-  });
-  return shift;
+  const within = candidates.filter((candidate) => isWithinShiftAt(candidate, zoned, grace, earlyWindow));
+  const pool = within.length ? within : null;
+  if (!pool) {
+    let shift = candidates[0];
+    let bestDistance = Infinity;
+    candidates.forEach((candidate) => {
+      const start = parseTimeToMinutes(candidate.start_time || '09:00');
+      const distance = Math.abs(zoned.minutes - start);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        shift = candidate;
+      }
+    });
+    return shift;
+  }
+
+  const onTime = pool.filter((candidate) => lateMinutesAgainstShift(candidate, zoned.minutes, grace) <= 0);
+  if (!onTime.length) return pool[0];
+
+  return [...onTime].sort(
+    (a, b) => parseTimeToMinutes(a.start_time || '09:00') - parseTimeToMinutes(b.start_time || '09:00'),
+  )[0];
 }
 
 export function findActiveShift(policy, date = new Date()) {

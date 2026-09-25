@@ -14,7 +14,7 @@ class AttendanceLateClockInReasonTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeUserWithShift(bool $requireReason): User
+    private function makeUserWithShift(bool $requireReason, array $shifts = []): User
     {
         $department = Department::query()->create(['name' => 'Ops']);
 
@@ -29,7 +29,7 @@ class AttendanceLateClockInReasonTest extends TestCase
             'overtime_enabled' => false,
             'standard_hours_per_day' => 8,
             'overtime_threshold_minutes' => 0,
-            'shifts' => [[
+            'shifts' => $shifts !== [] ? $shifts : [[
                 'name' => 'Day Shift',
                 'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
                 'start_time' => '09:00',
@@ -100,6 +100,44 @@ class AttendanceLateClockInReasonTest extends TestCase
             ->assertJsonPath('metadata.policy.is_late', true);
 
         $this->assertArrayNotHasKey('late_clock_in_reason', $response->json('metadata.policy') ?? []);
+    }
+
+    public function test_clock_in_before_shift_start_does_not_require_reason(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true);
+        $inAt = Carbon::parse('2026-07-29 08:30:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_late', false);
+    }
+
+    public function test_early_arrival_for_later_shift_is_not_late_when_earlier_shift_overlaps(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true, shifts: [
+            [
+                'id' => 'early',
+                'name' => 'Early',
+                'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
+                'start_time' => '07:00',
+                'end_time' => '17:00',
+                'crosses_midnight' => false,
+            ],
+            [
+                'id' => 'later',
+                'name' => 'Later',
+                'days_of_week' => [1, 2, 3, 4, 5, 6, 7],
+                'start_time' => '08:00',
+                'end_time' => '18:00',
+                'crosses_midnight' => false,
+            ],
+        ]);
+        $inAt = Carbon::parse('2026-07-29 07:40:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_late', false)
+            ->assertJsonPath('metadata.policy.shift_name', 'Later');
     }
 
     public function test_on_time_clock_in_does_not_require_reason(): void

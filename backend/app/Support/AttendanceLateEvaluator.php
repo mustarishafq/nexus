@@ -93,19 +93,10 @@ class AttendanceLateEvaluator
             return null;
         }
 
-        if (count($shifts) === 1) {
-            return $shifts[0];
-        }
-
         $grace = (int) $setting->grace_period_minutes;
         $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
-        foreach ($shifts as $shift) {
-            if (self::isWithinShift($shift, $at, $grace, $earlyWindow)) {
-                return $shift;
-            }
-        }
 
-        return AttendanceShiftResolver::nearestDayMatchingShift($shifts, $at) ?? $shifts[0];
+        return AttendanceShiftResolver::selectArrivalShift($shifts, $at, $grace, $earlyWindow);
     }
 
     /**
@@ -147,50 +138,6 @@ class AttendanceLateEvaluator
         }
 
         return $result;
-    }
-
-    /**
-     * @param  array<string, mixed>  $shift
-     */
-    private static function isWithinShift(
-        array $shift,
-        Carbon $at,
-        int $graceMinutes,
-        int $earlyWindowMinutes,
-    ): bool {
-        $days = $shift['days_of_week'] ?? [];
-
-        if ($days === []) {
-            return true;
-        }
-
-        $isoDay = (int) $at->isoWeekday();
-        $start = self::parseTimeToMinutes((string) ($shift['start_time'] ?? '00:00'));
-        $end = self::parseTimeToMinutes((string) ($shift['end_time'] ?? '23:59'));
-        $current = ($at->hour * 60) + $at->minute;
-        $crosses = (bool) ($shift['crosses_midnight'] ?? false);
-
-        if ($crosses) {
-            $startBound = max(0, $start - $earlyWindowMinutes);
-            $endBound = min((24 * 60) - 1, $end + $graceMinutes);
-
-            if ($current >= $startBound && in_array($isoDay, $days, true)) {
-                return true;
-            }
-
-            $previousDay = $isoDay === 1 ? 7 : $isoDay - 1;
-
-            return $current <= $endBound && in_array($previousDay, $days, true);
-        }
-
-        if (! in_array($isoDay, $days, true)) {
-            return false;
-        }
-
-        $startBound = max(0, $start - $earlyWindowMinutes);
-        $endBound = min((24 * 60) - 1, $end + $graceMinutes);
-
-        return $current >= $startBound && $current <= $endBound;
     }
 
     private static function parseTimeToMinutes(string $time): int

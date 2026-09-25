@@ -64,19 +64,10 @@ class AttendanceShiftResolver
             return null;
         }
 
-        if (count($shifts) === 1) {
-            return $shifts[0];
-        }
-
         $grace = (int) ($setting->grace_period_minutes ?? 0);
         $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
-        foreach ($shifts as $shift) {
-            if (AttendancePolicyValidator::isWithinShift($shift, $at, $grace, $earlyWindow)) {
-                return $shift;
-            }
-        }
 
-        return self::nearestDayMatchingShift($shifts, $at) ?? $shifts[0];
+        return self::selectArrivalShift($shifts, $at, $grace, $earlyWindow);
     }
 
     /**
@@ -152,6 +143,70 @@ class AttendanceShiftResolver
         }
 
         return AttendanceLocation::query()->find($locationId);
+    }
+
+    /**
+     * Pick the shift this punch is arriving for.
+     * When several windows overlap, keep a shift that has not passed start + grace
+     * so an earlier shift does not mark an on-time arrival for a later shift as late.
+     *
+     * @param  list<array<string, mixed>>  $shifts
+     * @return array<string, mixed>|null
+     */
+    public static function selectArrivalShift(array $shifts, Carbon $at, int $grace, int $earlyWindow): ?array
+    {
+        if ($shifts === []) {
+            return null;
+        }
+
+        if (count($shifts) === 1) {
+            return $shifts[0];
+        }
+
+        $within = [];
+        foreach ($shifts as $shift) {
+            if (AttendancePolicyValidator::isWithinShift($shift, $at, $grace, $earlyWindow)) {
+                $within[] = $shift;
+            }
+        }
+
+        if ($within === []) {
+            return self::nearestDayMatchingShift($shifts, $at) ?? $shifts[0];
+        }
+
+        $onTime = array_values(array_filter(
+            $within,
+            fn (array $shift) => ! self::punchIsAfterGrace($shift, $at, $grace),
+        ));
+
+        if ($onTime === []) {
+            return $within[0];
+        }
+
+        usort($onTime, function (array $a, array $b): int {
+            return self::parseTimeToMinutes((string) ($a['start_time'] ?? '09:00'))
+                <=> self::parseTimeToMinutes((string) ($b['start_time'] ?? '09:00'));
+        });
+
+        return $onTime[0];
+    }
+
+    /**
+     * @param  array<string, mixed>  $shift
+     */
+    private static function punchIsAfterGrace(array $shift, Carbon $at, int $grace): bool
+    {
+        $start = self::parseTimeToMinutes((string) ($shift['start_time'] ?? '09:00'));
+        $end = self::parseTimeToMinutes((string) ($shift['end_time'] ?? '18:00'));
+        $crosses = (bool) ($shift['crosses_midnight'] ?? false);
+        $current = ($at->hour * 60) + $at->minute;
+        $endBound = min((24 * 60) - 1, $end + max(0, $grace));
+        $scheduled = $at->copy()->startOfDay()->addMinutes($start);
+        if ($crosses && $current <= $endBound) {
+            $scheduled->subDay();
+        }
+
+        return $at->gt($scheduled->addMinutes(max(0, $grace)));
     }
 
     /**
