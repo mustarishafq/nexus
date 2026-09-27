@@ -118,11 +118,17 @@ class AttendanceReminderEvaluator
                 continue;
             }
 
-            if (! self::needsClockInReminder($todayRecords, $start, $end, $setting->timezone)) {
+            $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
+            $matchStart = $start->copy()->subMinutes($earlyWindow);
+
+            if (! self::needsClockInReminder($todayRecords, $matchStart, $end, $setting->timezone)) {
                 continue;
             }
 
-            $minutesLate = (int) max(0, $start->diffInMinutes($now, true));
+            // Only count lateness after the shift has actually started.
+            $minutesLate = $now->gt($start)
+                ? (int) max(0, $start->diffInMinutes($now))
+                : 0;
 
             return [
                 'type' => 'clock_in',
@@ -135,7 +141,9 @@ class AttendanceReminderEvaluator
                         self::formatElapsedMinutes($minutesLate),
                     )
                     : sprintf(
-                        '%s has started. Please clock in now.',
+                        $now->lt($start)
+                            ? '%s starts soon. Please clock in.'
+                            : '%s has started. Please clock in now.',
                         $shift['name'],
                     ),
                 'shift_name' => $shift['name'],

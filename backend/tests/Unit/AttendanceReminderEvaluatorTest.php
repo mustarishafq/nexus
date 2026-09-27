@@ -105,6 +105,52 @@ class AttendanceReminderEvaluatorTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function test_early_clock_in_suppresses_clock_in_reminder(): void
+    {
+        $setting = $this->setting();
+        $clockIn = new AttendanceRecord(['type' => 'clock_in']);
+        $clockIn->captured_at = Carbon::parse('2026-07-24 08:50', $setting->timezone);
+
+        $result = $this->evaluateClockIn(
+            $setting,
+            collect([$clockIn]),
+            Carbon::parse('2026-07-24 09:05', $setting->timezone),
+        );
+
+        $this->assertNull($result);
+    }
+
+    public function test_missing_clock_in_still_reminds_after_shift_start(): void
+    {
+        $setting = $this->setting();
+        $result = $this->evaluateClockIn(
+            $setting,
+            collect(),
+            Carbon::parse('2026-07-24 09:10', $setting->timezone),
+        );
+
+        $this->assertNotNull($result);
+        $this->assertSame('clock_in', $result['type']);
+        $this->assertSame('Day Shift', $result['shift_name']);
+        $this->assertSame(10, $result['minutes_late']);
+        $this->assertStringContainsString('Please clock in', $result['message']);
+    }
+
+    public function test_pre_start_reminder_does_not_report_false_lateness(): void
+    {
+        $setting = $this->setting();
+        $result = $this->evaluateClockIn(
+            $setting,
+            collect(),
+            Carbon::parse('2026-07-24 08:50', $setting->timezone),
+        );
+
+        $this->assertNotNull($result);
+        $this->assertSame('clock_in', $result['type']);
+        $this->assertSame(0, $result['minutes_late']);
+        $this->assertStringContainsString('starts soon', $result['message']);
+    }
+
     private function setting(): DepartmentAttendanceSetting
     {
         $setting = new DepartmentAttendanceSetting([
@@ -152,5 +198,25 @@ class AttendanceReminderEvaluatorTest extends TestCase
         ));
 
         return $method->invoke(null, $setting, $record, $now, $shifts);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, AttendanceRecord>  $todayRecords
+     * @return array<string, mixed>|null
+     */
+    private function evaluateClockIn(
+        DepartmentAttendanceSetting $setting,
+        \Illuminate\Support\Collection $todayRecords,
+        Carbon $now,
+    ): ?array {
+        $method = new ReflectionMethod(AttendanceReminderEvaluator::class, 'evaluateClockInReminder');
+        $method->setAccessible(true);
+
+        $shifts = array_values(array_filter(
+            is_array($setting->shifts) ? $setting->shifts : [],
+            static fn ($shift) => is_array($shift),
+        ));
+
+        return $method->invoke(null, $setting, $todayRecords, $now, $shifts);
     }
 }

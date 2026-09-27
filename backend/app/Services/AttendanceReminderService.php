@@ -58,15 +58,22 @@ class AttendanceReminderService
             ->get()
             ->groupBy('user_id');
 
-        $lastRecordIds = AttendanceRecord::query()
-            ->selectRaw('MAX(id) as id')
+        // Latest punch by captured_at (not MAX(id)) — ingest can insert older
+        // punches with newer IDs and would otherwise force a false clock-in path.
+        $latestCapturedAt = AttendanceRecord::query()
+            ->select('user_id')
+            ->selectRaw('MAX(captured_at) as max_captured_at')
             ->whereIn('user_id', $userIds)
-            ->groupBy('user_id')
-            ->pluck('id');
+            ->groupBy('user_id');
 
         $lastRecordsByUser = AttendanceRecord::query()
-            ->whereIn('id', $lastRecordIds)
-            ->get()
+            ->joinSub($latestCapturedAt, 'latest', function ($join) {
+                $join->on('attendance_records.user_id', '=', 'latest.user_id')
+                    ->on('attendance_records.captured_at', '=', 'latest.max_captured_at');
+            })
+            ->orderByDesc('attendance_records.id')
+            ->get(['attendance_records.*'])
+            ->unique('user_id')
             ->keyBy('user_id');
 
         $cooldownKeys = $this->loadCooldownKeys($userIds);
