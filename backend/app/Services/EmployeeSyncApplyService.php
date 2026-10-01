@@ -106,7 +106,13 @@ class EmployeeSyncApplyService
             ];
 
             if (array_key_exists('email', $row) && $email !== '') {
-                $fill['email'] = $email;
+                $emailTaken = User::withTrashed()
+                    ->where('email', $email)
+                    ->whereKeyNot($user->id)
+                    ->exists();
+                if (! $emailTaken) {
+                    $fill['email'] = $email;
+                }
             }
 
             if (array_key_exists('role', $row) && in_array($row['role'], UserRoles::ALL, true)) {
@@ -155,7 +161,14 @@ class EmployeeSyncApplyService
                 $fill[$field] = ($value === null || $value === '') ? null : $value;
             }
 
-            $user->forceFill($fill)->save();
+            try {
+                $user->forceFill($fill)->save();
+            } catch (\Throwable $e) {
+                report($e);
+                $stats['skipped']++;
+
+                continue;
+            }
 
             if (array_key_exists('attendance_shift_ids', $row)
                 || array_key_exists('attendance_shift_location_names', $row)
