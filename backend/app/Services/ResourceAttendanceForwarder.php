@@ -83,10 +83,13 @@ class ResourceAttendanceForwarder
                 'aud' => 'resource-attendance-ingest',
             ], $apiKey, 'HS256');
 
+            $user->loadMissing('department:id,name');
+
             $payload = [
                 'external_id' => (string) $record->id,
                 'nexus_user_id' => (string) $user->id,
                 'email' => $user->email,
+                'department_name' => $user->department?->name,
                 'type' => $record->type,
                 'captured_at' => $record->captured_at?->toIso8601String() ?? now()->toIso8601String(),
                 'photo_url' => $record->photo_url,

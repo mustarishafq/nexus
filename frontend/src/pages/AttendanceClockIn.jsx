@@ -373,7 +373,10 @@ export default function AttendanceClockIn() {
       ) : null}
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
-        <Card className="order-1 min-w-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm">
+        <Card className={cn(
+          'min-w-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm',
+          needsLateReason ? 'order-2 lg:order-1' : 'order-1',
+        )}>
           <CardContent className="p-0">
             <AttendanceCamera
               key={cameraKey}
@@ -394,7 +397,10 @@ export default function AttendanceClockIn() {
           </CardContent>
         </Card>
 
-        <div className="order-2 min-w-0 space-y-3">
+        <div className={cn(
+          'min-w-0 space-y-3',
+          needsLateReason ? 'order-1 lg:order-2' : 'order-2',
+        )}>
           {needsLateReason ? (
             <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
               <CardHeader className="space-y-1 p-4 pb-3 sm:p-5 sm:pb-3">

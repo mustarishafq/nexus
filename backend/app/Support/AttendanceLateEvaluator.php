@@ -133,8 +133,14 @@ class AttendanceLateEvaluator
         }
 
         if ($at->gt($deadline)) {
-            $result['is_late'] = true;
-            $result['late_minutes'] = (int) $deadline->diffInMinutes($at);
+            // Whole minutes only. Carbon's diff is fractional, so 09:00:20 was
+            // marked late while the clock-in screen (minute precision) still
+            // hid the reason field and then showed a blocking error.
+            $lateMinutes = (int) floor(abs($deadline->diffInMinutes($at)));
+            if ($lateMinutes >= 1) {
+                $result['is_late'] = true;
+                $result['late_minutes'] = $lateMinutes;
+            }
         }
 
         return $result;

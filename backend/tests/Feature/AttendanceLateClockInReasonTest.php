@@ -140,6 +140,16 @@ class AttendanceLateClockInReasonTest extends TestCase
             ->assertJsonPath('metadata.policy.shift_name', 'Later');
     }
 
+    public function test_clock_in_in_the_first_minute_of_shift_is_not_late(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true);
+        $inAt = Carbon::parse('2026-07-29 09:00:40', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_late', false);
+    }
+
     public function test_on_time_clock_in_does_not_require_reason(): void
     {
         $user = $this->makeUserWithShift(requireReason: true);
