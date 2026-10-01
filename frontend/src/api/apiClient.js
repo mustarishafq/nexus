@@ -1638,6 +1638,18 @@ export const db = {
 		});
 	},
 
+	async getNotificationUnreadCount() {
+		return request('/notifications/unread-count');
+	},
+
+	async getNotificationCounts(filters = {}) {
+		return request(`/notifications/counts${buildQuery(filters)}`);
+	},
+
+	async markAllNotificationsRead() {
+		return request('/notifications/mark-all-read', { method: 'POST' });
+	},
+
 	async getPlatformReleaseNoteUnreadCount() {
 		return request('/platform-release-notes/unread-count');
 	},

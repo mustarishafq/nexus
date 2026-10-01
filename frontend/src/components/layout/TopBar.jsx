@@ -2,7 +2,7 @@ import db from '@/api/apiClient';
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { useUnreadNotifications } from '@/hooks/useNotifications';
+import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { isAdmin } from '@/lib/roles';
 
@@ -28,10 +28,9 @@ export default function TopBar({ sidebarWidth, isMobile, embedded = false }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
-  const { data: unreadNotifications = [] } = useUnreadNotifications({
+  const { data: unreadCount = 0 } = useUnreadNotificationCount({
     enabled: !isMobile,
   });
-  const unreadCount = unreadNotifications.length;
   const { data: platformUnreadCount = 0 } = usePlatformReleaseNoteUnreadCount({
     enabled: !isMobile,
   });
