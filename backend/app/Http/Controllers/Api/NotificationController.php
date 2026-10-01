@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\UserTodo;
 use App\Support\ApiTokenAuth;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,8 @@ use Illuminate\Validation\Rule;
 class NotificationController extends Controller
 {
     use AppliesIndexQuery;
+
+    private const CRITICAL_TYPES = ['error', 'critical'];
 
     public function index(Request $request): JsonResponse
     {
@@ -71,6 +74,93 @@ class NotificationController extends Controller
         $items = $query->limit($limit)->get();
 
         return response()->json($items);
+    }
+
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        return response()->json(['count' => $this->personalUnreadQuery($user)->count()]);
+    }
+
+    /**
+     * Per-tab totals for the notification panel: all, unread, and critical (error or critical type).
+     */
+    public function counts(Request $request): JsonResponse
+    {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'type' => ['nullable', Rule::in(['info', 'success', 'warning', 'error', 'critical'])],
+            'category' => ['nullable', 'string', 'max:50'],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $all = $this->personalQuery($user)->count();
+        $unread = $this->personalUnreadQuery($user)->count();
+        $filtered = ['all' => $all, 'unread' => $unread];
+
+        // Notification Center filters (type, category, search) narrow the "filtered" totals only.
+        if (filled($validated['type'] ?? null) || filled($validated['category'] ?? null) || filled($validated['search'] ?? null)) {
+            $matching = fn () => $this->personalQuery($user)
+                ->when(filled($validated['type'] ?? null), fn (Builder $q) => $q->where('type', $validated['type']))
+                ->when(filled($validated['category'] ?? null), fn (Builder $q) => $q->where('category', $validated['category']))
+                ->when(filled($validated['search'] ?? null), function (Builder $q) use ($validated) {
+                    $term = '%'.addcslashes($validated['search'], '\\%_').'%';
+                    $q->where(fn (Builder $inner) => $inner->where('title', 'like', $term)->orWhere('message', 'like', $term));
+                });
+
+            $filtered = [
+                'all' => $matching()->count(),
+                'unread' => $matching()->where('is_read', false)->count(),
+            ];
+        }
+
+        return response()->json([
+            'all' => $all,
+            'unread' => $unread,
+            'critical' => $this->personalQuery($user)->whereIn('type', self::CRITICAL_TYPES)->count(),
+            'filtered' => $filtered,
+        ]);
+    }
+
+    /**
+     * Mark every unread personal notification as read, not just the page the client has loaded.
+     */
+    public function markAllRead(Request $request): JsonResponse
+    {
+        $user = $this->authenticatedUser($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $readAt = now();
+        $updated = 0;
+
+        // Bulk updates skip NotificationObserver, so complete the linked todos here.
+        $this->personalUnreadQuery($user)->chunkById(500, function ($notifications) use ($readAt, &$updated) {
+            $ids = $notifications->pluck('id');
+
+            $updated += Notification::query()
+                ->whereIn('id', $ids)
+                ->update(['is_read' => true, 'read_at' => $readAt, 'updated_at' => $readAt]);
+
+            UserTodo::query()
+                ->whereIn('notification_id', $ids)
+                ->whereNull('completed_at')
+                ->update(['completed_at' => $readAt]);
+        });
+
+        return response()->json(['updated' => $updated]);
     }
 
     public function store(Request $request): JsonResponse
@@ -197,6 +287,26 @@ class NotificationController extends Controller
                 $inner->orWhere('is_broadcast', true);
             }
         });
+    }
+
+    /**
+     * Notifications shown in the bell panel: personal only, excluding broadcasts and direct messages.
+     */
+    private function personalQuery(User $user): Builder
+    {
+        return Notification::query()
+            ->where('is_broadcast', false)
+            ->whereIn('user_id', $this->userIdentifiers($user))
+            ->where(function (Builder $inner) {
+                $inner->whereNull('data')
+                    ->orWhereNull('data->kind')
+                    ->orWhere('data->kind', '!=', 'direct_message');
+            });
+    }
+
+    private function personalUnreadQuery(User $user): Builder
+    {
+        return $this->personalQuery($user)->where('is_read', false);
     }
 
     /**

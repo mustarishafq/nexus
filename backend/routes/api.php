@@ -321,6 +321,9 @@ Route::apiResource('access-groups', AccessGroupController::class);
 Route::apiResource('metabase-dashboards', MetabaseDashboardController::class);
 Route::apiResource('user-system-accesses', UserSystemAccessController::class);
 Route::apiResource('broadcasts', BroadcastController::class);
+Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+Route::get('notifications/counts', [NotificationController::class, 'counts']);
+Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllRead']);
 Route::apiResource('notifications', NotificationController::class);
 Route::apiResource('system-events', SystemEventController::class);
 

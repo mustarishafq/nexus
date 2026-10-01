@@ -9,7 +9,7 @@ import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { GAMIFICATION_ME_QUERY_KEY } from '@/lib/gamification';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset';
-import { useUnreadNotifications } from '@/hooks/useNotifications';
+import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { usePlatformReleaseNoteUnreadCount } from '@/hooks/usePlatformReleaseNotes';
 import { cn } from '@/lib/utils';
 import { isRunningStandalone } from '@/lib/pwa';
@@ -40,7 +40,7 @@ export default function BottomNav() {
     enabled: !isCompactNav,
   });
 
-  const { data: unreadNotifications = [] } = useUnreadNotifications({
+  const { data: unreadNotificationCount = 0 } = useUnreadNotificationCount({
     enabled: isCompactNav,
   });
   const { data: platformUnreadCount = 0 } = usePlatformReleaseNoteUnreadCount({
@@ -110,9 +110,9 @@ export default function BottomNav() {
   useEffect(() => {
     setBadgeCounts((prev) => ({
       ...prev,
-      notifications: unreadNotifications.length,
+      notifications: unreadNotificationCount,
     }));
-  }, [unreadNotifications.length]);
+  }, [unreadNotificationCount]);
 
   useEffect(() => {
     setBadgeCounts((prev) => ({
