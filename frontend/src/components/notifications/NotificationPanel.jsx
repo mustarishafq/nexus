@@ -17,6 +17,7 @@ import {
   clearUnreadNotificationsCache,
   invalidateNotificationQueries,
   removeUnreadNotificationFromCache,
+  useNotificationTabCounts,
 } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { glassPanelStyles } from '@/components/layout/glassStyles';
@@ -24,6 +25,9 @@ import {
   isCriticalNotification,
   normalizeNotifications,
 } from '@/lib/notificationVisuals';
+
+// Matches isCriticalNotification; the Critical tab loads these server-side.
+const CRITICAL_TYPES = ['error', 'critical'];
 
 export default function NotificationPanel({ open, onClose, onCountChange }) {
   const [notifications, setNotifications] = useState([]);
@@ -42,10 +46,18 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     enabled: open,
   });
 
+  const { data: tabCounts } = useNotificationTabCounts({ enabled: open });
+  const tabCount = Number(tabCounts?.[filter]) || 0;
+
   const load = useCallback(async () => {
     setLoading(true);
     const baseQuery = { exclude_broadcasts: true, exclude_direct_messages: true };
-    const query = filter === 'unread' ? { ...baseQuery, is_read: false } : baseQuery;
+    const query =
+      filter === 'unread'
+        ? { ...baseQuery, is_read: false }
+        : filter === 'critical'
+          ? { ...baseQuery, 'type[]': CRITICAL_TYPES }
+          : baseQuery;
     const data = await db.entities.Notification.filter(query, '-created_date', 50);
     setNotifications(normalizeNotifications(data));
     setLoading(false);
@@ -101,8 +113,7 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
   };
 
   const markAllRead = async () => {
-    const unread = notifications.filter(isUnreadNotification);
-    if (unread.length === 0) return;
+    if (tabCounts && Number(tabCounts.unread) === 0) return;
 
     const readAt = new Date().toISOString();
     setNotifications((prev) =>
@@ -112,11 +123,8 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     onCountChange?.(0);
 
     try {
-      await Promise.all(
-        unread.map((n) =>
-          db.entities.Notification.update(n.id, { is_read: true, read_at: readAt })
-        )
-      );
+      // Server-side so unread notifications beyond the loaded page are included.
+      await db.markAllNotificationsRead();
       invalidateSharedNotificationQueries();
     } catch {
       await load();
@@ -172,7 +180,6 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
     return true;
   });
 
-  const unreadCount = notifications.filter(isUnreadNotification).length;
 
   // Render nothing when closed. Exit animations via AnimatePresence were getting
   // interrupted by mark-as-read re-renders, leaving the drawer stuck open with
@@ -208,9 +215,9 @@ export default function NotificationPanel({ open, onClose, onCountChange }) {
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
             <h2 className="font-semibold text-lg">Notifications</h2>
-            {unreadCount > 0 && (
+            {tabCount > 0 && (
               <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium">
-                {unreadCount}
+                {tabCount}
               </span>
             )}
           </div>

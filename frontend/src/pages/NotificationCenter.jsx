@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +26,8 @@ import {
   clearUnreadNotificationsCache,
   invalidateNotificationQueries,
   removeUnreadNotificationFromCache,
+  useNotificationTabCounts,
+  useUnreadNotificationCount,
 } from '@/hooks/useNotifications';
 
 export default function NotificationCenter() {
@@ -53,7 +55,31 @@ export default function NotificationCenter() {
   });
 
   // Update meta tags for sharing
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const { data: unreadCount = 0 } = useUnreadNotificationCount();
+
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Counted server-side so the header stays accurate beyond the 200 loaded notifications.
+  const { data: counts } = useNotificationTabCounts({
+    filters: {
+      type: typeFilter !== 'all' ? typeFilter : undefined,
+      category: categoryFilter !== 'all' ? categoryFilter : undefined,
+      search: debouncedSearch || undefined,
+    },
+  });
+  const matchingAll = Number(counts?.filtered?.all) || 0;
+  const matchingUnread = Number(counts?.filtered?.unread) || 0;
+  const filteredUnread = filter === 'read' ? 0 : matchingUnread;
+  const filteredTotal =
+    filter === 'unread' ? matchingUnread : filter === 'read' ? matchingAll - matchingUnread : matchingAll;
+  const isFiltered = filter !== 'all' || typeFilter !== 'all' || categoryFilter !== 'all' || debouncedSearch !== '';
+  const headerDescription = counts
+    ? `${isFiltered ? `${filteredUnread} of ${unreadCount}` : unreadCount} unread | ${filteredTotal} notification${filteredTotal === 1 ? '' : 's'}`
+    : `${unreadCount} unread`;
   useMetaTags({
     description: buildSystemStatusDescription(unreadCount, notifications.length),
   });
@@ -63,7 +89,6 @@ export default function NotificationCenter() {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
       if (variables?.data?.is_read) {
-        removeUnreadNotificationFromCache(queryClient, variables.id);
         invalidateNotificationQueries(queryClient);
       }
     },
@@ -102,8 +127,7 @@ export default function NotificationCenter() {
   }, [applications, navigate]);
 
   const markAllRead = async () => {
-    const unread = notifications.filter((n) => !n.is_read);
-    if (unread.length === 0) return;
+    if (unreadCount === 0) return;
 
     const readAt = new Date().toISOString();
     queryClient.setQueryData(['notifications-center'], (old = []) =>
@@ -112,11 +136,8 @@ export default function NotificationCenter() {
     clearUnreadNotificationsCache(queryClient);
 
     try {
-      await Promise.all(
-        unread.map((n) =>
-          db.entities.Notification.update(n.id, { is_read: true, read_at: readAt })
-        )
-      );
+      // Server-side so unread notifications beyond the loaded 200 are included.
+      await db.markAllNotificationsRead();
       queryClient.invalidateQueries({ queryKey: ['notifications-center'] });
       invalidateNotificationQueries(queryClient);
     } catch {
@@ -148,7 +169,7 @@ export default function NotificationCenter() {
       <PageHeader
         icon={Bell}
         title="Notification Center"
-        description={`${notifications.filter((n) => !n.is_read).length} unread of ${notifications.length} total`}
+        description={headerDescription}
         actions={unreadCount > 0 ? (
           <Button onClick={markAllRead} variant="outline" size="sm" className="gap-1">
             <CheckCheck className="h-4 w-4" /> Mark all read
