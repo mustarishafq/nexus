@@ -17,6 +17,10 @@ function useDebouncedValue(value, delay = 300) {
   return debounced;
 }
 
+function isTouchDevice() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+}
+
 /** GIPHY search popover for comment composers. Results come through the Laravel proxy. */
 export default function GifPicker({ onSelect, disabled = false, triggerClassName }) {
   const [open, setOpen] = useState(false);
@@ -40,6 +44,8 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
     <Popover
       open={open}
       onOpenChange={(next) => {
+        // Opening on a touch device: dismiss the on-screen keyboard (e.g. from the comment box).
+        if (next && isTouchDevice()) document.activeElement?.blur?.();
         if (next) setPortalContainer(triggerRef.current?.closest('[role="dialog"]') ?? null);
         setOpen(next);
         if (!next) setQuery('');
@@ -65,6 +71,9 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
         side="top"
         container={portalContainer}
         data-vaul-no-drag
+        onOpenAutoFocus={(event) => {
+          if (isTouchDevice()) event.preventDefault();
+        }}
         className="w-[min(20rem,calc(100vw-2rem))] p-2"
       >
         <div className="relative mb-2">
@@ -74,7 +83,7 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search GIFs"
             className="h-8 pl-8 text-sm"
-            autoFocus
+            autoFocus={!isTouchDevice()}
           />
         </div>
 
