@@ -1,5 +1,5 @@
 import db from '@/api/apiClient';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Search } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -21,6 +21,9 @@ function useDebouncedValue(value, delay = 300) {
 export default function GifPicker({ onSelect, disabled = false, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // Inside a modal Drawer/Dialog, a body-level portal sits outside its scroll lock and can't be touch-scrolled.
+  const [portalContainer, setPortalContainer] = useState(null);
+  const triggerRef = useRef(null);
   const debouncedQuery = useDebouncedValue(query.trim());
 
   const { data, isLoading, isError } = useQuery({
@@ -37,12 +40,14 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
     <Popover
       open={open}
       onOpenChange={(next) => {
+        if (next) setPortalContainer(triggerRef.current?.closest('[role="dialog"]') ?? null);
         setOpen(next);
         if (!next) setQuery('');
       }}
     >
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           disabled={disabled}
           className={cn(
@@ -55,7 +60,13 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
           <span className="rounded border border-current px-1 leading-tight">GIF</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" side="top" className="w-[min(20rem,calc(100vw-2rem))] p-2">
+      <PopoverContent
+        align="end"
+        side="top"
+        container={portalContainer}
+        data-vaul-no-drag
+        className="w-[min(20rem,calc(100vw-2rem))] p-2"
+      >
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -67,7 +78,7 @@ export default function GifPicker({ onSelect, disabled = false, triggerClassName
           />
         </div>
 
-        <div className="h-64 overflow-y-auto">
+        <div className="h-64 overflow-y-auto overscroll-contain touch-pan-y">
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
