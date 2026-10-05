@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Support\ApiTokenAuth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use App\Support\AppSettings;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -144,5 +146,22 @@ class PostCommentAttachmentTest extends TestCase
             ->assertJson(['enabled' => false, 'gifs' => []]);
 
         $this->flushHeaders()->getJson('/api/gifs')->assertUnauthorized();
+    }
+
+    public function test_admin_settings_key_overrides_the_env_key(): void
+    {
+        config(['services.giphy.key' => 'env-key']);
+        DB::table('app_settings')->insert([
+            'system_name' => 'Nexus',
+            'giphy_api_key' => 'settings-key',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AppSettings::forget();
+        Http::fake(['api.giphy.com/*' => Http::response(['data' => []])]);
+
+        $this->withToken($this->token)->getJson('/api/gifs?q=wow')->assertOk()->assertJsonPath('enabled', true);
+
+        Http::assertSent(fn ($request) => $request['api_key'] === 'settings-key');
     }
 }

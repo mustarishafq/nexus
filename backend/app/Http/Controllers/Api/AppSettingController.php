@@ -86,6 +86,7 @@ class AppSettingController extends Controller
             'imap_encryption' => ['nullable', 'in:ssl,tls,null'],
             'openrouter_api_key' => ['nullable', 'string', 'max:2048'],
             'openrouter_model' => ['nullable', 'string', 'max:255'],
+            'giphy_api_key' => ['nullable', 'string', 'max:255'],
             'splash_animation_style' => ['nullable', 'string', 'in:'.implode(',', SplashAnimationSettings::allowedValues())],
         ], SplashAnimationSettings::validationRules(), ApplicationLaunchSettings::validationRules(), AttendanceWatermarkSettings::validationRules(), FeedModerationSettings::validationRules(), GamificationSettings::validationRules(), GeneralChatSettings::validationRules()));
 
@@ -116,6 +117,7 @@ class AppSettingController extends Controller
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'openrouter_api_key' => $validated['openrouter_api_key'] ?? null,
                 'openrouter_model' => $validated['openrouter_model'] ?? null,
+                'giphy_api_key' => $validated['giphy_api_key'] ?? null,
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification, $generalChat));
         } else {
@@ -133,6 +135,7 @@ class AppSettingController extends Controller
                 'imap_encryption' => $validated['imap_encryption'] === 'null' ? null : ($validated['imap_encryption'] ?? null),
                 'openrouter_api_key' => $validated['openrouter_api_key'] ?? null,
                 'openrouter_model' => $validated['openrouter_model'] ?? null,
+                'giphy_api_key' => $validated['giphy_api_key'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ], SplashAnimationSettings::toDatabaseColumns($splash), ApplicationLaunchSettings::toDatabaseColumns($launch), AttendanceWatermarkSettings::toDatabaseColumns($attendance), $feed, $gamification, $generalChat));
@@ -337,6 +340,7 @@ class AppSettingController extends Controller
             'openrouter_api_key' => $settings->openrouter_api_key ?? null,
             'openrouter_model' => $settings->openrouter_model
                 ?: config('services.openrouter.default_model', 'openai/gpt-4o-mini'),
+            'giphy_api_key' => $settings->giphy_api_key ?? null,
             'splash' => $splash,
             'splash_animations' => SplashAnimationSettings::catalog(),
             'splash_system_name_animations' => SplashAnimationSettings::systemNameCatalog(),

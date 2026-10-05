@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\AppSettings;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,15 @@ class GiphyService
 
     public function isEnabled(): bool
     {
-        return filled(config('services.giphy.key'));
+        return $this->apiKey() !== '';
+    }
+
+    /** Admin Settings → Feed key wins; GIPHY_API_KEY in .env is the fallback. */
+    private function apiKey(): string
+    {
+        $fromSettings = trim((string) (AppSettings::row()?->giphy_api_key ?? ''));
+
+        return $fromSettings !== '' ? $fromSettings : trim((string) config('services.giphy.key'));
     }
 
     /**
@@ -81,7 +90,7 @@ class GiphyService
             $response = Http::timeout(5)
                 ->acceptJson()
                 ->get(self::BASE_URL."/{$endpoint}", array_merge($params, [
-                    'api_key' => config('services.giphy.key'),
+                    'api_key' => $this->apiKey(),
                     'rating' => self::RATING,
                     'bundle' => 'messaging_non_clips',
                 ]));
