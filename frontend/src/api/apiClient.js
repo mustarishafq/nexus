@@ -1107,6 +1107,18 @@ export const db = {
 			})}`, { method: 'DELETE' });
 		},
 
+		async bulkUpdate(uids, action, { accountId, folder } = {}) {
+			return request('/mail/messages/bulk', {
+				method: 'POST',
+				body: {
+					uids,
+					action,
+					...(accountId ? { account_id: accountId } : {}),
+					...(folder ? { folder } : {}),
+				},
+			});
+		},
+
 		async markUnread(uid, { accountId, folder } = {}) {
 			return request(`/mail/messages/${uid}/unread${buildQuery({
 				account_id: accountId || undefined,

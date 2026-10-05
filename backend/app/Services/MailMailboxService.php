@@ -1228,6 +1228,112 @@ class MailMailboxService
         $this->forgetUnreadCountCache($user, $accountId, $folder);
     }
 
+    public const BULK_ACTIONS = ['read', 'unread', 'delete', 'archive', 'unarchive'];
+
+    /**
+     * Apply one action to many messages over a single IMAP session. Deletes
+     * are flagged per message and expunged once at the end.
+     *
+     * @param  array<int, int>  $uids
+     * @return array{updated: int, failed: array<int, int>}
+     */
+    public function bulkUpdate(
+        User $user,
+        array $uids,
+        string $action,
+        ?int $accountId = null,
+        string $folder = self::FOLDER_INBOX,
+    ): array {
+        if (! in_array($action, self::BULK_ACTIONS, true)) {
+            throw new RuntimeException('Unsupported bulk action.');
+        }
+
+        $logicalFolder = $this->normalizeLogicalFolder($folder);
+        if ($action === 'archive' && $logicalFolder === self::FOLDER_ARCHIVE) {
+            throw new RuntimeException('These emails are already in Archive.');
+        }
+        if ($action === 'unarchive' && $logicalFolder !== self::FOLDER_ARCHIVE) {
+            throw new RuntimeException('Only archived emails can be unarchived.');
+        }
+
+        $credential = $this->resolveAccount($user, $accountId);
+        $session = $this->connect($user, $credential->id, $folder);
+        $updated = 0;
+        $failed = [];
+
+        if ($action === 'archive' || $action === 'unarchive') {
+            $target = $action === 'archive' ? self::FOLDER_ARCHIVE : self::FOLDER_INBOX;
+            try {
+                return $this->moveMessagesTo($session, $credential, $uids, $target);
+            } finally {
+                $session->disconnect();
+                $this->forgetUnreadCountCache($user, $credential->id, $folder);
+                $this->forgetUnreadCountCache($user, $credential->id, $target);
+            }
+        }
+
+        try {
+            foreach (array_values(array_unique(array_map('intval', $uids))) as $uid) {
+                try {
+                    $message = $this->getImapMessage($session->folder, $uid);
+                    $ok = match ($action) {
+                        'read' => $message->setFlag('Seen'),
+                        'unread' => $message->unsetFlag('Seen'),
+                        'delete' => $message->delete(false),
+                    };
+                    if ($ok) {
+                        $updated++;
+                    } else {
+                        $failed[] = $uid;
+                    }
+                } catch (Throwable) {
+                    $failed[] = $uid;
+                }
+            }
+
+            if ($action === 'delete' && $updated > 0) {
+                $session->client->expunge();
+            }
+        } finally {
+            $session->disconnect();
+        }
+
+        $this->forgetUnreadCountCache($user, $credential->id, $folder);
+
+        return ['updated' => $updated, 'failed' => $failed];
+    }
+
+    /**
+     * Move messages into another logical folder (Archive is created if
+     * missing) with one UID MOVE; webklex falls back to COPY + \\Deleted +
+     * EXPUNGE on servers without MOVE.
+     *
+     * @param  array<int, int>  $uids
+     * @return array{updated: int, failed: array<int, int>}
+     */
+    protected function moveMessagesTo(MailImapSession $session, UserMailCredential $credential, array $uids, string $logicalTarget): array
+    {
+        $uids = array_values(array_unique(array_filter(array_map('intval', $uids))));
+
+        if ($logicalTarget === self::FOLDER_INBOX) {
+            $targetPath = 'INBOX';
+        } else {
+            $map = $this->cachedFolderMap($credential, $session->client);
+            $targetPath = $map[$logicalTarget] ?? $this->defaultImapFolder($logicalTarget);
+            // Resolving (and possibly creating) the folder selects it; reselect the source.
+            $this->resolveImapFolder($session->client, $targetPath, $logicalTarget, create: true);
+            $session->client->openFolder($session->folder->path);
+        }
+
+        $moved = $session->client->getConnection()
+            ->moveManyMessages($uids, $targetPath)
+            ->boolean();
+
+        return $moved
+            ? ['updated' => count($uids), 'failed' => []]
+            : ['updated' => 0, 'failed' => $uids];
+    }
+
     /**
      * @return array<int, int>
      */

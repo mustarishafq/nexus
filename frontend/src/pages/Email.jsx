@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import {
-  Archive, ArrowLeft, Check, ChevronDown, FileEdit, Forward, Inbox, Loader2, LogOut, Mail, MailOpen,
+  Archive, ArchiveRestore, ArrowLeft, Check, CheckSquare, ChevronDown, FileEdit, Forward, Inbox, Loader2, LogOut, Mail, MailCheck, MailOpen, Minus,
   Maximize2, Minimize2, MoreHorizontal, Paperclip, PenSquare, Plus, RefreshCw, Reply, ReplyAll,
   Search, Send, ShieldAlert, Sparkles, Trash2, X,
 } from 'lucide-react';
@@ -236,6 +236,8 @@ function EmailMessageActions({
   onReplyAll,
   onForward,
   onMarkUnread,
+  onArchive,
+  onUnarchive,
   onDelete,
   compact = false,
 }) {
@@ -274,6 +276,18 @@ function EmailMessageActions({
           <MailOpen className="mr-2 h-4 w-4" />
           Mark unread
         </DropdownMenuItem>
+        {onArchive ? (
+          <DropdownMenuItem onClick={onArchive}>
+            <Archive className="mr-2 h-4 w-4" />
+            Archive
+          </DropdownMenuItem>
+        ) : null}
+        {onUnarchive ? (
+          <DropdownMenuItem onClick={onUnarchive}>
+            <ArchiveRestore className="mr-2 h-4 w-4" />
+            Unarchive
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" />
@@ -284,21 +298,63 @@ function EmailMessageActions({
   );
 }
 
-function InboxListItem({ message, active, onClick, folder }) {
+/** Gmail-style select box: ✓ when checked, – when only some rows are selected. */
+function SelectBox({ state, onToggle, label, className }) {
+  const checked = state === true;
+  const partial = state === 'partial';
+
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={partial ? 'mixed' : checked}
+      aria-label={label}
+      onClick={onToggle}
+      className={cn(
+        'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors',
+        checked || partial
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-muted-foreground/50 bg-background hover:border-foreground',
+        className
+      )}
+    >
+      {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+      {partial ? <Minus className="h-3 w-3" strokeWidth={3} /> : null}
+    </button>
+  );
+}
+
+function InboxListItem({ message, active, onClick, folder, selectMode = false, selected = false, onToggleSelect }) {
   const primary = folder === 'sent' || folder === 'drafts'
     ? (message.to || message.from || 'No recipients')
     : (message.from || 'Unknown sender');
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        'flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-muted/40',
+        'flex w-full items-start gap-3 border-b border-border/50 pr-4 transition-colors hover:bg-muted/40',
+        selectMode ? 'pl-3' : 'pl-4',
         active && 'bg-primary/5',
-        !message.seen && 'bg-muted/20'
+        !message.seen && 'bg-muted/20',
+        selected && 'bg-primary/10 hover:bg-primary/10'
       )}
     >
+      {selectMode ? (
+        <div className="flex shrink-0 items-center self-stretch py-3 pl-1">
+          <SelectBox
+            state={selected}
+            onToggle={(event) => onToggleSelect?.(event)}
+            label={selected ? 'Deselect email' : 'Select email'}
+            className="mt-0.5 self-start"
+          />
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={(event) => (selectMode ? onToggleSelect?.(event) : onClick?.(event))}
+        aria-pressed={selectMode ? selected : undefined}
+        className="flex min-w-0 flex-1 items-start gap-3 py-3 text-left"
+      >
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <p className={cn('truncate text-sm', !message.seen && 'font-semibold')}>{primary}</p>
@@ -315,7 +371,8 @@ function InboxListItem({ message, active, onClick, folder }) {
         ) : null}
       </div>
       {!message.seen ? <UnreadBadge count={1} className="mt-1" /> : null}
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -998,6 +1055,10 @@ export default function Email() {
   });
   const [accountId, setAccountId] = useState(() => readStoredAccountId());
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedUids, setSelectedUids] = useState(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const lastSelectedUidRef = useRef(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const composeFlushRef = useRef(null);
@@ -1215,6 +1276,109 @@ export default function Email() {
   });
 
   const messages = Array.isArray(inboxData?.messages) ? inboxData.messages : [];
+
+  // Keep the selection to messages still in the visible list (folder, search,
+  // filter or a refresh can change it).
+  useEffect(() => {
+    setSelectedUids((current) => {
+      if (current.size === 0) return current;
+      const visible = new Set(messages.map((message) => message.uid));
+      const next = new Set([...current].filter((id) => visible.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [messages]);
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedUids(new Set());
+    lastSelectedUidRef.current = null;
+  };
+
+  useEffect(() => {
+    exitSelectMode();
+  }, [folder, activeAccountId]);
+
+  const canArchive = folder !== 'archive' && folder !== 'drafts';
+  const canUnarchive = folder === 'archive';
+  const selectedCount = selectedUids.size;
+  const allSelected = messages.length > 0 && selectedCount === messages.length;
+  const selectAllState = allSelected ? true : selectedCount > 0 ? 'partial' : false;
+  const selectedMessages = messages.filter((message) => selectedUids.has(message.uid));
+  const anyUnreadSelected = selectedMessages.some((message) => !message.seen);
+
+  const toggleSelect = (messageUid, event) => {
+    setSelectedUids((current) => {
+      const next = new Set(current);
+      const last = lastSelectedUidRef.current;
+      // Shift-click selects the range from the last toggled row, like Gmail.
+      if (event?.shiftKey && last != null && last !== messageUid) {
+        const ids = messages.map((message) => message.uid);
+        const [from, to] = [ids.indexOf(last), ids.indexOf(messageUid)].sort((a, b) => a - b);
+        if (from >= 0) {
+          const select = !current.has(messageUid);
+          ids.slice(from, to + 1).forEach((id) => (select ? next.add(id) : next.delete(id)));
+          return next;
+        }
+      }
+      if (next.has(messageUid)) next.delete(messageUid);
+      else next.add(messageUid);
+      return next;
+    });
+    lastSelectedUidRef.current = messageUid;
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedUids(allSelected ? new Set() : new Set(messages.map((message) => message.uid)));
+    lastSelectedUidRef.current = null;
+  };
+
+  const bulkMail = useMutation({
+    mutationFn: ({ uids, action }) => db.mail.bulkUpdate(uids, action, {
+      accountId: activeAccountId,
+      folder,
+    }),
+    onSuccess: (result, { uids, action }) => {
+      const updated = result?.updated ?? uids.length;
+      const failed = Array.isArray(result?.failed) ? result.failed.length : 0;
+      const noun = updated === 1 ? 'email' : 'emails';
+
+      setSelectedUids(new Set(Array.isArray(result?.failed) ? result.failed : []));
+      if (failed === 0) {
+        setSelectMode(false);
+      }
+      setBulkDeleteOpen(false);
+      invalidateMail();
+
+      if (action === 'delete' || action === 'archive' || action === 'unarchive') {
+        uids.forEach((id) => queryClient.removeQueries({ queryKey: ['mail-message', activeAccountId, folder, String(id)] }));
+        if (uid && uids.map(String).includes(String(uid))) {
+          navigate('/email');
+        }
+      } else {
+        uids.forEach((id) => queryClient.invalidateQueries({ queryKey: ['mail-message', activeAccountId, folder, String(id)] }));
+      }
+
+      const verb = {
+        delete: 'Deleted',
+        archive: 'Archived',
+        unarchive: 'Moved to Inbox:',
+        read: 'Marked as read:',
+        unread: 'Marked as unread:',
+      }[action];
+      if (failed > 0) {
+        toast.warning(`${verb} ${updated} ${noun}. ${failed} couldn't be updated and ${failed === 1 ? 'is' : 'are'} still selected.`);
+      } else {
+        toast.success(`${verb} ${updated} ${noun}.`);
+      }
+    },
+    onError: (error) => toast.error(error?.message || 'Could not update the selected emails.'),
+  });
+
+  const runBulk = (action) => {
+    if (!selectedCount || bulkMail.isPending) return;
+    bulkMail.mutate({ uids: [...selectedUids], action });
+  };
+
   const showPanel = isCompose || Boolean(uid);
   const activeFolder = FOLDERS.find((item) => item.id === folder) || FOLDERS[0];
   const ActiveFolderIcon = activeFolder.icon;
@@ -1441,10 +1605,133 @@ export default function Email() {
           showPanel && 'hidden lg:flex',
         )}>
           <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4 sm:py-3">
-            <p className="text-sm font-semibold">{activeFolder.label}</p>
-            <p className="text-xs text-muted-foreground">
-              {inboxData?.unread_count ? `${inboxData.unread_count} unread` : 'All caught up'}
-            </p>
+            <div className="flex min-h-9 items-center gap-3">
+              {selectMode ? (
+                <SelectBox
+                  state={selectAllState}
+                  onToggle={toggleSelectAll}
+                  label={allSelected ? 'Deselect all' : 'Select all'}
+                  className={cn('ml-1', messages.length === 0 && 'invisible')}
+                />
+              ) : null}
+              {selectMode && selectedCount > 0 ? (
+                <>
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">{selectedCount} selected</p>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {bulkMail.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                    {anyUnreadSelected ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => runBulk('read')}
+                        disabled={bulkMail.isPending}
+                        title="Mark as read"
+                        aria-label="Mark as read"
+                      >
+                        <MailCheck className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => runBulk('unread')}
+                        disabled={bulkMail.isPending}
+                        title="Mark as unread"
+                        aria-label="Mark as unread"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canArchive ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => runBulk('archive')}
+                        disabled={bulkMail.isPending}
+                        title="Archive"
+                        aria-label="Archive selected"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                    {canUnarchive ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => runBulk('unarchive')}
+                        disabled={bulkMail.isPending}
+                        title="Unarchive (move to Inbox)"
+                        aria-label="Unarchive selected"
+                      >
+                        <ArchiveRestore className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:text-destructive"
+                      onClick={() => setBulkDeleteOpen(true)}
+                      disabled={bulkMail.isPending}
+                      title="Delete"
+                      aria-label="Delete selected"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground"
+                      onClick={exitSelectMode}
+                      title="Done"
+                      aria-label="Exit selection"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">
+                      {selectMode ? 'Select emails' : activeFolder.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectMode
+                        ? 'Tap emails to select them'
+                        : inboxData?.unread_count ? `${inboxData.unread_count} unread` : 'All caught up'}
+                    </p>
+                  </div>
+                  {selectMode ? (
+                    <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0" onClick={exitSelectMode}>
+                      Done
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 gap-1.5 text-muted-foreground"
+                      onClick={() => setSelectMode(true)}
+                      disabled={messages.length === 0}
+                      title="Select multiple emails"
+                    >
+                      <CheckSquare className="h-4 w-4" />
+                      Select
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
             <div className="relative mt-3">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -1524,6 +1811,9 @@ export default function Email() {
                   message={message}
                   folder={folder}
                   active={String(message.uid) === String(uid)}
+                  selectMode={selectMode}
+                  selected={selectedUids.has(message.uid)}
+                  onToggleSelect={(event) => toggleSelect(message.uid, event)}
                   onClick={async () => {
                     if (folder !== 'drafts') {
                       navigate(`/email/${message.uid}`);
@@ -1688,6 +1978,8 @@ export default function Email() {
                             onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                             onForward={() => openCompose(buildForwardDraft(messageData))}
                             onMarkUnread={() => markUnread.mutate(uid)}
+                            onArchive={canArchive ? () => bulkMail.mutate({ uids: [Number(uid)], action: 'archive' }) : undefined}
+                            onUnarchive={canUnarchive ? () => bulkMail.mutate({ uids: [Number(uid)], action: 'unarchive' }) : undefined}
                             onDelete={() => setDeleteTarget(messageData)}
                           />
                         </div>
@@ -1699,6 +1991,8 @@ export default function Email() {
                             onReplyAll={() => openCompose(buildReplyDraft(messageData, { replyAll: true, userEmail: activeEmail }))}
                             onForward={() => openCompose(buildForwardDraft(messageData))}
                             onMarkUnread={() => markUnread.mutate(uid)}
+                            onArchive={canArchive ? () => bulkMail.mutate({ uids: [Number(uid)], action: 'archive' }) : undefined}
+                            onUnarchive={canUnarchive ? () => bulkMail.mutate({ uids: [Number(uid)], action: 'unarchive' }) : undefined}
                             onDelete={() => setDeleteTarget(messageData)}
                           />
                         </div>
@@ -1755,6 +2049,32 @@ export default function Email() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => !bulkMail.isPending && setBulkDeleteOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedCount} {selectedCount === 1 ? 'email' : 'emails'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the selected messages from {activeFolder.label} on the mail server.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkMail.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={bulkMail.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                runBulk('delete');
+              }}
+            >
+              {bulkMail.isPending ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

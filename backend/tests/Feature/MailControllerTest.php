@@ -343,4 +343,75 @@ class MailControllerTest extends TestCase
                 'unread_count' => 0,
             ]);
     }
+
+    public function test_bulk_action_passes_uids_to_the_service(): void
+    {
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $mailMock = Mockery::mock(MailMailboxService::class)->makePartial();
+        $mailMock->shouldReceive('bulkUpdate')
+            ->once()
+            ->with(
+                Mockery::on(fn (User $checked) => $checked->is($user)),
+                [3, 5, 8],
+                'delete',
+                null,
+                'inbox',
+            )
+            ->andReturn(['updated' => 2, 'failed' => [8]]);
+        $this->app->instance(MailMailboxService::class, $mailMock);
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [3, 5, 8], 'action' => 'delete', 'folder' => 'inbox'])
+            ->assertOk()
+            ->assertJson(['updated' => 2, 'failed' => [8]]);
+    }
+
+    public function test_bulk_action_validates_input(): void
+    {
+        $token = ApiTokenAuth::issueToken(User::factory()->create(['is_approved' => true]));
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [], 'action' => 'delete'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('uids');
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [1], 'action' => 'spam'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('action');
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [1], 'action' => 'archive', 'folder' => 'archive'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'These emails are already in Archive.');
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [1], 'action' => 'unarchive', 'folder' => 'inbox'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Only archived emails can be unarchived.');
+
+        $this->flushHeaders()
+            ->postJson('/api/mail/messages/bulk', ['uids' => [1], 'action' => 'read'])
+            ->assertUnauthorized();
+    }
+
+    public function test_bulk_archive_is_forwarded_to_the_service(): void
+    {
+        $user = User::factory()->create(['is_approved' => true]);
+        $token = ApiTokenAuth::issueToken($user);
+
+        $mailMock = Mockery::mock(MailMailboxService::class)->makePartial();
+        $mailMock->shouldReceive('bulkUpdate')
+            ->once()
+            ->with(Mockery::any(), [12], 'archive', null, 'inbox')
+            ->andReturn(['updated' => 1, 'failed' => []]);
+        $this->app->instance(MailMailboxService::class, $mailMock);
+
+        $this->withToken($token)
+            ->postJson('/api/mail/messages/bulk', ['uids' => [12], 'action' => 'archive', 'folder' => 'inbox'])
+            ->assertOk()
+            ->assertJson(['updated' => 1, 'failed' => []]);
+    }
 }
