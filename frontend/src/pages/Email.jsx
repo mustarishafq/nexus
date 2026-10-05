@@ -37,6 +37,7 @@ import { Expandable } from '@/components/ui/expandable';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
 import EmailAttachments from '@/components/email/EmailAttachments';
 import RecipientSuggestInput from '@/components/email/RecipientSuggestInput';
+import QuotedText from '@/components/email/QuotedText';
 
 const MAIL_ACCOUNT_STORAGE_KEY = 'nexus-mail-account-id';
 const COMPOSE_SESSION_KEY_PREFIX = 'nexus-mail-compose-draft:';
@@ -149,6 +150,16 @@ function splitComposeQuote(body) {
   return { prefix: text.slice(0, idx), quote: text.slice(idx) };
 }
 
+/** Replies fold the quoted original behind "•••"; forwards keep it visible, like Gmail. */
+function splitReplyQuote(draft) {
+  const text = draft?.body || '';
+  if (composeModeFromDraft(draft) !== 'reply') {
+    return { body: text, quote: '' };
+  }
+  const { prefix, quote } = splitComposeQuote(text);
+  return { body: prefix.replace(/^\n+/, ''), quote };
+}
+
 function composeModeFromDraft(draft) {
   if (draft?.in_reply_to) return 'reply';
   if (/^fwd:\s*/i.test(draft?.subject || '')) return 'forward';
@@ -186,7 +197,24 @@ function buildReplyDraft(message, { replyAll = false, userEmail } = {}) {
     body: quoteBody(message),
     in_reply_to: message?.message_id || null,
     references: message?.message_id || null,
+    context: replyContext(message),
   };
+}
+
+/** Original-message summary shown above a Gmail-style reply/forward composer. */
+function replyContext(message) {
+  if (!message) return null;
+  return {
+    from: message.from || '',
+    date: message.date || '',
+    text: (message.body_text || message.body || '').trim(),
+  };
+}
+
+function senderName(address) {
+  const value = (address || '').trim();
+  const named = value.match(/^"?([^"<]+?)"?\s*<[^>]+>$/);
+  return (named ? named[1] : value).trim() || 'Unknown sender';
 }
 
 function buildForwardDraft(message) {
@@ -197,6 +225,7 @@ function buildForwardDraft(message) {
     body: `\n\n--- Forwarded message ---\nFrom: ${message?.from || ''}\nDate: ${message?.date || ''}\nSubject: ${message?.subject || ''}\nTo: ${message?.to || ''}\n\n${message?.body || ''}`,
     in_reply_to: null,
     references: null,
+    context: replyContext(message),
   };
 }
 
@@ -394,7 +423,13 @@ function ComposeForm({
   const [to, setTo] = useState(initialDraft?.to || '');
   const [cc, setCc] = useState(initialDraft?.cc || '');
   const [subject, setSubject] = useState(initialDraft?.subject || '');
-  const [body, setBody] = useState(initialDraft?.body || '');
+  // Gmail-style: the quoted original stays folded behind "•••" and is
+  // re-attached to the body whenever the draft is saved or sent.
+  const [body, setBody] = useState(() => splitReplyQuote(initialDraft).body);
+  const [quote, setQuote] = useState(() => splitReplyQuote(initialDraft).quote);
+  const [showQuote, setShowQuote] = useState(false);
+  const [showCc, setShowCc] = useState(Boolean(initialDraft?.cc));
+  const [contextOpen, setContextOpen] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [draftUid, setDraftUid] = useState(initialDraftUid || null);
   const [draftStatus, setDraftStatus] = useState('idle');
@@ -403,6 +438,11 @@ function ComposeForm({
   const [aiTone, setAiTone] = useState('');
   const [aiLanguage, setAiLanguage] = useState('auto');
   const [aiDrafting, setAiDrafting] = useState(false);
+
+  const fullBody = quote ? `${body.replace(/\s+$/, '')}${quote}` : body;
+  const mode = composeModeFromDraft(initialDraft);
+  const isReply = mode === 'reply';
+  const context = initialDraft?.context || null;
 
   useEffect(() => {
     draftUidRef.current = draftUid;
@@ -418,7 +458,12 @@ function ComposeForm({
     setTo(seed.to || '');
     setCc(seed.cc || '');
     setSubject(seed.subject || '');
-    setBody(seed.body || '');
+    const split = splitReplyQuote(seed);
+    setBody(split.body);
+    setQuote(split.quote);
+    setShowCc(Boolean(seed.cc));
+    setShowQuote(false);
+    setContextOpen(false);
     setAttachments([]);
     setDraftUid(initialDraftUid || session?.uid || null);
     setDraftStatus(session && !initialDraft ? 'saved' : 'idle');
@@ -430,12 +475,12 @@ function ComposeForm({
       to,
       cc,
       subject,
-      body,
+      body: fullBody,
       uid: draftUid,
       in_reply_to: initialDraft?.in_reply_to || null,
       references: initialDraft?.references || null,
     });
-  }, [accountId, to, cc, subject, body, draftUid, initialDraft]);
+  }, [accountId, to, cc, subject, fullBody, draftUid, initialDraft]);
 
   const persistDraft = async () => {
     const isEmpty = !to.trim() && !cc.trim() && !subject.trim() && !body.trim();
@@ -449,7 +494,7 @@ function ComposeForm({
       to,
       cc: cc || undefined,
       subject,
-      body,
+      body: fullBody,
       accountId: accountId || undefined,
       uid: draftUidRef.current || undefined,
       in_reply_to: initialDraft?.in_reply_to || undefined,
@@ -521,7 +566,7 @@ function ComposeForm({
         autosaveTimerRef.current = null;
       }
     };
-  }, [to, cc, subject, body, accountId, initialDraft]);
+  }, [to, cc, subject, fullBody, accountId, initialDraft]);
 
   const addAttachments = (fileList) => {
     const files = Array.from(fileList || []);
@@ -566,6 +611,24 @@ function ComposeForm({
     onCancel?.(result);
   };
 
+  const handleDiscard = async () => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    clearComposeSession(accountId);
+    if (draftUidRef.current) {
+      try {
+        await db.mail.deleteDraft(draftUidRef.current, { accountId: accountId || undefined });
+        onDraftSaved?.();
+      } catch {
+        // The draft may already be gone; closing is still the right outcome.
+      }
+    }
+    toast.success('Draft discarded');
+    onCancel?.({ saved: false, discarded: true });
+  };
+
   const handleAiDraft = async () => {
     const instruction = aiInstruction.trim();
     if (!instruction) {
@@ -582,15 +645,14 @@ function ComposeForm({
         to,
         cc,
         subject,
-        body,
-        mode: composeModeFromDraft(initialDraft),
+        body: fullBody,
+        mode,
       });
       const generated = (result?.body || '').trim();
       if (!generated) {
         throw new Error('The AI did not return an email draft.');
       }
-      const { quote } = splitComposeQuote(body);
-      setBody(quote ? `${generated}${quote}` : generated);
+      setBody(generated);
       setSubject((current) => keepPrefixedSubject(current, result?.subject));
       if (!to.trim() && result?.to) {
         setTo(result.to);
@@ -622,7 +684,7 @@ function ComposeForm({
           to,
           cc: cc || undefined,
           subject,
-          body,
+          body: fullBody,
           attachments,
           draft_uid: draftUid || undefined,
           in_reply_to: initialDraft?.in_reply_to || undefined,
@@ -631,77 +693,130 @@ function ComposeForm({
       }}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="shrink-0 space-y-3 border-b border-border/60 p-3 sm:p-4">
-        <div className="space-y-2">
-          <Label htmlFor="compose-to">To</Label>
-          <RecipientSuggestInput
-            id="compose-to"
-            value={to}
-            onChange={setTo}
-            placeholder="name@company.com"
-            required
-          />
+      {context && isReply ? (
+        <div className="shrink-0 border-b border-border/60 px-3 py-2.5 sm:px-4">
+          <button
+            type="button"
+            onClick={() => setContextOpen((open) => !open)}
+            className="flex w-full min-w-0 items-start gap-3 text-left"
+            aria-expanded={contextOpen}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+              {senderName(context.from).charAt(0)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-semibold">{senderName(context.from)}</span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">{formatMailDate(context.date)}</span>
+              </span>
+              <span className={cn('block text-xs text-muted-foreground', contextOpen ? 'whitespace-pre-wrap' : 'truncate')}>
+                {context.text || '(No message body)'}
+              </span>
+            </span>
+          </button>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="compose-cc">Cc</Label>
-          <RecipientSuggestInput
-            id="compose-cc"
-            value={cc}
-            onChange={setCc}
-            placeholder="Optional"
-          />
+      ) : null}
+
+      <div className="shrink-0 px-3 sm:px-4">
+        <div className="flex items-center gap-2 border-b border-border/60">
+          <span className="w-12 shrink-0 text-sm text-muted-foreground">{isReply ? <Reply className="h-4 w-4" /> : 'To'}</span>
+          <div className="min-w-0 flex-1">
+            <RecipientSuggestInput
+              id="compose-to"
+              value={to}
+              onChange={setTo}
+              placeholder="Recipients"
+              required
+              className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+          {!showCc ? (
+            <button
+              type="button"
+              onClick={() => setShowCc(true)}
+              className="shrink-0 text-sm text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Cc
+            </button>
+          ) : null}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="compose-subject">Subject</Label>
-          <Input
-            id="compose-subject"
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            placeholder="Subject"
-            required
-          />
-        </div>
-        {draftStatusLabel ? (
-          <p className={cn(
-            'text-[11px]',
-            draftStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
-          )}>
-            {draftStatusLabel}
-          </p>
+        {showCc ? (
+          <div className="flex items-center gap-2 border-b border-border/60">
+            <span className="w-12 shrink-0 text-sm text-muted-foreground">Cc</span>
+            <div className="min-w-0 flex-1">
+              <RecipientSuggestInput
+                id="compose-cc"
+                value={cc}
+                onChange={setCc}
+                placeholder=""
+                className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+              />
+            </div>
+          </div>
+        ) : null}
+        {!isReply ? (
+          <div className="border-b border-border/60">
+            <Input
+              id="compose-subject"
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              placeholder="Subject"
+              required
+              className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
         ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
-        <div className="relative min-h-0 flex-1">
-          <Textarea
-            id="compose-body"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="Write your message..."
-            className="absolute inset-0 h-full min-h-0 w-full resize-none"
-            required
-          />
-        </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2 pt-3 sm:px-4">
+        <Textarea
+          id="compose-body"
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder={isReply ? 'Write your reply…' : 'Write your message…'}
+          className="min-h-[10rem] flex-1 resize-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:ring-0"
+          autoFocus={Boolean(initialDraft)}
+          required={!quote}
+        />
+        {quote ? (
+          <div className="mt-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowQuote((open) => !open)}
+              className={cn(
+                'inline-flex h-5 w-8 items-center justify-center rounded text-xs font-bold leading-none text-muted-foreground transition-colors',
+                showQuote ? 'bg-muted/70 text-foreground' : 'bg-muted hover:bg-muted/70'
+              )}
+              title={showQuote ? 'Hide trimmed content' : 'Show trimmed content'}
+              aria-label={showQuote ? 'Hide trimmed content' : 'Show trimmed content'}
+              aria-expanded={showQuote}
+            >
+              •••
+            </button>
+            {showQuote ? (
+              <QuotedText text={quote.replace(/^\n+/, '')} className="mt-2 text-muted-foreground" />
+            ) : null}
+          </div>
+        ) : null}
         {attachments.length > 0 ? (
-          <ul className="max-h-28 shrink-0 space-y-2 overflow-y-auto">
+          <ul className="mt-3 flex shrink-0 flex-wrap gap-2">
             {attachments.map((file, index) => (
               <li
                 key={`${file.name}-${file.size}-${index}`}
-                className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+                className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-muted/30 py-1.5 pl-2.5 pr-1 text-sm"
               >
-                <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                </div>
+                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate font-medium">{file.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 shrink-0"
+                  className="h-6 w-6 shrink-0"
                   onClick={() => removeAttachment(index)}
                   aria-label={`Remove ${file.name}`}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </li>
             ))}
@@ -718,39 +833,65 @@ function ComposeForm({
           event.target.value = '';
         }}
       />
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 bg-card p-3 sm:p-4">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 border-t border-border/60 bg-card px-3 py-2.5 sm:px-4">
+        <Button type="submit" className="h-9 gap-2 rounded-full px-5" disabled={sending}>
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          Send
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 text-muted-foreground"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={attachments.length >= MAX_ATTACHMENTS}
+          title="Attach files"
+          aria-label="Attach files"
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 text-muted-foreground"
+          onClick={() => setAiDialogOpen(true)}
+          disabled={aiDrafting}
+          title="Draft with AI"
+          aria-label="Draft with AI"
+        >
+          {aiDrafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        </Button>
+        <div className="ml-auto flex min-w-0 items-center gap-1">
+          {draftStatusLabel ? (
+            <span className={cn(
+              'hidden truncate text-[11px] sm:inline',
+              draftStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
+            )}>
+              {draftStatusLabel}
+            </span>
+          ) : null}
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={attachments.length >= MAX_ATTACHMENTS}
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground"
+            onClick={handleCancel}
+            title="Save & close"
+            aria-label="Save draft and close"
           >
-            <Paperclip className="h-4 w-4" />
-            Attach
+            <X className="h-4 w-4" />
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setAiDialogOpen(true)}
-            disabled={aiDrafting}
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-destructive"
+            onClick={handleDiscard}
+            title="Discard draft"
+            aria-label="Discard draft"
           >
-            {aiDrafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="hidden sm:inline">Draft with AI</span>
-            <span className="sm:hidden">AI</span>
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={handleCancel}>
-            {to.trim() || cc.trim() || subject.trim() || body.trim() || draftUid ? 'Save draft' : 'Cancel'}
-          </Button>
-          <Button type="submit" className="gap-2" disabled={sending}>
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Send
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -1411,7 +1552,13 @@ export default function Email() {
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 lg:hidden" onClick={() => composeFlushRef.current?.().then((result) => closeCompose(result || {})).catch(() => closeCompose())}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <p className="min-w-0 flex-1 truncate text-sm font-semibold">New message</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {composeModeFromDraft(composeDraft) === 'compose'
+                      ? 'New message'
+                      : composeDraft?.subject || 'Reply'}
+                  </p>
+                </div>
                 <p className="hidden truncate text-xs text-muted-foreground sm:block">{activeEmail}</p>
               </div>
               <ComposeForm

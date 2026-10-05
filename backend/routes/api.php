@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\DepartmentAttendanceController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedController;
 use App\Http\Controllers\Api\FileUploadController;
+use App\Http\Controllers\Api\GifController;
 use App\Http\Controllers\Api\GamificationController;
 use App\Http\Controllers\Api\GeneralChatAdminController;
 use App\Http\Controllers\Api\GeneralChatController;
@@ -259,6 +260,7 @@ Route::patch('/roles/{role}', [RoleController::class, 'update']);
 Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
 Route::put('/roles/{role}/permissions', [RoleController::class, 'syncPermissions']);
 
+Route::get('/gifs', [GifController::class, 'index'])->middleware('throttle:60,1');
 Route::post('/uploads', [FileUploadController::class, 'store']);
 Route::get('/uploads', [FileUploadController::class, 'show']);
 Route::delete('/uploads', [FileUploadController::class, 'destroy']);

@@ -4,6 +4,9 @@ namespace App\Support;
 
 class FeedLinks
 {
+    /** Matches absoluteShare() links inside free text (e.g. a DM); group 1 is the post id. */
+    public const SHARE_LINK_PATTERN = '#https?://\S+/share/posts/(\d+)/?#';
+
     public static function post(int $postId, bool $expandComments = false): string
     {
         $url = "/feed?post={$postId}";

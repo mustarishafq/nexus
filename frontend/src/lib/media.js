@@ -23,6 +23,10 @@ export const POST_IMAGE_QUALITY = 0.92;
 export const POST_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const POST_IMAGE_SOURCE_MAX_BYTES = 40 * 1024 * 1024;
 
+/** Comment photos render at most ~240px tall (full size on tap), so a smaller edge is plenty. */
+export const COMMENT_IMAGE_MAX_EDGE = 1600;
+export const COMMENT_IMAGE_QUALITY = 0.82;
+
 /** Square quiz question images: sharp on play screens, small on disk. */
 export const QUIZ_QUESTION_IMAGE_MAX_EDGE = 1080;
 export const QUIZ_QUESTION_IMAGE_QUALITY = 0.82;

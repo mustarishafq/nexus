@@ -14,6 +14,7 @@ use App\Services\GamificationService;
 use App\Services\MentionService;
 use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\CommentAttachment;
 use App\Support\FeedLinks;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
@@ -84,11 +85,29 @@ class PostCommentController extends Controller
         }
 
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:1000'],
+            'body' => ['nullable', 'string', 'max:1000', 'required_without:attachment'],
             'parent_comment_id' => ['nullable', 'integer', 'exists:post_comments,id'],
+            'attachment' => ['nullable', 'array'],
+            'attachment.type' => ['required_with:attachment', 'string', 'in:'.CommentAttachment::TYPE_IMAGE.','.CommentAttachment::TYPE_GIF],
+            'attachment.url' => ['required_with:attachment', 'string', 'max:2048'],
+            'attachment.width' => ['nullable', 'integer'],
+            'attachment.height' => ['nullable', 'integer'],
         ]);
 
-        $body = trim($validated['body']);
+        $body = trim((string) ($validated['body'] ?? ''));
+        $attachment = CommentAttachment::normalize($validated['attachment'] ?? null);
+
+        if ($body === '' && ! $attachment) {
+            return response()->json([
+                'message' => 'Write a comment or add a photo or GIF.',
+                'errors' => ['body' => ['Write a comment or add a photo or GIF.']],
+            ], 422);
+        }
+
+        // Notification previews need some text for photo/GIF-only comments.
+        $notificationBody = $body !== ''
+            ? $body
+            : ($attachment['attachment_type'] === CommentAttachment::TYPE_GIF ? 'sent a GIF' : 'sent a photo');
         $parentCommentId = isset($validated['parent_comment_id'])
             ? (int) $validated['parent_comment_id']
             : null;
@@ -108,7 +127,8 @@ class PostCommentController extends Controller
         $comment = $post->comments()->create([
             'author_user_id' => $viewer->id,
             'parent_comment_id' => $parentCommentId,
-            'body' => $body,
+            'body' => $body !== '' ? $body : null,
+            ...($attachment ?? []),
         ]);
 
         app(MentionService::class)->notifyMentionedUsers(
@@ -121,13 +141,13 @@ class PostCommentController extends Controller
         );
 
         if ($parentComment) {
-            app(FeedNotificationService::class)->notifyCommentAuthorOnReply($post, $parentComment, $viewer, $body);
+            app(FeedNotificationService::class)->notifyCommentAuthorOnReply($post, $parentComment, $viewer, $notificationBody);
 
             if ((int) $post->author_user_id !== (int) $parentComment->author_user_id) {
-                app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);
+                app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $notificationBody);
             }
         } else {
-            app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $body);
+            app(FeedNotificationService::class)->notifyPostAuthorOnComment($post, $viewer, $notificationBody);
         }
 
         $comment->load(['author.department', 'reactions']);

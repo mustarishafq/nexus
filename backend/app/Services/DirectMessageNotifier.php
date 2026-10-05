@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\FeedLinks;
 
 class DirectMessageNotifier
 {
@@ -15,7 +16,12 @@ class DirectMessageNotifier
         }
 
         $senderName = $sender->displayName();
-        $preview = mb_strlen($message->body) > 120 ? mb_substr($message->body, 0, 117).'...' : $message->body;
+        $body = $message->body;
+        if (preg_match(FeedLinks::SHARE_LINK_PATTERN, $body)) {
+            $note = trim(preg_replace(FeedLinks::SHARE_LINK_PATTERN, '', $body) ?? '');
+            $body = $note !== '' ? $note : 'Shared a post with you';
+        }
+        $preview = mb_strlen($body) > 120 ? mb_substr($body, 0, 117).'...' : $body;
 
         // Unread counts drive the Messages badge. Push-only delivery avoids duplicate
         // in-app Notification records while still triggering the service worker.

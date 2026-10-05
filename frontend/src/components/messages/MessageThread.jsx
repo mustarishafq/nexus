@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import db from '@/api/apiClient';
 import { groupMessagesWithDateSeparators } from '@/lib/messages';
 import MessageBubble, { MessageReactionRow } from '@/components/messages/MessageBubble';
@@ -25,11 +26,30 @@ export default function MessageThread({
   conversationId,
   onEdit,
   onDelete,
+  onReply,
   compactReactions = false,
   bottomRef,
   className,
 }) {
   const items = useMemo(() => groupMessagesWithDateSeparators(messages), [messages]);
+
+  const containerRef = useRef(null);
+  const highlightTimer = useRef(null);
+  const [highlightedId, setHighlightedId] = useState(null);
+
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+
+  const jumpToMessage = useCallback((messageId) => {
+    const target = containerRef.current?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!target) {
+      toast.info('The original message is too far back to show here.');
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedId(messageId);
+    window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlightedId(null), 1600);
+  }, []);
 
   const invalidateKeys = useMemo(
     () => [['messages-thread', conversationId]],
@@ -37,7 +57,7 @@ export default function MessageThread({
   );
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div ref={containerRef} className={cn('space-y-2', className)}>
       {items.map((item) => {
         if (item.type === 'separator') {
           return <DateSeparator key={item.key} label={item.label} />;
@@ -46,8 +66,21 @@ export default function MessageThread({
         const { message } = item;
 
         return (
-          <div key={item.key} className="space-y-0.5">
-            <MessageBubble message={message} onEdit={onEdit} onDelete={onDelete} />
+          <div
+            key={item.key}
+            data-message-id={message.id}
+            className={cn(
+              '-mx-2 space-y-0.5 rounded-xl px-2 transition-colors duration-500',
+              highlightedId === message.id && 'bg-primary/10'
+            )}
+          >
+            <MessageBubble
+              message={message}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onReply={onReply}
+              onJumpToMessage={jumpToMessage}
+            />
             <MessageReactionRow
               message={message}
               compact={compactReactions}

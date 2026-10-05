@@ -17,6 +17,7 @@ import {
   prepareRichTextForEditor,
   preserveBlankLines,
 } from '@/lib/richText';
+import { MentionNode, deserializeMentionTokens, serializeMentionNodes } from '@/lib/tiptapMention';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,11 @@ function ToolbarButton({ pressed, onPressedChange, title, children, disabled }) 
 
 function normalizeEditorValue(value = '') {
   const html = prepareRichTextForEditor(value || '');
+  return isEmptyRichText(html) ? '' : deserializeMentionTokens(html);
+}
+
+function readEditorValue(editor) {
+  const html = preserveBlankLines(serializeMentionNodes(editor.getHTML()));
   return isEmptyRichText(html) ? '' : html;
 }
 
@@ -65,6 +71,7 @@ export default function TextEditor({
         horizontalRule: false,
       }),
       Underline,
+      MentionNode,
       Placeholder.configure({
         placeholder,
       }),
@@ -82,8 +89,7 @@ export default function TextEditor({
       },
     },
     onUpdate: ({ editor: current }) => {
-      const html = preserveBlankLines(current.getHTML());
-      const next = isEmptyRichText(html) ? '' : html;
+      const next = readEditorValue(current);
       lastEmittedRef.current = next;
       onChange?.(next);
     },
@@ -116,9 +122,7 @@ export default function TextEditor({
     // preserveBlankLines normalization), so paste/typing isn't clobbered.
     if (next === lastEmittedRef.current) return;
 
-    const current = preserveBlankLines(editor.getHTML());
-    const currentNormalized = isEmptyRichText(current) ? '' : current;
-    if (next === currentNormalized) {
+    if (next === readEditorValue(editor)) {
       lastEmittedRef.current = next;
       return;
     }

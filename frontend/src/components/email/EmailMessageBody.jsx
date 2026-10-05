@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AlertTriangle, ImageOff, Loader2 } from 'lucide-react';
+import QuotedText from '@/components/email/QuotedText';
 import { cn } from '@/lib/utils';
 
 const LIGHT_TEXT = '#f3f4f6';
@@ -173,8 +174,6 @@ export default function EmailMessageBody({ html, text }) {
   }
 
   return (
-    <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground">
-      {text || ''}
-    </pre>
+    <QuotedText text={text || ''} className="text-foreground" />
   );
 }

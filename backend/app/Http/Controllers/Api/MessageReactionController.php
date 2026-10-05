@@ -53,7 +53,7 @@ class MessageReactionController extends Controller
             );
         }
 
-        $message->load(['sender.department', 'reactions']);
+        $message->load(['sender.department', 'reactions', 'replyTo.sender']);
 
         return response()->json([
             'message' => $this->serializeMessage($message, $viewer),
@@ -77,7 +77,7 @@ class MessageReactionController extends Controller
             ->where('user_id', $viewer->id)
             ->delete();
 
-        $message->load(['sender.department', 'reactions']);
+        $message->load(['sender.department', 'reactions', 'replyTo.sender']);
 
         return response()->json([
             'message' => $this->serializeMessage($message, $viewer),

@@ -5,11 +5,14 @@ import { Loader2, Users } from 'lucide-react';
 import TextEditor from '@/components/ui/text-editor';
 import UserAvatar from '@/components/users/UserAvatar';
 import {
+  ALL_MENTION_ID,
+  ALL_MENTION_LABEL,
   ALL_MENTION_OPTION,
-  buildMentionToken,
+  isAllMention,
   matchesAllMentionQuery,
 } from '@/lib/mentions';
 import { prepareRichTextForEditor, stripHtml } from '@/lib/richText';
+import { deserializeMentionTokens } from '@/lib/tiptapMention';
 import { cn } from '@/lib/utils';
 
 function useDebouncedValue(value, delay = 200) {
@@ -155,7 +158,7 @@ export default function FeedTextEditor({
     // length rejects multi-line / lightly formatted pastes that are still under
     // the character budget, which looks like paste is broken.
     if (stripHtml(html).length > maxLength) {
-      editor?.commands.setContent(prepareRichTextForEditor(valueRef.current || ''), {
+      editor?.commands.setContent(deserializeMentionTokens(prepareRichTextForEditor(valueRef.current || '')), {
         emitUpdate: false,
       });
       return;
@@ -166,12 +169,19 @@ export default function FeedTextEditor({
   const handleSelect = (user) => {
     if (!editor || !mentionState) return;
 
-    const token = `${buildMentionToken(user)} `;
+    const isAll = user?.isAll || isAllMention(user?.id);
+    const attrs = isAll
+      ? { id: ALL_MENTION_ID, label: ALL_MENTION_LABEL }
+      : {
+          id: String(user.id),
+          label: (user?.name?.trim() || user?.full_name?.trim() || 'User').replace(/\]/g, ''),
+        };
+
     editor
       .chain()
       .focus()
       .deleteRange({ from: mentionState.deleteFrom, to: mentionState.deleteTo })
-      .insertContent(token)
+      .insertContent([{ type: 'mention', attrs }, { type: 'text', text: ' ' }])
       .run();
 
     setMentionState(null);

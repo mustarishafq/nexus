@@ -868,14 +868,19 @@ export const db = {
 			return request(`/posts/${postId}/comments`);
 		},
 
-		async createComment(postId, body, parentCommentId = null) {
+		async createComment(postId, body, parentCommentId = null, attachment = null) {
 			return request(`/posts/${postId}/comments`, {
 				method: 'POST',
 				body: {
 					body,
 					...(parentCommentId ? { parent_comment_id: parentCommentId } : {}),
+					...(attachment ? { attachment } : {}),
 				},
 			});
+		},
+
+		async searchGifs(query = '') {
+			return request(`/gifs${buildQuery({ q: query || undefined })}`);
 		},
 
 		async deleteComment(commentId) {
@@ -968,10 +973,13 @@ export const db = {
 			return request(`/conversations/${conversationId}/messages`);
 		},
 
-		async sendMessage(conversationId, body) {
+		async sendMessage(conversationId, body, { replyToMessageId } = {}) {
 			return request(`/conversations/${conversationId}/messages`, {
 				method: 'POST',
-				body: { body },
+				body: {
+					body,
+					...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+				},
 			});
 		},
 

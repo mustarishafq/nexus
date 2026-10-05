@@ -8,6 +8,7 @@ import { useGoBack } from '@/hooks/useGoBack';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useMessageActions } from '@/hooks/useMessageActions';
 import MessageThread from '@/components/messages/MessageThread';
+import ReplyPreviewBar from '@/components/messages/ReplyPreviewBar';
 import UserAvatar from '@/components/users/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getDisplayName } from '@/lib/profile';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
+import { messagePreviewText } from '@/lib/feedLinks';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
 import { useVisibleRefetchInterval } from '@/hooks/useVisibleRefetchInterval';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -55,7 +57,7 @@ function conversationMatchesQuery(conversation, query) {
 
 function ConversationListItem({ conversation, active, onClick, onDelete, deleting }) {
   const other = conversation.other_user;
-  const preview = conversation.last_message?.body || 'No messages yet';
+  const preview = messagePreviewText(conversation.last_message?.body) || 'No messages yet';
   const unread = conversation.unread_count || 0;
 
   return (
@@ -136,6 +138,8 @@ export default function Messages() {
   const [peopleSearching, setPeopleSearching] = useState(false);
   const [openingUserId, setOpeningUserId] = useState(null);
   const bottomRef = useRef(null);
+  const composerRef = useRef(null);
+  const [replyingTo, setReplyingTo] = useState(null);
   const trimmedSearchQuery = searchQuery.trim();
   const debouncedSearchQuery = useDebouncedValue(trimmedSearchQuery);
   const isSearchActive = trimmedSearchQuery.length > 0;
@@ -204,6 +208,7 @@ export default function Messages() {
 
   useEffect(() => {
     setEditingMessage(null);
+    setReplyingTo(null);
     setDraft('');
   }, [conversationId]);
 
@@ -284,14 +289,15 @@ export default function Messages() {
   };
 
   const sendMessage = useMutation({
-    mutationFn: (body) => {
+    mutationFn: ({ body, replyToMessageId }) => {
       if (isCompose) {
         return db.messages.startConversation(composeUserId, body);
       }
-      return db.messages.sendMessage(conversationId, body);
+      return db.messages.sendMessage(conversationId, body, { replyToMessageId });
     },
     onSuccess: (payload) => {
       setDraft('');
+      setReplyingTo(null);
       if (isCompose && payload?.conversation?.id) {
         queryClient.invalidateQueries({ queryKey: MESSAGES_INBOX_QUERY_KEY });
         navigate(`/messages/${payload.conversation.id}`);
@@ -310,8 +316,18 @@ export default function Messages() {
   const { updateMessage, deleteMessage } = useMessageActions(conversationId);
 
   const beginEditMessage = (message) => {
+    setReplyingTo(null);
     setEditingMessage(message);
     setDraft(message.body || '');
+  };
+
+  const beginReply = (message) => {
+    if (editingMessage) {
+      setEditingMessage(null);
+      setDraft('');
+    }
+    setReplyingTo(message);
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const cancelEditMessage = () => {
@@ -561,6 +577,7 @@ export default function Messages() {
                     conversationId={conversationId}
                     onEdit={beginEditMessage}
                     onDelete={setDeleteMessageTarget}
+                    onReply={isCompose ? undefined : beginReply}
                     bottomRef={bottomRef}
                   />
                 )}
@@ -578,6 +595,9 @@ export default function Messages() {
                   </button>
                 </p>
               ) : null}
+              {replyingTo && !editingMessage ? (
+                <ReplyPreviewBar message={replyingTo} onCancel={() => setReplyingTo(null)} className="bg-muted/40 px-4" />
+              ) : null}
               <form
                 className="flex shrink-0 gap-2 border-t border-border/60 p-4"
                 onSubmit={(event) => {
@@ -591,13 +611,17 @@ export default function Messages() {
                     );
                     return;
                   }
-                  sendMessage.mutate(body);
+                  sendMessage.mutate({ body, replyToMessageId: replyingTo?.id });
                 }}
               >
                 <Input
+                  ref={composerRef}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder={editingMessage ? 'Edit your message...' : 'Write a message...'}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape' && replyingTo) setReplyingTo(null);
+                  }}
+                  placeholder={editingMessage ? 'Edit your message...' : replyingTo ? 'Write a reply...' : 'Write a message...'}
                   maxLength={2000}
                   className="h-10"
                   autoFocus={Boolean(editingMessage)}

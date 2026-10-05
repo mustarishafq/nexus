@@ -13,11 +13,55 @@ class MailPlainTextHtml
     public static function toHtml(string $text): string
     {
         $text = str_replace(["\r\n", "\r"], "\n", $text);
-        $body = self::replaceMarkdownLinks($text);
+        $body = self::renderQuotedBlocks($text);
 
         return '<!DOCTYPE html><html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:14px;line-height:1.5;color:#111827">'
             .$body
             .'</body></html>';
+    }
+
+    /**
+     * Render ">"-quoted runs (e.g. "On … wrote:" replies) as Gmail-style
+     * blockquotes with a left rule instead of literal ">" markers. Nested
+     * ">>" quotes nest. The plain-text MIME part keeps the markers.
+     */
+    private static function renderQuotedBlocks(string $text): string
+    {
+        $html = '';
+        $plain = [];
+        $quoted = [];
+
+        $flushPlain = function () use (&$html, &$plain): void {
+            if ($plain !== []) {
+                $html .= self::replaceMarkdownLinks(implode("\n", $plain));
+                $plain = [];
+            }
+        };
+        $flushQuoted = function () use (&$html, &$quoted): void {
+            if ($quoted !== []) {
+                $html .= '<blockquote class="gmail_quote" style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555">'
+                    .self::renderQuotedBlocks(implode("\n", $quoted))
+                    .'</blockquote>';
+                $quoted = [];
+            }
+        };
+
+        foreach (explode("\n", $text) as $line) {
+            if (preg_match('/^\s*>\s?(.*)$/', $line, $match) === 1) {
+                $flushPlain();
+                $quoted[] = $match[1];
+
+                continue;
+            }
+
+            $flushQuoted();
+            $plain[] = $line;
+        }
+
+        $flushPlain();
+        $flushQuoted();
+
+        return $html;
     }
 
     private static function replaceMarkdownLinks(string $text): string

@@ -28,6 +28,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import FeedTextEditor from '@/components/feed/FeedTextEditor';
 import EmojiCollectionPicker from '@/components/feed/EmojiCollectionPicker';
+import CommentAttachment from '@/components/feed/CommentAttachment';
+import GifPicker from '@/components/feed/GifPicker';
 import MentionInput from '@/components/feed/MentionInput';
 import MentionText from '@/components/feed/MentionText';
 import PostEditHistory from '@/components/feed/PostEditHistory';
@@ -61,6 +63,8 @@ import { isEmptyRichText, stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
 import { feedPostElementId, feedPostPath, feedPostShareUrl } from '@/lib/feedLinks';
 import {
+  COMMENT_IMAGE_MAX_EDGE,
+  COMMENT_IMAGE_QUALITY,
   compressImageFile,
   POST_IMAGE_MAX_BYTES,
   POST_IMAGE_SOURCE_MAX_BYTES,
@@ -460,6 +464,10 @@ function PostComments({
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [commentBody, setCommentBody] = useState('');
+  // { type: 'image' | 'gif', url, width, height, previewUrl?, uploading? }
+  const [commentAttachment, setCommentAttachment] = useState(null);
+  const commentPhotoInputRef = useRef(null);
+  const commentUploadIdRef = useRef(0);
   const [replyingTo, setReplyingTo] = useState(null);
   const [showAllComments, setShowAllComments] = useState(false);
   const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState(null);
@@ -477,8 +485,9 @@ function PostComments({
   });
 
   const createComment = useMutation({
-    mutationFn: ({ body, parentCommentId }) => db.feed.createComment(postId, body, parentCommentId),
-    onMutate: async ({ body, parentCommentId }) => {
+    mutationFn: ({ body, parentCommentId, attachment }) =>
+      db.feed.createComment(postId, body, parentCommentId, attachment),
+    onMutate: async ({ body, parentCommentId, attachment }) => {
       const queryKeys = [['post-comments', postId], ['company-feed'], ['user-feed'], ['feed-active-discussions']];
       await cancelQueryMatches(queryClient, queryKeys);
       const snapshots = snapshotQueryMatches(queryClient, queryKeys);
@@ -489,6 +498,9 @@ function PostComments({
         post_id: postId,
         parent_comment_id: parentCommentId || null,
         body,
+        attachment: attachment
+          ? { ...attachment, url: commentAttachment?.previewUrl || attachment.url }
+          : null,
         author: {
           id: user?.id,
           name: getDisplayName(user),
@@ -506,8 +518,10 @@ function PostComments({
 
       const draftBody = commentBody;
       const draftReply = replyingTo;
+      const draftAttachment = commentAttachment;
       setCommentBody('');
       setReplyingTo(null);
+      setCommentAttachment(null);
 
       insertOptimisticComment(queryClient, postId, optimisticComment, parentCommentId || null);
       bumpFeedCommentsCount(queryClient, postId, 1);
@@ -519,7 +533,7 @@ function PostComments({
         });
       }
 
-      return { snapshots, tempId, draftBody, draftReply, parentCommentId };
+      return { snapshots, tempId, draftBody, draftReply, draftAttachment, parentCommentId };
     },
     onSuccess: (payload, variables, context) => {
       if (payload?.comment && context?.tempId) {
@@ -533,6 +547,9 @@ function PostComments({
           });
         }
       }
+      if (context?.draftAttachment?.previewUrl) {
+        URL.revokeObjectURL(context.draftAttachment.previewUrl);
+      }
       notifyGamificationOffers(payload);
       toast.success(variables?.parentCommentId ? 'Reply added.' : 'Comment added.');
     },
@@ -545,6 +562,9 @@ function PostComments({
       }
       if (context?.draftReply !== undefined) {
         setReplyingTo(context.draftReply);
+      }
+      if (context?.draftAttachment) {
+        setCommentAttachment(context.draftAttachment);
       }
       toast.error(error?.message || 'Failed to add comment.');
     },
@@ -634,13 +654,85 @@ function PostComments({
     }
   };
 
+  const clearCommentAttachment = () => {
+    commentUploadIdRef.current += 1;
+    setCommentAttachment((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  };
+
+  const handleCommentPhoto = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image file.');
+      return;
+    }
+    if (file.size > POST_IMAGE_SOURCE_MAX_BYTES) {
+      toast.error('That photo is too large. Choose one under 40 MB.');
+      return;
+    }
+
+    clearCommentAttachment();
+    const uploadId = commentUploadIdRef.current;
+    // Show the spinner while compressing; large phone photos can take a moment.
+    setCommentAttachment({ type: 'image', url: null, previewUrl: null, uploading: true });
+
+    const compressed = await compressImageFile(file, {
+      maxEdge: COMMENT_IMAGE_MAX_EDGE,
+      quality: COMMENT_IMAGE_QUALITY,
+    });
+    if (commentUploadIdRef.current !== uploadId) return;
+    if (compressed.size > POST_IMAGE_MAX_BYTES) {
+      setCommentAttachment(null);
+      toast.error('Photos must be 10 MB or smaller.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(compressed);
+    const size = await new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => resolve({ width: null, height: null });
+      image.src = previewUrl;
+    });
+    if (commentUploadIdRef.current !== uploadId) {
+      URL.revokeObjectURL(previewUrl);
+      return;
+    }
+
+    setCommentAttachment({ type: 'image', url: null, previewUrl, uploading: true, ...size });
+
+    try {
+      const upload = await db.integrations.Core.UploadFile({ file: compressed, folder: 'comment-images' });
+      if (commentUploadIdRef.current !== uploadId) return;
+      setCommentAttachment((current) => (current ? { ...current, url: upload.file_url, uploading: false } : current));
+    } catch (error) {
+      if (commentUploadIdRef.current !== uploadId) return;
+      URL.revokeObjectURL(previewUrl);
+      setCommentAttachment(null);
+      toast.error(error?.message || 'Could not upload the photo.');
+    }
+  };
+
+  const attachmentReady = Boolean(commentAttachment?.url && !commentAttachment.uploading);
+  const canSubmitComment = Boolean(commentBody.trim() || attachmentReady) && !commentAttachment?.uploading;
+
   const submitComment = (event) => {
     event.preventDefault();
     const body = commentBody.trim();
-    if (!body) return;
+    if (!canSubmitComment || createComment.isPending) return;
     createComment.mutate({
       body,
       parentCommentId: replyingTo?.id || null,
+      attachment: attachmentReady
+        ? {
+            type: commentAttachment.type,
+            url: commentAttachment.url,
+            width: commentAttachment.width || null,
+            height: commentAttachment.height || null,
+          }
+        : null,
     });
   };
 
@@ -676,6 +768,32 @@ function PostComments({
           </button>
         </div>
       ) : null}
+      {commentAttachment ? (
+        <div className="mb-2 flex items-start gap-2 px-0.5">
+          <div className="relative">
+            {commentAttachment.previewUrl || commentAttachment.url ? (
+              <img
+                src={commentAttachment.previewUrl || commentAttachment.url}
+                alt=""
+                className={cn('h-16 max-w-[8rem] rounded-lg bg-muted object-cover', commentAttachment.uploading && 'opacity-60')}
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-lg bg-muted" />
+            )}
+            {commentAttachment.uploading ? (
+              <Loader2 className="absolute inset-0 m-auto h-4 w-4 animate-spin text-foreground" />
+            ) : null}
+            <button
+              type="button"
+              onClick={clearCommentAttachment}
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background shadow"
+              aria-label="Remove attachment"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-end gap-1.5 md:gap-2">
         {sticky ? (
           <UserAvatar user={user} className="mb-0.5 h-8 w-8 shrink-0" fallbackClassName="text-[10px]" />
@@ -688,10 +806,39 @@ function PostComments({
             placeholder={replyingTo ? 'Write a reply...' : 'Write a comment...'}
             rows={1}
             maxLength={1000}
-            className="min-h-9 overflow-x-hidden pr-10 text-sm shadow-none md:min-h-10 md:pr-11"
-            placeholderClassName="!right-10 md:!right-11"
+            submitOnEnter
+            className="min-h-9 overflow-x-hidden pr-[6.25rem] text-sm shadow-none md:min-h-10 md:pr-[7rem]"
+            placeholderClassName="!right-[6.25rem] md:!right-[7rem]"
           />
           <div className="absolute inset-y-0 right-0.5 flex items-center">
+            <input
+              ref={commentPhotoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                handleCommentPhoto(event.target.files?.[0]);
+                event.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => commentPhotoInputRef.current?.click()}
+              disabled={createComment.isPending}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 md:h-9 md:w-9"
+              aria-label="Add a photo"
+              title="Photo"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+            <GifPicker
+              disabled={createComment.isPending}
+              triggerClassName="md:h-9 md:w-9"
+              onSelect={(gif) => {
+                clearCommentAttachment();
+                setCommentAttachment(gif);
+              }}
+            />
             <EmojiCollectionPicker
               disabled={createComment.isPending}
               triggerClassName="h-8 w-8 md:h-9 md:w-9"
@@ -707,7 +854,7 @@ function PostComments({
             type="submit"
             size="icon"
             className="h-9 w-9 shrink-0 md:h-10 md:w-10"
-            disabled={createComment.isPending || !commentBody.trim()}
+            disabled={createComment.isPending || !canSubmitComment}
             title={replyingTo ? 'Post reply' : 'Post comment'}
           >
             {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -771,9 +918,12 @@ function PostComments({
                   </Button>
                 ) : null}
               </div>
-              <div className="mt-1 text-sm leading-relaxed break-words">
-                <MentionText text={comment.body} />
-              </div>
+              {comment.body ? (
+                <div className="mt-1 text-sm leading-relaxed break-words">
+                  <MentionText text={comment.body} />
+                </div>
+              ) : null}
+              <CommentAttachment attachment={comment.attachment} />
             </div>
 
             {/* Tablet/desktop: original side-by-side layout */}
@@ -790,9 +940,12 @@ function PostComments({
                     {formatDistanceToNow(new Date(comment.created_date), { addSuffix: true })}
                   </span>
                 </div>
-                <div className="mt-1 text-sm leading-relaxed">
-                  <MentionText text={comment.body} />
-                </div>
+                {comment.body ? (
+                  <div className="mt-1 text-sm leading-relaxed">
+                    <MentionText text={comment.body} />
+                  </div>
+                ) : null}
+                <CommentAttachment attachment={comment.attachment} />
               </div>
               {comment.can_delete && !readOnly ? (
                 <Button

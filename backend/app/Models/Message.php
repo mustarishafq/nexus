@@ -10,6 +10,7 @@ class Message extends Model
     protected $fillable = [
         'conversation_id',
         'sender_user_id',
+        'reply_to_message_id',
         'body',
         'edited_at',
         'deleted_at',
@@ -38,6 +39,11 @@ class Message extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_user_id');
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reply_to_message_id');
     }
 
     public function edits(): HasMany

@@ -21,6 +21,7 @@ class FileUploadController extends Controller
         'cover-pictures',
         'cover-pictures-new',
         'post-images',
+        'comment-images',
         'attendance-photos',
         'quiz-question-images',
     ];
