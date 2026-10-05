@@ -49,3 +49,19 @@ export function scrollFeedPostIntoView(element, {
   element.scrollIntoView({ behavior, block });
   return () => {};
 }
+
+const SHARED_POST_LINK_REGEX = /https?:\/\/\S+\/share\/posts\/\d+\/?/g;
+
+/** Remove feed share links from message text (the post renders as a preview card instead). */
+export function stripSharedPostLinks(text = '') {
+  return String(text).replace(SHARED_POST_LINK_REGEX, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Inbox preview for a message body: shared post links read as "Shared a post". */
+export function messagePreviewText(body = '') {
+  const text = String(body || '');
+  if (!new RegExp(SHARED_POST_LINK_REGEX.source).test(text)) {
+    return text;
+  }
+  return stripSharedPostLinks(text) || 'Shared a post';
+}

@@ -70,6 +70,7 @@ function mergeSettingsFromPayload(payload, fallback = {}) {
     imap_encryption: payload?.imap_encryption || 'ssl',
     openrouter_api_key: payload?.openrouter_api_key || '',
     openrouter_model: payload?.openrouter_model || fallback.openrouter_model || 'openai/gpt-4o-mini',
+    giphy_api_key: payload?.giphy_api_key ?? fallback.giphy_api_key ?? '',
     general_chat_token_limit: payload?.general_chat_token_limit ?? fallback.general_chat_token_limit ?? 100000,
     general_chat_reset_period: payload?.general_chat_reset_period || fallback.general_chat_reset_period || 'monthly',
     general_chat_reset_time: payload?.general_chat_reset_time || fallback.general_chat_reset_time || '00:00',
@@ -332,6 +333,35 @@ export default function AdminSettings({ embedded = false }) {
                       </Button>
                     </div>
                   ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {activeSection === 'feed' && isAdmin ? (
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">GIF search (GIPHY)</CardTitle>
+                  <CardDescription>
+                    Powers the GIF button in feed comments. Results are limited to G-rated GIFs.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Label htmlFor="giphy_api_key">API key</Label>
+                  <Input
+                    id="giphy_api_key"
+                    type="password"
+                    value={settings.giphy_api_key}
+                    onChange={(event) => setSettings((current) => ({ ...current, giphy_api_key: event.target.value }))}
+                    placeholder="Paste your GIPHY API key"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Get a key at{' '}
+                    <a href="https://developers.giphy.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                      developers.giphy.com
+                    </a>
+                    . Leave blank to use <code className="rounded bg-muted px-1 py-0.5">GIPHY_API_KEY</code> from the server environment.
+                  </p>
                 </CardContent>
               </Card>
             ) : null}

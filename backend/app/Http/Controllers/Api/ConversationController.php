@@ -102,7 +102,7 @@ class ConversationController extends Controller
                 return $message;
             });
 
-            $message->load('sender.department');
+            $message->load(['sender.department', 'replyTo.sender']);
 
             app(DirectMessageNotifier::class)->notifyRecipient($viewer, $recipient, $conversation, $message);
 
@@ -145,11 +145,13 @@ class ConversationController extends Controller
         $conversation->load('participants');
 
         $messages = $conversation->messages()
-            ->with(['sender.department', 'reactions'])
+            ->with(['sender.department', 'reactions', 'replyTo.sender'])
             ->orderBy('created_at')
             ->limit(100)
-            ->get()
-            ->map(fn (Message $message) => $this->serializeMessage($message, $viewer))
+            ->get();
+        $sharedPosts = $this->sharedPostPreviews($messages, $viewer);
+        $messages = $messages
+            ->map(fn (Message $message) => $this->serializeMessage($message, $viewer, $sharedPosts))
             ->values();
 
         $this->markConversationRead($conversation, $viewer);
@@ -170,13 +172,23 @@ class ConversationController extends Controller
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:2000'],
+            'reply_to_message_id' => ['sometimes', 'nullable', 'integer'],
         ]);
+
+        $replyToId = $validated['reply_to_message_id'] ?? null;
+        if ($replyToId !== null && ! $conversation->messages()->whereKey($replyToId)->exists()) {
+            return response()->json([
+                'message' => 'You can only reply to a message in this conversation.',
+                'errors' => ['reply_to_message_id' => ['You can only reply to a message in this conversation.']],
+            ], 422);
+        }
 
         $conversation->load('participants');
 
-        $message = DB::transaction(function () use ($conversation, $viewer, $validated) {
+        $message = DB::transaction(function () use ($conversation, $viewer, $validated, $replyToId) {
             $message = $conversation->messages()->create([
                 'sender_user_id' => $viewer->id,
+                'reply_to_message_id' => $replyToId,
                 'body' => trim($validated['body']),
             ]);
 
@@ -186,7 +198,7 @@ class ConversationController extends Controller
             return $message;
         });
 
-        $message->load('sender');
+        $message->load(['sender', 'replyTo.sender']);
 
         $recipient = $conversation->participants
             ->first(fn (User $user) => (int) $user->id !== (int) $viewer->id);
@@ -237,7 +249,7 @@ class ConversationController extends Controller
             });
         }
 
-        $message->load(['sender.department', 'reactions']);
+        $message->load(['sender.department', 'reactions', 'replyTo.sender']);
 
         return response()->json([
             'message' => $this->serializeMessage($message, $viewer),
@@ -422,7 +434,8 @@ class ConversationController extends Controller
             'id' => $conversation->id,
             'type' => $conversation->type,
             'other_user' => $other ? $this->serializeFeedAuthor($other) : null,
-            'last_message' => $latestMessage ? $this->serializeMessage($latestMessage, $viewer) : null,
+            // Inbox rows only need the body preview — skip per-row shared post lookups.
+            'last_message' => $latestMessage ? $this->serializeMessage($latestMessage, $viewer, []) : null,
             'unread_count' => $unreadCount,
             'last_message_at' => $conversation->last_message_at?->toISOString(),
             'updated_date' => $conversation->updated_date,

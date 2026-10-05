@@ -35,6 +35,7 @@ const MentionInput = forwardRef(function MentionInput({
   className,
   placeholderClassName,
   onKeyDown,
+  submitOnEnter = false,
 }, ref) {
   const editorRef = useRef(null);
   const pendingCursorRef = useRef(null);
@@ -234,6 +235,19 @@ const MentionInput = forwardRef(function MentionInput({
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
       event.preventDefault();
+
+      // Enter sends (Shift+Enter for a new line). While the mention list is
+      // open, Enter picks the top match instead of sending.
+      if (submitOnEnter && !event.shiftKey) {
+        if (mentionState && results.length && !loading) {
+          handleSelect(results[0]);
+        } else if (!mentionState) {
+          editorRef.current?.closest('form')?.requestSubmit();
+        }
+        onKeyDown?.(event);
+        return;
+      }
+
       preferPlainTextBreaks();
 
       if (document.queryCommandSupported?.('insertLineBreak')) {

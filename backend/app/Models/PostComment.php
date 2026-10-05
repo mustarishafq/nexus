@@ -12,6 +12,10 @@ class PostComment extends Model
         'parent_comment_id',
         'author_user_id',
         'body',
+        'attachment_type',
+        'attachment_url',
+        'attachment_width',
+        'attachment_height',
     ];
 
     protected $appends = [

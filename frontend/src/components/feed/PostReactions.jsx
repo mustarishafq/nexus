@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, Plus, Share2, SmilePlus, ThumbsUp } from 'lucide-react';
+import { Link2, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp } from 'lucide-react';
 import db from '@/api/apiClient';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import ShareToMessagesDialog from '@/components/feed/ShareToMessagesDialog';
 import { toast } from 'sonner';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { glassDockStyles } from '@/components/layout/glassStyles';
@@ -177,6 +184,7 @@ export function FeedEngagementBar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState('quick');
   const [popReaction, setPopReaction] = useState(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const hoverCloseTimer = React.useRef(null);
   const hoverOpenTimer = React.useRef(null);
   const longPressTimer = React.useRef(null);
@@ -308,7 +316,7 @@ export function FeedEngagementBar({
     clearLongPressTimer();
   };
 
-  const handleShare = async () => {
+  const handleCopyLink = async () => {
     if (!shareUrl) return;
     try {
       const absolute = new URL(shareUrl, window.location.origin).toString();
@@ -482,20 +490,37 @@ export function FeedEngagementBar({
           Comment
         </button>
 
-        <button
-          type="button"
-          onClick={handleShare}
-          disabled={readOnly || !shareUrl}
-          className={cn(
-            actionClass,
-            'text-muted-foreground disabled:pointer-events-none disabled:opacity-40'
-          )}
-        >
-          <Share2 className="h-4 w-4" />
-          Share
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              disabled={readOnly || !shareUrl}
+              className={cn(
+                actionClass,
+                'text-muted-foreground disabled:pointer-events-none disabled:opacity-40'
+              )}
+            >
+              <Share2 className="h-4 w-4" />
+              Share
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => setShareDialogOpen(true)} className="gap-2">
+              <Send className="h-4 w-4" />
+              Send in Messages
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCopyLink} className="gap-2">
+              <Link2 className="h-4 w-4" />
+              Copy link
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       )}
+
+      {shareUrl ? (
+        <ShareToMessagesDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} shareUrl={shareUrl} />
+      ) : null}
     </div>
   );
 }

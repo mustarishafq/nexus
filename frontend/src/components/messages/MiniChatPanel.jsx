@@ -25,6 +25,7 @@ import {
 } from '@/components/layout/glassStyles';
 import { useMessageActions } from '@/hooks/useMessageActions';
 import MessageThread from '@/components/messages/MessageThread';
+import ReplyPreviewBar from '@/components/messages/ReplyPreviewBar';
 import { getDisplayName } from '@/lib/profile';
 import { MESSAGES_INBOX_QUERY_KEY } from '@/lib/queryKeys';
 import { BACKGROUND_POLL_INTERVAL_MS } from '@/lib/polling';
@@ -47,12 +48,15 @@ export default function MiniChatPanel({
   const [editingMessage, setEditingMessage] = useState(null);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const bottomRef = useRef(null);
+  const composerRef = useRef(null);
+  const [replyingTo, setReplyingTo] = useState(null);
   const queryClient = useQueryClient();
   const pollInterval = useVisibleRefetchInterval(BACKGROUND_POLL_INTERVAL_MS);
 
   useEffect(() => {
     setConversationId(initialConversationId);
     setEditingMessage(null);
+    setReplyingTo(null);
     setDraft('');
   }, [initialConversationId, user?.id]);
 
@@ -78,8 +82,18 @@ export default function MiniChatPanel({
   const { updateMessage, deleteMessage } = useMessageActions(conversationId);
 
   const beginEditMessage = (message) => {
+    setReplyingTo(null);
     setEditingMessage(message);
     setDraft(message.body || '');
+  };
+
+  const beginReply = (message) => {
+    if (editingMessage) {
+      setEditingMessage(null);
+      setDraft('');
+    }
+    setReplyingTo(message);
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const cancelEditMessage = () => {
@@ -95,14 +109,15 @@ export default function MiniChatPanel({
   };
 
   const sendMessage = useMutation({
-    mutationFn: (body) => {
+    mutationFn: ({ body, replyToMessageId }) => {
       if (conversationId) {
-        return db.messages.sendMessage(conversationId, body);
+        return db.messages.sendMessage(conversationId, body, { replyToMessageId });
       }
       return db.messages.startConversation(user.id, body);
     },
     onSuccess: (payload) => {
       setDraft('');
+      setReplyingTo(null);
 
       if (!conversationId && payload?.conversation?.id) {
         setConversationId(payload.conversation.id);
@@ -136,7 +151,7 @@ export default function MiniChatPanel({
       return;
     }
 
-    sendMessage.mutate(body);
+    sendMessage.mutate({ body, replyToMessageId: replyingTo?.id });
   };
 
   return (
@@ -231,6 +246,7 @@ export default function MiniChatPanel({
             conversationId={conversationId}
             onEdit={beginEditMessage}
             onDelete={setDeleteMessageTarget}
+            onReply={conversationId ? beginReply : undefined}
             compactReactions
             bottomRef={bottomRef}
           />
@@ -249,14 +265,25 @@ export default function MiniChatPanel({
           </button>
         </p>
       ) : null}
+      {replyingTo && !editingMessage ? (
+        <ReplyPreviewBar
+          message={replyingTo}
+          onCancel={() => setReplyingTo(null)}
+          mutedClassName={glassDialogMutedText}
+        />
+      ) : null}
       <form
         onSubmit={handleSubmit}
         className="flex shrink-0 gap-2 border-t border-border/60 p-3"
       >
         <Input
+          ref={composerRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={editingMessage ? 'Edit your message...' : 'Write a message...'}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && replyingTo) setReplyingTo(null);
+          }}
+          placeholder={editingMessage ? 'Edit your message...' : replyingTo ? 'Write a reply...' : 'Write a message...'}
           className={cn('h-9 text-sm', glassDialogInputStyles)}
           maxLength={2000}
           autoFocus={Boolean(editingMessage)}

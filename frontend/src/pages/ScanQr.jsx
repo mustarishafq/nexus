@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
-import { CheckCircle2, Clock, MapPin, QrCode, RefreshCw, X } from 'lucide-react';
+import { CheckCircle2, Clock, MapPin, Minus, Plus, QrCode, RefreshCw, X } from 'lucide-react';
 import ExpActionHint from '@/components/gamification/ExpActionHint';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,9 @@ import EventCheckInAnswersFields from '@/components/calendar/EventCheckInAnswers
 import { emptyCheckInAnswers, staffMustFillCheckInForm } from '@/lib/eventCheckInForm';
 
 const SCANNER_ELEMENT_ID = 'nexus-event-qr-scanner';
+const ZOOM_DECODER_ELEMENT_ID = 'nexus-event-qr-zoom-decoder';
+const DIGITAL_ZOOM = { mode: 'digital', min: 1, max: 4, step: 0.1, value: 1 };
+const DIGITAL_ZOOM_SCAN_MS = 350;
 const VIDEO_READY_TIMEOUT_MS = 8000;
 
 function waitForNextPaint() {
@@ -50,6 +53,60 @@ function waitForScannerVideo(host, timeoutMs = VIDEO_READY_TIMEOUT_MS) {
 
     check();
   });
+}
+
+/**
+ * Hardware zoom of the running camera track, when the browser/device exposes
+ * it (most Android Chrome devices; many iPhones and desktop webcams do not).
+ */
+function readZoomCapability(scanner) {
+  try {
+    const zoom = scanner?.getRunningTrackCameraCapabilities?.()?.zoomFeature?.();
+    if (!zoom?.isSupported?.()) {
+      return { ...DIGITAL_ZOOM };
+    }
+    const min = Number(zoom.min());
+    const max = Number(zoom.max());
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+      return { ...DIGITAL_ZOOM };
+    }
+    const step = Number(zoom.step()) || 0.1;
+    const value = Number(zoom.value()) || min;
+    return { mode: 'hardware', feature: zoom, min, max, step, value };
+  } catch {
+    return { ...DIGITAL_ZOOM };
+  }
+}
+
+/**
+ * Digital zoom fallback: crop the centre of the camera frame at full sensor
+ * resolution. html5-qrcode's own loop shrinks its scan box to a 240px canvas,
+ * so this crop gives the decoder far more pixels for small or distant codes.
+ */
+async function captureZoomedFrame(video, zoomLevel) {
+  if (!video?.videoWidth || !video?.videoHeight) return null;
+
+  const side = Math.min(video.videoWidth, video.videoHeight) / zoomLevel;
+  const sx = (video.videoWidth - side) / 2;
+  const sy = (video.videoHeight - side) / 2;
+  const output = Math.round(Math.min(1024, Math.max(side, 480)));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = output;
+  canvas.height = output;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, output, output);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  return blob ? new File([blob], 'zoom-frame.jpg', { type: 'image/jpeg' }) : null;
+}
+
+function touchDistance(touches) {
+  const [a, b] = [touches[0], touches[1]];
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
 export function extractCheckInToken(rawValue) {
@@ -111,6 +168,13 @@ export default function ScanQr() {
   const [scannerKey, setScannerKey] = useState(0);
   const [scannerSession, setScannerSession] = useState(0);
   const [answers, setAnswers] = useState({});
+  // { mode: 'hardware' | 'digital', min, max, step, value, feature? } while the camera runs.
+  const [zoom, setZoom] = useState(null);
+  const zoomDecoderRef = useRef(null);
+  const zoomRef = useRef(null);
+  zoomRef.current = zoom;
+  const pinchRef = useRef(null);
+  const zoomApplyRef = useRef({ inFlight: false, pending: null });
 
   const refreshCalendarViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
@@ -120,6 +184,10 @@ export default function ScanQr() {
   const stopScanner = useCallback(async () => {
     const scanner = scannerRef.current;
     scannerRef.current = null;
+    pinchRef.current = null;
+    if (mountedRef.current) {
+      setZoom(null);
+    }
     if (!scanner) {
       if (mountedRef.current) {
         setScanning(false);
@@ -145,6 +213,105 @@ export default function ScanQr() {
       setScanning(false);
     }
   }, []);
+
+  // Apply zoom without queueing a constraint per slider tick: keep only the
+  // latest requested value while one apply() is in flight.
+  const applyZoom = useCallback((requested) => {
+    const current = zoomRef.current;
+    if (!current) return;
+
+    const steps = Math.round((requested - current.min) / current.step);
+    const value = Math.min(current.max, Math.max(current.min, current.min + steps * current.step));
+    setZoom((state) => (state ? { ...state, value } : state));
+    if (current.mode !== 'hardware') return;
+
+    const queue = zoomApplyRef.current;
+    queue.pending = value;
+    if (queue.inFlight) return;
+
+    const flush = async () => {
+      queue.inFlight = true;
+      while (queue.pending != null) {
+        const next = queue.pending;
+        queue.pending = null;
+        try {
+          await current.feature.apply(next);
+        } catch {
+          // Some devices report zoom but reject certain values; keep the UI responsive.
+        }
+      }
+      queue.inFlight = false;
+    };
+    flush();
+  }, []);
+
+  const handlePinchStart = useCallback((event) => {
+    if (event.touches.length !== 2 || !zoomRef.current) return;
+    pinchRef.current = { distance: touchDistance(event.touches), zoom: zoomRef.current.value };
+  }, []);
+
+  const handlePinchMove = useCallback((event) => {
+    const pinch = pinchRef.current;
+    if (!pinch || event.touches.length !== 2) return;
+    const ratio = touchDistance(event.touches) / Math.max(1, pinch.distance);
+    applyZoom(pinch.zoom * ratio);
+  }, [applyZoom]);
+
+  const handlePinchEnd = useCallback((event) => {
+    if (event.touches.length < 2) {
+      pinchRef.current = null;
+    }
+  }, []);
+
+  const digitalZoomLevel = zoom?.mode === 'digital' ? zoom.value : 1;
+
+  // Digital zoom preview: scale the video around its centre (the scan box).
+  useEffect(() => {
+    const video = document.getElementById(SCANNER_ELEMENT_ID)?.querySelector('video');
+    if (!video) return undefined;
+    video.style.transformOrigin = 'center center';
+    video.style.transform = digitalZoomLevel > 1 ? `scale(${digitalZoomLevel})` : '';
+    return () => {
+      video.style.transform = '';
+    };
+  }, [digitalZoomLevel, scanning, scannerKey]);
+
+  // Digital zoom decode loop: runs alongside html5-qrcode's own loop.
+  useEffect(() => {
+    if (!scanning || digitalZoomLevel <= 1) return undefined;
+
+    let cancelled = false;
+    let timer = null;
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const video = document.getElementById(SCANNER_ELEMENT_ID)?.querySelector('video');
+        const file = await captureZoomedFrame(video, digitalZoomLevel);
+        if (file && !cancelled && !handlingRef.current) {
+          if (!zoomDecoderRef.current) {
+            zoomDecoderRef.current = new Html5Qrcode(ZOOM_DECODER_ELEMENT_ID, { verbose: false });
+          }
+          const result = await zoomDecoderRef.current.scanFileV2(file, false);
+          if (!cancelled && result?.decodedText) {
+            handleDecodedRef.current(result.decodedText);
+            return;
+          }
+        }
+      } catch {
+        // No code in this frame — keep trying.
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(tick, DIGITAL_ZOOM_SCAN_MS);
+      }
+    };
+
+    timer = window.setTimeout(tick, DIGITAL_ZOOM_SCAN_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [scanning, digitalZoomLevel]);
 
   const handleDecoded = useCallback(async (decodedText) => {
     if (handlingRef.current) {
@@ -376,6 +543,7 @@ export default function ScanQr() {
 
       setScanning(true);
       setStarting(false);
+      setZoom(readZoomCapability(scannerRef.current));
       return true;
     };
 
@@ -481,7 +649,15 @@ export default function ScanQr() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="relative overflow-hidden rounded-xl border bg-black/90 min-h-[280px]">
+          <div
+            className="relative overflow-hidden rounded-xl border bg-black/90 min-h-[280px]"
+            // pan-y keeps page scrolling but stops the browser's own pinch-zoom here.
+            style={zoom ? { touchAction: 'pan-y' } : undefined}
+            onTouchStart={zoom ? handlePinchStart : undefined}
+            onTouchMove={zoom ? handlePinchMove : undefined}
+            onTouchEnd={zoom ? handlePinchEnd : undefined}
+            onTouchCancel={zoom ? handlePinchEnd : undefined}
+          >
             <div
               key={scannerKey}
               id={SCANNER_ELEMENT_ID}
@@ -493,6 +669,43 @@ export default function ScanQr() {
               </div>
             ) : null}
           </div>
+          {zoom && scanning ? (
+            <div className="flex items-center gap-2 rounded-full border bg-muted/40 px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => applyZoom(zoom.value - Math.max(zoom.step, (zoom.max - zoom.min) / 10))}
+                disabled={zoom.value <= zoom.min}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted disabled:opacity-40"
+                aria-label="Zoom out"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
+                type="range"
+                min={zoom.min}
+                max={zoom.max}
+                step={zoom.step}
+                value={zoom.value}
+                onChange={(event) => applyZoom(Number(event.target.value))}
+                className="h-1 min-w-0 flex-1 cursor-pointer accent-primary"
+                aria-label="Camera zoom"
+              />
+              <button
+                type="button"
+                onClick={() => applyZoom(zoom.value + Math.max(zoom.step, (zoom.max - zoom.min) / 10))}
+                disabled={zoom.value >= zoom.max}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted disabled:opacity-40"
+                aria-label="Zoom in"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <span className="w-10 shrink-0 pr-1 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                {(zoom.mode === 'hardware' ? zoom.value / (zoom.min || 1) : zoom.value).toFixed(1)}×
+              </span>
+            </div>
+          ) : null}
+          {/* Off-screen host for decoding digitally zoomed frames. */}
+          <div id={ZOOM_DECODER_ELEMENT_ID} className="hidden" aria-hidden />
 
           {cameraError ? (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">

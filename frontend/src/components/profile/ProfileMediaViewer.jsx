@@ -185,7 +185,7 @@ function ProfileMediaComments({ userId, mediaType, commentsCount, queryKey }) {
         onSubmit={(event) => {
           event.preventDefault();
           const body = commentBody.trim();
-          if (!body) return;
+          if (!body || createComment.isPending) return;
           createComment.mutate({
             body,
             parentCommentId: replyingTo?.id || null,
@@ -214,6 +214,7 @@ function ProfileMediaComments({ userId, mediaType, commentsCount, queryKey }) {
               placeholder={replyingTo ? `Reply to ${replyingTo.name}...` : 'Write a comment...'}
               rows={1}
               maxLength={1000}
+              submitOnEnter
               className="min-h-9 text-sm"
             />
           </div>

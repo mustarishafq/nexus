@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 class MailPlainTextHtmlTest extends TestCase
 {
+    public function test_quoted_reply_lines_render_as_gmail_style_blockquotes(): void
+    {
+        $html = MailPlainTextHtml::toHtml("Sounds good.\n\nOn Mon, Finance wrote:\n> Hi all,\n> > older note\n> Thanks & regards");
+
+        $this->assertStringContainsString('Sounds good.', $html);
+        $this->assertStringContainsString('On Mon, Finance wrote:', $html);
+        $this->assertSame(2, substr_count($html, '<blockquote class="gmail_quote"'));
+        $this->assertStringContainsString('border-left:1px solid #ccc', $html);
+        $this->assertStringContainsString('Thanks &amp; regards', $html);
+        $this->assertStringNotContainsString('&gt; Hi all', $html);
+    }
+
     public function test_urls_become_clickable_links_and_trailing_punctuation_stays_outside(): void
     {
         $html = MailPlainTextHtml::toHtml("Please review https://example.com/docs.\nThanks");

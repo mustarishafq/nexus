@@ -5,6 +5,7 @@ import { Loader2, MessageCircle, MessagesSquare, SmilePlus } from 'lucide-react'
 import db from '@/api/apiClient';
 import UserAvatar from '@/components/users/UserAvatar';
 import { feedPostPath } from '@/lib/feedLinks';
+import { displayMentionText } from '@/lib/mentions';
 import { getDisplayName } from '@/lib/profile';
 import { stripHtml } from '@/lib/richText';
 import { cn } from '@/lib/utils';
@@ -13,7 +14,7 @@ const DISPLAY_LIMIT = 5;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function previewText(body) {
-  return stripHtml(body || '').replace(/\s+/g, ' ').trim();
+  return displayMentionText(stripHtml(body || '')).replace(/\s+/g, ' ').trim();
 }
 
 function engagementScore(item) {
