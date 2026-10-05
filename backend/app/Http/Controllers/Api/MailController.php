@@ -547,6 +547,39 @@ class MailController extends Controller
         return response()->json(['deleted' => true]);
     }
 
+    public function bulk(Request $request): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'uids' => ['required', 'array', 'min:1', 'max:100'],
+            'uids.*' => ['integer', 'min:1'],
+            'action' => ['required', 'string', 'in:'.implode(',', MailMailboxService::BULK_ACTIONS)],
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
+        try {
+            $result = $this->mail->bulkUpdate(
+                $user,
+                $validated['uids'],
+                $validated['action'],
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json(['message' => 'Unable to update messages.'], 500);
+        }
+
+        return response()->json($result);
+    }
+
     public function markUnread(Request $request, int $uid): JsonResponse
     {
         $user = ApiTokenAuth::userFromRequest($request);

@@ -171,6 +171,7 @@ Route::post('/mail/connect', [MailController::class, 'connect']);
 Route::delete('/mail/disconnect', [MailController::class, 'disconnect']);
 Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);
 Route::get('/mail/messages', [MailController::class, 'index']);
+Route::post('/mail/messages/bulk', [MailController::class, 'bulk']);
 Route::get('/mail/messages/{uid}', [MailController::class, 'show']);
 Route::get('/mail/messages/{uid}/attachments/{part}', [MailController::class, 'downloadAttachment'])
     ->where('part', '[0-9.]+');
