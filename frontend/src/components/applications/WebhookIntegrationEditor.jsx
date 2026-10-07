@@ -67,6 +67,7 @@ export default function WebhookIntegrationEditor({
   previewOutput,
   previewVisual,
   saveFirstMessage = 'Save the application first to preview mapping.',
+  connectionExtra = null,
 }) {
   const [open, setOpen] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
@@ -157,6 +158,8 @@ export default function WebhookIntegrationEditor({
                   />
                 </div>
               </div>
+
+              {connectionExtra}
 
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">

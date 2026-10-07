@@ -6,6 +6,7 @@ import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import {
   acknowledgeBroadcasts,
   getUnacknowledgedBroadcasts,
+  isApplicationBroadcast,
   isBroadcastModalSnoozedToday,
   snoozeBroadcastModalForToday,
 } from '@/lib/broadcast';
@@ -31,13 +32,12 @@ export default function BroadcastAnnouncementGate() {
       return;
     }
 
-    if (isBroadcastModalSnoozedToday(user.id)) {
-      setPendingBroadcasts((prev) => (prev.length === 0 ? prev : EMPTY_BROADCASTS));
-      setOpen(false);
-      return;
-    }
-
-    const unacknowledged = getUnacknowledgedBroadcasts(user.id, data);
+    // "Don't show again today" quiets announcements, but not what an application raised
+    // for this person (e.g. a letter to return): that comes back each sign-in until resolved.
+    const candidates = isBroadcastModalSnoozedToday(user.id)
+      ? data.filter(isApplicationBroadcast)
+      : data;
+    const unacknowledged = getUnacknowledgedBroadcasts(user.id, candidates);
     const nextIds = getBroadcastIds(unacknowledged);
 
     setPendingBroadcasts((prev) => (getBroadcastIds(prev) === nextIds ? prev : unacknowledged));

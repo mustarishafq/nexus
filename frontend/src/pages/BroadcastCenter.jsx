@@ -70,6 +70,8 @@ function getBroadcastStatus(broadcast) {
   const start = broadcast.broadcast_starts_at ? new Date(broadcast.broadcast_starts_at).getTime() : null;
   const end = broadcast.broadcast_ends_at ? new Date(broadcast.broadcast_ends_at).getTime() : null;
 
+  // Raised by an application and since taken down by it (e.g. the letter was returned).
+  if (broadcast.resolved_at) return 'resolved';
   if (start && start > now) return 'scheduled';
   if (end && end < now) return 'expired';
   return 'active';
@@ -198,6 +200,7 @@ function getAudienceLabel(broadcast, users = [], departments = []) {
 export default function BroadcastCenter() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [actionUrl, setActionUrl] = useState('');
   const [priority, setPriority] = useState('medium');
   const [broadcastStartsAt, setBroadcastStartsAt] = useState('');
   const [broadcastEndsAt, setBroadcastEndsAt] = useState('');
@@ -232,6 +235,7 @@ export default function BroadcastCenter() {
   const resetForm = () => {
     setTitle('');
     setMessage('');
+    setActionUrl('');
     setPriority('medium');
     setBroadcastStartsAt('');
     setBroadcastEndsAt('');
@@ -245,6 +249,7 @@ export default function BroadcastCenter() {
     setEditingId(broadcast.id);
     setTitle(broadcast.title || '');
     setMessage(broadcast.message || '');
+    setActionUrl(broadcast.action_url || '');
     setPriority(broadcast.priority || 'medium');
     setBroadcastStartsAt(toDatetimeLocalValue(broadcast.broadcast_starts_at));
     setBroadcastEndsAt(toDatetimeLocalValue(broadcast.broadcast_ends_at));
@@ -275,6 +280,7 @@ export default function BroadcastCenter() {
     const payload = {
       title: title.trim(),
       message,
+      action_url: actionUrl.trim() || null,
       priority,
       audience_type: audienceType,
       broadcast_starts_at: broadcastStartsAt ? new Date(broadcastStartsAt).toISOString() : null,
@@ -339,6 +345,11 @@ export default function BroadcastCenter() {
       return;
     }
 
+    if (actionUrl.trim() && !/^https?:\/\/\S+$/i.test(actionUrl.trim())) {
+      toast.error('Reference link must be a full link starting with http:// or https://');
+      return;
+    }
+
     if (audienceType === 'individual' && selectedUserIds.size === 0) {
       toast.error('Select at least one user');
       return;
@@ -399,6 +410,19 @@ export default function BroadcastCenter() {
                 placeholder="Provide details..."
                 rows={4}
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Reference link (optional)</Label>
+              <Input
+                type="url"
+                value={actionUrl}
+                onChange={(e) => setActionUrl(e.target.value)}
+                placeholder="https://forms.gle/..."
+                className="h-9 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                The announcement gets an Open button to this link, e.g. a Google Form.
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Priority</Label>
@@ -551,6 +575,11 @@ export default function BroadcastCenter() {
                               )}
                               {getAudienceLabel(broadcast, users, departments)}
                             </Badge>
+                            {broadcast.application?.name ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                From {broadcast.application.name}
+                              </Badge>
+                            ) : null}
                             {isEditing ? (
                               <Badge className="text-[10px]">Editing</Badge>
                             ) : null}

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Broadcast extends Model
@@ -15,10 +17,15 @@ class Broadcast extends Model
     protected $fillable = [
         'title',
         'message',
+        'action_url',
+        'action_label',
         'priority',
         'audience_type',
+        'application_id',
+        'external_ref',
         'broadcast_starts_at',
         'broadcast_ends_at',
+        'resolved_at',
     ];
 
     protected $appends = [
@@ -33,7 +40,31 @@ class Broadcast extends Model
         return [
             'broadcast_starts_at' => 'datetime',
             'broadcast_ends_at' => 'datetime',
+            'resolved_at' => 'datetime',
         ];
+    }
+
+    /** The application that raised it, when it was not posted by hand. */
+    public function application(): BelongsTo
+    {
+        return $this->belongsTo(Application::class);
+    }
+
+    /** Live now: inside its schedule and not yet resolved by the application that raised it. */
+    public function scopeActive(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query
+            ->whereNull('resolved_at')
+            ->where(function ($inner) use ($now) {
+                $inner->whereNull('broadcast_starts_at')
+                    ->orWhere('broadcast_starts_at', '<=', $now);
+            })
+            ->where(function ($inner) use ($now) {
+                $inner->whereNull('broadcast_ends_at')
+                    ->orWhere('broadcast_ends_at', '>=', $now);
+            });
     }
 
     public function assignedUsers(): BelongsToMany

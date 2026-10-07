@@ -10,6 +10,8 @@ import {
   NOTIFICATION_FIELD_LABELS,
 } from '@/lib/notificationEventMapping';
 import { Bell } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import NotificationPreview from '@/components/notifications/NotificationPreview';
 import WebhookIntegrationEditor from '@/components/applications/WebhookIntegrationEditor';
@@ -115,6 +117,23 @@ export default function NotificationEventMappingEditor({
       previewLoading={previewLoading}
       previewOutput={previewOutput}
       previewVisual={(payload) => <NotificationPreview payload={payload} />}
+      connectionExtra={(
+        <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1 min-w-0">
+              <Label htmlFor="notifications-broadcast-enabled" className="text-sm">Allow broadcasts</Label>
+              <p className="text-[11px] text-muted-foreground">
+                This application can raise an announcement for one person about one of its records (e.g. a letter to sign), shown until the application resolves it.
+              </p>
+            </div>
+            <Switch
+              id="notifications-broadcast-enabled"
+              checked={config.broadcast_enabled}
+              onCheckedChange={(checked) => updateConfig({ broadcast_enabled: checked })}
+            />
+          </div>
+        </div>
+      )}
     />
   );
 }
