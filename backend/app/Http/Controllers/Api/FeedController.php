@@ -270,17 +270,8 @@ class FeedController extends Controller
 
     private function activeBroadcastsQuery(User $viewer): Builder
     {
-        $now = now();
-
-        $query = Broadcast::query()
-            ->where(function ($inner) use ($now) {
-                $inner->whereNull('broadcast_starts_at')
-                    ->orWhere('broadcast_starts_at', '<=', $now);
-            })
-            ->where(function ($inner) use ($now) {
-                $inner->whereNull('broadcast_ends_at')
-                    ->orWhere('broadcast_ends_at', '>=', $now);
-            });
+        // Notices an application raises for one person (e.g. a letter to sign) are not feed posts.
+        $query = Broadcast::query()->active()->whereNull('application_id');
 
         return BroadcastAudience::scopeVisibleToUser($query, $viewer);
     }

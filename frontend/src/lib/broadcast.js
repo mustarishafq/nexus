@@ -9,6 +9,11 @@ export function sortBroadcastsByPriority(broadcasts = []) {
   });
 }
 
+/** Raised by an application for one of its records, rather than posted in Broadcast Center. */
+export function isApplicationBroadcast(broadcast) {
+  return Boolean(broadcast?.application_id);
+}
+
 function getAckStorageKey(userId) {
   return `nexus_broadcast_ack_${userId}`;
 }

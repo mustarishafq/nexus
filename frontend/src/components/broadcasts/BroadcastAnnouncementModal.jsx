@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { AlertOctagon, AlertTriangle, Info, Megaphone } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ExternalLink, Info, Megaphone } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -59,9 +59,20 @@ function BroadcastAnnouncementCard({ broadcast }) {
           {broadcast.message}
         </div>
       ) : null}
-      <p className="mt-2 text-[10px] text-muted-foreground">
-        Posted {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}
-      </p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[10px] text-muted-foreground">
+          {broadcast.application?.name ? `From ${broadcast.application.name} · ` : 'Posted '}
+          {formatDistanceToNow(new Date(broadcast.created_date), { addSuffix: true })}
+        </p>
+        {broadcast.action_url ? (
+          <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs">
+            <a href={broadcast.action_url} target="_blank" rel="noopener noreferrer">
+              Open
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </Button>
+        ) : null}
+      </div>
     </article>
   );
 }

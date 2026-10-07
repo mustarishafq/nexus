@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\AppliesIndexQuery;
 use App\Http\Controllers\Api\Concerns\AuthorizesRoles;
+use App\Http\Controllers\Api\Nexus\V1\BroadcastController as NexusV1BroadcastController;
 use App\Http\Controllers\Controller;
 use App\Models\Broadcast;
 use App\Models\Notification;
@@ -34,20 +35,10 @@ class BroadcastController extends Controller
             }
         }
 
-        $query = Broadcast::query()->with(['assignedUsers', 'assignedDepartments']);
+        $query = Broadcast::query()->with(['assignedUsers', 'assignedDepartments', 'application:id,name,slug,notification_config']);
 
         if ($request->boolean('active_only')) {
-            $now = now();
-            $query
-                ->where(function ($inner) use ($now) {
-                    $inner->whereNull('broadcast_starts_at')
-                        ->orWhere('broadcast_starts_at', '<=', $now);
-                })
-                ->where(function ($inner) use ($now) {
-                    $inner->whereNull('broadcast_ends_at')
-                        ->orWhere('broadcast_ends_at', '>=', $now);
-                });
-
+            $query->active();
             BroadcastAudience::scopeVisibleToUser($query, $user);
         }
 
@@ -57,6 +48,17 @@ class BroadcastController extends Controller
             ['priority', 'audience_type'],
             'created_at'
         )->get();
+
+        if ($request->boolean('active_only')) {
+            // An application that may no longer broadcast takes its open ones down with it.
+            $items = $items->reject(
+                fn (Broadcast $b) => $b->application_id !== null
+                    && (! $b->application || ! NexusV1BroadcastController::broadcastsEnabled($b->application))
+            )->values();
+        }
+
+        // Which application raised it, by name only — never its settings.
+        $items->each(fn (Broadcast $b) => $b->application?->setVisible(['id', 'name', 'slug']));
 
         return response()->json($items);
     }
@@ -70,6 +72,8 @@ class BroadcastController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
+            // Optional reference link (e.g. a Google Form); the announcement gets an Open button to it.
+            'action_url' => ['nullable', 'url:http,https', 'max:2048'],
             'priority' => ['sometimes', 'in:low,medium,high,critical'],
             'audience_type' => ['sometimes', Rule::in([
                 Broadcast::AUDIENCE_ALL,
@@ -133,6 +137,8 @@ class BroadcastController extends Controller
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
+            // Optional reference link (e.g. a Google Form); the announcement gets an Open button to it.
+            'action_url' => ['nullable', 'url:http,https', 'max:2048'],
             'priority' => ['sometimes', 'in:low,medium,high,critical'],
             'audience_type' => ['sometimes', Rule::in([
                 Broadcast::AUDIENCE_ALL,

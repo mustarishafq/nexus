@@ -132,4 +132,30 @@ class BroadcastAudienceTest extends TestCase
             ])
             ->assertUnprocessable();
     }
+
+    public function test_broadcast_can_carry_a_reference_link(): void
+    {
+        $admin = User::factory()->create(['is_approved' => true, 'role' => 'admin']);
+        $token = $this->issueToken($admin);
+
+        $id = $this->withToken($token)
+            ->postJson('/api/broadcasts', [
+                'title' => 'Staff survey',
+                'action_url' => 'https://forms.gle/abc123',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('action_url', 'https://forms.gle/abc123')
+            ->json('id');
+
+        $this->withToken($token)->getJson('/api/broadcasts?active_only=1')
+            ->assertOk()
+            ->assertJsonPath('0.action_url', 'https://forms.gle/abc123');
+
+        // Only a web link, and it can be taken off again.
+        $this->withToken($token)->putJson("/api/broadcasts/{$id}", ['action_url' => 'javascript:alert(1)'])
+            ->assertUnprocessable();
+        $this->withToken($token)->putJson("/api/broadcasts/{$id}", ['action_url' => null])
+            ->assertOk()
+            ->assertJsonPath('action_url', null);
+    }
 }

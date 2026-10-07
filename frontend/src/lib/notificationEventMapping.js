@@ -1,5 +1,6 @@
 export const DEFAULT_NOTIFICATION_EVENT_MAPPING = {
   auto_notify: false,
+  broadcast_enabled: false,
   webhook_secret: '',
   field_mappings: {
     title: ['title', 'subject'],
@@ -100,6 +101,7 @@ export function normalizeNotificationEventMapping(config) {
 
   return {
     auto_notify: Boolean(parsed.auto_notify),
+    broadcast_enabled: Boolean(parsed.broadcast_enabled),
     webhook_secret: parsed.webhook_secret || '',
     field_mappings: hasSavedMappings
       ? {

@@ -30,6 +30,8 @@ class NotificationEventMapping
     {
         return [
             'auto_notify' => false,
+            // May this application raise broadcasts for its own records (Nexus v1 broadcasts)?
+            'broadcast_enabled' => false,
             'webhook_secret' => null,
             'field_mappings' => self::DEFAULT_FIELD_MAPPINGS,
             'category_prefix_rules' => self::DEFAULT_CATEGORY_PREFIX_RULES,
@@ -68,6 +70,7 @@ class NotificationEventMapping
 
         return [
             'auto_notify' => (bool) ($config['auto_notify'] ?? $defaults['auto_notify']),
+            'broadcast_enabled' => (bool) ($config['broadcast_enabled'] ?? $defaults['broadcast_enabled']),
             'webhook_secret' => filled($config['webhook_secret'] ?? null)
                 ? (string) $config['webhook_secret']
                 : null,
