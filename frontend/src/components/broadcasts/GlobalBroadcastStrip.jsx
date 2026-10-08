@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import { sortBroadcastsByPriority } from '@/lib/broadcast';
@@ -30,21 +31,47 @@ function formatBroadcastText(broadcast) {
   return broadcast.title;
 }
 
-function TickerItems({ broadcasts, suffix = '' }) {
-  return broadcasts.map((broadcast) => (
-    <span
-      key={`${broadcast.id}${suffix}`}
-      className="inline-flex shrink-0 items-center gap-1.5 pr-10 leading-none"
-    >
-      <span className="font-semibold leading-none tracking-tight">{broadcast.title}</span>
-      {broadcast.message ? (
-        <>
-          <span className="opacity-40">·</span>
-          <span className="font-normal leading-none opacity-85">{broadcast.message}</span>
-        </>
-      ) : null}
-    </span>
-  ));
+function TickerItems({ broadcasts, suffix = '', copy = false }) {
+  return broadcasts.map((broadcast) => {
+    const content = (
+      <>
+        <span className="font-semibold leading-none tracking-tight">{broadcast.title}</span>
+        {broadcast.message ? (
+          <>
+            <span className="opacity-40">·</span>
+            <span className="font-normal leading-none opacity-85">{broadcast.message}</span>
+          </>
+        ) : null}
+      </>
+    );
+
+    // With a link (e.g. Insan's letter to sign), the item works like the announcement's Open button.
+    if (broadcast.action_url) {
+      return (
+        <a
+          key={`${broadcast.id}${suffix}`}
+          href={broadcast.action_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open"
+          tabIndex={copy ? -1 : undefined}
+          className="inline-flex shrink-0 items-center gap-1.5 pr-10 leading-none underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+        >
+          {content}
+          <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-70" aria-hidden />
+        </a>
+      );
+    }
+
+    return (
+      <span
+        key={`${broadcast.id}${suffix}`}
+        className="inline-flex shrink-0 items-center gap-1.5 pr-10 leading-none"
+      >
+        {content}
+      </span>
+    );
+  });
 }
 
 function LiveBadge({ priority }) {
@@ -70,9 +97,9 @@ export default function GlobalBroadcastStrip({
   const [dismissedIds, setDismissedIds] = useState(new Set());
   const viewportRef = useRef(null);
   const measureRef = useRef(null);
-  const trackRef = useRef(null);
-  const [shouldScroll, setShouldScroll] = useState(false);
-  const [duration, setDuration] = useState(40);
+  // Copies of the items in each half of the ticker, so it fills the strip and loops seamlessly.
+  const [repeat, setRepeat] = useState(1);
+  const [duration, setDuration] = useState(24);
 
   const visibleBroadcasts = useMemo(
     () =>
@@ -89,21 +116,18 @@ export default function GlobalBroadcastStrip({
     onVisibilityChange?.(isVisible);
   }, [isVisible, onVisibilityChange]);
 
+  // The ticker always moves; short text is repeated until it spans the strip.
   const updateTickerLayout = useCallback(() => {
     const viewport = viewportRef.current;
     const measure = measureRef.current;
     if (!viewport || !measure) return;
 
     const contentWidth = measure.scrollWidth;
-    const viewportWidth = viewport.clientWidth;
-    const overflow = contentWidth > viewportWidth + 8;
+    if (!contentWidth) return;
 
-    setShouldScroll(overflow);
-
-    if (overflow && trackRef.current) {
-      const halfWidth = trackRef.current.scrollWidth / 2;
-      setDuration(Math.max(24, halfWidth / 55));
-    }
+    const nextRepeat = Math.max(1, Math.ceil(viewport.clientWidth / contentWidth));
+    setRepeat(nextRepeat);
+    setDuration(Math.max(12, (contentWidth * nextRepeat) / 55));
   }, []);
 
   useEffect(() => {
@@ -112,15 +136,9 @@ export default function GlobalBroadcastStrip({
     const observer = new ResizeObserver(updateTickerLayout);
     if (viewportRef.current) observer.observe(viewportRef.current);
     if (measureRef.current) observer.observe(measureRef.current);
-    if (trackRef.current) observer.observe(trackRef.current);
 
     return () => observer.disconnect();
   }, [visibleBroadcasts, updateTickerLayout]);
-
-  useEffect(() => {
-    if (!shouldScroll) return;
-    updateTickerLayout();
-  }, [shouldScroll, updateTickerLayout]);
 
   if (!user || !isVisible) {
     return null;
@@ -158,29 +176,25 @@ export default function GlobalBroadcastStrip({
 
         <div
           ref={viewportRef}
-          className={cn(
-            'broadcast-ticker-viewport relative flex h-full min-w-0 flex-1 items-center overflow-hidden',
-            shouldScroll ? 'broadcast-ticker-viewport--scroll' : 'justify-center'
-          )}
+          className="broadcast-ticker-viewport broadcast-ticker-viewport--scroll relative flex h-full min-w-0 flex-1 items-center overflow-hidden"
         >
           <div
             ref={measureRef}
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 flex w-max items-center whitespace-nowrap px-3 text-[10px] leading-none opacity-0 sm:text-[11px]"
+            className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-center whitespace-nowrap text-[11px] leading-none"
           >
             <TickerItems broadcasts={visibleBroadcasts} />
           </div>
 
           <div
-            ref={trackRef}
-            className={cn(
-              'flex items-center whitespace-nowrap px-3 text-[11px] leading-none sm:text-[11px]',
-              shouldScroll ? 'broadcast-ticker-track w-max' : 'w-full justify-center'
-            )}
-            style={shouldScroll ? { animationDuration: `${duration}s` } : undefined}
+            className="broadcast-ticker-track flex w-max items-center whitespace-nowrap text-[11px] leading-none"
+            style={{ animationDuration: `${duration}s` }}
           >
-            <TickerItems broadcasts={visibleBroadcasts} />
-            {shouldScroll ? <TickerItems broadcasts={visibleBroadcasts} suffix="-loop" /> : null}
+            {Array.from({ length: repeat * 2 }, (_, i) => (
+              <span key={i} className="flex items-center" aria-hidden={i > 0 || undefined}>
+                <TickerItems broadcasts={visibleBroadcasts} suffix={`-${i}`} copy={i > 0} />
+              </span>
+            ))}
           </div>
         </div>
 
