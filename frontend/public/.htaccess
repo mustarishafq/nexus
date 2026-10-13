@@ -2,6 +2,12 @@
     # HTML shell must revalidate so deploys pick up new hashed /assets/* URLs.
     Header always set Cache-Control "no-cache, no-store, must-revalidate" "expr=%{CONTENT_TYPE} =~ m#^text/html#"
 
+    <FilesMatch "^oauth-(protected-resource|authorization-server)\.json$">
+        Header set Content-Type "application/json"
+        Header set Access-Control-Allow-Origin "*"
+        Header set Cache-Control "public, max-age=300"
+    </FilesMatch>
+
     <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
         Header set Cache-Control "no-cache, no-store, must-revalidate"
         Header set Pragma "no-cache"
@@ -15,6 +21,13 @@
 
     # Missing /assets/* must 404, not fall back to index.html.
     RewriteRule ^assets/ - [L]
+
+    # MCP OAuth discovery (RFC 9728 / RFC 8414). ChatGPT and other strict
+    # connector clients fetch these before /mcp; without them they get the
+    # SPA shell and fail with "Couldn't discover OAuth settings". Keep in
+    # sync with backend OAuthDiscoveryController.
+    RewriteRule ^\.well-known/oauth-protected-resource(/mcp)?/?$ /.well-known/oauth-protected-resource.json [L]
+    RewriteRule ^\.well-known/(oauth-authorization-server|openid-configuration)(/mcp)?/?$ /.well-known/oauth-authorization-server.json [L]
 
     RewriteRule ^index\.html$ - [L]
     RewriteCond %{REQUEST_FILENAME} !-f

@@ -13,6 +13,9 @@ use Illuminate\Http\Request;
 
 class McpController extends Controller
 {
+    /** Newest first; the first entry is offered when the client's is unknown. */
+    private const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+
     public function __construct(private ToolRegistry $tools) {}
 
     /**
@@ -38,12 +41,19 @@ class McpController extends Controller
         $method = (string) $request->input('method');
         $params = (array) $request->input('params', []);
 
+        // JSON-RPC notifications (no id, e.g. notifications/initialized) get
+        // no response body; strict clients like ChatGPT expect 202 here.
+        if (! $request->has('id') && str_starts_with($method, 'notifications/')) {
+            return response()->json(null, 202);
+        }
+
         return match ($method) {
             'initialize' => $this->result($id, [
-                'protocolVersion' => '2024-11-05',
-                'serverInfo' => ['name' => 'nexus-mcp', 'version' => '1.0.0'],
+                'protocolVersion' => $this->negotiateProtocolVersion($params['protocolVersion'] ?? null),
+                'serverInfo' => ['name' => 'nexus-mcp', 'title' => 'Nexus Brain', 'version' => '1.0.0'],
                 'capabilities' => ['tools' => ['listChanged' => false]],
             ]),
+            'ping' => $this->result($id, []),
             'tools/list' => $this->result($id, [
                 'tools' => array_map(
                     fn ($tool) => $this->serializeToolForUser($tool, $user),
@@ -114,6 +124,17 @@ class McpController extends Controller
             'content' => [['type' => 'text', 'text' => json_encode($output)]],
             'isError' => false,
         ]);
+    }
+
+    /**
+     * Echo the client's requested version when we support it, otherwise
+     * offer our latest so the client can decide whether to continue.
+     */
+    private function negotiateProtocolVersion(mixed $requested): string
+    {
+        return is_string($requested) && in_array($requested, self::SUPPORTED_PROTOCOL_VERSIONS, true)
+            ? $requested
+            : self::SUPPORTED_PROTOCOL_VERSIONS[0];
     }
 
     private function result(mixed $id, array $result): JsonResponse

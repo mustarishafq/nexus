@@ -1,0 +1,7 @@
+{
+  "resource": "https://emzinexus.com/mcp",
+  "resource_name": "Nexus Brain",
+  "authorization_servers": ["https://emzinexus.com"],
+  "scopes_supported": ["mcp"],
+  "bearer_methods_supported": ["header"]
+}

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OAuthClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class OAuthAuthorizeRedirectController extends Controller
 {
@@ -17,7 +18,7 @@ class OAuthAuthorizeRedirectController extends Controller
      */
     public function __invoke(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $validator = Validator::make($request->query(), [
             'response_type' => ['required', 'in:code'],
             'client_id' => ['required', 'string'],
             'redirect_uri' => ['required', 'string'],
@@ -26,6 +27,14 @@ class OAuthAuthorizeRedirectController extends Controller
             'code_challenge' => ['required', 'string'],
             'code_challenge_method' => ['required', 'in:S256'],
         ]);
+
+        // A failed validate() would redirect "back" (to the API homepage),
+        // hiding the problem from the connector developer.
+        if ($validator->fails()) {
+            abort(400, $validator->errors()->first());
+        }
+
+        $validated = $validator->validated();
 
         $client = OAuthClient::query()->where('client_id', $validated['client_id'])->first();
 

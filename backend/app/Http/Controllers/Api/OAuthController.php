@@ -13,6 +13,7 @@ use App\Support\ApiTokenAuth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class OAuthController extends Controller
@@ -34,7 +35,7 @@ class OAuthController extends Controller
             'client_name' => ['nullable', 'string', 'max:255'],
             'redirect_uris' => ['required', 'array', 'min:1'],
             'redirect_uris.*' => ['required', 'string', 'max:2048'],
-            'token_endpoint_auth_method' => ['nullable', 'in:none,client_secret_post'],
+            'token_endpoint_auth_method' => ['nullable', 'in:none,client_secret_post,client_secret_basic'],
         ]);
 
         $authMethod = $validated['token_endpoint_auth_method'] ?? 'none';
@@ -48,7 +49,7 @@ class OAuthController extends Controller
             'token_endpoint_auth_method' => $authMethod,
         ];
 
-        if ($authMethod === 'client_secret_post') {
+        if ($authMethod !== 'none') {
             $plainSecret = Str::random(48);
             $attributes['client_secret_hash'] = Hash::make($plainSecret);
         }
@@ -158,13 +159,17 @@ class OAuthController extends Controller
 
     private function exchangeAuthorizationCode(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = $this->tokenRequestInput($request, [
             'code' => ['required', 'string'],
             'redirect_uri' => ['required', 'string'],
             'client_id' => ['required', 'string'],
             'client_secret' => ['nullable', 'string'],
             'code_verifier' => ['required', 'string'],
         ]);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
 
         $client = OAuthClient::query()->where('client_id', $validated['client_id'])->first();
 
@@ -207,11 +212,15 @@ class OAuthController extends Controller
 
     private function exchangeRefreshToken(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = $this->tokenRequestInput($request, [
             'refresh_token' => ['required', 'string'],
             'client_id' => ['required', 'string'],
             'client_secret' => ['nullable', 'string'],
         ]);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
 
         $client = OAuthClient::query()->where('client_id', $validated['client_id'])->first();
 
@@ -287,9 +296,38 @@ class OAuthController extends Controller
         return 'MCP: '.($name !== '' ? $name : 'Unnamed client');
     }
 
+    /**
+     * Token request params with client credentials merged in from an HTTP
+     * Basic header (client_secret_basic), validated into an RFC 6749
+     * invalid_request error instead of Laravel's 422 shape.
+     *
+     * @param  array<string, mixed>  $rules
+     * @return array<string, mixed>|JsonResponse
+     */
+    private function tokenRequestInput(Request $request, array $rules): array|JsonResponse
+    {
+        $input = $request->all();
+
+        if ($request->getUser() !== null) {
+            $input['client_id'] = urldecode((string) $request->getUser());
+            $input['client_secret'] = urldecode((string) $request->getPassword());
+        }
+
+        $validator = Validator::make($input, $rules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'invalid_request',
+                'error_description' => $validator->errors()->first(),
+            ], 400);
+        }
+
+        return $validator->validated();
+    }
+
     private function clientSecretValid(OAuthClient $client, ?string $providedSecret): bool
     {
-        if ($client->token_endpoint_auth_method !== 'client_secret_post') {
+        if (! in_array($client->token_endpoint_auth_method, ['client_secret_post', 'client_secret_basic'], true)) {
             return true;
         }
 
