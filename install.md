@@ -257,7 +257,19 @@ Point the API vhost to `backend/public/`.
 
 Ensure `/api/*` routes reach Laravel. If frontend and API share a domain, reverse-proxy `/api` to the backend.
 
+### MCP connector (Claude, ChatGPT, Cursor, …)
+
+Connector clients use `https://emzinexus.com/mcp`. The server must also forward
+`/authorize`, `/token` and `/register` to Laravel. The OAuth discovery documents
+are served as static files from the SPA (`frontend/public/.well-known/*.json`,
+mapped by `.htaccess`), because `/.well-known/*` on the frontend host never
+reaches Laravel. If the public domain changes, update those JSON files together
+with `MCP_PUBLIC_URL`.
+
 ### Verify after deploy
+
+- `https://yoursite.com/.well-known/oauth-protected-resource/mcp` and
+  `/.well-known/oauth-authorization-server` — JSON (not the SPA HTML)
 
 - `https://yoursite.com/sw.js` — service worker loads (200)
 - `https://yoursite.com/share/posts/{id}` — HTML with `og:title` / `og:image` (WhatsApp preview)
