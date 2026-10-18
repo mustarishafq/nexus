@@ -10,6 +10,8 @@ class AssistantMessage extends Model
         'assistant_conversation_id',
         'role',
         'content',
+        'attachments',
+        'visuals',
         'tool_steps',
         'usage',
     ];
@@ -22,6 +24,8 @@ class AssistantMessage extends Model
     protected function casts(): array
     {
         return [
+            'attachments' => 'array',
+            'visuals' => 'array',
             'tool_steps' => 'array',
             'usage' => 'array',
         ];

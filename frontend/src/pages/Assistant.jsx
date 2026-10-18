@@ -24,6 +24,8 @@ function mapStoredMessage(message) {
     id: String(message.id),
     role: message.role,
     content: message.content || '',
+    attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    visuals: Array.isArray(message.visuals) ? message.visuals : [],
     tool_steps: Array.isArray(message.tool_steps) ? message.tool_steps : [],
     usage: message.usage || null,
   };

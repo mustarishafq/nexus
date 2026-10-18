@@ -9,6 +9,7 @@ use App\Services\Llm\OpenRouterClient;
 use App\Services\Mcp\Tools\CallApplicationApiTool;
 use App\Services\Mcp\Tools\DescribeApplicationApiTool;
 use App\Support\ApplicationSsoCredentials;
+use App\Support\ChatResponseArtifacts;
 use App\Support\McpUserAccess;
 use App\Support\UserApplicationAccess;
 use Carbon\Carbon;
@@ -17,7 +18,7 @@ use Throwable;
 
 class AssistantAgent
 {
-    private const MAX_TOOL_ITERATIONS = 5;
+    private const MAX_TOOL_ITERATIONS = 6;
 
     private const MAX_HISTORY_TURNS = 20;
 
@@ -32,6 +33,8 @@ class AssistantAgent
      * @return array{
      *   message: string,
      *   tool_steps: list<array{name: string, summary: string, ok: bool}>,
+     *   visuals: list<array<string, mixed>>,
+     *   attachments: list<array<string, mixed>>,
      *   usage: array<string, mixed>|null
      * }
      */
@@ -49,6 +52,11 @@ class AssistantAgent
             throw new RuntimeException("You don't have Assistant tool access for {$application->slug}.");
         }
 
+        $tools = [
+            ...$tools,
+            ...ChatResponseArtifacts::toolDefinitions(),
+        ];
+
         $messages = [
             ['role' => 'system', 'content' => $this->systemPrompt($user, $application)],
             ...$this->normalizeHistory($history),
@@ -56,6 +64,8 @@ class AssistantAgent
         ];
 
         $toolSteps = [];
+        $visuals = [];
+        $files = [];
         $usageChunks = [];
         $fallbackModel = (string) config('services.openrouter.default_model', 'openai/gpt-4o-mini');
         $deadlineAt = microtime(true) + 150;
@@ -82,6 +92,10 @@ class AssistantAgent
                     $content = trim((string) ($choice['content'] ?? ''));
 
                     if ($content === '') {
+                        $content = ChatResponseArtifacts::fallbackCaption($visuals, $files);
+                    }
+
+                    if ($content === '') {
                         $content = 'I could not produce an answer. Please try rephrasing your question.';
                     }
 
@@ -102,6 +116,8 @@ class AssistantAgent
                     return [
                         'message' => $content,
                         'tool_steps' => $toolSteps,
+                        'visuals' => $visuals,
+                        'attachments' => $files,
                         'usage' => $usage,
                     ];
                 }
@@ -118,12 +134,22 @@ class AssistantAgent
                     $name = (string) ($toolCall['function']['name'] ?? '');
                     $rawArgs = $toolCall['function']['arguments'] ?? '{}';
                     $arguments = $this->decodeArguments($rawArgs);
-                    $arguments['slug'] = $application->slug;
+                    if (! in_array($name, ['present_chart', 'create_spreadsheet'], true)) {
+                        $arguments['slug'] = $application->slug;
+                    }
                     if ($name === 'describe_application_api') {
                         $arguments['assistant'] = true;
                     }
 
-                    $step = $this->executeTool($user, $application, $name, $arguments);
+                    $step = in_array($name, ['present_chart', 'create_spreadsheet'], true)
+                        ? ChatResponseArtifacts::execute($user, $name, $arguments, count($visuals), count($files))
+                        : $this->executeTool($user, $application, $name, $arguments);
+                    if (is_array($step['visual'] ?? null)) {
+                        $visuals[] = $step['visual'];
+                    }
+                    if (is_array($step['attachment'] ?? null)) {
+                        $files[] = $step['attachment'];
+                    }
                     $toolSteps[] = [
                         'name' => $name,
                         'summary' => $step['summary'],
@@ -138,7 +164,10 @@ class AssistantAgent
                 }
             }
 
-            $limitMessage = 'I reached the tool-call limit while investigating that. Try a more specific question.';
+            $limitMessage = ChatResponseArtifacts::fallbackCaption($visuals, $files);
+            if ($limitMessage === '') {
+                $limitMessage = 'I reached the tool-call limit while investigating that. Try a more specific question.';
+            }
             $usage = $this->persistUsage(
                 $user,
                 $application,
@@ -157,6 +186,8 @@ class AssistantAgent
             return [
                 'message' => $limitMessage,
                 'tool_steps' => $toolSteps,
+                'visuals' => $visuals,
+                'attachments' => $files,
                 'usage' => $usage,
             ];
         } catch (Throwable $e) {
@@ -258,6 +289,7 @@ class AssistantAgent
         $timezone = $now->timezoneName;
         $accountEmail = ApplicationSsoCredentials::resolveLaunchEmail($user, $application, null)
             ?: trim((string) ($user->email ?? ''));
+        $artifactRules = ChatResponseArtifacts::instruction();
 
         return <<<PROMPT
 You are the Nexus Assistant inside EMZI Nexus Brain.
@@ -284,6 +316,7 @@ Rules:
 - Be concise and practical. Prefer clear summaries over dumping raw JSON unless asked.
 - Format answers in Markdown (bold, lists, links).
 - When a response includes image evidence or media URLs, embed them with Markdown images like ![label](https://...), not only as text links.
+{$artifactRules}
 PROMPT;
     }
 

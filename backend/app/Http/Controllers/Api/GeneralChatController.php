@@ -12,6 +12,7 @@ use App\Services\GeneralChat\GeneralChatMemoryService;
 use App\Services\GeneralChat\GeneralChatQuotaService;
 use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\ChatResponseArtifacts;
 use App\Support\GeneralChatAttachments;
 use App\Support\GeneralChatTitle;
 use App\Support\PermissionCatalog;
@@ -373,6 +374,8 @@ class GeneralChatController extends Controller
                 'general_chat_conversation_id' => $conversation->id,
                 'role' => 'assistant',
                 'content' => $errorText,
+                'attachments' => null,
+                'visuals' => null,
                 'usage' => null,
             ]);
             $conversation->forceFill(['last_message_at' => now()])->save();
@@ -394,10 +397,14 @@ class GeneralChatController extends Controller
             ], $status);
         }
 
+        $replyAttachments = is_array($result['attachments'] ?? null) ? $result['attachments'] : [];
+        $visuals = is_array($result['visuals'] ?? null) ? $result['visuals'] : [];
         $assistantMessage = GeneralChatMessage::query()->create([
             'general_chat_conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => (string) ($result['message'] ?? ''),
+            'attachments' => $replyAttachments === [] ? null : $replyAttachments,
+            'visuals' => $visuals === [] ? null : $visuals,
             'usage' => is_array($result['usage'] ?? null) ? $result['usage'] : null,
         ]);
         $conversation->forceFill(['last_message_at' => now()])->save();
@@ -479,7 +486,7 @@ class GeneralChatController extends Controller
             ->whereIn('role', ['user', 'assistant'])
             ->orderByDesc('id')
             ->limit(self::MAX_STORED_HISTORY)
-            ->get(['role', 'content', 'attachments'])
+            ->get(['role', 'content', 'attachments', 'visuals'])
             ->reverse()
             ->values()
             ->map(function (GeneralChatMessage $message) {
@@ -487,6 +494,15 @@ class GeneralChatController extends Controller
                 $content = $attachments === []
                     ? (string) $message->content
                     : GeneralChatAttachments::toLlmContent((string) $message->content, $attachments);
+                $suffix = ChatResponseArtifacts::historySuffix(
+                    is_array($message->visuals) ? $message->visuals : [],
+                    [],
+                );
+                if ($suffix !== '' && is_string($content)) {
+                    $content .= $suffix;
+                } elseif ($suffix !== '' && is_array($content)) {
+                    $content[] = ['type' => 'text', 'text' => trim($suffix)];
+                }
 
                 return [
                     'role' => (string) $message->role,
@@ -535,7 +551,7 @@ class GeneralChatController extends Controller
     }
 
     /**
-     * @return array{id: int, role: string, content: string, attachments: list<mixed>, usage: array<string, mixed>|null, created_at: string|null}
+     * @return array{id: int, role: string, content: string, attachments: list<mixed>, visuals: list<mixed>, usage: array<string, mixed>|null, created_at: string|null}
      */
     private function serializeMessage(GeneralChatMessage $message): array
     {
@@ -544,6 +560,7 @@ class GeneralChatController extends Controller
             'role' => (string) $message->role,
             'content' => (string) $message->content,
             'attachments' => is_array($message->attachments) ? $message->attachments : [],
+            'visuals' => is_array($message->visuals) ? $message->visuals : [],
             'usage' => is_array($message->usage) ? $message->usage : null,
             'created_at' => optional($message->created_at)?->toIso8601String(),
         ];

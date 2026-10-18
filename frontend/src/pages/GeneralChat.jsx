@@ -46,6 +46,7 @@ function mapStoredMessage(message) {
     role: message.role,
     content: message.content || '',
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    visuals: Array.isArray(message.visuals) ? message.visuals : [],
     tool_steps: [],
     usage: message.usage || null,
     pendingLabel: 'Thinking…',

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, CheckCircle2, FileText, Loader2, Wrench, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ChatVisuals from '@/components/assistant/ChatVisuals';
 import MediaLightbox from '@/components/media/MediaLightbox';
 import LightboxZoomableImage from '@/components/media/LightboxZoomableImage';
 import { cn } from '@/lib/utils';
@@ -40,7 +41,7 @@ function MessageAttachments({ attachments, isUser }) {
   if (!Array.isArray(attachments) || attachments.length === 0) return null;
 
   return (
-    <div className="mb-2 flex flex-wrap gap-2">
+    <div className={cn('flex flex-wrap gap-2', isUser ? 'mb-2' : 'mt-2')}>
       {attachments.map((item, index) => {
         const url = attachmentSrc(item);
         const name = String(item?.name || 'Attachment');
@@ -67,6 +68,7 @@ function MessageAttachments({ attachments, isUser }) {
             href={item?.url || url || undefined}
             target="_blank"
             rel="noopener noreferrer"
+            download={name}
             className={cn(
               'inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]',
               isUser
@@ -269,7 +271,9 @@ export default function AssistantMessage({ message }) {
   const isUser = message.role === 'user';
   const toolSteps = Array.isArray(message.tool_steps) ? message.tool_steps : [];
   const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  const visuals = Array.isArray(message.visuals) ? message.visuals : [];
   const pendingLabel = message.pendingLabel || 'Working with the system…';
+  const hasVisuals = !isUser && visuals.length > 0;
 
   return (
     <motion.div
@@ -286,7 +290,8 @@ export default function AssistantMessage({ message }) {
 
       <div
         className={cn(
-          'max-w-[min(92%,42rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm sm:max-w-[75%]',
+          hasVisuals ? 'w-full max-w-[min(100%,40rem)]' : 'max-w-[min(92%,42rem)] sm:max-w-[75%]',
+          'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
           isUser
             ? 'rounded-br-md bg-primary text-primary-foreground'
             : 'rounded-bl-md border border-border/70 bg-card text-foreground',
@@ -299,7 +304,7 @@ export default function AssistantMessage({ message }) {
         ) : null}
 
         <ToolSteps steps={toolSteps} />
-        {!message.pending ? <MessageAttachments attachments={attachments} isUser={isUser} /> : null}
+        {isUser && !message.pending ? <MessageAttachments attachments={attachments} isUser /> : null}
 
         {message.pending ? (
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -313,7 +318,11 @@ export default function AssistantMessage({ message }) {
         ) : isUser ? (
           message.content ? <p className="whitespace-pre-wrap break-words">{message.content}</p> : null
         ) : (
-          <AssistantMarkdown content={message.content} />
+          <>
+            {message.content ? <AssistantMarkdown content={message.content} /> : null}
+            <ChatVisuals visuals={visuals} />
+            <MessageAttachments attachments={attachments} isUser={false} />
+          </>
         )}
       </div>
     </motion.div>

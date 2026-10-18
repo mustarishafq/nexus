@@ -11,6 +11,7 @@ class GeneralChatMessage extends Model
         'role',
         'content',
         'attachments',
+        'visuals',
         'usage',
     ];
 
@@ -18,6 +19,7 @@ class GeneralChatMessage extends Model
     {
         return [
             'attachments' => 'array',
+            'visuals' => 'array',
             'usage' => 'array',
         ];
     }

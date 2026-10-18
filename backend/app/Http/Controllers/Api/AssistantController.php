@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Assistant\AssistantAgent;
 use App\Services\PermissionService;
 use App\Support\ApiTokenAuth;
+use App\Support\ChatResponseArtifacts;
 use App\Support\McpUserAccess;
 use App\Support\PermissionCatalog;
 use App\Support\UserApplicationAccess;
@@ -204,6 +205,8 @@ class AssistantController extends Controller
                 'assistant_conversation_id' => $conversation->id,
                 'role' => 'assistant',
                 'content' => $errorText,
+                'attachments' => null,
+                'visuals' => null,
                 'tool_steps' => [],
                 'usage' => null,
             ]);
@@ -226,10 +229,14 @@ class AssistantController extends Controller
             ], $status);
         }
 
+        $attachments = is_array($result['attachments'] ?? null) ? $result['attachments'] : [];
+        $visuals = is_array($result['visuals'] ?? null) ? $result['visuals'] : [];
         $assistantMessage = AssistantMessage::query()->create([
             'assistant_conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => (string) ($result['message'] ?? ''),
+            'attachments' => $attachments === [] ? null : $attachments,
+            'visuals' => $visuals === [] ? null : $visuals,
             'tool_steps' => is_array($result['tool_steps'] ?? null) ? $result['tool_steps'] : [],
             'usage' => is_array($result['usage'] ?? null) ? $result['usage'] : null,
         ]);
@@ -281,13 +288,23 @@ class AssistantController extends Controller
             ->whereIn('role', ['user', 'assistant'])
             ->orderByDesc('id')
             ->limit(self::MAX_STORED_HISTORY)
-            ->get(['role', 'content'])
+            ->get(['role', 'content', 'attachments', 'visuals'])
             ->reverse()
             ->values()
-            ->map(fn (AssistantMessage $message) => [
-                'role' => (string) $message->role,
-                'content' => (string) $message->content,
-            ])
+            ->map(function (AssistantMessage $message) {
+                $content = (string) $message->content;
+                if ($message->role === 'assistant') {
+                    $content .= ChatResponseArtifacts::historySuffix(
+                        is_array($message->visuals) ? $message->visuals : [],
+                        is_array($message->attachments) ? $message->attachments : [],
+                    );
+                }
+
+                return [
+                    'role' => (string) $message->role,
+                    'content' => $content,
+                ];
+            })
             ->all();
 
         if ($stored !== []) {
@@ -321,7 +338,7 @@ class AssistantController extends Controller
     }
 
     /**
-     * @return array{id: int, role: string, content: string, tool_steps: list<mixed>|null, usage: array<string, mixed>|null, created_at: string|null}
+     * @return array{id: int, role: string, content: string, attachments: list<mixed>, visuals: list<mixed>, tool_steps: list<mixed>|null, usage: array<string, mixed>|null, created_at: string|null}
      */
     private function serializeMessage(AssistantMessage $message): array
     {
@@ -329,6 +346,8 @@ class AssistantController extends Controller
             'id' => (int) $message->id,
             'role' => (string) $message->role,
             'content' => (string) $message->content,
+            'attachments' => is_array($message->attachments) ? $message->attachments : [],
+            'visuals' => is_array($message->visuals) ? $message->visuals : [],
             'tool_steps' => is_array($message->tool_steps) ? $message->tool_steps : null,
             'usage' => is_array($message->usage) ? $message->usage : null,
             'created_at' => optional($message->created_at)?->toIso8601String(),

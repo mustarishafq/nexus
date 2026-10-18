@@ -239,7 +239,7 @@ class GeneralChatTest extends TestCase
             ->assertJsonPath('quota.remaining', 100);
     }
 
-    public function test_chat_sends_no_tools_to_openrouter(): void
+    public function test_chat_offers_only_chart_and_spreadsheet_tools(): void
     {
         $this->configureChat();
         $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
@@ -251,12 +251,19 @@ class GeneralChatTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
-            $hasNoTools = ! array_key_exists('tools', $body) || $body['tools'] === [];
             $system = (string) ($body['messages'][0]['content'] ?? '');
+            if (! str_contains($system, 'general-purpose assistant')) {
+                return false;
+            }
+
+            $names = array_map(
+                fn ($tool) => (string) ($tool['function']['name'] ?? ''),
+                is_array($body['tools'] ?? null) ? $body['tools'] : [],
+            );
 
             return $request->url() === 'https://openrouter.ai/api/v1/chat/completions'
-                && $hasNoTools
-                && str_contains($system, 'no tools')
+                && $names === ['present_chart', 'create_spreadsheet']
+                && str_contains($system, 'do not read or change this system')
                 && str_contains(strtolower($system), 'security');
         });
 
@@ -557,5 +564,99 @@ class GeneralChatTest extends TestCase
 
             return str_contains($system, 'Prefers tea');
         });
+    }
+
+    public function test_chat_saves_a_chart_and_csv_when_the_model_calls_the_tools(): void
+    {
+        Storage::fake('public');
+        $this->configureChat();
+        $user = User::factory()->create(['is_approved' => true, 'role' => 'user']);
+
+        Http::fake(function ($request) {
+            $messages = $request->data()['messages'] ?? [];
+            $system = (string) ($messages[0]['content'] ?? '');
+            $usage = [
+                'prompt_tokens' => 10,
+                'completion_tokens' => 5,
+                'total_tokens' => 15,
+            ];
+            $text = function (string $content) use ($usage) {
+                return Http::response([
+                    'id' => 'gen',
+                    'model' => 'openai/gpt-4o-mini',
+                    'choices' => [[
+                        'message' => ['role' => 'assistant', 'content' => $content],
+                    ]],
+                    'usage' => $usage,
+                ]);
+            };
+
+            if (str_contains($system, 'chat thread title')) {
+                return $text('Scores Export');
+            }
+            if (str_contains($system, 'Extract durable')) {
+                return $text('{"save":[],"forget":[]}');
+            }
+
+            $hasToolResult = collect($messages)->contains(fn ($message) => ($message['role'] ?? '') === 'tool');
+            if ($hasToolResult) {
+                return $text('Here is the chart, and the file is attached.');
+            }
+
+            return Http::response([
+                'id' => 'gen-tools',
+                'model' => 'openai/gpt-4o-mini',
+                'choices' => [[
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [
+                            [
+                                'id' => 'call_chart',
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'present_chart',
+                                    'arguments' => json_encode([
+                                        'type' => 'bar',
+                                        'title' => 'Scores',
+                                        'points' => [
+                                            ['label' => 'A', 'value' => 2],
+                                            ['label' => 'B', 'value' => 5],
+                                        ],
+                                    ]),
+                                ],
+                            ],
+                            [
+                                'id' => 'call_file',
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'create_spreadsheet',
+                                    'arguments' => json_encode([
+                                        'filename' => 'scores',
+                                        'format' => 'csv',
+                                        'columns' => ['Name', 'Score'],
+                                        'rows' => [['A', 2], ['B', 5]],
+                                    ]),
+                                ],
+                            ],
+                        ],
+                    ],
+                ]],
+                'usage' => $usage,
+            ]);
+        });
+
+        $this->withToken($this->token($user))
+            ->postJson('/api/general-chat/chat', ['message' => 'Show scores as a chart and a csv file'])
+            ->assertOk()
+            ->assertJsonPath('assistant_message.visuals.0.type', 'bar')
+            ->assertJsonPath('assistant_message.visuals.0.title', 'Scores')
+            ->assertJsonPath('assistant_message.visuals.0.points.1.label', 'B')
+            ->assertJsonPath('assistant_message.attachments.0.name', 'scores.csv')
+            ->assertJsonPath('message', 'Here is the chart, and the file is attached.');
+
+        $stored = \App\Models\GeneralChatMessage::query()->where('role', 'assistant')->first();
+        $path = ltrim(substr((string) ($stored->attachments[0]['url'] ?? ''), strlen('/storage/')), '/');
+        Storage::disk('public')->assertExists($path);
     }
 }
