@@ -24,13 +24,14 @@ use App\Support\SyncUserProfileRecords;
 use App\Support\UserHrCsvImporter;
 use App\Support\UserProfileSerializer;
 use App\Support\UserRoles;
+use App\Support\UserXlsxExporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class UserController extends Controller
 {
@@ -262,7 +263,7 @@ class UserController extends Controller
         }
     }
 
-    public function exportCsv(Request $request): StreamedResponse|JsonResponse
+    public function exportCsv(Request $request): BinaryFileResponse|JsonResponse
     {
         if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;
@@ -278,74 +279,15 @@ class UserController extends Controller
         ]);
 
         $query = User::query()
-            ->with(['accessGroups', 'department', 'company', 'manager:id,email,full_name,name', 'educations', 'workExperiences'])
             ->orderBy('full_name')
             ->orderBy('email');
 
         $this->applyAdminUserFilters($query, $validated);
 
-        $filename = 'users-'.now()->format('Y-m-d-His').'.csv';
-
-        return response()->streamDownload(function () use ($query) {
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, [
-                'ID',
-                'Full Name',
-                'Email',
-                'Role',
-                'Approved',
-                'Job Title',
-                'Employee ID',
-                'Employment Type',
-                'Company',
-                'Department',
-                'Manager Email',
-                'Work Phone',
-                'Personal Phone',
-                'Location',
-                'Gender',
-                'Date of Birth',
-                'Joined At',
-                'MCP Access',
-                'Access Groups',
-                'Profile Completeness %',
-                'Last Login',
-                'Created At',
-            ]);
-
-            foreach ($query->lazy(500) as $user) {
-                $completeness = ProfileCompleteness::forUser($user);
-
-                fputcsv($handle, [
-                    $user->id,
-                    $user->full_name ?: $user->name,
-                    $user->email,
-                    $user->role,
-                    $user->is_approved ? 'yes' : 'no',
-                    $user->job_title,
-                    $user->employee_id,
-                    $user->employment_type,
-                    $user->company?->name,
-                    $user->department?->name,
-                    $user->manager?->email,
-                    $user->work_phone,
-                    $user->personal_phone,
-                    $user->location,
-                    $user->gender,
-                    $user->date_of_birth?->format('Y-m-d'),
-                    $user->joined_at?->format('Y-m-d'),
-                    $user->mcp_access,
-                    $user->accessGroups->pluck('name')->sort()->implode('; '),
-                    $completeness['percent'] ?? 0,
-                    $user->last_login_at?->toISOString() ?: 'Never login',
-                    $user->created_at?->toISOString(),
-                ]);
-            }
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type' => 'text/csv',
-        ]);
+        return app(UserXlsxExporter::class)->download(
+            $query,
+            'users-'.now()->format('Y-m-d-His').'.xlsx',
+        );
     }
 
     public function profileNudge(Request $request, User $user): JsonResponse

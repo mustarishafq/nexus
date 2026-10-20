@@ -1704,7 +1704,7 @@ export const db = {
 		const response = await fetch(`${API_BASE_URL}/users/export${query}`, {
 			method: 'GET',
 			headers: {
-				Accept: 'text/csv',
+				Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 				...(token ? { Authorization: `Bearer ${token}` } : {}),
 			},
 			credentials: 'include',
@@ -1727,7 +1727,7 @@ export const db = {
 		const url = window.URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+		link.download = `users-${new Date().toISOString().slice(0, 10)}.xlsx`;
 		document.body.appendChild(link);
 		link.click();
 		link.remove();

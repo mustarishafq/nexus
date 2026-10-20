@@ -1678,7 +1678,7 @@ export default function UserManagement() {
       });
       toast.success('Users export downloaded');
     } catch (err) {
-      toast.error(err?.data?.message || err.message || 'Failed to export users CSV');
+      toast.error(err?.data?.message || err.message || 'Failed to export users');
     } finally {
       setExporting(false);
     }
