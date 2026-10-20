@@ -31,7 +31,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UserController extends Controller
 {
@@ -263,7 +263,7 @@ class UserController extends Controller
         }
     }
 
-    public function exportCsv(Request $request): BinaryFileResponse|JsonResponse
+    public function exportCsv(Request $request): StreamedResponse|JsonResponse
     {
         if ($response = $this->authorizePermission($request, PermissionCatalog::PEOPLE_MANAGE_USERS)) {
             return $response;

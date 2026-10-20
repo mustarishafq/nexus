@@ -4,13 +4,9 @@ namespace App\Support;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
-use OpenSpout\Common\Entity\Row;
-use OpenSpout\Common\Entity\Style\Style;
-use OpenSpout\Writer\AutoFilter;
-use OpenSpout\Writer\Common\Entity\Sheet;
-use OpenSpout\Writer\XLSX\Writer;
+use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class UserXlsxExporter
@@ -18,18 +14,14 @@ class UserXlsxExporter
     /**
      * @param  Builder<User>  $users
      */
-    public function download(Builder $users, string $filename): BinaryFileResponse
+    public function download(Builder $users, string $filename): StreamedResponse
     {
-        $temporary = tempnam(sys_get_temp_dir(), 'users-export-');
-        if ($temporary === false) {
+        $directory = storage_path('app/exports');
+        if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
             throw new RuntimeException('Unable to create the user export file.');
         }
 
-        $path = $temporary.'.xlsx';
-        if (! rename($temporary, $path)) {
-            @unlink($temporary);
-            throw new RuntimeException('Unable to create the user export file.');
-        }
+        $path = $directory.'/'.Str::uuid().'.xlsx';
 
         try {
             $this->write($users, $path);
@@ -38,11 +30,16 @@ class UserXlsxExporter
             throw $exception;
         }
 
-        return response()
-            ->download($path, $filename, [
-                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ])
-            ->deleteFileAfterSend(true);
+        return response()->streamDownload(function () use ($path) {
+            $handle = fopen($path, 'rb');
+            if ($handle !== false) {
+                fpassthru($handle);
+                fclose($handle);
+            }
+            @unlink($path);
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     /**
@@ -60,22 +57,14 @@ class UserXlsxExporter
             'userSkills',
         ]);
 
-        $headerStyle = (new Style)->setFontBold();
         $children = [];
         $educations = [];
         $workExperiences = [];
         $skills = [];
-
-        $writer = new Writer;
-        $writer->openToFile($path);
-        $userHeaders = $this->userHeaders();
-        $userSheet = $writer->getCurrentSheet()->setName('Users');
-        $writer->addRow(Row::fromValues($userHeaders, $headerStyle));
-        $userCount = 0;
+        $userRows = [];
 
         foreach ($users->lazy(200) as $user) {
-            $userCount++;
-            $writer->addRow(Row::fromValues($this->userRow($user)));
+            $userRows[] = $this->userRow($user);
 
             foreach ($this->childRows($user) as $row) {
                 $children[] = $row;
@@ -91,46 +80,13 @@ class UserXlsxExporter
             }
         }
 
-        $this->configureSheet($userSheet, $userHeaders, $userCount);
-        $this->writeSheet($writer, 'Children', $this->childHeaders(), $children, $headerStyle);
-        $this->writeSheet($writer, 'Education', $this->educationHeaders(), $educations, $headerStyle);
-        $this->writeSheet($writer, 'Work Experience', $this->workExperienceHeaders(), $workExperiences, $headerStyle);
-        $this->writeSheet($writer, 'Skills', $this->skillHeaders(), $skills, $headerStyle);
-        $writer->close();
-    }
-
-    /**
-     * @param  list<string>  $headers
-     * @param  list<list<int|string>>  $rows
-     */
-    private function writeSheet(Writer $writer, string $name, array $headers, array $rows, Style $headerStyle): void
-    {
-        $sheet = $writer->addNewSheetAndMakeItCurrent()->setName($name);
-        $writer->addRow(Row::fromValues($headers, $headerStyle));
-
-        foreach ($rows as $row) {
-            $writer->addRow(Row::fromValues($row));
-        }
-
-        $this->configureSheet($sheet, $headers, count($rows));
-    }
-
-    /**
-     * @param  list<string>  $headers
-     */
-    private function configureSheet(Sheet $sheet, array $headers, int $dataRowCount): void
-    {
-        foreach ($headers as $index => $header) {
-            $sheet->setColumnWidth($this->headerColumnWidth($header), $index + 1);
-        }
-
-        $lastColumn = max(count($headers) - 1, 0);
-        $sheet->setAutoFilter(new AutoFilter(0, 1, $lastColumn, max($dataRowCount + 1, 1)));
-    }
-
-    private function headerColumnWidth(string $header): float
-    {
-        return (float) (mb_strlen($header) + 3);
+        $workbook = new XlsxWorkbook;
+        $workbook->addSheet('Users', $this->userHeaders(), $userRows);
+        $workbook->addSheet('Children', $this->childHeaders(), $children);
+        $workbook->addSheet('Education', $this->educationHeaders(), $educations);
+        $workbook->addSheet('Work Experience', $this->workExperienceHeaders(), $workExperiences);
+        $workbook->addSheet('Skills', $this->skillHeaders(), $skills);
+        $workbook->save($path);
     }
 
     /**
@@ -386,6 +342,22 @@ class UserXlsxExporter
 
     private function text(mixed $value): string
     {
-        return trim((string) ($value ?? ''));
+        if (is_bool($value)) {
+            return $value ? 'yes' : 'no';
+        }
+
+        if (is_array($value)) {
+            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE);
+            $value = $encoded === false ? '' : $encoded;
+        }
+
+        $text = trim((string) ($value ?? ''));
+        $text = mb_scrub($text, 'UTF-8');
+
+        if (mb_strlen($text) > 32767) {
+            $text = mb_substr($text, 0, 32767);
+        }
+
+        return $text;
     }
 }
