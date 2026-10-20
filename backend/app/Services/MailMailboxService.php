@@ -521,6 +521,14 @@ class MailMailboxService
         bool $unreadOnly,
         bool $includeAttachments,
     ): array {
+        if ($query === '' && ! $unreadOnly && ! $includeAttachments) {
+            $recent = $this->fetchRecentListMessages($folder, $limit);
+
+            if ($recent !== null) {
+                return $recent;
+            }
+        }
+
         if ($query !== '') {
             $uids = $this->searchMessageUids($folder, $query, $unreadOnly);
 
@@ -585,6 +593,181 @@ class MailMailboxService
         // Webklex may return header batches in ascending UID order even when
         // setFetchOrder('desc') selected the newest page — re-sort for the UI.
         return $this->sortMessagesNewestFirst($messages);
+    }
+
+    /**
+     * Newest page by message sequence. Webklex's limit() still runs SEARCH ALL
+     * first, and that response alone can outlive the gateway on a large inbox.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    protected function fetchRecentListMessages(Folder $folder, int $limit): ?array
+    {
+        try {
+            $connection = $folder->getClient()->getConnection();
+            $examined = $connection->examineFolder($folder->path)->validatedData();
+            $exists = (int) ($examined['exists'] ?? 0);
+
+            if ($exists < 1) {
+                return [];
+            }
+
+            $from = $this->recentMessageSequenceStart($exists, $limit);
+            $raw = $connection->fetch(
+                ['UID', 'FLAGS', 'BODY.PEEK[HEADER]'],
+                $from,
+                $exists,
+                '',
+            )->validatedData();
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_array($raw) || $raw === []) {
+            return null;
+        }
+
+        $messages = [];
+        foreach ($raw as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $normalized = [];
+            foreach ($row as $key => $value) {
+                $normalized[strtoupper((string) $key)] = $value;
+            }
+
+            $uid = (int) ($normalized['UID'] ?? 0);
+            if ($uid < 1) {
+                continue;
+            }
+
+            $header = '';
+            foreach ($normalized as $key => $value) {
+                if (is_string($value) && str_contains($key, 'HEADER')) {
+                    $header = $value;
+                    break;
+                }
+            }
+
+            if ($header === '') {
+                continue;
+            }
+
+            $messages[] = $this->summarizeRawListHeader($uid, $header, $normalized['FLAGS'] ?? []);
+        }
+
+        if ($messages === []) {
+            return null;
+        }
+
+        return $this->sortMessagesNewestFirst($messages);
+    }
+
+    protected function recentMessageSequenceStart(int $exists, int $limit): int
+    {
+        return max(1, $exists - max(1, $limit) + 1);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function summarizeRawListHeader(int $uid, string $rawHeader, mixed $flags): array
+    {
+        $fields = $this->parseRawHeaderFields($rawHeader);
+        $subject = $this->decodeHeader($fields['subject'] ?? '');
+
+        return [
+            'uid' => $uid,
+            'subject' => $subject !== '' ? $subject : '(No subject)',
+            'from' => $this->decodeHeader($fields['from'] ?? ''),
+            'to' => $this->decodeHeader($fields['to'] ?? ''),
+            'date' => $this->listMessageDate($fields['date'] ?? null),
+            'seen' => in_array('seen', $this->flattenImapFlags($flags), true),
+            'has_attachments' => $this->contentHeadersSuggestAttachments(
+                $fields['content-type'] ?? '',
+                $fields['content-disposition'] ?? '',
+                $rawHeader,
+                $fields['x-ms-has-attach'] ?? '',
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function parseRawHeaderFields(string $raw): array
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $raw);
+        $unfolded = preg_replace("/\n[ \t]+/", ' ', $normalized) ?? $normalized;
+        $fields = [];
+
+        foreach (explode("\n", $unfolded) as $line) {
+            if (! str_contains($line, ':')) {
+                continue;
+            }
+
+            [$name, $value] = explode(':', $line, 2);
+            $key = strtolower(trim($name));
+            $value = trim($value);
+
+            if ($key === '') {
+                continue;
+            }
+
+            $fields[$key] = isset($fields[$key]) ? $fields[$key].', '.$value : $value;
+        }
+
+        return $fields;
+    }
+
+    protected function listMessageDate(?string $raw): ?string
+    {
+        $raw = trim((string) $raw);
+
+        if ($raw === '') {
+            return null;
+        }
+
+        try {
+            return (new \DateTimeImmutable($raw))->format(\DateTimeInterface::RFC2822);
+        } catch (Throwable) {
+            return $raw;
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function flattenImapFlags(mixed $flags): array
+    {
+        if (is_string($flags)) {
+            $flags = preg_split('/\s+/', trim($flags, "() \t")) ?: [];
+        }
+
+        if (! is_array($flags)) {
+            return [];
+        }
+
+        $flat = [];
+        $walk = function (mixed $value) use (&$walk, &$flat): void {
+            if (is_array($value)) {
+                foreach ($value as $item) {
+                    $walk($item);
+                }
+
+                return;
+            }
+
+            $flag = strtolower(ltrim(trim((string) $value), '\\'));
+            if ($flag !== '') {
+                $flat[] = $flag;
+            }
+        };
+        $walk($flags);
+
+        return $flat;
     }
 
     /**
