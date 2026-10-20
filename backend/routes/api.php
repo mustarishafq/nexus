@@ -176,6 +176,7 @@ Route::post('/mail/accounts/primary', [MailController::class, 'setPrimary']);
 Route::get('/mail/messages', [MailController::class, 'index']);
 Route::post('/mail/messages/bulk', [MailController::class, 'bulk']);
 Route::get('/mail/messages/{uid}', [MailController::class, 'show']);
+Route::post('/mail/messages/{uid}/calendar-reply', [MailController::class, 'replyToInvite']);
 Route::get('/mail/messages/{uid}/attachments/{part}', [MailController::class, 'downloadAttachment'])
     ->where('part', '[0-9.]+');
 Route::delete('/mail/messages/{uid}', [MailController::class, 'destroy']);

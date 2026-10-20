@@ -1062,6 +1062,17 @@ export const db = {
 			})}`);
 		},
 
+		async replyToInvite(uid, response, { accountId, folder } = {}) {
+			return request(`/mail/messages/${uid}/calendar-reply`, {
+				method: 'POST',
+				body: {
+					response,
+					...(accountId ? { account_id: accountId } : {}),
+					...(folder ? { folder } : {}),
+				},
+			});
+		},
+
 		async downloadAttachment(uid, part, { accountId, folder, filename } = {}) {
 			const token = getAuthToken();
 			const response = await fetch(`${API_BASE_URL}/mail/messages/${uid}/attachments/${encodeURIComponent(part)}${buildQuery({

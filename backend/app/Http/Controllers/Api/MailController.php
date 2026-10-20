@@ -10,6 +10,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Throwable;
@@ -286,6 +287,39 @@ class MailController extends Controller
         }
 
         return response()->json($message);
+    }
+
+    public function replyToInvite(Request $request, int $uid): JsonResponse
+    {
+        $user = ApiTokenAuth::userFromRequest($request);
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'response' => ['required', Rule::in(['accepted', 'tentative', 'declined'])],
+            'account_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+
+        try {
+            $this->mail->replyToCalendarInvite(
+                $user,
+                $uid,
+                $validated['response'],
+                isset($validated['account_id']) ? (int) $validated['account_id'] : null,
+                $validated['folder'] ?? MailMailboxService::FOLDER_INBOX,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json(['message' => 'Unable to send the calendar response.'], 500);
+        }
+
+        return response()->json(['message' => 'Calendar response sent.']);
     }
 
     public function downloadAttachment(Request $request, int $uid, string $part): Response|JsonResponse

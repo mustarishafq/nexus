@@ -36,6 +36,7 @@ import { UnreadBadge } from '@/components/ui/unread-badge';
 import { Expandable } from '@/components/ui/expandable';
 import EmailMessageBody from '@/components/email/EmailMessageBody';
 import EmailAttachments from '@/components/email/EmailAttachments';
+import EmailCalendarInvite from '@/components/email/EmailCalendarInvite';
 import RecipientSuggestInput from '@/components/email/RecipientSuggestInput';
 import QuotedText from '@/components/email/QuotedText';
 
@@ -2034,6 +2035,12 @@ export default function Email() {
                 </Expandable>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                <EmailCalendarInvite
+                  invite={messageData?.calendar}
+                  uid={uid}
+                  accountId={activeAccountId}
+                  folder={folder}
+                />
                 <EmailAttachments
                   attachments={messageData?.attachments}
                   uid={uid}

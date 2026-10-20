@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserMailCredential;
 use App\Models\UserMailRecipientSuggestion;
 use App\Support\AppSettings;
+use App\Support\MailCalendarInvite;
 use App\Support\MailImapSession;
 use App\Support\MailPlainTextHtml;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -18,6 +19,8 @@ use Illuminate\Support\HtmlString;
 use RuntimeException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Header\ParameterizedHeader;
+use Symfony\Component\Mime\Part\TextPart;
 use Throwable;
 use Webklex\PHPIMAP\Attachment;
 use Webklex\PHPIMAP\Attribute;
@@ -924,6 +927,7 @@ class MailMailboxService
 
             $content = $this->extractMessageContent($message);
             $attachments = $this->collectAttachments($message);
+            $calendar = $this->extractCalendarInvite($message);
             $from = $this->formatAddresses($message->getFrom());
 
             return [
@@ -943,6 +947,7 @@ class MailMailboxService
                 'seen' => true,
                 'attachments' => $attachments,
                 'has_attachments' => $attachments !== [],
+                'calendar' => $calendar,
             ];
         } finally {
             $session->disconnect();
@@ -1063,6 +1068,94 @@ class MailMailboxService
             isset($payload['cc']) ? (string) $payload['cc'] : null,
             $credential->email,
         );
+    }
+
+    /**
+     * Email the organizer an iTIP REPLY for a calendar invitation.
+     */
+    public function replyToCalendarInvite(
+        User $user,
+        int $uid,
+        string $response,
+        ?int $accountId = null,
+        string $folder = self::FOLDER_INBOX,
+    ): void {
+        $partstat = match ($response) {
+            'accepted' => 'ACCEPTED',
+            'tentative' => 'TENTATIVE',
+            'declined' => 'DECLINED',
+            default => throw new RuntimeException('Choose accept, maybe, or decline.'),
+        };
+
+        $credential = $this->resolveAccount($user, $accountId);
+        $folder = $this->normalizeLogicalFolder($folder);
+        $session = $this->connect($user, $credential->id, $folder);
+
+        try {
+            $message = $this->getImapMessage($session->folder, $uid);
+            $ics = $this->calendarSource($message);
+        } finally {
+            $session->disconnect();
+        }
+
+        if ($ics === null) {
+            throw new RuntimeException('This message has no calendar invitation.');
+        }
+
+        $invite = MailCalendarInvite::parse($ics);
+        if ($invite === null || $invite['organizer_email'] === '') {
+            throw new RuntimeException('This invitation has no organizer to reply to.');
+        }
+
+        if (! $invite['can_reply']) {
+            throw new RuntimeException('This calendar message does not accept a response.');
+        }
+
+        $password = $this->decryptMailboxPassword($credential);
+        $config = $this->serverConfig($user, $credential->email);
+        $fromName = $credential->label
+            ?: ($user->full_name ?? $user->name ?? $credential->email);
+        $replyIcs = MailCalendarInvite::buildReply($ics, $credential->email, $fromName, $partstat);
+        $verb = match ($partstat) {
+            'ACCEPTED' => 'Accepted',
+            'TENTATIVE' => 'Tentative',
+            'DECLINED' => 'Declined',
+        };
+        $summary = $invite['summary'] !== '' ? $invite['summary'] : 'Invitation';
+        $body = $fromName.' '.$verb.': '.$summary;
+        if ($invite['when_label'] !== '') {
+            $body .= "\n\nWhen: ".$invite['when_label'];
+        }
+
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.host' => $config['host'],
+            'mail.mailers.smtp.port' => $config['smtp_port'],
+            'mail.mailers.smtp.username' => $credential->email,
+            'mail.mailers.smtp.password' => $password,
+            'mail.mailers.smtp.scheme' => AppSettings::smtpSchemeFromEncryption($config['smtp_encryption']),
+            'mail.from.address' => $credential->email,
+            'mail.from.name' => $fromName,
+        ]);
+
+        $email = (new Email)
+            ->from(new Address($credential->email, $fromName))
+            ->to(new Address($invite['organizer_email'], $invite['organizer_name'] !== '' ? $invite['organizer_name'] : ''))
+            ->subject($verb.': '.$summary)
+            ->text($body)
+            ->date(new \DateTimeImmutable('now'));
+
+        $calendarPart = new TextPart($replyIcs, 'utf-8', 'calendar');
+        $contentType = $calendarPart->getHeaders()->get('Content-Type');
+        if ($contentType instanceof ParameterizedHeader) {
+            $contentType->setParameter('method', 'REPLY');
+            $contentType->setParameter('charset', 'UTF-8');
+        }
+        $email->addPart($calendarPart);
+
+        Mail::mailer('smtp')->getSymfonyTransport()->send($email);
+        $this->appendRawToSent($user, $credential, $password, $config, $email->toString());
+        $this->rememberRecipients($user, $invite['organizer_email'], null, $credential->email);
     }
 
     /**
@@ -1301,6 +1394,23 @@ class MailMailboxService
     ): void {
         try {
             $raw = $this->buildSentMimeMessage($credential->email, $fromName, $payload);
+            $this->appendRawToSent($user, $credential, $password, $config, $raw);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    /**
+     * @param  array{host: string, port: int, encryption: string|null}  $config
+     */
+    protected function appendRawToSent(
+        User $user,
+        UserMailCredential $credential,
+        string $password,
+        array $config,
+        string $raw,
+    ): void {
+        try {
             $client = $this->openMailbox($config, $credential->email, $password);
 
             try {
@@ -1993,7 +2103,21 @@ class MailMailboxService
 
     protected function attachmentIsFile(Attachment $attachment): bool
     {
+        if ($this->attachmentIsCalendar($attachment)) {
+            return true;
+        }
+
         return strtolower((string) $attachment->getDisposition()) === 'attachment';
+    }
+
+    protected function attachmentIsCalendar(Attachment $attachment): bool
+    {
+        $mime = strtolower((string) $attachment->getContentType());
+        $name = strtolower((string) ($attachment->getName() ?: $attachment->filename ?: ''));
+
+        return str_contains($mime, 'calendar')
+            || $mime === 'application/ics'
+            || str_ends_with($name, '.ics');
     }
 
     protected function attachmentPartId(Attachment $attachment): string
@@ -2001,6 +2125,78 @@ class MailMailboxService
         $part = (string) $attachment->getPartNumber();
 
         return $part !== '' ? $part : '1';
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function extractCalendarInvite(Message $message): ?array
+    {
+        $ics = $this->calendarSource($message);
+        if ($ics === null) {
+            return null;
+        }
+
+        $invite = MailCalendarInvite::parse($ics);
+        if ($invite === null) {
+            return null;
+        }
+
+        foreach ($message->getAttachments() as $attachment) {
+            if (! $this->attachmentIsCalendar($attachment)) {
+                continue;
+            }
+
+            $part = $this->attachmentPartId($attachment);
+            $filename = $attachment->getName() ?: $attachment->filename ?: 'Part '.$part.'.ics';
+            $invite['part'] = $part;
+            $invite['filename'] = $this->decodeHeader((string) $filename);
+
+            break;
+        }
+
+        return $invite;
+    }
+
+    protected function calendarSource(Message $message): ?string
+    {
+        foreach ($message->getAttachments() as $attachment) {
+            if (! $this->attachmentIsCalendar($attachment)) {
+                continue;
+            }
+
+            try {
+                $content = $attachment->getContent();
+            } catch (Throwable) {
+                continue;
+            }
+
+            if (! is_string($content) || trim($content) === '') {
+                continue;
+            }
+
+            $content = $this->ensureUtf8($content);
+            if (str_contains($content, 'BEGIN:VCALENDAR')) {
+                return $content;
+            }
+        }
+
+        foreach ($message->getBodies() as $subtype => $content) {
+            if (! is_string($subtype) || ! is_string($content)) {
+                continue;
+            }
+
+            if (! in_array(strtolower($subtype), ['calendar', 'ics'], true)) {
+                continue;
+            }
+
+            $content = $this->ensureUtf8($content);
+            if (str_contains($content, 'BEGIN:VCALENDAR')) {
+                return $content;
+            }
+        }
+
+        return null;
     }
 
     protected function findFileAttachment(Message $message, string $partNumber): ?Attachment
