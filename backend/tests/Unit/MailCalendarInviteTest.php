@@ -3,6 +3,8 @@
 namespace Tests\Unit;
 
 use App\Support\MailCalendarInvite;
+use App\Support\MailCalendarReplyPart;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
 class MailCalendarInviteTest extends TestCase
@@ -47,6 +49,28 @@ class MailCalendarInviteTest extends TestCase
         $this->assertStringContainsString('DTSTART;TZID=Asia/Dubai:20261021T110000', $reply);
         $this->assertStringContainsString('ATTENDEE;PARTSTAT=ACCEPTED;CN=Anuar Ali:mailto:anuar.ali@emzi.com.my', $reply);
         $this->assertStringContainsString('ORGANIZER;CN=Imran Shahani:mailto:Imran.Shahani@dhl.com', $reply);
+    }
+
+    public function test_reply_part_can_be_attached_to_an_email(): void
+    {
+        $reply = MailCalendarInvite::buildReply(
+            $this->sampleRequest(),
+            'anuar.ali@emzi.com.my',
+            'Anuar Ali',
+            'ACCEPTED',
+        );
+
+        $raw = (new Email)
+            ->from('anuar.ali@emzi.com.my')
+            ->to('Imran.Shahani@dhl.com')
+            ->subject('Accepted: Update of E-commerce fulfillment services')
+            ->text('Accepted')
+            ->addPart(new MailCalendarReplyPart($reply))
+            ->toString();
+
+        $this->assertStringContainsString('text/calendar', $raw);
+        $this->assertStringContainsString('method=REPLY', $raw);
+        $this->assertStringContainsString('Content-Disposition: inline', $raw);
     }
 
     private function sampleRequest(): string

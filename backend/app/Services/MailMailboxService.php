@@ -7,6 +7,7 @@ use App\Models\UserMailCredential;
 use App\Models\UserMailRecipientSuggestion;
 use App\Support\AppSettings;
 use App\Support\MailCalendarInvite;
+use App\Support\MailCalendarReplyPart;
 use App\Support\MailImapSession;
 use App\Support\MailPlainTextHtml;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -19,8 +20,6 @@ use Illuminate\Support\HtmlString;
 use RuntimeException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
-use Symfony\Component\Mime\Header\ParameterizedHeader;
-use Symfony\Component\Mime\Part\TextPart;
 use Throwable;
 use Webklex\PHPIMAP\Attachment;
 use Webklex\PHPIMAP\Attribute;
@@ -1138,23 +1137,29 @@ class MailMailboxService
             'mail.from.name' => $fromName,
         ]);
 
-        $email = (new Email)
-            ->from(new Address($credential->email, $fromName))
-            ->to(new Address($invite['organizer_email'], $invite['organizer_name'] !== '' ? $invite['organizer_name'] : ''))
-            ->subject($verb.': '.$summary)
-            ->text($body)
-            ->date(new \DateTimeImmutable('now'));
+        $sentMessage = null;
 
-        $calendarPart = new TextPart($replyIcs, 'utf-8', 'calendar');
-        $contentType = $calendarPart->getHeaders()->get('Content-Type');
-        if ($contentType instanceof ParameterizedHeader) {
-            $contentType->setParameter('method', 'REPLY');
-            $contentType->setParameter('charset', 'UTF-8');
+        Mail::mailer('smtp')->send(
+            [
+                'html' => new HtmlString(MailPlainTextHtml::toHtml($body)),
+                'raw' => $body,
+            ],
+            [],
+            function ($message) use ($credential, $fromName, $invite, $verb, $summary, $replyIcs, &$sentMessage) {
+                $message->to($invite['organizer_email'], $invite['organizer_name'] ?: null)
+                    ->subject($verb.': '.$summary)
+                    ->from($credential->email, $fromName);
+
+                $symfonyMessage = $message->getSymfonyMessage();
+                $symfonyMessage->addPart(new MailCalendarReplyPart($replyIcs));
+                $sentMessage = $symfonyMessage;
+            }
+        );
+
+        if ($sentMessage instanceof Email) {
+            $this->appendRawToSent($user, $credential, $password, $config, $sentMessage->toString());
         }
-        $email->addPart($calendarPart);
 
-        Mail::mailer('smtp')->getSymfonyTransport()->send($email);
-        $this->appendRawToSent($user, $credential, $password, $config, $email->toString());
         $this->rememberRecipients($user, $invite['organizer_email'], null, $credential->email);
     }
 
