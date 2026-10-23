@@ -44,6 +44,12 @@ class ProfileNudgeService
 
         $percent = $completeness['percent'];
         $adminName = $admin->displayName();
+        $missingLabels = ProfileCompleteness::missingLabels($completeness);
+        $listed = collect($missingLabels)->take(6)->implode(', ');
+        $extra = count($missingLabels) > 6 ? ', and more' : '';
+        $message = $listed !== ''
+            ? "Your profile is {$percent}% complete. Still needed: {$listed}{$extra}."
+            : "Your profile is {$percent}% complete. Add the missing details to help colleagues find and connect with you.";
 
         $notification = Notification::create([
             'user_id' => (string) $user->id,
@@ -51,7 +57,7 @@ class ProfileNudgeService
             'priority' => 'medium',
             'category' => 'hr',
             'title' => 'Complete your profile',
-            'message' => "Your profile is {$percent}% complete. Add the missing details to help colleagues find and connect with you.",
+            'message' => $message,
             'action_url' => '/profile',
             'is_read' => false,
             'is_broadcast' => false,

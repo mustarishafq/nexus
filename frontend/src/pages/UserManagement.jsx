@@ -45,7 +45,7 @@ import { useIsUserOnline, useUserLastSeenAt } from '@/components/presence/UserPr
 import DepartmentCombobox from '@/components/profile/DepartmentCombobox';
 import CompanyCombobox from '@/components/profile/CompanyCombobox';
 import ManagerCombobox from '@/components/profile/ManagerCombobox';
-import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, getProfileCompleteness, formatRelativeDate, getDisplayName } from '@/lib/profile';
+import { EMPLOYMENT_TYPE_LABELS, buildHrProfileForm, buildHrProfilePayload, childDetailErrors, getProfileCompleteness, listMissingProfileDetails, formatRelativeDate, getDisplayName } from '@/lib/profile';
 import ProfileHrDetailsForm from '@/components/profile/ProfileHrDetailsForm';
 import SsoCredentialApprovals from '@/components/applications/SsoCredentialApprovals';
 import UserApiTokensPanel, { API_TOKENS_QUERY_KEY } from '@/components/admin/UserApiTokensPanel';
@@ -148,9 +148,12 @@ const USER_MANAGEMENT_SECTIONS = ['users', 'roles', 'groups', 'analytics', 'sso-
 
 function ProfileStrengthCell({ user, compact = false }) {
   const { percent } = getUserProfileStrength(user);
+  const missing = listMissingProfileDetails(user);
+  const preview = missing.slice(0, 2).join(', ');
+  const extra = missing.length > 2 ? ` +${missing.length - 2}` : '';
 
   return (
-    <div className={cn('min-w-[88px]', compact ? 'space-y-1' : 'space-y-1.5')}>
+    <div className={cn('min-w-[88px]', compact ? 'space-y-1' : 'space-y-1.5')} title={missing.length ? `Missing: ${missing.join(', ')}` : undefined}>
       <div className="flex items-center justify-between gap-2">
         <span className={cn('font-semibold tabular-nums', percent === 100 ? 'text-primary' : 'text-foreground')}>
           {percent}%
@@ -162,6 +165,11 @@ function ProfileStrengthCell({ user, compact = false }) {
         )}
       </div>
       <Progress value={percent} className={compact ? 'h-1.5' : 'h-2'} />
+      {missing.length > 0 ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Missing: {preview}{extra}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1397,6 +1405,11 @@ export default function UserManagement() {
   const handleEditUser = async (e) => {
     e.preventDefault();
     if (!editUser) return;
+    const childErrors = childDetailErrors(editForm.children);
+    if (childErrors.length > 0) {
+      toast.error(childErrors[0]);
+      return;
+    }
     setEditSaving(true);
     try {
       const updateData = {
@@ -2152,7 +2165,7 @@ export default function UserManagement() {
                       )}
                     </div>
                     <div className="grid grid-cols-1 gap-1.5 text-xs text-muted-foreground">
-                      <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete</p>
+                      <p><span className="font-medium text-foreground/80">Profile:</span> {getUserProfileStrength(user).percent}% complete{listMissingProfileDetails(user).length ? ` — missing ${listMissingProfileDetails(user).join(', ')}` : ''}</p>
                       <p><span className="font-medium text-foreground/80">Groups:</span> {getUserAccessLabel(user)}</p>
                       <p><span className="font-medium text-foreground/80">Analytics:</span> {getUserAnalyticsLabel(user)}</p>
                       <p>

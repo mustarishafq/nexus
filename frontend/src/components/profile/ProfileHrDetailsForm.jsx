@@ -65,7 +65,7 @@ function AgeHint({ dateOfBirth }) {
   return <p className="text-xs text-muted-foreground">Age {label}</p>;
 }
 
-function DateOfBirthField({ id, label, value, onChange, today }) {
+function DateOfBirthField({ id, label, value, onChange, today, invalid = false }) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -75,6 +75,8 @@ function DateOfBirthField({ id, label, value, onChange, today }) {
         max={today}
         value={formatDateForInput(value)}
         onChange={(e) => onChange(e.target.value)}
+        aria-invalid={invalid || undefined}
+        className={invalid ? 'border-destructive' : undefined}
       />
       <AgeHint dateOfBirth={value} />
     </div>
@@ -198,11 +200,27 @@ function ChildrenDetailsEditor({ value, onChange, today }) {
     <div className="space-y-3">
       <div>
         <p className="text-sm font-medium">Children</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Add children details if applicable.</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Leave this blank if there are no children. Once a child is added, name, IC no., school, and date of birth are all required.
+        </p>
       </div>
 
       <div className="space-y-3">
-        {entries.map((child, index) => (
+        {entries.map((child, index) => {
+          const started = Boolean(
+            String(child.name || '').trim()
+            || String(child.ic_number || '').trim()
+            || String(child.school || '').trim()
+            || String(child.date_of_birth || '').trim()
+          );
+          const missing = {
+            name: started && !String(child.name || '').trim(),
+            ic_number: started && !String(child.ic_number || '').trim(),
+            school: started && !String(child.school || '').trim(),
+            date_of_birth: started && !String(child.date_of_birth || '').trim(),
+          };
+
+          return (
           <div key={`child-${index}`} className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -224,16 +242,18 @@ function ChildrenDetailsEditor({ value, onChange, today }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor={`child-${index}-name`}>Child name</Label>
+                <Label htmlFor={`child-${index}-name`}>Child name{started ? ' *' : ''}</Label>
                 <Input
                   id={`child-${index}-name`}
                   value={child.name || ''}
                   onChange={(e) => updateEntry(index, { name: e.target.value })}
                   placeholder="Full name"
+                  aria-invalid={missing.name || undefined}
+                  className={missing.name ? 'border-destructive' : undefined}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`child-${index}-ic`}>IC no.</Label>
+                <Label htmlFor={`child-${index}-ic`}>IC no.{started ? ' *' : ''}</Label>
                 <IcInput
                   id={`child-${index}-ic`}
                   value={child.ic_number || ''}
@@ -243,27 +263,35 @@ function ChildrenDetailsEditor({ value, onChange, today }) {
                       date_of_birth: applyIcDateOfBirth(child.date_of_birth, nextIc),
                     });
                   }}
+                  className={missing.ic_number ? 'border-destructive' : undefined}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`child-${index}-school`}>School</Label>
+                <Label htmlFor={`child-${index}-school`}>School{started ? ' *' : ''}</Label>
                 <Input
                   id={`child-${index}-school`}
                   value={child.school || ''}
                   onChange={(e) => updateEntry(index, { school: e.target.value })}
                   placeholder="School name"
+                  aria-invalid={missing.school || undefined}
+                  className={missing.school ? 'border-destructive' : undefined}
                 />
               </div>
               <DateOfBirthField
                 id={`child-${index}-dob`}
-                label="Date of birth"
+                label={`Date of birth${started ? ' *' : ''}`}
                 value={child.date_of_birth}
                 onChange={(next) => updateEntry(index, { date_of_birth: next })}
                 today={today}
+                invalid={missing.date_of_birth}
               />
             </div>
+            {started && (missing.name || missing.ic_number || missing.school || missing.date_of_birth) ? (
+              <p className="text-xs text-destructive">Name, IC no., school, and date of birth are required for this child.</p>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {entries.length < 10 ? (

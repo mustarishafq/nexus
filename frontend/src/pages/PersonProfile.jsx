@@ -66,7 +66,7 @@ export default function PersonProfile() {
 
   const profileDetails = (
     <div className="space-y-4">
-      <ProfileAboutCard user={user} showCompleteLink={false} />
+      <ProfileAboutCard user={user} showCompleteLink={false} showChecklist={canViewHrProfiling} />
       <ProfileStaffDetails user={user} />
       {canViewHrProfiling ? <ProfileHrDetailsView user={user} /> : null}
     </div>
@@ -120,7 +120,7 @@ export default function PersonProfile() {
           className="grid grid-cols-12 items-start gap-6"
         >
           <aside className="col-span-3 space-y-4">
-            <ProfileAboutCard user={user} showCompleteLink={false} />
+            <ProfileAboutCard user={user} showCompleteLink={false} showChecklist={canViewHrProfiling} />
           </aside>
           <div className="col-span-6 min-w-0">
             <ProfileUserPosts userId={user.id} />

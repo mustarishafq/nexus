@@ -150,4 +150,98 @@ class ProfileHrFieldsTest extends TestCase
 
         $this->assertSame(100, ProfileCompleteness::forUser($user->fresh())['percent']);
     }
+
+    public function test_child_name_alone_is_rejected_and_does_not_count_as_complete(): void
+    {
+        $department = \App\Models\Department::query()->create(['name' => 'Engineering']);
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'name' => 'Display',
+            'full_name' => 'Full Name',
+            'profile_picture' => 'https://example.com/p.jpg',
+            'cover_picture' => 'https://example.com/c.jpg',
+            'bio' => 'Hello',
+            'department_id' => $department->id,
+            'work_phone' => '123',
+            'date_of_birth' => '1990-01-01',
+            'joined_at' => '2020-01-01',
+            'gender' => 'male',
+            'nationality' => 'Malaysian',
+            'ic_number' => '900101-01-1234',
+            'current_address' => '123 Street',
+            'emergency_contact_name' => 'Kin',
+            'emergency_contact_phone' => '456',
+            'next_of_kin_relationship' => 'Spouse',
+            'health_status' => ['conditions' => ['none'], 'others' => null],
+        ]);
+        $user->educations()->create([
+            'institution' => 'Test University',
+            'qualification' => 'Degree',
+            'field_of_study' => 'CS',
+            'year_from' => '2010',
+            'year_to' => '2014',
+            'sort_order' => 0,
+        ]);
+        $token = $this->issueToken($user);
+
+        $this->withToken($token)
+            ->patchJson('/api/me', [
+                'children' => [
+                    ['name' => 'Ali'],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Child 1 must include IC no., school, date of birth.']);
+
+        $user->forceFill([
+            'children' => [
+                ['name' => 'Ali', 'ic_number' => null, 'school' => null, 'date_of_birth' => null],
+            ],
+        ])->save();
+
+        $completeness = ProfileCompleteness::forUser($user->fresh());
+        $hr = collect($completeness['checks'])->firstWhere('key', 'hr_private');
+
+        $this->assertLessThan(100, $completeness['percent']);
+        $this->assertFalse($hr['done']);
+        $this->assertContains('Child 1 IC no.', $hr['missing']);
+        $this->assertContains('Child 1 school', $hr['missing']);
+        $this->assertContains('Child 1 date of birth', $hr['missing']);
+
+        $user->forceFill([
+            'children' => [
+                [
+                    'name' => 'Ali',
+                    'ic_number' => '160315-14-1111',
+                    'school' => 'SK Ampang',
+                    'date_of_birth' => '2016-03-15',
+                ],
+            ],
+        ])->save();
+
+        $this->assertSame(100, ProfileCompleteness::forUser($user->fresh())['percent']);
+    }
+
+    public function test_public_profile_hides_private_missing_field_names(): void
+    {
+        $user = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'user',
+            'name' => 'Display',
+            'full_name' => 'Full Name',
+        ]);
+
+        $public = \App\Support\UserProfileSerializer::publicProfile($user);
+        $hr = collect($public['profile_completeness']['checks'])->firstWhere('key', 'hr_private');
+
+        $this->assertFalse($hr['done']);
+        $this->assertSame([], $hr['missing']);
+
+        $private = \App\Support\UserProfileSerializer::privateProfile($user->fresh());
+        $privateHr = collect($private['profile_completeness']['checks'])->firstWhere('key', 'hr_private');
+
+        $this->assertContains('IC number', $privateHr['missing']);
+        $this->assertContains('Health status', $privateHr['missing']);
+    }
 }

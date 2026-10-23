@@ -94,7 +94,7 @@ class UserProfileSerializer
 
         $array['name'] = $user->displayName();
         $array['manager'] = self::managerSummary($user->relationLoaded('manager') ? $user->manager : $user->manager()->with('department')->first());
-        $array['profile_completeness'] = $completeness;
+        $array['profile_completeness'] = ProfileCompleteness::redactForPublic($completeness);
         $array = array_merge($array, self::expDirectoryFields($user));
         if ($includeRank) {
             $array['rank'] = app(GamificationService::class)->resolveRank($user);

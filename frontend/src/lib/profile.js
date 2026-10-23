@@ -282,8 +282,34 @@ export function normalizeChildren(value) {
         date_of_birth: applyIcDateOfBirth(String(item?.date_of_birth || '').slice(0, 10), icNumber),
       };
     })
-    .filter((item) => item.name)
+    .filter((item) => item.name || item.ic_number || item.school || item.date_of_birth)
     .slice(0, 10);
+}
+
+export function childDetailErrors(children) {
+  if (!Array.isArray(children)) return [];
+
+  return children.flatMap((child, index) => {
+    const values = {
+      name: String(child?.name || '').trim(),
+      ic_number: String(child?.ic_number || '').trim(),
+      school: String(child?.school || '').trim(),
+      date_of_birth: String(child?.date_of_birth || '').trim(),
+    };
+    const started = Object.values(values).some(Boolean);
+    if (!started) return [];
+
+    const missing = [
+      !values.name ? 'name' : null,
+      !values.ic_number ? 'IC no.' : null,
+      !values.school ? 'school' : null,
+      !values.date_of_birth ? 'date of birth' : null,
+    ].filter(Boolean);
+
+    if (missing.length === 0) return [];
+
+    return [`Child ${index + 1} still needs ${missing.join(', ')}.`];
+  });
 }
 
 export function spouseDetailsIsEqual(a, b) {
@@ -404,34 +430,76 @@ const PROFILE_CHECKS = [
   { key: 'hr_private', label: 'HR & private details' },
 ];
 
-function isProfileCheckDone(user, key) {
+function childMissingLabels(children) {
+  if (!Array.isArray(children)) return [];
+
+  return children.flatMap((child, index) => {
+    const fields = [
+      ['name', 'name'],
+      ['ic_number', 'IC no.'],
+      ['school', 'school'],
+      ['date_of_birth', 'date of birth'],
+    ];
+    const gaps = [];
+    let started = false;
+
+    fields.forEach(([key, label]) => {
+      if (String(child?.[key] || '').trim()) started = true;
+      else gaps.push(label);
+    });
+
+    if (!started || gaps.length === 0) return [];
+
+    return gaps.map((label) => `Child ${index + 1} ${label}`);
+  });
+}
+
+function missingProfileFields(user, key) {
   switch (key) {
     case 'photos':
-      return Boolean(user.profile_picture) && Boolean(user.cover_picture);
+      return [
+        user.profile_picture ? null : 'Profile photo',
+        user.cover_picture ? null : 'Cover photo',
+      ].filter(Boolean);
     case 'name':
-      return Boolean(user.name?.trim()) && Boolean(user.full_name?.trim());
+      return [
+        user.name?.trim() ? null : 'Display name',
+        user.full_name?.trim() ? null : 'Full name',
+      ].filter(Boolean);
     case 'bio':
-      return Boolean(user.bio?.trim());
-    case 'department':
-      return Boolean(user.department?.trim());
+      return user.bio?.trim() ? [] : ['Bio'];
+    case 'department': {
+      const departmentName = typeof user.department === 'string'
+        ? user.department.trim()
+        : user.department?.name;
+      return departmentName || user.department_id ? [] : ['Department'];
+    }
     case 'work_phone':
-      return Boolean(user.work_phone?.trim());
+      return user.work_phone?.trim() ? [] : ['Work phone'];
     case 'dates':
-      return Boolean(user.date_of_birth) && Boolean(user.joined_at);
+      return [
+        user.date_of_birth ? null : 'Birthday',
+        user.joined_at ? null : 'Joined date',
+      ].filter(Boolean);
     case 'background':
       return normalizeEducationHistory(user.education_history).length > 0
-        || normalizeWorkHistory(user.work_history).length > 0;
+        || normalizeWorkHistory(user.work_history).length > 0
+        ? []
+        : ['Education or work experience'];
     case 'hr_private':
-      return Boolean(user.gender?.trim())
-        && Boolean(user.nationality?.trim())
-        && Boolean(user.ic_number?.trim())
-        && Boolean(user.current_address?.trim())
-        && Boolean(user.emergency_contact_name?.trim())
-        && Boolean(user.emergency_contact_phone?.trim())
-        && Boolean(user.next_of_kin_relationship?.trim())
-        && healthStatusIsComplete(user.health_status);
+      return [
+        user.gender?.trim() ? null : 'Gender',
+        user.nationality?.trim() ? null : 'Nationality',
+        user.ic_number?.trim() ? null : 'IC number',
+        user.current_address?.trim() ? null : 'Current address',
+        user.emergency_contact_name?.trim() ? null : 'Emergency contact name',
+        user.emergency_contact_phone?.trim() ? null : 'Emergency contact phone',
+        user.next_of_kin_relationship?.trim() ? null : 'Next of kin relationship',
+        healthStatusIsComplete(user.health_status) ? null : 'Health status',
+        ...childMissingLabels(user.children),
+      ].filter(Boolean);
     default:
-      return false;
+      return [];
   }
 }
 
@@ -452,20 +520,34 @@ export function getProfileCompleteness(user) {
         key: item.key,
         label: item.label,
         done: Boolean(item.done),
+        missing: Array.isArray(item.missing) ? item.missing : [],
       })),
     };
   }
 
-  const checks = PROFILE_CHECKS.map((item) => ({
-    ...item,
-    done: isProfileCheckDone(user, item.key),
-  }));
+  const checks = PROFILE_CHECKS.map((item) => {
+    const missing = missingProfileFields(user, item.key);
+
+    return {
+      ...item,
+      done: missing.length === 0,
+      missing,
+    };
+  });
 
   const doneCount = checks.filter((item) => item.done).length;
   const totalCount = checks.length;
   const percent = Math.round((doneCount / totalCount) * 100);
 
   return { percent, doneCount, totalCount, checks };
+}
+
+export function listMissingProfileDetails(user) {
+  const { checks } = getProfileCompleteness(user);
+
+  return checks
+    .filter((item) => !item.done)
+    .flatMap((item) => (Array.isArray(item.missing) && item.missing.length > 0 ? item.missing : [item.label]));
 }
 
 export function normalizeSkills(value) {

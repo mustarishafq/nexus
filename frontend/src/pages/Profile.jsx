@@ -52,6 +52,7 @@ import {
   workHistoryIsEqual,
   buildHrProfileForm,
   buildHrProfilePayload,
+  childDetailErrors,
   hrProfileFormIsDirty,
   formatAgeLabel,
 } from '@/lib/profile';
@@ -224,6 +225,11 @@ export default function Profile() {
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
+    const childErrors = childDetailErrors(profileForm.children);
+    if (childErrors.length > 0) {
+      toast.error(childErrors[0]);
+      return;
+    }
     setProfileSaving(true);
     try {
       const updatedUser = await db.auth.updateMe({

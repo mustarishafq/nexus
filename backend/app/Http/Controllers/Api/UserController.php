@@ -215,7 +215,22 @@ class UserController extends Controller
                 ->whereRaw("TRIM(COALESCE(emergency_contact_phone, '')) != ''")
                 ->whereRaw("TRIM(COALESCE(next_of_kin_relationship, '')) != ''")
                 ->whereNotNull('health_status')
-                ->whereRaw("json_extract(health_status, '$.conditions[0]') is not null");
+                ->whereRaw("json_extract(health_status, '$.conditions[0]') is not null")
+                ->where(function ($children) {
+                    $children->whereNull('children')
+                        ->orWhere(function ($slots) {
+                            for ($index = 0; $index < 10; $index++) {
+                                $slots->where(function ($slot) use ($index) {
+                                    $slot->whereRaw("json_extract(children, '$[{$index}]') is null")
+                                        ->orWhere(function ($filled) use ($index) {
+                                            foreach (['name', 'ic_number', 'school', 'date_of_birth'] as $field) {
+                                                $filled->whereRaw($this->jsonText("\$[{$index}].{$field}")." != ''");
+                                            }
+                                        });
+                                });
+                            }
+                        });
+                });
         };
 
         if ($profile === 'complete') {
@@ -231,6 +246,17 @@ class UserController extends Controller
                 });
             });
         }
+    }
+
+    private function jsonText(string $path): string
+    {
+        $extract = "json_extract(children, '{$path}')";
+
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return "TRIM(COALESCE({$extract}, ''))";
+        }
+
+        return "TRIM(COALESCE(JSON_UNQUOTE({$extract}), ''))";
     }
 
     private function applyIndexSort($query, string $sort): void

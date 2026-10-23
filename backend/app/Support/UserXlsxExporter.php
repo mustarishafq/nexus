@@ -145,6 +145,7 @@ class UserXlsxExporter
             'MCP Access',
             'Access Groups',
             'Profile Completeness %',
+            'Missing Profile Details',
             'Last Login',
             'Created At',
         ];
@@ -209,6 +210,7 @@ class UserXlsxExporter
             $this->text($user->mcp_access),
             $user->accessGroups->pluck('name')->sort()->implode('; '),
             (int) ($completeness['percent'] ?? 0),
+            implode('; ', ProfileCompleteness::missingLabels($completeness)),
             $user->last_login_at?->toISOString() ?: 'Never login',
             $this->text($user->created_at?->toISOString()),
         ];

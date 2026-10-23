@@ -69,6 +69,22 @@ function AboutRow({ icon: Icon, label, children, iconClassName, className }) {
   );
 }
 
+function IncompleteCheckItem({ item }) {
+  const details = Array.isArray(item.missing) ? item.missing : [];
+
+  return (
+    <li className="space-y-0.5">
+      <div className="flex items-start gap-2 text-xs">
+        <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
+        <span className="text-foreground font-medium">{item.label}</span>
+      </div>
+      {details.length > 0 ? (
+        <p className="pl-5 text-xs text-muted-foreground">{details.join(', ')}</p>
+      ) : null}
+    </li>
+  );
+}
+
 function ProfileStrengthBlock({
   percent,
   showChecklist,
@@ -98,20 +114,14 @@ function ProfileStrengthBlock({
           {incompleteChecks.length > 0 ? (
             <ul className="space-y-1.5">
               {incompleteChecks.slice(0, 3).map((item) => (
-                <li key={item.key} className="flex items-center gap-2 text-xs">
-                  <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-                  <span className="text-foreground font-medium">{item.label}</span>
-                </li>
+                <IncompleteCheckItem key={item.key} item={item} />
               ))}
             </ul>
           ) : null}
           <Expandable open={checklistExpanded && incompleteChecks.length > 3}>
             <ul className="space-y-1.5 pt-1.5">
               {incompleteChecks.slice(3).map((item) => (
-                <li key={item.key} className="flex items-center gap-2 text-xs">
-                  <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-                  <span className="text-foreground font-medium">{item.label}</span>
-                </li>
+                <IncompleteCheckItem key={item.key} item={item} />
               ))}
             </ul>
           </Expandable>
@@ -162,6 +172,7 @@ export default function ProfileAboutCard({
   const [cardCollapsed, setCardCollapsed] = useState(defaultCollapsed);
   const { percent, doneCount, totalCount, checks } = getProfileCompleteness(user);
   const incompleteChecks = checks.filter((item) => !item.done);
+  const showMissingChecklist = showChecklist || isOwnProfile;
   const groups = (user?.access_group_names || []).filter(Boolean);
   const skills = normalizeSkills(user?.skills);
   const memberSince = formatMemberSince(user?.joined_at);
@@ -173,7 +184,7 @@ export default function ProfileAboutCard({
   const profileStrength = (
     <ProfileStrengthBlock
       percent={percent}
-      showChecklist={showChecklist}
+      showChecklist={showMissingChecklist}
       doneCount={doneCount}
       totalCount={totalCount}
       incompleteChecks={incompleteChecks}

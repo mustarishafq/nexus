@@ -45,8 +45,19 @@ trait ValidatesHrProfileFields
             'spouse_details.employer_address' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'spouse_details.date_of_birth' => ['sometimes', 'nullable', 'date'],
             'spouse_details.marriage_date' => ['sometimes', 'nullable', 'date'],
-            'children' => ['sometimes', 'nullable', 'array', 'max:10'],
-            'children.*.name' => ['required_with:children', 'string', 'max:150'],
+            'children' => [
+                'sometimes',
+                'nullable',
+                'array',
+                'max:10',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $error = $this->childrenValidationError($value);
+                    if ($error !== null) {
+                        $fail($error);
+                    }
+                },
+            ],
+            'children.*.name' => ['sometimes', 'nullable', 'string', 'max:150'],
             'children.*.ic_number' => ['sometimes', 'nullable', 'string', 'max:20'],
             'children.*.school' => ['sometimes', 'nullable', 'string', 'max:150'],
             'children.*.date_of_birth' => ['sometimes', 'nullable', 'date'],
@@ -144,6 +155,50 @@ trait ValidatesHrProfileFields
         $details['marriage_date'] = $marriageDate;
 
         return $details;
+    }
+
+    private function childrenValidationError(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_array($value)) {
+            return 'Children must be a list.';
+        }
+
+        foreach (array_values($value) as $index => $child) {
+            if (! is_array($child)) {
+                return 'Each child must be an object.';
+            }
+
+            $name = trim((string) ($child['name'] ?? ''));
+            $icNumber = trim((string) ($child['ic_number'] ?? ''));
+            $school = trim((string) ($child['school'] ?? ''));
+            $dateOfBirth = IcNumber::fillDateOfBirth(
+                trim((string) ($child['date_of_birth'] ?? '')) ?: null,
+                $icNumber
+            ) ?? '';
+
+            if ($name === '' && $icNumber === '' && $school === '' && $dateOfBirth === '') {
+                continue;
+            }
+
+            $missing = array_values(array_filter([
+                $name === '' ? 'name' : null,
+                $icNumber === '' ? 'IC no.' : null,
+                $school === '' ? 'school' : null,
+                $dateOfBirth === '' ? 'date of birth' : null,
+            ]));
+
+            if ($missing !== []) {
+                $number = $index + 1;
+
+                return 'Child '.$number.' must include '.implode(', ', $missing).'.';
+            }
+        }
+
+        return null;
     }
 
     /**
