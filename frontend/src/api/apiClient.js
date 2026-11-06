@@ -523,6 +523,54 @@ export const db = {
 		},
 	},
 
+	eventAttendance: {
+		async myHistory(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/event-attendance/my-history${query}`);
+		},
+
+		async report(filters = {}) {
+			const query = buildQuery(filters);
+			return request(`/event-attendance/report${query}`);
+		},
+
+		async exportCsv(filters = {}) {
+			const token = getAuthToken();
+			const query = buildQuery(filters);
+			const response = await fetch(`${API_BASE_URL}/event-attendance/export${query}`, {
+				method: 'GET',
+				headers: {
+					Accept: 'text/csv',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				let payload = null;
+				try {
+					payload = await response.json();
+				} catch {
+					payload = null;
+				}
+				const error = new Error(payload?.message || `HTTP ${response.status}`);
+				error.status = response.status;
+				error.data = payload;
+				throw error;
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `event-attendance-report-${new Date().toISOString().slice(0, 10)}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.URL.revokeObjectURL(url);
+		},
+	},
+
 	quizzes: {
 		async list({ scope } = {}) {
 			const query = buildQuery({ scope });

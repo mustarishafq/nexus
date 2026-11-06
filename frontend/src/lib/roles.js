@@ -75,6 +75,10 @@ export function canManageCalendar(user) {
   return can(user, 'calendar.manage');
 }
 
+export function canViewAllEventAttendance(user) {
+  return canViewAllAttendance(user) || canManageCalendar(user);
+}
+
 export function canManageAnalytics(user) {
   return can(user, 'analytics.manage');
 }

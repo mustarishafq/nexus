@@ -19,6 +19,7 @@ test('getPageTitle maps each module path to its page heading', () => {
     ['/network-health', 'Network Health'],
     ['/attendance', 'Attendance'],
     ['/attendance/records', 'Attendance'],
+    ['/attendance/events', 'Attendance'],
     ['/missions', 'Missions'],
     ['/leaderboard', 'Missions'],
     ['/analytics', 'Analytics'],
