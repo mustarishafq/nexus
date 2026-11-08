@@ -283,6 +283,7 @@ class DepartmentAttendanceSettings
             'grace_period_minutes' => $setting->grace_period_minutes,
             'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
             'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
+            'min_reason_length' => AttendanceClockRulesSettings::minReasonLength($setting),
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'allow_different_shift_clock_in' => (bool) ($setting->allow_different_shift_clock_in ?? false),
             'overtime_enabled' => $setting->overtime_enabled,

@@ -92,6 +92,7 @@ class AttendancePolicySnapshotService
                 'grace_period_minutes' => $serialized['grace_period_minutes'],
                 'require_early_clock_out_reason' => $serialized['require_early_clock_out_reason'],
                 'require_late_clock_in_reason' => $serialized['require_late_clock_in_reason'],
+                'min_reason_length' => $serialized['min_reason_length'] ?? AttendanceClockRulesSettings::minReasonLength(),
                 'allow_outside_shift_hours' => $serialized['allow_outside_shift_hours'],
                 'allow_different_shift_clock_in' => $serialized['allow_different_shift_clock_in'] ?? false,
                 'overtime_enabled' => $serialized['overtime_enabled'],

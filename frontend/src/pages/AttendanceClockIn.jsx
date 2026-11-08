@@ -20,11 +20,13 @@ import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAtt
 import { useAuth } from '@/lib/AuthContext';
 import { canViewAllAttendance } from '@/lib/roles';
 import {
+  MIN_ATTENDANCE_REASON_LENGTH,
   evaluateEarlyClockOut,
   evaluateLateClockIn,
   findActiveShift,
   findMatchingAttendanceSite,
   findNearestAttendanceSite,
+  isValidAttendanceReason,
   resolveAttendanceSites,
 } from '@/lib/attendancePolicy';
 import { getDeviceInfo } from '@/lib/deviceInfo';
@@ -135,6 +137,10 @@ export default function AttendanceClockIn() {
     return evaluateEarlyClockOut(policy, at, lastRecord);
   }, [isClockIn, policy, capture?.capturedAt, lastRecord, nowTick]);
 
+  const minReasonLength = Math.max(
+    1,
+    Math.min(200, Number(policy?.min_reason_length ?? MIN_ATTENDANCE_REASON_LENGTH) || MIN_ATTENDANCE_REASON_LENGTH),
+  );
   const needsLateReason = Boolean(
     isClockIn && policy?.require_late_clock_in_reason && lateClockIn.is_late,
   );
@@ -142,8 +148,9 @@ export default function AttendanceClockIn() {
     !isClockIn && policy?.require_early_clock_out_reason && earlyClockOut.is_early,
   );
   const needsAnyReason = needsLateReason || needsEarlyReason;
-  const reasonReady = (!needsLateReason || lateClockInReason.trim().length > 0)
-    && (!needsEarlyReason || earlyClockOutReason.trim().length > 0);
+  const lateReasonValid = !needsLateReason || isValidAttendanceReason(lateClockInReason, minReasonLength);
+  const earlyReasonValid = !needsEarlyReason || isValidAttendanceReason(earlyClockOutReason, minReasonLength);
+  const reasonReady = lateReasonValid && earlyReasonValid;
 
   const clockMutation = useMutation({
     mutationFn: async ({
@@ -158,13 +165,17 @@ export default function AttendanceClockIn() {
       }
 
       const trimmedLate = String(lateReason || '').trim();
-      if (requireLateReason && !trimmedLate) {
-        throw new Error('Please enter a reason for clocking in late.');
+      if (requireLateReason && !isValidAttendanceReason(trimmedLate, minReasonLength)) {
+        throw new Error(
+          `Please enter a meaningful late clock-in reason (at least ${minReasonLength} characters, not just symbols).`,
+        );
       }
 
       const trimmedEarly = String(earlyReason || '').trim();
-      if (requireEarlyReason && !trimmedEarly) {
-        throw new Error('Please enter a reason for clocking out early.');
+      if (requireEarlyReason && !isValidAttendanceReason(trimmedEarly, minReasonLength)) {
+        throw new Error(
+          `Please enter a meaningful early clock-out reason (at least ${minReasonLength} characters, not just symbols).`,
+        );
       }
 
       const upload = await db.integrations.Core.UploadFile({
@@ -247,7 +258,9 @@ export default function AttendanceClockIn() {
   }, [capture, clockMutation, lateClockInReason, needsLateReason, earlyClockOutReason, needsEarlyReason, reasonReady]);
 
   const submitHint = !reasonReady
-    ? (needsEarlyReason ? 'Enter an early clock-out reason first' : 'Enter a late clock-in reason first')
+    ? (needsEarlyReason
+      ? `Enter a valid early clock-out reason (min ${minReasonLength} characters)`
+      : `Enter a valid late clock-in reason (min ${minReasonLength} characters)`)
     : '';
 
   const attendanceSites = useMemo(() => {
@@ -471,11 +484,21 @@ export default function AttendanceClockIn() {
                   id="late-clock-in-reason"
                   value={lateClockInReason}
                   onChange={(event) => setLateClockInReason(event.target.value)}
-                  placeholder="Why are you clocking in late?"
+                  placeholder="Why are you clocking in late? (e.g. Heavy traffic on highway)"
                   maxLength={500}
                   rows={3}
                   disabled={clockMutation.isPending}
                 />
+                <p className={cn(
+                  'text-xs',
+                  lateClockInReason.trim().length > 0 && !lateReasonValid
+                    ? 'text-destructive font-medium'
+                    : 'text-muted-foreground',
+                )}>
+                  {lateClockInReason.trim().length > 0 && !lateReasonValid
+                    ? `Please enter a proper reason (at least ${minReasonLength} characters with words, not "." or "-").`
+                    : `Minimum ${minReasonLength} characters (${lateClockInReason.trim().length}/500)`}
+                </p>
               </CardContent>
             </Card>
           ) : needsEarlyReason ? (
@@ -496,11 +519,21 @@ export default function AttendanceClockIn() {
                   id="early-clock-out-reason"
                   value={earlyClockOutReason}
                   onChange={(event) => setEarlyClockOutReason(event.target.value)}
-                  placeholder="Why are you clocking out early?"
+                  placeholder="Why are you clocking out early? (e.g. Clinic appointment)"
                   maxLength={500}
                   rows={3}
                   disabled={clockMutation.isPending}
                 />
+                <p className={cn(
+                  'text-xs',
+                  earlyClockOutReason.trim().length > 0 && !earlyReasonValid
+                    ? 'text-destructive font-medium'
+                    : 'text-muted-foreground',
+                )}>
+                  {earlyClockOutReason.trim().length > 0 && !earlyReasonValid
+                    ? `Please enter a proper reason (at least ${minReasonLength} characters with words, not "." or "-").`
+                    : `Minimum ${minReasonLength} characters (${earlyClockOutReason.trim().length}/500)`}
+                </p>
               </CardContent>
             </Card>
           ) : (

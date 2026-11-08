@@ -136,6 +136,7 @@ class AttendancePolicyValidator
             'early_clock_in_cutoff_minutes' => GamificationSettings::earlyClockInCutoffMinutes(),
             'require_early_clock_out_reason' => (bool) $setting->require_early_clock_out_reason,
             'require_late_clock_in_reason' => (bool) $setting->require_late_clock_in_reason,
+            'min_reason_length' => AttendanceClockRulesSettings::minReasonLength($setting),
             'allow_outside_shift_hours' => $setting->allow_outside_shift_hours,
             'overtime_enabled' => $setting->overtime_enabled,
             'overtime_threshold_minutes' => (int) $setting->overtime_threshold_minutes,

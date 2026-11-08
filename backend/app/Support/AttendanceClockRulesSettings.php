@@ -13,6 +13,7 @@ class AttendanceClockRulesSettings
         'allow_outside_shift_hours' => false,
         'require_early_clock_out_reason' => false,
         'require_late_clock_in_reason' => false,
+        'min_reason_length' => 10,
         'overtime_enabled' => true,
         'overtime_threshold_minutes' => 0,
         'grace_period_minutes' => 15,
@@ -23,6 +24,20 @@ class AttendanceClockRulesSettings
 
     /** @var list<string> */
     public const KEYS = [
+        'allow_outside_shift_hours',
+        'require_early_clock_out_reason',
+        'require_late_clock_in_reason',
+        'min_reason_length',
+        'overtime_enabled',
+        'overtime_threshold_minutes',
+        'grace_period_minutes',
+        'allow_different_shift_clock_in',
+        'shortage_enabled',
+        'count_work_from_scheduled_start',
+    ];
+
+    /** @var list<string> */
+    public const DEPARTMENT_COLUMN_KEYS = [
         'allow_outside_shift_hours',
         'require_early_clock_out_reason',
         'require_late_clock_in_reason',
@@ -49,7 +64,7 @@ class AttendanceClockRulesSettings
             ->first();
 
         if ($first) {
-            return self::normalize([
+            return array_merge(self::DEFAULTS, self::normalize([
                 'allow_outside_shift_hours' => $first->allow_outside_shift_hours,
                 'require_early_clock_out_reason' => $first->require_early_clock_out_reason,
                 'require_late_clock_in_reason' => $first->require_late_clock_in_reason,
@@ -59,10 +74,21 @@ class AttendanceClockRulesSettings
                 'allow_different_shift_clock_in' => $first->allow_different_shift_clock_in ?? false,
                 'shortage_enabled' => $first->shortage_enabled ?? true,
                 'count_work_from_scheduled_start' => $first->count_work_from_scheduled_start ?? true,
-            ]);
+            ]));
         }
 
         return self::DEFAULTS;
+    }
+
+    public static function minReasonLength(?DepartmentAttendanceSetting $setting = null): int
+    {
+        if ($setting !== null && isset($setting->min_reason_length)) {
+            return max(1, min(200, (int) $setting->min_reason_length));
+        }
+
+        $current = self::current();
+
+        return max(1, min(200, (int) ($current['min_reason_length'] ?? self::DEFAULTS['min_reason_length'])));
     }
 
     /**
@@ -134,6 +160,7 @@ class AttendanceClockRulesSettings
             'allow_outside_shift_hours' => ['nullable', 'boolean'],
             'require_early_clock_out_reason' => ['nullable', 'boolean'],
             'require_late_clock_in_reason' => ['nullable', 'boolean'],
+            'min_reason_length' => ['nullable', 'integer', 'min:1', 'max:200'],
             'overtime_enabled' => ['nullable', 'boolean'],
             'overtime_threshold_minutes' => ['nullable', 'integer', 'min:0', 'max:480'],
             'grace_period_minutes' => ['nullable', 'integer', 'min:0', 'max:180'],
@@ -159,6 +186,9 @@ class AttendanceClockRulesSettings
         }
         if (array_key_exists('require_late_clock_in_reason', $input)) {
             $config['require_late_clock_in_reason'] = self::toBool($input['require_late_clock_in_reason']);
+        }
+        if (array_key_exists('min_reason_length', $input) && $input['min_reason_length'] !== null && $input['min_reason_length'] !== '') {
+            $config['min_reason_length'] = max(1, min(200, (int) $input['min_reason_length']));
         }
         if (array_key_exists('overtime_enabled', $input)) {
             $config['overtime_enabled'] = self::toBool($input['overtime_enabled']);
@@ -252,7 +282,7 @@ class AttendanceClockRulesSettings
         }
 
         $update = [];
-        foreach (self::KEYS as $key) {
+        foreach (self::DEPARTMENT_COLUMN_KEYS as $key) {
             if (array_key_exists($key, $config)) {
                 $update[$key] = $config[$key];
             }

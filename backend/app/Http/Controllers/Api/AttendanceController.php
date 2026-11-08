@@ -355,14 +355,26 @@ class AttendanceController extends Controller
             $metadata['policy_warnings'] = $policyResult['warnings'];
         }
 
+        $minReasonLength = \App\Support\AttendanceClockRulesSettings::minReasonLength();
+
         if ($validated['type'] === 'clock_in') {
             $late = AttendanceLateEvaluator::evaluate($user, $capturedAt);
             $reason = trim((string) ($validated['late_clock_in_reason'] ?? ''));
 
-            if (! empty($late['require_late_clock_in_reason']) && ! empty($late['is_late']) && $reason === '') {
-                return response()->json([
-                    'message' => 'A late clock-in reason is required when arriving after your shift start.',
-                ], 422);
+            if (! empty($late['require_late_clock_in_reason']) && ! empty($late['is_late'])) {
+                if ($reason === '') {
+                    return response()->json([
+                        'message' => 'A late clock-in reason is required when arriving after your shift start.',
+                    ], 422);
+                }
+                if (! $this->isValidAttendanceReason($reason, $minReasonLength)) {
+                    return response()->json([
+                        'message' => sprintf(
+                            'Please provide a meaningful late clock-in reason (at least %d characters, not just symbols).',
+                            $minReasonLength,
+                        ),
+                    ], 422);
+                }
             }
 
             unset($late['require_late_clock_in_reason']);
@@ -375,10 +387,20 @@ class AttendanceController extends Controller
             $early = AttendanceEarlyClockOutEvaluator::evaluate($user, $capturedAt, $lastRecord);
             $earlyReason = trim((string) ($validated['early_clock_out_reason'] ?? ''));
 
-            if (! empty($early['require_early_clock_out_reason']) && ! empty($early['is_early_leave']) && $earlyReason === '') {
-                return response()->json([
-                    'message' => 'An early clock-out reason is required when leaving before your shift end.',
-                ], 422);
+            if (! empty($early['require_early_clock_out_reason']) && ! empty($early['is_early_leave'])) {
+                if ($earlyReason === '') {
+                    return response()->json([
+                        'message' => 'An early clock-out reason is required when leaving before your shift end.',
+                    ], 422);
+                }
+                if (! $this->isValidAttendanceReason($earlyReason, $minReasonLength)) {
+                    return response()->json([
+                        'message' => sprintf(
+                            'Please provide a meaningful early clock-out reason (at least %d characters, not just symbols).',
+                            $minReasonLength,
+                        ),
+                    ], 422);
+                }
             }
 
             unset($early['require_early_clock_out_reason']);
@@ -428,6 +450,19 @@ class AttendanceController extends Controller
     private function isAttendanceEnabled(): bool
     {
         return AppSettings::isAttendanceEnabled();
+    }
+
+    private function isValidAttendanceReason(string $reason, int $minLength = 10): bool
+    {
+        $trimmed = trim($reason);
+        $minLength = max(1, min(200, $minLength));
+        if (mb_strlen($trimmed) < $minLength) {
+            return false;
+        }
+
+        $minLetters = min(3, $minLength);
+
+        return preg_match_all('/\p{L}/u', $trimmed) >= $minLetters;
     }
 
     public function dashboard(Request $request): JsonResponse

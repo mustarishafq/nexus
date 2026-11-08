@@ -302,6 +302,19 @@ function lateMinutesAgainstShift(shift, currentMinutes, grace) {
  * Uses overwrite / planned shift and department timezone when present.
  * @returns {{ is_late: boolean, late_minutes: number, scheduled_start: Date|null, shift_name: string|null }}
  */
+export const MIN_ATTENDANCE_REASON_LENGTH = 10;
+export const MIN_ATTENDANCE_REASON_LETTERS = 3;
+
+export function isValidAttendanceReason(value, minLength = MIN_ATTENDANCE_REASON_LENGTH) {
+  const trimmed = String(value || '').trim();
+  const effectiveMin = Math.max(1, Math.min(200, Number(minLength) || MIN_ATTENDANCE_REASON_LENGTH));
+  if (trimmed.length < effectiveMin) {
+    return false;
+  }
+  const letters = (trimmed.match(/\p{L}/gu) || []).length;
+  return letters >= Math.min(MIN_ATTENDANCE_REASON_LETTERS, effectiveMin);
+}
+
 export function evaluateLateClockIn(policy, date = new Date()) {
   const result = {
     is_late: false,

@@ -14,6 +14,7 @@ const DEFAULT_CLOCK_RULES = {
   allow_outside_shift_hours: false,
   require_early_clock_out_reason: false,
   require_late_clock_in_reason: false,
+  min_reason_length: 10,
   overtime_enabled: true,
   overtime_threshold_minutes: 0,
   grace_period_minutes: 15,
@@ -27,6 +28,7 @@ function normalizeClockRules(input = {}) {
     allow_outside_shift_hours: Boolean(input.allow_outside_shift_hours),
     require_early_clock_out_reason: Boolean(input.require_early_clock_out_reason),
     require_late_clock_in_reason: Boolean(input.require_late_clock_in_reason),
+    min_reason_length: Math.max(1, Math.min(200, Number(input.min_reason_length ?? 10) || 10)),
     overtime_enabled: input.overtime_enabled !== false,
     overtime_threshold_minutes: Number(input.overtime_threshold_minutes ?? 0),
     grace_period_minutes: Number(input.grace_period_minutes ?? 15),
@@ -150,6 +152,27 @@ export default function AttendanceClockRulesPanel({ peerHint = 'Insan' }) {
                 }))}
               />
             </AdminSettingsToggleRow>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="min-reason-length">Minimum reason length (characters)</Label>
+              <Input
+                id="min-reason-length"
+                type="number"
+                min={1}
+                max={200}
+                className="tabular-nums"
+                value={form.min_reason_length}
+                onChange={(event) => setForm((current) => ({
+                  ...current,
+                  min_reason_length: Math.max(1, Math.min(200, Number(event.target.value || 1))),
+                }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum characters required for late clock-in and early clock-out reasons (rejects symbols like &ldquo;.&rdquo; or &ldquo;-&rdquo;).
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -300,4 +300,75 @@ class AttendanceLateClockInReasonTest extends TestCase
             ->assertJsonPath('metadata.policy.outside_shift_hours', true)
             ->assertJsonPath('metadata.policy.is_early_leave', false);
     }
+
+    public function test_symbol_only_or_too_short_late_and_early_reasons_are_rejected(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: true, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-07-29 09:30:00', 'Asia/Kuala_Lumpur');
+        $outAt = Carbon::parse('2026-07-29 16:30:00', 'Asia/Kuala_Lumpur');
+
+        foreach (['.', '-', '..........', '----------', '1234567890', 'Too short'] as $invalid) {
+            $this->clockIn($user, $inAt, $invalid)
+                ->assertStatus(422)
+                ->assertJsonPath(
+                    'message',
+                    'Please provide a meaningful late clock-in reason (at least 10 characters, not just symbols).',
+                );
+        }
+
+        $this->clockIn($user, $inAt, 'Heavy rain')->assertCreated();
+
+        foreach (['.', '-', '..........', '----------', '1234567890', 'Too short'] as $invalid) {
+            $this->clockOut($user, $outAt, $invalid)
+                ->assertStatus(422)
+                ->assertJsonPath(
+                    'message',
+                    'Please provide a meaningful early clock-out reason (at least 10 characters, not just symbols).',
+                );
+        }
+
+        $this->clockOut($user, $outAt, 'Medical checkup')->assertCreated();
+    }
+
+    public function test_admin_can_configure_min_reason_length_in_clock_rules(): void
+    {
+        $admin = User::factory()->create([
+            'is_approved' => true,
+            'role' => 'admin',
+            'email' => 'admin-clock@example.com',
+        ]);
+        $user = $this->makeUserWithShift(requireReason: true, requireEarlyReason: true);
+
+        $adminToken = ApiTokenAuth::issueToken($admin);
+
+        $this->withToken($adminToken)
+            ->putJson('/api/admin/attendance-clock-rules', [
+                'grace_period_minutes' => 15,
+                'require_late_clock_in_reason' => true,
+                'require_early_clock_out_reason' => true,
+                'allow_outside_shift_hours' => true,
+                'min_reason_length' => 15,
+            ])
+            ->assertOk()
+            ->assertJsonPath('settings.min_reason_length', 15);
+
+        $userToken = ApiTokenAuth::issueToken($user);
+        $this->withToken($userToken)
+            ->getJson('/api/attendance/status')
+            ->assertOk()
+            ->assertJsonPath('policy.min_reason_length', 15);
+
+        $inAt = Carbon::parse('2026-07-29 09:30:00', 'Asia/Kuala_Lumpur');
+
+        // 10-character reason fails when min_reason_length is 15
+        $this->clockIn($user, $inAt, 'Heavy rain')
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'Please provide a meaningful late clock-in reason (at least 15 characters, not just symbols).',
+            );
+
+        // 15+ character reason succeeds
+        $this->clockIn($user, $inAt, 'Heavy rain this morning')->assertCreated();
+    }
 }
