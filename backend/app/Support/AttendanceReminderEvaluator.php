@@ -80,10 +80,7 @@ class AttendanceReminderEvaluator
             }
         }
 
-        return array_values(array_filter(
-            is_array($setting->shifts ?? null) ? $setting->shifts : [],
-            static fn ($shift) => is_array($shift),
-        ));
+        return AttendanceShiftResolver::shiftsForUser($user, $setting);
     }
 
     /**

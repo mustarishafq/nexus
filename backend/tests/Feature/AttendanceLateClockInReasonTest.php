@@ -280,4 +280,24 @@ class AttendanceLateClockInReasonTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('metadata.policy.is_early_leave', false);
     }
+
+    public function test_clock_out_after_shift_hours_is_allowed_even_when_outside_shift_hours_disallowed(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        DepartmentAttendanceSetting::query()
+            ->where('department_id', $user->department_id)
+            ->update(['allow_outside_shift_hours' => false]);
+
+        $inAt = Carbon::parse('2026-07-29 08:55:00', 'Asia/Kuala_Lumpur');
+        $lateEveningOutAt = Carbon::parse('2026-07-29 19:30:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        // Even with allow_outside_shift_hours = false, an open clock_in must always
+        // be allowed to clock_out after shift end + grace without getting trapped.
+        $this->clockOut($user, $lateEveningOutAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.outside_shift_hours', true)
+            ->assertJsonPath('metadata.policy.is_early_leave', false);
+    }
 }

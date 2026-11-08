@@ -60,10 +60,8 @@ class AttendancePolicyValidator
             'department_id' => $setting->department_id,
         ];
 
-        $today = $capturedAt->copy()->timezone($setting->timezone)->toDateString();
-        $activeRelease = self::findActiveSpecialRelease($user, $today);
-
         $at = $capturedAt->copy()->timezone($setting->timezone);
+        $activeRelease = self::findActiveSpecialReleaseForMoment($user, $at);
         $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
         if ($resolvedShift) {
             $metadata['shift_id'] = $resolvedShift['id'] ?? null;
@@ -75,12 +73,21 @@ class AttendancePolicyValidator
 
         $location = AttendanceShiftResolver::locationForShift($resolvedShift, $setting, $user);
         self::validateGeofence($setting, $location, $type, $latitude, $longitude, $errors, $warnings, $metadata, $activeRelease);
-        self::validateShiftHours($user, $setting, $capturedAt, $errors, $warnings, $metadata, $activeRelease);
+        self::validateShiftHours($user, $setting, $type, $capturedAt, $errors, $warnings, $metadata, $activeRelease);
 
         if ($type === 'clock_out' && $setting->overtime_enabled && $lastRecord?->type === 'clock_in') {
+            $overtimeShift = is_array($resolvedShift) ? $resolvedShift : null;
+            if ($lastRecord->captured_at) {
+                $inAt = $lastRecord->captured_at->copy()->timezone($setting->timezone);
+                $inRelease = self::findActiveSpecialReleaseForMoment($user, $inAt);
+                $inShift = AttendanceShiftResolver::resolveShiftForMoment($user, $inAt, $setting, $inRelease);
+                if (is_array($inShift)) {
+                    $overtimeShift = $inShift;
+                }
+            }
             $metadata = array_merge(
                 $metadata,
-                self::calculateOvertime($lastRecord->captured_at, $capturedAt, $setting, is_array($resolvedShift) ? $resolvedShift : null),
+                self::calculateOvertime($lastRecord->captured_at, $capturedAt, $setting, $overtimeShift),
             );
         }
 
@@ -105,10 +112,9 @@ class AttendancePolicyValidator
 
         $user->loadMissing('department');
         $shifts = AttendanceShiftResolver::shiftsForUser($user, $setting);
-        $at = now()->timezone($setting->timezone ?: config('app.timezone'));
         $timezone = $setting->timezone ?: config('app.timezone');
-        $today = now()->timezone($timezone)->toDateString();
-        $activeRelease = self::findActiveSpecialRelease($user, $today);
+        $at = now()->timezone($timezone);
+        $activeRelease = self::findActiveSpecialReleaseForMoment($user, $at);
         $activeShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
         $location = AttendanceShiftResolver::locationForShift($activeShift, $setting, $user);
 
@@ -180,6 +186,24 @@ class AttendancePolicyValidator
     {
         return app(ResourceSpecialReleaseClient::class)
             ->findApprovedForUserOnDate($user->id, $date);
+    }
+
+    private static function findActiveSpecialReleaseForMoment(User $user, Carbon $at): ?SpecialReleasePin
+    {
+        $release = self::findActiveSpecialRelease($user, $at->toDateString());
+        if ($release) {
+            return $release;
+        }
+
+        if ($at->hour < 12) {
+            $yesterday = $at->copy()->subDay()->toDateString();
+            $overnight = self::findActiveSpecialRelease($user, $yesterday);
+            if ($overnight && $overnight->shiftCrossesMidnight) {
+                return $overnight;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -354,6 +378,7 @@ class AttendancePolicyValidator
     private static function validateShiftHours(
         User $user,
         DepartmentAttendanceSetting $setting,
+        string $type,
         Carbon $capturedAt,
         array &$errors,
         array &$warnings,
@@ -363,6 +388,7 @@ class AttendancePolicyValidator
         $at = $capturedAt->copy()->timezone($setting->timezone);
         $grace = (int) $setting->grace_period_minutes;
         $earlyWindow = GamificationSettings::earlyClockInWindowMinutes();
+        $blockOutsideHours = $type === 'clock_in' && ! $setting->allow_outside_shift_hours;
 
         $synthetic = $activeRelease?->toSyntheticShift();
         if ($synthetic) {
@@ -374,7 +400,7 @@ class AttendancePolicyValidator
                 return;
             }
 
-            if (! $setting->allow_outside_shift_hours) {
+            if ($blockOutsideHours) {
                 $errors[] = 'Clock in/out is not allowed outside your special release shift hours.';
             } else {
                 $warnings[] = 'Recorded outside special release shift hours.';
@@ -405,7 +431,7 @@ class AttendancePolicyValidator
             return;
         }
 
-        if (! $setting->allow_outside_shift_hours) {
+        if ($blockOutsideHours) {
             $errors[] = 'Clock in/out is not allowed outside your department shift hours.';
         } else {
             $warnings[] = 'Recorded outside scheduled shift hours.';

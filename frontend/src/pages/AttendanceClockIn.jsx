@@ -1,6 +1,6 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -89,6 +89,12 @@ export default function AttendanceClockIn() {
   const [lateClockInReason, setLateClockInReason] = useState('');
   const [earlyClockOutReason, setEarlyClockOutReason] = useState('');
   const [justClockedOut, setJustClockedOut] = useState(false);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(Date.now()), 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const deviceInfo = useMemo(() => getDeviceInfo(), []);
 
@@ -117,17 +123,17 @@ export default function AttendanceClockIn() {
     if (!isClockIn || !policy?.require_late_clock_in_reason || suppressIdlePostClockOutPrompt) {
       return { is_late: false, late_minutes: 0 };
     }
-    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date();
+    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date(nowTick);
     return evaluateLateClockIn(policy, at);
-  }, [isClockIn, policy, capture?.capturedAt, suppressIdlePostClockOutPrompt]);
+  }, [isClockIn, policy, capture?.capturedAt, suppressIdlePostClockOutPrompt, nowTick]);
 
   const earlyClockOut = useMemo(() => {
     if (isClockIn || !policy?.require_early_clock_out_reason) {
       return { is_early: false, early_minutes: 0 };
     }
-    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date();
+    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date(nowTick);
     return evaluateEarlyClockOut(policy, at, lastRecord);
-  }, [isClockIn, policy, capture?.capturedAt, lastRecord]);
+  }, [isClockIn, policy, capture?.capturedAt, lastRecord, nowTick]);
 
   const needsLateReason = Boolean(
     isClockIn && policy?.require_late_clock_in_reason && lateClockIn.is_late,
