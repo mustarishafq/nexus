@@ -413,6 +413,20 @@ export default function AttendanceCamera({
 
       if (
         requirePreciseLocationRef.current
+        && (location.latitude == null || location.longitude == null)
+      ) {
+        locationRef.current = {
+          ...location,
+          locatingPosition: false,
+          locatingAddress: false,
+        };
+        setLocationTick((tick) => tick + 1);
+        toast.error('Location is required for attendance in your department. Please enable location access and try again.');
+        return;
+      }
+
+      if (
+        requirePreciseLocationRef.current
         && location.latitude != null
         && isLocationAccuracyPoor(location.accuracy, LOCATION_ACCURACY_POOR_METERS)
       ) {

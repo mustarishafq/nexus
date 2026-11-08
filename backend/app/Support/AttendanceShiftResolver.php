@@ -85,6 +85,47 @@ class AttendanceShiftResolver
     /**
      * @return array<string, mixed>|null
      */
+    public static function shiftFromRecord(
+        ?\App\Models\AttendanceRecord $record,
+        ?DepartmentAttendanceSetting $setting,
+    ): ?array {
+        if (! $record || ! $setting) {
+            return null;
+        }
+
+        $shifts = self::normalizeList($setting->shifts ?? []);
+        if ($shifts === []) {
+            return null;
+        }
+
+        $shiftId = data_get($record->metadata, 'policy.shift_id') ?? data_get($record->metadata, 'shift_id');
+        if (is_string($shiftId) || is_numeric($shiftId)) {
+            $targetId = trim((string) $shiftId);
+            if ($targetId !== '') {
+                foreach ($shifts as $shift) {
+                    if ((string) ($shift['id'] ?? '') === $targetId) {
+                        return $shift;
+                    }
+                }
+            }
+        }
+
+        $shiftName = data_get($record->metadata, 'policy.shift_name');
+        if (is_string($shiftName) && trim($shiftName) !== '') {
+            $targetName = mb_strtolower(trim($shiftName));
+            foreach ($shifts as $shift) {
+                if (mb_strtolower(trim((string) ($shift['name'] ?? ''))) === $targetName) {
+                    return $shift;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
     public static function specialReleaseShiftForMoment(
         User $user,
         Carbon $at,

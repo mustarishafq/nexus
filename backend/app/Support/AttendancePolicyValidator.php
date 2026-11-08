@@ -62,7 +62,16 @@ class AttendancePolicyValidator
 
         $at = $capturedAt->copy()->timezone($setting->timezone);
         $activeRelease = self::findActiveSpecialReleaseForMoment($user, $at);
-        $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
+        $resolvedShift = null;
+        if ($type === 'clock_out' && $lastRecord?->type === 'clock_in' && empty($activeRelease?->toSyntheticShift())) {
+            $resolvedShift = AttendanceShiftResolver::shiftFromRecord($lastRecord, $setting);
+            if (! $resolvedShift && $lastRecord->captured_at) {
+                $inAt = $lastRecord->captured_at->copy()->timezone($setting->timezone);
+                $inRelease = self::findActiveSpecialReleaseForMoment($user, $inAt);
+                $resolvedShift = AttendanceShiftResolver::resolveShiftForMoment($user, $inAt, $setting, $inRelease);
+            }
+        }
+        $resolvedShift = $resolvedShift ?? AttendanceShiftResolver::resolveShiftForMoment($user, $at, $setting, $activeRelease);
         if ($resolvedShift) {
             $metadata['shift_id'] = $resolvedShift['id'] ?? null;
             $metadata['shift_name'] = $resolvedShift['name'] ?? null;
