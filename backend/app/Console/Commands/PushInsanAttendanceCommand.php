@@ -16,6 +16,7 @@ class PushInsanAttendanceCommand extends Command
                             {--chunk=200 : Query chunk size}
                             {--legacy-fallback : Apply compatibility fallbacks (default reason / special-release pin) when Insan returns 422 on historical records}
                             {--legacy-reason= : Custom fallback reason for --legacy-fallback}
+                            {--force : Re-push records even if already marked as synced in Brain}
                             {--dry-run : Count matching Brain records without pushing}';
 
     protected $description = 'Push Brain attendance punches to Insan ingest endpoint (idempotent)';
@@ -40,6 +41,7 @@ class PushInsanAttendanceCommand extends Command
         $dryRun = (bool) $this->option('dry-run');
         $legacyFallback = (bool) $this->option('legacy-fallback');
         $legacyReason = trim((string) ($this->option('legacy-reason') ?: '')) ?: null;
+        $force = (bool) $this->option('force');
 
         try {
             $stats = $service->push(
@@ -51,6 +53,7 @@ class PushInsanAttendanceCommand extends Command
                 chunkSize: $chunk,
                 legacyFallback: $legacyFallback,
                 legacyReason: $legacyReason,
+                force: $force,
             );
         } catch (\Throwable $e) {
             $this->error($e->getMessage());

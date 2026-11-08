@@ -246,6 +246,17 @@ class InsanAttendancePushTest extends TestCase
         );
         Http::assertSent(fn ($req) => $req->url() === 'http://resource.test/api/nexus/v1/attendance/ingest'
             && ($req['early_clock_out_reason'] ?? null) === 'Backfill rekod lama Okt 2026');
+
+        // Running dry-run or push again skips records that are already marked as synced
+        $stats = app(\App\Services\InsanAttendancePushService::class)->push(
+            from: Carbon::parse('2026-10-30')->startOfDay(),
+            to: Carbon::parse('2026-10-30')->endOfDay(),
+            userFilter: 'nursyafiqah@emzi.com.my',
+            dryRun: true,
+        );
+        $this->assertSame(1, $stats['total']);
+        $this->assertSame(1, $stats['already_synced']);
+        $this->assertSame(0, $stats['pushed']);
     }
 
     public function test_queued_job_throws_on_retryable_server_error(): void

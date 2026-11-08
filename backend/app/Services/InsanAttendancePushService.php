@@ -16,6 +16,7 @@ class InsanAttendancePushService
      * @param  list<int>  $recordIds
      * @return array{
      *     total: int,
+     *     already_synced: int,
      *     pushed: int,
      *     retried_with_fallback: int,
      *     skipped: int,
@@ -34,6 +35,7 @@ class InsanAttendancePushService
         int $chunkSize = 200,
         bool $legacyFallback = false,
         ?string $legacyReason = null,
+        bool $force = false,
     ): array {
         $application = $this->forwarder->resolveResourceApplication();
         if (! $application || ! $application->base_url || ! $application->api_key) {
@@ -79,6 +81,7 @@ class InsanAttendancePushService
 
         $stats = [
             'total' => 0,
+            'already_synced' => 0,
             'pushed' => 0,
             'retried_with_fallback' => 0,
             'skipped' => 0,
@@ -92,6 +95,12 @@ class InsanAttendancePushService
 
         foreach ($query->lazy($chunkSize) as $record) {
             $stats['total']++;
+
+            $isAlreadySynced = data_get($record->metadata, 'insan_sync.status') === 'synced';
+            if ($isAlreadySynced && ! $force && $cleanIds === []) {
+                $stats['already_synced']++;
+                continue;
+            }
 
             if ($dryRun) {
                 $stats['pushed']++;
