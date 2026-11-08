@@ -259,6 +259,65 @@ class InsanAttendancePushTest extends TestCase
         $this->assertSame(0, $stats['pushed']);
     }
 
+    public function test_push_to_insan_with_legacy_fallback_backfills_missing_location_from_preceding_clock_in(): void
+    {
+        $this->createInsanApplication();
+        $user = User::factory()->create(['email' => 'najihah.ariffudin@emzi.com.my']);
+
+        AttendanceRecord::query()->create([
+            'user_id' => $user->id,
+            'type' => 'clock_in',
+            'photo_url' => 'https://example.com/in.jpg',
+            'latitude' => 5.6592,
+            'longitude' => 100.5069,
+            'location_label' => 'EMZI HQ',
+            'captured_at' => Carbon::parse('2026-10-06 08:50:00', 'Asia/Kuala_Lumpur'),
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'source' => 'brain',
+            'metadata' => ['insan_sync' => ['status' => 'synced']],
+        ]);
+
+        $clockOutWithoutGps = AttendanceRecord::query()->create([
+            'user_id' => $user->id,
+            'type' => 'clock_out',
+            'photo_url' => 'https://example.com/out.jpg',
+            'latitude' => null,
+            'longitude' => null,
+            'captured_at' => Carbon::parse('2026-10-06 19:37:06', 'Asia/Kuala_Lumpur'),
+            'timezone' => 'Asia/Kuala_Lumpur',
+            'source' => 'brain',
+        ]);
+
+        Http::fake([
+            'http://resource.test/.well-known/nexus-integration.json' => Http::response([
+                'name' => 'EMZI Nexus Insan',
+                'capabilities' => ['attendance.ingest'],
+            ]),
+            'http://resource.test/api/nexus/v1/attendance/ingest' => function ($request) {
+                if (empty($request['latitude']) || empty($request['longitude'])) {
+                    return Http::response([
+                        'message' => 'Location is required for attendance in your department.',
+                    ], 422);
+                }
+
+                return Http::response(['ok' => true], 201);
+            },
+        ]);
+
+        $this->artisan('attendance:push-to-insan', [
+            '--from' => '2026-10-06',
+            '--to' => '2026-10-06',
+            '--user' => 'najihah.ariffudin@emzi.com.my',
+            '--legacy-fallback' => true,
+        ])->assertExitCode(0);
+
+        $this->assertSame('synced', data_get($clockOutWithoutGps->fresh()->metadata, 'insan_sync.status'));
+        $this->assertSame(
+            ['missing_location'],
+            data_get($clockOutWithoutGps->fresh()->metadata, 'insan_sync.fallbacks_applied'),
+        );
+    }
+
     public function test_queued_job_throws_on_retryable_server_error(): void
     {
         $this->createInsanApplication();

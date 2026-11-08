@@ -153,7 +153,7 @@ class ResourceAttendanceForwarder
             $fallbacksApplied = [];
 
             if ($allowLegacyFallback && $response->status() === 422) {
-                for ($attempt = 1; $attempt <= 2 && $response->status() === 422; $attempt++) {
+                for ($attempt = 1; $attempt <= 3 && $response->status() === 422; $attempt++) {
                     $added = $this->applyLegacyIngestFallback(
                         $payload,
                         $record,
@@ -401,7 +401,107 @@ class ResourceAttendanceForwarder
             }
         }
 
+        if (
+            ! in_array('missing_location', $fallbacksApplied, true)
+            && stripos($responseBody, 'Location is required for attendance') !== false
+        ) {
+            $coords = $this->resolveLegacyMissingLocationCoordinates($record, $user);
+            if ($coords !== null) {
+                if (! isset($payload['metadata']['brain_original_coordinates'])) {
+                    $payload['metadata']['brain_original_coordinates'] = [
+                        'latitude' => $payload['latitude'] ?? null,
+                        'longitude' => $payload['longitude'] ?? null,
+                        'location_label' => $payload['location_label'] ?? null,
+                    ];
+                }
+                $payload['latitude'] = $coords['latitude'];
+                $payload['longitude'] = $coords['longitude'];
+                if (empty($payload['location_label']) && ! empty($coords['location_label'])) {
+                    $payload['location_label'] = $coords['location_label'];
+                }
+                $fallbacksApplied[] = 'missing_location';
+                $newlyApplied[] = 'missing_location';
+            }
+        }
+
         return $newlyApplied;
+    }
+
+    /**
+     * Resolve fallback coordinates when a historical punch had null GPS in Brain
+     * (e.g. allow_clock_out_outside_radius was true when recorded without GPS)
+     * but Insan requires location for the user's department.
+     *
+     * @return array{latitude: float, longitude: float, location_label?: ?string}|null
+     */
+    private function resolveLegacyMissingLocationCoordinates(AttendanceRecord $record, User $user): ?array
+    {
+        // 1. Same-day or preceding clock_in with valid GPS coordinates
+        if ($record->captured_at) {
+            $preceding = AttendanceRecord::query()
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $record->id)
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->where('captured_at', '<=', $record->captured_at)
+                ->orderByDesc('captured_at')
+                ->first();
+
+            if ($preceding && $preceding->latitude !== null && $preceding->longitude !== null) {
+                return [
+                    'latitude' => (float) $preceding->latitude,
+                    'longitude' => (float) $preceding->longitude,
+                    'location_label' => $preceding->location_label,
+                ];
+            }
+        }
+
+        // 2. Approved special release pin on that date
+        $pinCoords = $this->resolveLegacySpecialReleasePinCoordinates($record, $user);
+        if ($pinCoords !== null) {
+            return $pinCoords;
+        }
+
+        // 3. Assigned department / shift AttendanceLocation in Brain
+        $setting = \App\Support\AttendancePolicyValidator::resolveForUser($user);
+        if ($setting) {
+            $location = $setting->attendanceLocation;
+            if ($location) {
+                $sites = \App\Support\AttendanceLocationSettings::resolveSites($location);
+                if ($sites !== [] && isset($sites[0]['latitude'], $sites[0]['longitude'])) {
+                    return [
+                        'latitude' => (float) $sites[0]['latitude'],
+                        'longitude' => (float) $sites[0]['longitude'],
+                        'location_label' => $sites[0]['name'] ?? $location->name,
+                    ];
+                }
+                if ($location->center_latitude !== null && $location->center_longitude !== null) {
+                    return [
+                        'latitude' => (float) $location->center_latitude,
+                        'longitude' => (float) $location->center_longitude,
+                        'location_label' => $location->name,
+                    ];
+                }
+            }
+        }
+
+        // 4. Any other attendance record of this user with coordinates
+        $anyRecord = AttendanceRecord::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->orderByDesc('captured_at')
+            ->first();
+
+        if ($anyRecord && $anyRecord->latitude !== null && $anyRecord->longitude !== null) {
+            return [
+                'latitude' => (float) $anyRecord->latitude,
+                'longitude' => (float) $anyRecord->longitude,
+                'location_label' => $anyRecord->location_label,
+            ];
+        }
+
+        return null;
     }
 
     /**
