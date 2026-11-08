@@ -632,6 +632,44 @@ class NexusV1ResourceIntegrationTest extends TestCase
         $this->assertTrue((bool) $setting->require_late_clock_in_reason);
     }
 
+    public function test_department_level_early_clock_out_reason_sync_updates_existing_department(): void
+    {
+        $this->createResourceApplication();
+        $operations = \App\Models\Department::query()->create(['name' => 'Operations']);
+        \App\Models\DepartmentAttendanceSetting::query()->create([
+            'department_id' => $operations->id,
+            'require_early_clock_out_reason' => false,
+            'require_late_clock_in_reason' => false,
+            'grace_period_minutes' => 15,
+            'shifts' => [],
+        ]);
+
+        $this->putJson('/api/nexus/v1/attendance/policy', [
+            'departments' => [[
+                'department_name' => 'Operations',
+                'enabled' => true,
+                'require_early_clock_out_reason' => true,
+                'require_late_clock_in_reason' => true,
+                'grace_period_minutes' => 10,
+                'shifts' => [[
+                    'name' => 'Day',
+                    'days_of_week' => [1, 2, 3, 4, 5],
+                    'start_time' => '09:00',
+                    'end_time' => '18:00',
+                ]],
+            ]],
+            'prune_missing' => false,
+        ], $this->authHeaders('brain-attendance-policy'))
+            ->assertOk();
+
+        $setting = \App\Models\DepartmentAttendanceSetting::query()
+            ->where('department_id', $operations->id)
+            ->first();
+        $this->assertTrue((bool) $setting->require_early_clock_out_reason);
+        $this->assertTrue((bool) $setting->require_late_clock_in_reason);
+        $this->assertSame(10, (int) $setting->grace_period_minutes);
+    }
+
     public function test_attendance_policy_requires_auth(): void
     {
         $this->createResourceApplication();

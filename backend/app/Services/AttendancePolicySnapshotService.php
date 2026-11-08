@@ -183,9 +183,21 @@ class AttendancePolicySnapshotService
                     fn (AttendanceLocation $location) => mb_strtolower((string) $location->name)
                 );
 
+            $incomingClockRules = null;
             if (is_array($payload['clock_rules'] ?? null)) {
                 AttendanceClockRulesSettings::store($payload['clock_rules']);
+                $incomingClockRules = AttendanceClockRulesSettings::normalize($payload['clock_rules']);
                 $stats['clock_rules_updated'] = true;
+            } elseif ($departmentRows !== [] && is_array($departmentRows[0] ?? null) && AttendanceClockRulesSettings::hasStored()) {
+                $firstRowRules = AttendanceClockRulesSettings::normalize($departmentRows[0]);
+                if ($firstRowRules !== []) {
+                    AttendanceClockRulesSettings::store($firstRowRules);
+                    $incomingClockRules = $firstRowRules;
+                } else {
+                    $incomingClockRules = [];
+                }
+            } else {
+                $incomingClockRules = [];
             }
 
             foreach ($departmentRows as $row) {
@@ -231,6 +243,8 @@ class AttendancePolicySnapshotService
                         'shifts' => $normalizedShifts,
                     ])),
                     DepartmentAttendanceSetting::query()->where('department_id', $department->id)->first(),
+                    $row,
+                    $incomingClockRules,
                 );
 
                 DepartmentAttendanceSetting::query()->updateOrCreate(

@@ -120,20 +120,35 @@ class DepartmentAttendanceSettings
 
     /**
      * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $explicitInput
+     * @param  array<string, mixed>|null  $overrideClockRules
      * @return array<string, mixed>
      */
-    public static function preserveClockRules(array $config, ?DepartmentAttendanceSetting $existing = null): array
-    {
-        if (AttendanceClockRulesSettings::hasStored()) {
-            return array_merge($config, AttendanceClockRulesSettings::applied());
-        }
+    public static function preserveClockRules(
+        array $config,
+        ?DepartmentAttendanceSetting $existing = null,
+        array $explicitInput = [],
+        ?array $overrideClockRules = null,
+    ): array {
+        $applied = $overrideClockRules !== null
+            ? $overrideClockRules
+            : (AttendanceClockRulesSettings::hasStored()
+                ? AttendanceClockRulesSettings::applied()
+                : []);
 
         if ($existing) {
             foreach (AttendanceClockRulesSettings::KEYS as $key) {
+                if (array_key_exists($key, $applied) || array_key_exists($key, $explicitInput)) {
+                    continue;
+                }
                 if (isset($existing->{$key})) {
                     $config[$key] = $existing->{$key};
                 }
             }
+        }
+
+        if ($applied !== []) {
+            return array_merge($config, $applied);
         }
 
         return $config;

@@ -180,6 +180,13 @@ class InsanAttendancePullService
 
         $externalId = $insanId !== '' ? $insanId : ($brainExternalId !== '' ? $brainExternalId : $capturedAt->timestamp.'-'.$user->id);
 
+        $incomingMetadata = is_array($row['metadata'] ?? null) ? $row['metadata'] : [];
+        $incomingMetadata['insan_sync'] = [
+            'status' => 'synced',
+            'direction' => 'inbound',
+            'synced_at' => now()->toIso8601String(),
+        ];
+
         $record = AttendanceRecord::query()->create([
             'user_id' => $user->id,
             'type' => $type,
@@ -194,7 +201,7 @@ class InsanAttendancePullService
             'screen_resolution' => $row['screen_resolution'] ?? null,
             'timezone' => $row['timezone'] ?? null,
             'ip_address' => $row['ip_address'] ?? null,
-            'metadata' => is_array($row['metadata'] ?? null) ? $row['metadata'] : null,
+            'metadata' => $incomingMetadata,
             'captured_at' => $capturedAt,
             'source' => 'insan',
             'external_id' => $externalId,

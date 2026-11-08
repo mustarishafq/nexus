@@ -28,6 +28,8 @@ class AttendanceReminderService
         $settingsByDepartment = DepartmentAttendanceSetting::query()
             ->where('enabled', true)
             ->get()
+            ->map(fn (DepartmentAttendanceSetting $s) => \App\Support\AttendanceClockRulesSettings::applyTo($s))
+            ->filter()
             ->keyBy('department_id');
 
         if ($settingsByDepartment->isEmpty()) {
