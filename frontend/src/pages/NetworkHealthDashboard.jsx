@@ -103,11 +103,16 @@ export default function NetworkHealthDashboard() {
     enabled: Boolean(user) && canViewPage,
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['users-network-health'],
-    queryFn: () => db.entities.User.list('-created_date', 500),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
     enabled: isAdmin,
   });
+
+  const users = useMemo(
+    () => (Array.isArray(rosterData?.users) ? rosterData.users : []),
+    [rosterData],
+  );
 
   const { data: accessGroups = [] } = useQuery({
     queryKey: ['access-groups-network-health'],

@@ -63,12 +63,15 @@ export default function UserSearchCombobox({
               </CommandItem>
               {users.map((user) => {
                 const userLabel = user.full_name || user.name || user.email;
+                const searchValue = [user.full_name, user.name, user.email, user.id]
+                  .filter(Boolean)
+                  .join(' ');
                 const selected = String(user.id) === String(value);
 
                 return (
                   <CommandItem
                     key={user.id}
-                    value={`${userLabel} ${user.email || ''}`}
+                    value={searchValue}
                     onSelect={() => {
                       onValueChange(String(user.id));
                       setOpen(false);

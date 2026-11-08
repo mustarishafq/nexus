@@ -58,7 +58,7 @@ class UserController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'sort' => ['nullable', 'string', 'max:50'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'email' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -111,7 +111,7 @@ class UserController extends Controller
             ['role', 'email'],
             '-created_date',
             50,
-            200,
+            1000,
         )->get();
 
         return response()->json(
@@ -396,6 +396,7 @@ class UserController extends Controller
     {
         return app(UserPresenceService::class)->enrichPayload(array_merge([
             'id' => $user->id,
+            'full_name' => $user->full_name,
             'name' => $user->displayName(),
             'email' => $user->email,
             'profile_picture' => $user->profile_picture,

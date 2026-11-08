@@ -365,12 +365,32 @@ function EventAttendanceReport() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['users-attendance-admin'],
-    queryFn: () => db.entities.User.list('-created_date', 200),
+  const { data: rosterData } = useQuery({
+    queryKey: ['user-roster'],
+    queryFn: () => db.getUserRoster(),
     enabled: canViewReport,
     staleTime: 120_000,
   });
+
+  const users = useMemo(() => {
+    const byId = new Map();
+    const rosterUsers = Array.isArray(rosterData?.users) ? rosterData.users : [];
+    rosterUsers.forEach((entry) => {
+      if (entry?.id != null) {
+        byId.set(String(entry.id), entry);
+      }
+    });
+    (data?.records || []).forEach((record) => {
+      if (record?.user_id != null && !byId.has(String(record.user_id))) {
+        byId.set(String(record.user_id), {
+          id: record.user_id,
+          full_name: record.display_name,
+          email: record.email,
+        });
+      }
+    });
+    return Array.from(byId.values());
+  }, [rosterData, data?.records]);
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
