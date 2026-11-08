@@ -119,6 +119,7 @@ Route::get('/attendance/status', [AttendanceController::class, 'status']);
 Route::get('/attendance/my-history', [AttendanceController::class, 'myHistory']);
 Route::post('/attendance/clock', [AttendanceController::class, 'store']);
 Route::get('/attendance/dashboard', [AttendanceController::class, 'dashboard']);
+Route::post('/attendance/records/{attendanceRecord}/resync', [AttendanceController::class, 'resync']);
 Route::get('/attendance/users/{user}/history', [AttendanceController::class, 'userHistory']);
 
 Route::get('/network-health/ping', [NetworkHealthController::class, 'ping']);

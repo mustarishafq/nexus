@@ -257,7 +257,8 @@ function selectArrivalShift(candidates, zoned, grace, earlyWindow) {
   if (!candidates.length) return null;
   if (candidates.length === 1) return candidates[0];
 
-  const within = candidates.filter((candidate) => isWithinShiftAt(candidate, zoned, grace, earlyWindow));
+  const lookaheadWindow = Math.max(Number(earlyWindow) || 60, 180);
+  const within = candidates.filter((candidate) => isWithinShiftAt(candidate, zoned, grace, lookaheadWindow));
   const pool = within.length ? within : null;
   if (!pool) {
     let shift = candidates[0];
@@ -322,6 +323,99 @@ export function evaluateLateClockIn(policy, date = new Date()) {
   if (lateMinutes > 0) {
     result.is_late = true;
     result.late_minutes = lateMinutes;
+  }
+
+  return result;
+}
+
+function zonedDateParts(date, timeZone) {
+  const instant = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(instant.getTime())) {
+    return { dateKey: '', isoDay: 1, minutes: 0 };
+  }
+  const timeParts = zonedTimeParts(instant, timeZone);
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return {
+      dateKey: fmt.format(instant),
+      ...timeParts,
+    };
+  } catch {
+    const y = instant.getFullYear();
+    const m = String(instant.getMonth() + 1).padStart(2, '0');
+    const d = String(instant.getDate()).padStart(2, '0');
+    return {
+      dateKey: `${y}-${m}-${d}`,
+      ...timeParts,
+    };
+  }
+}
+
+/**
+ * Mirror backend AttendanceEarlyClockOutEvaluator:
+ * - Anchors shift end to the open clock_in record (`lastRecord`) when present.
+ * - If `lastRecord` is from a previous shift whose scheduled_end has already passed
+ *   (e.g. user forgot to clock out yesterday and clocks out today before or after
+ *   today's shift start), `is_early` is false.
+ * @returns {{ is_early: boolean, early_minutes: number, shift_name: string|null }}
+ */
+export function evaluateEarlyClockOut(policy, date = new Date(), lastRecord = null) {
+  const result = {
+    is_early: false,
+    early_minutes: 0,
+    shift_name: null,
+  };
+
+  const nowInstant = date instanceof Date ? date : new Date(date);
+  const lastInInstant = (lastRecord?.type === 'clock_in' && lastRecord?.captured_at)
+    ? new Date(lastRecord.captured_at)
+    : null;
+  const hasValidLastIn = lastInInstant
+    && !Number.isNaN(lastInInstant.getTime())
+    && lastInInstant.getTime() <= nowInstant.getTime();
+
+  const referenceDate = hasValidLastIn ? lastInInstant : nowInstant;
+  const shift = resolveShiftForLateClockIn(policy, referenceDate);
+  if (!shift) {
+    return result;
+  }
+
+  const start = parseTimeToMinutes(shift.start_time || '09:00');
+  const end = parseTimeToMinutes(shift.end_time || '18:00');
+  const crosses = Boolean(shift.crosses_midnight) || end <= start;
+  const grace = Math.max(0, Number(policy?.grace_period_minutes ?? 0));
+  const endBound = Math.min((24 * 60) - 1, end + grace);
+
+  const nowZoned = zonedDateParts(nowInstant, policy?.timezone);
+  const anchorZoned = hasValidLastIn
+    ? zonedDateParts(lastInInstant, policy?.timezone)
+    : nowZoned;
+
+  const dayDiff = (anchorZoned.dateKey && nowZoned.dateKey)
+    ? Math.round(
+      (new Date(`${nowZoned.dateKey}T00:00:00Z`).getTime()
+        - new Date(`${anchorZoned.dateKey}T00:00:00Z`).getTime()) / (24 * 60 * 60 * 1000),
+    )
+    : 0;
+
+  let scheduledEndOffsetMinutes = end;
+  if (crosses) {
+    const onMorningLeg = anchorZoned.minutes <= endBound;
+    scheduledEndOffsetMinutes = onMorningLeg ? end : (24 * 60) + end;
+  }
+
+  const nowOffsetFromAnchorDay = (dayDiff * 24 * 60) + nowZoned.minutes;
+  const earlyMinutes = scheduledEndOffsetMinutes - nowOffsetFromAnchorDay;
+
+  result.shift_name = shift.name || null;
+  if (earlyMinutes > 0) {
+    result.is_early = true;
+    result.early_minutes = earlyMinutes;
   }
 
   return result;

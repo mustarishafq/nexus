@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Nexus\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
+use App\Models\SystemEvent;
 use App\Models\User;
 use App\Services\GamificationService;
 use App\Support\NexusSatelliteAuth;
@@ -102,10 +103,38 @@ class AttendanceController extends Controller
         }
 
         if (! $user) {
+            try {
+                SystemEvent::query()->create([
+                    'system_id' => $auth->slug ?: 'emzi-nexus-insan',
+                    'event_type' => 'error',
+                    'title' => sprintf('Inbound %s failed: user not found (%s)', $validated['type'], $validated['email']),
+                    'status' => 'failed',
+                    'severity' => 7,
+                    'payload' => [
+                        'category' => 'attendance_sync',
+                        'direction' => 'inbound',
+                        'external_id' => $validated['external_id'],
+                        'user_email' => $validated['email'],
+                        'nexus_user_id' => $validated['nexus_user_id'] ?? null,
+                        'punch_type' => $validated['type'],
+                        'captured_at' => $validated['captured_at'],
+                        'error' => 'User not found in Brain.',
+                    ],
+                ]);
+            } catch (\Throwable) {
+                // Best-effort event logging.
+            }
+
             return response()->json(['message' => 'User not found in Brain.'], 404);
         }
 
         $capturedAt = Carbon::parse($validated['captured_at']);
+        $incomingMetadata = is_array($validated['metadata'] ?? null) ? $validated['metadata'] : [];
+        $incomingMetadata['insan_sync'] = [
+            'status' => 'synced',
+            'direction' => 'inbound',
+            'synced_at' => now()->toIso8601String(),
+        ];
 
         $record = AttendanceRecord::create([
             'user_id' => $user->id,
@@ -121,11 +150,33 @@ class AttendanceController extends Controller
             'screen_resolution' => $validated['screen_resolution'] ?? null,
             'timezone' => $validated['timezone'] ?? null,
             'ip_address' => $request->ip(),
-            'metadata' => $validated['metadata'] ?? null,
+            'metadata' => $incomingMetadata,
             'captured_at' => $capturedAt,
             'source' => 'insan',
             'external_id' => $validated['external_id'],
         ]);
+
+        try {
+            SystemEvent::query()->create([
+                'system_id' => $auth->slug ?: 'emzi-nexus-insan',
+                'event_type' => 'webhook',
+                'title' => sprintf('Inbound %s received from Insan (%s)', $validated['type'], $user->email),
+                'status' => 'processed',
+                'severity' => 2,
+                'payload' => [
+                    'category' => 'attendance_sync',
+                    'direction' => 'inbound',
+                    'attendance_record_id' => $record->id,
+                    'external_id' => $validated['external_id'],
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'punch_type' => $validated['type'],
+                    'captured_at' => $capturedAt->toIso8601String(),
+                ],
+            ]);
+        } catch (\Throwable) {
+            // Best-effort event logging.
+        }
 
         // Insan clocks must earn the same missions as Brain /attendance/clock.
         app(GamificationService::class)->offerForAttendanceRecord($user, $record);

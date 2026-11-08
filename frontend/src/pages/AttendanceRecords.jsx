@@ -1,10 +1,10 @@
 // @ts-nocheck
 import db from '@/api/apiClient';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, subDays } from 'date-fns';
 import {
-  ChevronDown, FileDown, Filter, History, Loader2, LogIn, LogOut, MapPin, Monitor, Timer, Users,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock3, FileDown, Filter, History, Loader2, LogIn, LogOut, MapPin, Monitor, RefreshCw, Timer, Users,
 } from 'lucide-react';
 import AttendancePhotoViewer from '@/components/attendance/AttendancePhotoViewer';
 import { Badge } from '@/components/ui/badge';
@@ -39,15 +39,31 @@ function formatCoordinates(latitude, longitude) {
 }
 
 function OvertimeBadge({ policy, className }) {
+  const lateReason = policy?.late_clock_in_reason;
+  const earlyReason = policy?.early_clock_out_reason;
+  const reasonText = lateReason
+    ? `Late: ${lateReason}`
+    : earlyReason
+      ? `Early out: ${earlyReason}`
+      : null;
+
   if (!policy?.is_overtime) {
-    if (policy?.shift_name) {
-      return (
-        <span className={cn('inline-flex rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground', className)}>
-          {policy.shift_name}
-        </span>
-      );
-    }
-    return <span className="text-muted-foreground">—</span>;
+    return (
+      <div className={cn('space-y-1', className)}>
+        {policy?.shift_name ? (
+          <span className="inline-flex rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground">
+            {policy.shift_name}
+          </span>
+        ) : !reasonText ? (
+          <span className="text-muted-foreground">—</span>
+        ) : null}
+        {reasonText ? (
+          <p className="max-w-[220px] truncate text-[11px] text-muted-foreground" title={reasonText}>
+            {reasonText}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   const overtime = formatDurationMinutes(policy.overtime_minutes);
@@ -56,23 +72,122 @@ function OvertimeBadge({ policy, className }) {
     : null;
 
   return (
-    <span
-      className={cn(
-        'inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-md bg-warning/10 px-2 py-1 text-xs',
-        className,
-      )}
-    >
-      <span className="inline-flex items-center gap-1 font-medium text-warning">
-        <Timer className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
-        {overtime} OT
+    <div className={cn('space-y-1', className)}>
+      <span className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-md bg-warning/10 px-2 py-1 text-xs">
+        <span className="inline-flex items-center gap-1 font-medium text-warning">
+          <Timer className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+          {overtime} OT
+        </span>
+        {worked ? (
+          <>
+            <span className="text-muted-foreground/40" aria-hidden>·</span>
+            <span className="tabular-nums text-muted-foreground">{worked} worked</span>
+          </>
+        ) : null}
       </span>
-      {worked ? (
-        <>
-          <span className="text-muted-foreground/40" aria-hidden>·</span>
-          <span className="tabular-nums text-muted-foreground">{worked} worked</span>
-        </>
+      {reasonText ? (
+        <p className="max-w-[220px] truncate text-[11px] text-muted-foreground" title={reasonText}>
+          {reasonText}
+        </p>
       ) : null}
-    </span>
+    </div>
+  );
+}
+
+function resolveSyncMeta(record) {
+  const isInsanOrigin = ['insan', 'kashfi', 'resource'].includes(String(record?.source || '').toLowerCase());
+  const insanSync = record?.metadata?.insan_sync || {};
+  const status = insanSync.status || (isInsanOrigin ? 'synced' : 'pending');
+
+  return {
+    sourceLabel: isInsanOrigin ? 'Insan' : 'Brain',
+    isInsanOrigin,
+    status,
+    error: insanSync.error || null,
+    httpStatus: insanSync.http_status || null,
+    syncedAt: insanSync.synced_at || null,
+  };
+}
+
+function InsanSyncCell({ record, onResync, resyncingId }) {
+  const meta = resolveSyncMeta(record);
+  const isResyncing = resyncingId === record.id;
+
+  if (meta.isInsanOrigin) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-info/10 px-2 py-0.5 text-xs font-medium text-info">
+        <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden />
+        From Insan
+      </span>
+    );
+  }
+
+  if (meta.status === 'synced') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+        <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden />
+        Brain · Synced
+      </span>
+    );
+  }
+
+  if (meta.status === 'failed') {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+            title={meta.error || 'Failed to sync to Nexus Insan'}
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+            Brain · Failed
+          </span>
+          {onResync ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              disabled={isResyncing}
+              onClick={() => onResync(record.id)}
+              title="Retry pushing this record to Nexus Insan"
+            >
+              <RefreshCw className={cn('h-3 w-3', isResyncing && 'animate-spin')} />
+            </Button>
+          ) : null}
+        </div>
+        {meta.error ? (
+          <p className="max-w-[220px] truncate text-[11px] text-destructive/90" title={meta.error}>
+            {meta.error}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+        title={meta.error || 'Pending sync to Nexus Insan'}
+      >
+        <Clock3 className="h-3 w-3 shrink-0" aria-hidden />
+        Brain · {meta.status === 'retrying' ? 'Retrying' : 'Pending'}
+      </span>
+      {onResync ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 px-1.5 text-[11px]"
+          disabled={isResyncing}
+          onClick={() => onResync(record.id)}
+          title="Push this record to Nexus Insan now"
+        >
+          <RefreshCw className={cn('h-3 w-3', isResyncing && 'animate-spin')} />
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
@@ -209,7 +324,7 @@ function MyAttendanceTable({ records }) {
   );
 }
 
-function AdminAttendanceTable({ records }) {
+function AdminAttendanceTable({ records, onResync, resyncingId }) {
   return (
     <AttendanceTableShell>
       <Table className="w-full">
@@ -221,7 +336,8 @@ function AdminAttendanceTable({ records }) {
             <TableHead className={TABLE_HEAD_CLASS}>Location</TableHead>
             <TableHead className={cn(TABLE_HEAD_CLASS, 'hidden lg:table-cell')}>Coordinates</TableHead>
             <TableHead className={cn(TABLE_HEAD_CLASS, 'hidden xl:table-cell')}>Device</TableHead>
-            <TableHead className={TABLE_HEAD_CLASS}>Overtime</TableHead>
+            <TableHead className={TABLE_HEAD_CLASS}>Overtime / Reason</TableHead>
+            <TableHead className={TABLE_HEAD_CLASS}>Insan Sync</TableHead>
             <TableHead className={cn(TABLE_HEAD_CLASS, 'w-14 pr-4 text-right')}>Photo</TableHead>
           </TableRow>
         </TableHeader>
@@ -251,6 +367,9 @@ function AdminAttendanceTable({ records }) {
               </TableCell>
               <TableCell className={TABLE_CELL_CLASS}>
                 <OvertimeBadge policy={record.metadata?.policy} />
+              </TableCell>
+              <TableCell className={TABLE_CELL_CLASS}>
+                <InsanSyncCell record={record} onResync={onResync} resyncingId={resyncingId} />
               </TableCell>
               <TableCell className={cn(TABLE_CELL_CLASS, 'pr-4 text-right')}>
                 <AttendancePhotoViewer record={record} />
@@ -403,14 +522,18 @@ function MyAttendanceHistory() {
 function AttendanceAdminReport() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const canViewAllRecords = canViewAllAttendance(user);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [resyncingId, setResyncingId] = useState(null);
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [type, setType] = useState('');
+  const [source, setSource] = useState('');
+  const [syncStatus, setSyncStatus] = useState('');
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -421,7 +544,7 @@ function AttendanceAdminReport() {
 
   useEffect(() => {
     setPage(0);
-  }, [dateFrom, dateTo, userId, departmentId, type]);
+  }, [dateFrom, dateTo, userId, departmentId, type, source, syncStatus]);
 
   const filters = useMemo(() => ({
     date_from: dateFrom,
@@ -431,7 +554,28 @@ function AttendanceAdminReport() {
     ...(userId ? { user_id: userId } : {}),
     ...(departmentId ? { department_id: departmentId } : {}),
     ...(type ? { type } : {}),
-  }), [dateFrom, dateTo, userId, departmentId, type, page]);
+    ...(source ? { source } : {}),
+    ...(syncStatus ? { sync_status: syncStatus } : {}),
+  }), [dateFrom, dateTo, userId, departmentId, type, source, syncStatus, page]);
+
+  const resyncMutation = useMutation({
+    mutationFn: async (recordId) => {
+      setResyncingId(recordId);
+      return db.attendance.resync(recordId);
+    },
+    onSuccess: () => {
+      toast.success('Synced attendance record to Nexus Insan');
+      queryClient.invalidateQueries({ queryKey: ['attendance-dashboard'] });
+    },
+    onError: (error) => {
+      const msg = error?.data?.result?.error || error?.data?.message || error.message || 'Failed to sync record';
+      toast.error(msg);
+      queryClient.invalidateQueries({ queryKey: ['attendance-dashboard'] });
+    },
+    onSettled: () => {
+      setResyncingId(null);
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-dashboard', filters],
@@ -474,7 +618,7 @@ function AttendanceAdminReport() {
   const totalPages = Math.max(1, Math.ceil(totalRecords / ADMIN_PAGE_SIZE));
   const pageStart = totalRecords === 0 ? 0 : page * ADMIN_PAGE_SIZE + 1;
   const pageEnd = Math.min(totalRecords, (page + 1) * ADMIN_PAGE_SIZE);
-  const activeFilterCount = [userId, departmentId, type].filter(Boolean).length;
+  const activeFilterCount = [userId, departmentId, type, source, syncStatus].filter(Boolean).length;
 
   const handleExport = async () => {
     setExporting(true);
@@ -485,6 +629,8 @@ function AttendanceAdminReport() {
         ...(userId ? { user_id: userId } : {}),
         ...(departmentId ? { department_id: departmentId } : {}),
         ...(type ? { type } : {}),
+        ...(source ? { source } : {}),
+        ...(syncStatus ? { sync_status: syncStatus } : {}),
       });
       toast.success('Attendance export downloaded');
     } catch {
@@ -564,7 +710,7 @@ function AttendanceAdminReport() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-3 border-t border-border/60 p-4 sm:p-6">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">Date from</label>
                   <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -611,6 +757,33 @@ function AttendanceAdminReport() {
                       <SelectItem value="all">All types</SelectItem>
                       <SelectItem value="clock_in">Clock In</SelectItem>
                       <SelectItem value="clock_out">Clock Out</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Source</label>
+                  <Select value={source || 'all'} onValueChange={(value) => setSource(value === 'all' ? '' : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All sources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All sources</SelectItem>
+                      <SelectItem value="brain">Nexus Brain</SelectItem>
+                      <SelectItem value="insan">Nexus Insan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Insan Sync</label>
+                  <Select value={syncStatus || 'all'} onValueChange={(value) => setSyncStatus(value === 'all' ? '' : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All sync states" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All sync states</SelectItem>
+                      <SelectItem value="synced">Synced</SelectItem>
+                      <SelectItem value="failed">Failed (Rejected)</SelectItem>
+                      <SelectItem value="pending">Pending / Retrying</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -682,7 +855,11 @@ function AttendanceAdminReport() {
               {data?.records?.length ? (
                 <>
                   <AttendanceRecordMobileList records={data.records} showUser />
-                  <AdminAttendanceTable records={data.records} />
+                  <AdminAttendanceTable
+                    records={data.records}
+                    onResync={(id) => resyncMutation.mutate(id)}
+                    resyncingId={resyncingId}
+                  />
                   {totalPages > 1 ? (
                     <div className="mt-4 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-center text-xs text-muted-foreground sm:text-left sm:text-sm md:hidden">

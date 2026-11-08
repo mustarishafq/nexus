@@ -385,6 +385,10 @@ export const db = {
 			return request(`/attendance/dashboard${query}`);
 		},
 
+		async resync(recordId) {
+			return request(`/attendance/records/${recordId}/resync`, { method: 'POST' });
+		},
+
 		async exportCsv(filters = {}) {
 			const token = getAuthToken();
 			const query = buildQuery(filters);

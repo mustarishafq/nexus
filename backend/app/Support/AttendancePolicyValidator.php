@@ -117,7 +117,7 @@ class AttendancePolicyValidator
             'department_name' => $user->department?->name,
             'attendance_location_id' => $location?->id ?? $setting->attendance_location_id,
             'attendance_location_name' => $location?->name,
-            'geofence_enabled' => (bool) $location?->geofence_enabled,
+            'geofence_enabled' => (bool) ($location?->geofence_enabled || $activeRelease !== null),
             'center_latitude' => $location?->center_latitude !== null ? (float) $location->center_latitude : null,
             'center_longitude' => $location?->center_longitude !== null ? (float) $location->center_longitude : null,
             'sites' => AttendanceLocationSettings::resolveSites($location),
@@ -198,30 +198,25 @@ class AttendancePolicyValidator
         array &$metadata,
         ?SpecialReleasePin $activeRelease = null,
     ): void {
+        if ($activeRelease) {
+            self::validateSpecialReleaseGeofence(
+                $activeRelease,
+                $activeRelease->allowOutsideRadius,
+                $latitude,
+                $longitude,
+                $errors,
+                $warnings,
+                $metadata,
+            );
+
+            return;
+        }
+
         if (! $location?->geofence_enabled) {
             return;
         }
 
         $allowOutside = $location->allowsOutsideRadiusFor($type);
-        $sites = AttendanceLocationSettings::resolveSites($location);
-        $defaultRadius = (int) $location->radius_meters;
-
-        if ($activeRelease) {
-            $metadata['special_release_id'] = $activeRelease->id;
-            $metadata['special_release_type'] = $activeRelease->type;
-            // Pin is an extra allowed site, not a replacement for the department location.
-            // Clock-in outstation still follows the release flag; clock-out also honors
-            // the location's "allow clock out outside radius" setting.
-            $allowOutside = $type === 'clock_out'
-                ? ($allowOutside || $activeRelease->allowOutsideRadius)
-                : $activeRelease->allowOutsideRadius;
-            $sites[] = [
-                'name' => sprintf('Special release (%s)', $activeRelease->typeLabel()),
-                'latitude' => $activeRelease->centerLatitude,
-                'longitude' => $activeRelease->centerLongitude,
-                'radius_meters' => $activeRelease->radiusMeters,
-            ];
-        }
 
         if ($latitude === null || $longitude === null) {
             if (! $allowOutside) {
@@ -234,6 +229,8 @@ class AttendancePolicyValidator
             return;
         }
 
+        $sites = AttendanceLocationSettings::resolveSites($location);
+
         if ($sites === []) {
             return;
         }
@@ -241,7 +238,6 @@ class AttendancePolicyValidator
         $closestDistance = null;
         $closestSite = null;
         $matchedSite = null;
-        $matchedDistance = null;
 
         foreach ($sites as $site) {
             $distance = self::haversineMeters(
@@ -256,16 +252,15 @@ class AttendancePolicyValidator
                 $closestSite = $site;
             }
 
-            $siteRadius = (int) ($site['radius_meters'] ?? $defaultRadius);
-            if ($distance <= $siteRadius && ($matchedDistance === null || $distance < $matchedDistance)) {
+            if ($distance <= $location->radius_meters) {
                 $matchedSite = $site;
-                $matchedDistance = $distance;
+                $metadata['distance_meters'] = round($distance, 1);
+                break;
             }
         }
 
         if ($matchedSite) {
             $metadata['matched_site_name'] = $matchedSite['name'];
-            $metadata['distance_meters'] = round((float) $matchedDistance, 1);
 
             return;
         }
@@ -274,31 +269,79 @@ class AttendancePolicyValidator
         $metadata['nearest_site_name'] = $closestSite['name'] ?? null;
 
         if (! $allowOutside) {
-            $errors[] = $activeRelease
-                ? sprintf(
-                    'You must be within %dm of your special release pin or a registered site (nearest: %s, ~%dm away).',
-                    $activeRelease->radiusMeters,
-                    $closestSite['name'] ?? 'assigned location',
-                    (int) round((float) $closestDistance),
-                )
-                : sprintf(
-                    'You must be within %dm of a registered site (nearest: %s, ~%dm away).',
-                    $location->radius_meters,
-                    $closestSite['name'] ?? 'assigned location',
-                    (int) round((float) $closestDistance),
-                );
+            $errors[] = sprintf(
+                'You must be within %dm of a registered site (nearest: %s, ~%dm away).',
+                $location->radius_meters,
+                $closestSite['name'] ?? 'assigned location',
+                (int) round((float) $closestDistance),
+            );
         } else {
-            $warnings[] = $activeRelease
-                ? sprintf(
-                    'Recorded outside special release pin and registered sites (nearest: %s, ~%dm away).',
-                    $closestSite['name'] ?? 'assigned location',
-                    (int) round((float) $closestDistance),
-                )
-                : sprintf(
-                    'Recorded outside allowed radius (nearest site: %s, ~%dm away).',
-                    $closestSite['name'] ?? 'assigned location',
-                    (int) round((float) $closestDistance),
-                );
+            $warnings[] = sprintf(
+                'Recorded outside allowed radius (nearest site: %s, ~%dm away).',
+                $closestSite['name'] ?? 'assigned location',
+                (int) round((float) $closestDistance),
+            );
+            $metadata['outside_radius'] = true;
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $errors
+     * @param  array<int, string>  $warnings
+     * @param  array<string, mixed>  $metadata
+     */
+    private static function validateSpecialReleaseGeofence(
+        SpecialReleasePin $release,
+        bool $allowOutside,
+        ?float $latitude,
+        ?float $longitude,
+        array &$errors,
+        array &$warnings,
+        array &$metadata,
+    ): void {
+        $siteLabel = sprintf('Special release (%s)', $release->typeLabel());
+        $metadata['special_release_id'] = $release->id;
+        $metadata['special_release_type'] = $release->type;
+
+        if ($latitude === null || $longitude === null) {
+            if (! $allowOutside) {
+                $errors[] = 'Location is required for attendance in your department.';
+            } else {
+                $warnings[] = 'Location unavailable; recorded without geofence verification.';
+                $metadata['outside_radius'] = true;
+            }
+
+            return;
+        }
+
+        $distance = self::haversineMeters(
+            $release->centerLatitude,
+            $release->centerLongitude,
+            $latitude,
+            $longitude,
+        );
+        $metadata['distance_meters'] = round($distance, 1);
+        $metadata['nearest_site_name'] = $siteLabel;
+
+        if ($distance <= $release->radiusMeters) {
+            $metadata['matched_site_name'] = $siteLabel;
+
+            return;
+        }
+
+        if (! $allowOutside) {
+            $errors[] = sprintf(
+                'You must be within %dm of your special release pin (%s, ~%dm away).',
+                $release->radiusMeters,
+                $siteLabel,
+                (int) round($distance),
+            );
+        } else {
+            $warnings[] = sprintf(
+                'Recorded outside special release pin (%s, ~%dm away).',
+                $siteLabel,
+                (int) round($distance),
+            );
             $metadata['outside_radius'] = true;
         }
     }

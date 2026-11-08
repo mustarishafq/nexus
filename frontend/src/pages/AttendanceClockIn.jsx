@@ -20,6 +20,7 @@ import { useAttendanceStatus, ATTENDANCE_STATUS_QUERY_KEY } from '@/hooks/useAtt
 import { useAuth } from '@/lib/AuthContext';
 import { canViewAllAttendance } from '@/lib/roles';
 import {
+  evaluateEarlyClockOut,
   evaluateLateClockIn,
   findActiveShift,
   findMatchingAttendanceSite,
@@ -86,6 +87,8 @@ export default function AttendanceClockIn() {
   const [capture, setCapture] = useState(null);
   const [cameraKey, setCameraKey] = useState(0);
   const [lateClockInReason, setLateClockInReason] = useState('');
+  const [earlyClockOutReason, setEarlyClockOutReason] = useState('');
+  const [justClockedOut, setJustClockedOut] = useState(false);
 
   const deviceInfo = useMemo(() => getDeviceInfo(), []);
 
@@ -96,28 +99,54 @@ export default function AttendanceClockIn() {
   const nextType = status?.next_type || 'clock_in';
   const isClockIn = nextType === 'clock_in';
   const policy = status?.policy;
+  const lastRecord = status?.last_record;
+  const todayIns = status?.today_summary?.clock_ins ?? 0;
+  const todayOuts = status?.today_summary?.clock_outs ?? 0;
+  const hasCompletedShiftToday = Boolean(isClockIn && todayIns > 0 && todayOuts >= todayIns);
+  const suppressIdlePostClockOutPrompt = Boolean(
+    isClockIn && !capture?.blob && (hasCompletedShiftToday || justClockedOut),
+  );
   const activeSpecialRelease = policy?.active_special_release || null;
-  const allowOutsideRadius = isClockIn
-    ? Boolean(activeSpecialRelease
-      ? activeSpecialRelease.allow_outside_radius
-      : policy?.allow_outside_radius)
-    : Boolean(policy?.allow_clock_out_outside_radius || activeSpecialRelease?.allow_outside_radius);
+  const allowOutsideRadius = activeSpecialRelease
+    ? Boolean(activeSpecialRelease.allow_outside_radius)
+    : (isClockIn
+      ? Boolean(policy?.allow_outside_radius)
+      : Boolean(policy?.allow_clock_out_outside_radius));
 
   const lateClockIn = useMemo(() => {
-    if (!isClockIn || !policy?.require_late_clock_in_reason) {
+    if (!isClockIn || !policy?.require_late_clock_in_reason || suppressIdlePostClockOutPrompt) {
       return { is_late: false, late_minutes: 0 };
     }
     const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date();
     return evaluateLateClockIn(policy, at);
-  }, [isClockIn, policy, capture?.capturedAt]);
+  }, [isClockIn, policy, capture?.capturedAt, suppressIdlePostClockOutPrompt]);
+
+  const earlyClockOut = useMemo(() => {
+    if (isClockIn || !policy?.require_early_clock_out_reason) {
+      return { is_early: false, early_minutes: 0 };
+    }
+    const at = capture?.capturedAt ? new Date(capture.capturedAt) : new Date();
+    return evaluateEarlyClockOut(policy, at, lastRecord);
+  }, [isClockIn, policy, capture?.capturedAt, lastRecord]);
 
   const needsLateReason = Boolean(
     isClockIn && policy?.require_late_clock_in_reason && lateClockIn.is_late,
   );
-  const reasonReady = !needsLateReason || lateClockInReason.trim().length > 0;
+  const needsEarlyReason = Boolean(
+    !isClockIn && policy?.require_early_clock_out_reason && earlyClockOut.is_early,
+  );
+  const needsAnyReason = needsLateReason || needsEarlyReason;
+  const reasonReady = (!needsLateReason || lateClockInReason.trim().length > 0)
+    && (!needsEarlyReason || earlyClockOutReason.trim().length > 0);
 
   const clockMutation = useMutation({
-    mutationFn: async ({ photoCapture, lateReason, requireLateReason }) => {
+    mutationFn: async ({
+      photoCapture,
+      lateReason,
+      requireLateReason,
+      earlyReason,
+      requireEarlyReason,
+    }) => {
       if (!photoCapture?.blob) {
         throw new Error('Capture a photo before clocking in or out.');
       }
@@ -125,6 +154,11 @@ export default function AttendanceClockIn() {
       const trimmedLate = String(lateReason || '').trim();
       if (requireLateReason && !trimmedLate) {
         throw new Error('Please enter a reason for clocking in late.');
+      }
+
+      const trimmedEarly = String(earlyReason || '').trim();
+      if (requireEarlyReason && !trimmedEarly) {
+        throw new Error('Please enter a reason for clocking out early.');
       }
 
       const upload = await db.integrations.Core.UploadFile({
@@ -155,10 +189,15 @@ export default function AttendanceClockIn() {
         payload.late_clock_in_reason = trimmedLate;
       }
 
+      if (requireEarlyReason && trimmedEarly) {
+        payload.early_clock_out_reason = trimmedEarly;
+      }
+
       return db.attendance.clock(payload);
     },
     onSuccess: (record) => {
       const recordPolicy = record?.metadata?.policy;
+      const recordedClockOut = (record?.type || nextType) === 'clock_out';
       if (recordPolicy?.is_overtime) {
         toast.success(`Clocked out with ${formatDurationMinutes(recordPolicy.overtime_minutes, { style: 'long' })} overtime`);
       } else if (recordPolicy?.is_late) {
@@ -167,8 +206,10 @@ export default function AttendanceClockIn() {
         toast.success(isClockIn ? 'Clocked in successfully' : 'Clocked out successfully');
       }
       notifyGamificationOffers(record);
+      setJustClockedOut(recordedClockOut);
       setCapture(null);
       setLateClockInReason('');
+      setEarlyClockOutReason('');
       setCameraKey((key) => key + 1);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_STATUS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
@@ -183,6 +224,9 @@ export default function AttendanceClockIn() {
 
   const handleCapture = useCallback((photoCapture) => {
     setCapture(photoCapture);
+    if (photoCapture?.blob) {
+      setJustClockedOut(false);
+    }
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -191,17 +235,16 @@ export default function AttendanceClockIn() {
       photoCapture: capture,
       lateReason: lateClockInReason,
       requireLateReason: needsLateReason,
+      earlyReason: earlyClockOutReason,
+      requireEarlyReason: needsEarlyReason,
     });
-  }, [capture, clockMutation, lateClockInReason, needsLateReason, reasonReady]);
+  }, [capture, clockMutation, lateClockInReason, needsLateReason, earlyClockOutReason, needsEarlyReason, reasonReady]);
 
-  const submitHint = !reasonReady ? 'Enter a late clock-in reason first' : '';
+  const submitHint = !reasonReady
+    ? (needsEarlyReason ? 'Enter an early clock-out reason first' : 'Enter a late clock-in reason first')
+    : '';
 
   const attendanceSites = useMemo(() => {
-    const departmentRadius = Number(policy?.radius_meters);
-    const departmentSites = resolveAttendanceSites(policy).map((site) => ({
-      ...site,
-      radius_meters: Number.isFinite(departmentRadius) ? departmentRadius : undefined,
-    }));
     if (activeSpecialRelease?.center_latitude != null && activeSpecialRelease?.center_longitude != null) {
       const typeLabel = activeSpecialRelease.type === 'wfh'
         ? 'WFH'
@@ -215,15 +258,17 @@ export default function AttendanceClockIn() {
           longitude: Number(activeSpecialRelease.center_longitude),
           radius_meters: Number(activeSpecialRelease.radius_meters) || 100,
         },
-        ...departmentSites,
       ];
     }
-    return departmentSites;
+    const departmentRadius = Number(policy?.radius_meters);
+    return resolveAttendanceSites(policy).map((site) => ({
+      ...site,
+      radius_meters: Number.isFinite(departmentRadius) ? departmentRadius : undefined,
+    }));
   }, [policy, activeSpecialRelease]);
-  const siteRadiusMeters = [
-    Number(activeSpecialRelease?.radius_meters),
-    Number(policy?.radius_meters),
-  ].reduce((max, value) => (Number.isFinite(value) && value > max ? value : max), 0) || 200;
+  const siteRadiusMeters = Number(
+    activeSpecialRelease ? activeSpecialRelease.radius_meters : policy?.radius_meters,
+  ) || 200;
   const liveLocation = capture?.location;
   const nearestSite = useMemo(() => (
     findNearestAttendanceSite(attendanceSites, liveLocation?.latitude, liveLocation?.longitude)
@@ -251,19 +296,20 @@ export default function AttendanceClockIn() {
   const StatusIcon = isClockIn ? LogIn : LogOut;
   const statusTitle = statusLoading
     ? 'Checking status…'
-    : isClockIn
-      ? 'Ready to clock in'
-      : 'You are clocked in';
+    : hasCompletedShiftToday && !capture?.blob
+      ? 'You are clocked out'
+      : isClockIn
+        ? 'Ready to clock in'
+        : 'You are clocked in';
   const statusSubtitle = statusLoading
     ? 'Loading your shift and last punch.'
-    : scheduleHint?.message
-      || (isClockIn
-        ? 'Take a selfie to start your shift.'
-        : 'Take a selfie when you leave.');
+    : hasCompletedShiftToday && !capture?.blob
+      ? 'Shift completed for today. Take a new selfie only if you need to clock in again.'
+      : scheduleHint?.message
+        || (isClockIn
+          ? 'Take a selfie to start your shift.'
+          : 'Take a selfie when you leave.');
 
-  const lastRecord = status?.last_record;
-  const todayIns = status?.today_summary?.clock_ins ?? 0;
-  const todayOuts = status?.today_summary?.clock_outs ?? 0;
   const showContextChips = Boolean(
     activeShift
     || policy?.planned_shift?.name
@@ -365,8 +411,8 @@ export default function AttendanceClockIn() {
           <div className="min-w-0">
             <p className="font-medium">Special release · {specialReleaseTypeLabel}</p>
             <p className="mt-0.5 text-muted-foreground text-pretty">
-              Clock within {activeSpecialRelease.radius_meters}m of your approved pin or at your department location
-              {allowOutsideRadius ? ' (outstation outside those sites still allowed with a warning)' : ''}.
+              Clock within {activeSpecialRelease.radius_meters}m of your approved pin
+              {allowOutsideRadius ? ' (outstation outside your pin still allowed with a warning)' : ''}.
             </p>
           </div>
         </div>
@@ -375,7 +421,7 @@ export default function AttendanceClockIn() {
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
         <Card className={cn(
           'min-w-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm',
-          needsLateReason ? 'order-2 lg:order-1' : 'order-1',
+          needsAnyReason ? 'order-2 lg:order-1' : 'order-1',
         )}>
           <CardContent className="p-0">
             <AttendanceCamera
@@ -385,7 +431,7 @@ export default function AttendanceClockIn() {
               deviceInfo={deviceInfo}
               attendanceSites={attendanceSites}
               siteRadiusMeters={siteRadiusMeters}
-              requirePreciseLocation={Boolean(policy?.geofence_enabled)}
+              requirePreciseLocation={Boolean(policy?.geofence_enabled || activeSpecialRelease)}
               actionType={nextType}
               submitting={clockMutation.isPending}
               canSubmit={Boolean(capture?.blob) && reasonReady}
@@ -399,7 +445,7 @@ export default function AttendanceClockIn() {
 
         <div className={cn(
           'min-w-0 space-y-3',
-          needsLateReason ? 'order-1 lg:order-2' : 'order-2',
+          needsAnyReason ? 'order-1 lg:order-2' : 'order-2',
         )}>
           {needsLateReason ? (
             <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
@@ -420,6 +466,31 @@ export default function AttendanceClockIn() {
                   value={lateClockInReason}
                   onChange={(event) => setLateClockInReason(event.target.value)}
                   placeholder="Why are you clocking in late?"
+                  maxLength={500}
+                  rows={3}
+                  disabled={clockMutation.isPending}
+                />
+              </CardContent>
+            </Card>
+          ) : needsEarlyReason ? (
+            <Card className="min-w-0 overflow-hidden rounded-2xl border-warning/30 bg-warning/5">
+              <CardHeader className="space-y-1 p-4 pb-3 sm:p-5 sm:pb-3">
+                <CardTitle className="text-base">Early clock-out reason</CardTitle>
+                <CardDescription className="text-pretty">
+                  You are clocking out
+                  {earlyClockOut.early_minutes
+                    ? ` ${formatDurationMinutes(earlyClockOut.early_minutes, { style: 'long' })} before shift end`
+                    : ' before your shift end'}
+                  . A reason is required.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 p-4 pt-0 sm:p-5 sm:pt-0">
+                <Label htmlFor="early-clock-out-reason">Reason</Label>
+                <Textarea
+                  id="early-clock-out-reason"
+                  value={earlyClockOutReason}
+                  onChange={(event) => setEarlyClockOutReason(event.target.value)}
+                  placeholder="Why are you clocking out early?"
                   maxLength={500}
                   rows={3}
                   disabled={clockMutation.isPending}

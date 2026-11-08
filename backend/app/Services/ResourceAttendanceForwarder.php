@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Jobs\ForwardAttendanceRecordToResourceJob;
 use App\Models\Application;
 use App\Models\AttendanceRecord;
+use App\Models\SystemEvent;
 use App\Models\User;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Cache;
@@ -31,6 +33,12 @@ class ResourceAttendanceForwarder
 
     private const DEFAULT_ATTENDANCE_POLICY_PATH = '/api/nexus/v1/attendance/policy';
 
+    public const DEFAULT_LEGACY_EARLY_CLOCK_OUT_REASON = 'Legacy record (recorded before early clock-out prompt)';
+
+    public const DEFAULT_LEGACY_LATE_CLOCK_IN_REASON = 'Legacy record (recorded before late clock-in prompt)';
+
+    private const CLOSING_PREVIOUS_SHIFT_REASON = 'Closing previous shift';
+
     public function forwardAfterResponse(AttendanceRecord $record, User $user): void
     {
         $recordId = $record->id;
@@ -44,16 +52,56 @@ class ResourceAttendanceForwarder
                 return;
             }
 
-            app(self::class)->forward($record, $user);
+            $result = app(self::class)->forwardWithResult($record, $user);
+
+            if (($result['retryable'] ?? false) === true && config('queue.default') !== 'sync') {
+                ForwardAttendanceRecordToResourceJob::dispatch($recordId, $userId)
+                    ->delay(now()->addSeconds(10));
+            }
         })->afterResponse();
     }
 
     public function forward(AttendanceRecord $record, User $user): void
     {
+        $this->forwardWithResult($record, $user);
+    }
+
+    /**
+     * @return array{
+     *     status: 'pushed'|'retried_with_fallback'|'skipped'|'failed',
+     *     http_status: ?int,
+     *     retryable: bool,
+     *     fallbacks_applied: list<string>,
+     *     error: ?string
+     * }
+     */
+    public function forwardWithResult(
+        AttendanceRecord $record,
+        ?User $user = null,
+        bool $allowLegacyFallback = false,
+        ?string $legacyReason = null,
+    ): array {
+        $user = $user ?? $record->user ?? ($record->user_id ? User::query()->find($record->user_id) : null);
+        if (! $user) {
+            return [
+                'status' => 'skipped',
+                'http_status' => null,
+                'retryable' => false,
+                'fallbacks_applied' => [],
+                'error' => 'User not found for attendance record.',
+            ];
+        }
+
         try {
             $application = $this->resolveResourceApplication();
             if (! $application || ! $application->base_url || ! $application->api_key) {
-                return;
+                return [
+                    'status' => 'skipped',
+                    'http_status' => null,
+                    'retryable' => false,
+                    'fallbacks_applied' => [],
+                    'error' => 'Resource application not configured.',
+                ];
             }
 
             $manifest = $this->fetchManifest(rtrim($application->base_url, '/'));
@@ -63,7 +111,13 @@ class ResourceAttendanceForwarder
             // Named Insan/Resource apps keep syncing even when well-known is blocked
             // (common on OpenResty/nginx that deny /.well-known/* except ACME).
             if (! $namedResource && ! in_array('attendance.ingest', $capabilities, true)) {
-                return;
+                return [
+                    'status' => 'skipped',
+                    'http_status' => null,
+                    'retryable' => false,
+                    'fallbacks_applied' => [],
+                    'error' => 'Resource application does not advertise attendance.ingest capability.',
+                ];
             }
 
             $ingestPath = data_get($manifest, 'endpoints.attendance_ingest');
@@ -73,71 +127,389 @@ class ResourceAttendanceForwarder
 
             $url = rtrim($application->base_url, '/').'/'.ltrim($ingestPath, '/');
             $apiKey = (string) $application->api_key;
-            $now = time();
-            $serviceToken = JWT::encode([
-                'iss' => config('app.url'),
-                'iat' => $now,
-                'exp' => $now + 120,
-                'sub' => 'system',
-                'typ' => 'service',
-                'aud' => 'resource-attendance-ingest',
-            ], $apiKey, 'HS256');
+            $payload = $this->buildPayload($record, $user);
 
-            $user->loadMissing('department:id,name');
+            $response = $this->postIngest($url, $apiKey, $payload);
 
-            $payload = [
-                'external_id' => (string) $record->id,
-                'nexus_user_id' => (string) $user->id,
-                'email' => $user->email,
-                'department_name' => $user->department?->name,
-                'type' => $record->type,
-                'captured_at' => $record->captured_at?->toIso8601String() ?? now()->toIso8601String(),
-                'photo_url' => $record->photo_url,
-                'latitude' => $record->latitude !== null ? (float) $record->latitude : null,
-                'longitude' => $record->longitude !== null ? (float) $record->longitude : null,
-                'location_label' => $record->location_label,
-                'browser' => $record->browser,
-                'browser_version' => $record->browser_version,
-                'operating_system' => $record->operating_system,
-                'device_type' => $record->device_type,
-                'screen_resolution' => $record->screen_resolution,
-                'timezone' => $record->timezone,
-                'ip_address' => $record->ip_address,
-                'metadata' => $record->metadata ?? [],
+            if ($response->successful()) {
+                $this->recordSyncOutcome(
+                    record: $record,
+                    user: $user,
+                    application: $application,
+                    syncStatus: 'synced',
+                    httpStatus: $response->status(),
+                    errorMessage: null,
+                );
+
+                return [
+                    'status' => 'pushed',
+                    'http_status' => $response->status(),
+                    'retryable' => false,
+                    'fallbacks_applied' => [],
+                    'error' => null,
+                ];
+            }
+
+            $fallbacksApplied = [];
+
+            if ($allowLegacyFallback && $response->status() === 422) {
+                for ($attempt = 1; $attempt <= 2 && $response->status() === 422; $attempt++) {
+                    $added = $this->applyLegacyIngestFallback(
+                        $payload,
+                        $record,
+                        $user,
+                        $response->body(),
+                        $fallbacksApplied,
+                        $legacyReason,
+                    );
+
+                    if ($added === []) {
+                        break;
+                    }
+
+                    $response = $this->postIngest($url, $apiKey, $payload);
+                    if ($response->successful()) {
+                        $this->recordSyncOutcome(
+                            record: $record,
+                            user: $user,
+                            application: $application,
+                            syncStatus: 'synced',
+                            httpStatus: $response->status(),
+                            errorMessage: null,
+                            fallbacksApplied: $fallbacksApplied,
+                        );
+
+                        return [
+                            'status' => 'retried_with_fallback',
+                            'http_status' => $response->status(),
+                            'retryable' => false,
+                            'fallbacks_applied' => $fallbacksApplied,
+                            'error' => null,
+                        ];
+                    }
+                }
+            }
+
+            $status = $response->status();
+            $body = $response->body();
+            $retryable = $status >= 500 || $status === 429 || $status === 408;
+            $cleanError = $this->extractErrorMessage($response, $body);
+
+            Log::warning('Resource attendance ingest failed', [
+                'attendance_record_id' => $record->id,
+                'status' => $status,
+                'body' => $body,
+                'url' => $url,
+                'fallbacks_applied' => $fallbacksApplied,
+            ]);
+
+            $this->recordSyncOutcome(
+                record: $record,
+                user: $user,
+                application: $application,
+                syncStatus: $retryable ? 'retrying' : 'failed',
+                httpStatus: $status,
+                errorMessage: $cleanError,
+                fallbacksApplied: $fallbacksApplied,
+            );
+
+            return [
+                'status' => 'failed',
+                'http_status' => $status,
+                'retryable' => $retryable,
+                'fallbacks_applied' => $fallbacksApplied,
+                'error' => sprintf('HTTP %d: %s', $status, $cleanError),
             ];
-
-            $lateReason = data_get($record->metadata, 'policy.late_clock_in_reason');
-            if (is_string($lateReason) && trim($lateReason) !== '') {
-                $payload['late_clock_in_reason'] = trim($lateReason);
-            }
-
-            $earlyReason = data_get($record->metadata, 'policy.early_clock_out_reason');
-            if (is_string($earlyReason) && trim($earlyReason) !== '') {
-                $payload['early_clock_out_reason'] = trim($earlyReason);
-            }
-
-            $response = Http::timeout(self::HTTP_TIMEOUT_SECONDS)
-                ->withToken($serviceToken)
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'X-Nexus-Api-Key' => $apiKey,
-                ])
-                ->post($url, $payload);
-
-            if (! $response->successful()) {
-                Log::warning('Resource attendance ingest failed', [
-                    'attendance_record_id' => $record->id,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                    'url' => $url,
-                ]);
-            }
         } catch (\Throwable $e) {
             Log::warning('Resource attendance forwarder error', [
                 'attendance_record_id' => $record->id,
                 'message' => $e->getMessage(),
             ]);
+
+            $this->recordSyncOutcome(
+                record: $record,
+                user: $user,
+                application: $application ?? null,
+                syncStatus: 'retrying',
+                httpStatus: null,
+                errorMessage: $e->getMessage(),
+            );
+
+            return [
+                'status' => 'failed',
+                'http_status' => null,
+                'retryable' => true,
+                'fallbacks_applied' => [],
+                'error' => $e->getMessage(),
+            ];
         }
+    }
+
+    private function extractErrorMessage(\Illuminate\Http\Client\Response $response, string $rawBody): string
+    {
+        try {
+            $json = $response->json();
+            if (is_array($json) && is_string($json['message'] ?? null) && trim($json['message']) !== '') {
+                return trim($json['message']);
+            }
+        } catch (\Throwable) {
+            // Fall through to raw body.
+        }
+
+        return trim($rawBody) !== '' ? trim($rawBody) : 'HTTP '.$response->status();
+    }
+
+    private function recordSyncOutcome(
+        AttendanceRecord $record,
+        User $user,
+        ?Application $application,
+        string $syncStatus,
+        ?int $httpStatus,
+        ?string $errorMessage,
+        array $fallbacksApplied = [],
+    ): void {
+        $nowIso = now()->toIso8601String();
+
+        try {
+            $metadata = is_array($record->metadata) ? $record->metadata : [];
+            $existingSync = is_array($metadata['insan_sync'] ?? null) ? $metadata['insan_sync'] : [];
+
+            $metadata['insan_sync'] = array_filter([
+                ...$existingSync,
+                'status' => $syncStatus,
+                'direction' => 'outbound',
+                'http_status' => $httpStatus,
+                'attempted_at' => $nowIso,
+                'synced_at' => $syncStatus === 'synced' ? $nowIso : ($existingSync['synced_at'] ?? null),
+                'error' => $syncStatus === 'synced' ? null : $errorMessage,
+                'fallbacks_applied' => $fallbacksApplied !== [] ? $fallbacksApplied : null,
+            ], static fn ($v) => $v !== null);
+
+            $record->forceFill(['metadata' => $metadata])->saveQuietly();
+        } catch (\Throwable) {
+            // Best-effort metadata persistence.
+        }
+
+        try {
+            $systemId = $application?->slug ?: 'emzi-nexus-insan';
+            $typeLabel = $record->type === 'clock_out' ? 'clock_out' : 'clock_in';
+            $isSuccess = $syncStatus === 'synced';
+            $isRetrying = $syncStatus === 'retrying';
+
+            SystemEvent::query()->create([
+                'system_id' => $systemId,
+                'event_type' => $isSuccess ? 'webhook' : ($isRetrying ? 'warning' : 'error'),
+                'title' => $isSuccess
+                    ? sprintf('Outbound %s synced to Insan (%s)', $typeLabel, $user->email)
+                    : sprintf(
+                        'Outbound %s %s (%s%s)',
+                        $typeLabel,
+                        $isRetrying ? 'retry queued for Insan' : 'rejected by Insan',
+                        $httpStatus ? "HTTP {$httpStatus} · " : '',
+                        $user->email,
+                    ),
+                'status' => $isSuccess ? 'processed' : ($isRetrying ? 'pending' : 'failed'),
+                'severity' => $isSuccess ? 2 : ($isRetrying ? 5 : 7),
+                'payload' => array_filter([
+                    'category' => 'attendance_sync',
+                    'direction' => 'outbound',
+                    'attendance_record_id' => $record->id,
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'punch_type' => $record->type,
+                    'captured_at' => $record->captured_at?->toIso8601String(),
+                    'http_status' => $httpStatus,
+                    'error' => $errorMessage,
+                    'fallbacks_applied' => $fallbacksApplied !== [] ? $fallbacksApplied : null,
+                ], static fn ($v) => $v !== null),
+            ]);
+        } catch (\Throwable) {
+            // Never break attendance forwarding if system_events logging fails.
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  list<string>  $fallbacksApplied
+     * @return list<string>
+     */
+    private function applyLegacyIngestFallback(
+        array &$payload,
+        AttendanceRecord $record,
+        User $user,
+        string $responseBody,
+        array &$fallbacksApplied,
+        ?string $customReason = null,
+    ): array {
+        $newlyApplied = [];
+        $fallbackEarly = ($customReason !== null && trim($customReason) !== '')
+            ? trim($customReason)
+            : self::DEFAULT_LEGACY_EARLY_CLOCK_OUT_REASON;
+        $fallbackLate = ($customReason !== null && trim($customReason) !== '')
+            ? trim($customReason)
+            : self::DEFAULT_LEGACY_LATE_CLOCK_IN_REASON;
+
+        if (
+            ! in_array('early_clock_out_reason', $fallbacksApplied, true)
+            && (
+                stripos($responseBody, 'early clock-out reason') !== false
+                || stripos($responseBody, 'early_clock_out_reason') !== false
+            )
+        ) {
+            $reason = trim((string) ($payload['early_clock_out_reason'] ?? ''));
+            if ($reason === '') {
+                $payload['early_clock_out_reason'] = $fallbackEarly;
+                data_set($payload, 'metadata.policy.early_clock_out_reason', $fallbackEarly);
+                $fallbacksApplied[] = 'early_clock_out_reason';
+                $newlyApplied[] = 'early_clock_out_reason';
+            }
+        }
+
+        if (
+            ! in_array('late_clock_in_reason', $fallbacksApplied, true)
+            && (
+                stripos($responseBody, 'late clock-in reason') !== false
+                || stripos($responseBody, 'late_clock_in_reason') !== false
+            )
+        ) {
+            $reason = trim((string) ($payload['late_clock_in_reason'] ?? ''));
+            if ($reason === '') {
+                $payload['late_clock_in_reason'] = $fallbackLate;
+                data_set($payload, 'metadata.policy.late_clock_in_reason', $fallbackLate);
+                $fallbacksApplied[] = 'late_clock_in_reason';
+                $newlyApplied[] = 'late_clock_in_reason';
+            }
+        }
+
+        if (
+            ! in_array('special_release_pin', $fallbacksApplied, true)
+            && stripos($responseBody, 'special release pin') !== false
+        ) {
+            $coords = $this->resolveLegacySpecialReleasePinCoordinates($record, $user);
+            if ($coords !== null) {
+                if (! isset($payload['metadata']['brain_original_coordinates'])) {
+                    $payload['metadata']['brain_original_coordinates'] = [
+                        'latitude' => $payload['latitude'] ?? null,
+                        'longitude' => $payload['longitude'] ?? null,
+                        'location_label' => $payload['location_label'] ?? null,
+                    ];
+                }
+                $payload['latitude'] = $coords['latitude'];
+                $payload['longitude'] = $coords['longitude'];
+                $fallbacksApplied[] = 'special_release_pin';
+                $newlyApplied[] = 'special_release_pin';
+            }
+        }
+
+        return $newlyApplied;
+    }
+
+    /**
+     * @return array{latitude: float, longitude: float}|null
+     */
+    private function resolveLegacySpecialReleasePinCoordinates(AttendanceRecord $record, User $user): ?array
+    {
+        $tz = $record->timezone ?: (config('app.timezone') ?: 'Asia/Kuala_Lumpur');
+        $date = ($record->captured_at ?? now())->copy()->timezone($tz)->toDateString();
+
+        try {
+            $pin = app(ResourceSpecialReleaseClient::class)->findApprovedForUserOnDate($user->id, $date);
+            if ($pin) {
+                return [
+                    'latitude' => (float) $pin->centerLatitude,
+                    'longitude' => (float) $pin->centerLongitude,
+                ];
+            }
+        } catch (\Throwable) {
+            // Fall through to local record lookup.
+        }
+
+        $siblingPinRecord = AttendanceRecord::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->where('location_label', 'like', 'Special release%')
+            ->orderByDesc('captured_at')
+            ->first();
+
+        if ($siblingPinRecord && $siblingPinRecord->latitude !== null && $siblingPinRecord->longitude !== null) {
+            return [
+                'latitude' => (float) $siblingPinRecord->latitude,
+                'longitude' => (float) $siblingPinRecord->longitude,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPayload(AttendanceRecord $record, User $user): array
+    {
+        $user->loadMissing('department:id,name');
+
+        $payload = [
+            'external_id' => (string) $record->id,
+            'nexus_user_id' => (string) $user->id,
+            'email' => $user->email,
+            'department_name' => $user->department?->name,
+            'type' => $record->type,
+            'captured_at' => $record->captured_at?->toIso8601String() ?? now()->toIso8601String(),
+            'photo_url' => $record->photo_url,
+            'latitude' => $record->latitude !== null ? (float) $record->latitude : null,
+            'longitude' => $record->longitude !== null ? (float) $record->longitude : null,
+            'location_label' => $record->location_label,
+            'browser' => $record->browser,
+            'browser_version' => $record->browser_version,
+            'operating_system' => $record->operating_system,
+            'device_type' => $record->device_type,
+            'screen_resolution' => $record->screen_resolution,
+            'timezone' => $record->timezone,
+            'ip_address' => $record->ip_address,
+            'metadata' => is_array($record->metadata) ? $record->metadata : [],
+        ];
+
+        $lateReason = data_get($record->metadata, 'policy.late_clock_in_reason');
+        if (is_string($lateReason) && trim($lateReason) !== '') {
+            $payload['late_clock_in_reason'] = trim($lateReason);
+        }
+
+        $earlyReason = data_get($record->metadata, 'policy.early_clock_out_reason');
+        if (is_string($earlyReason) && trim($earlyReason) !== '') {
+            $payload['early_clock_out_reason'] = trim($earlyReason);
+        } elseif ($record->type === 'clock_out' && data_get($record->metadata, 'policy.closing_previous_shift') === true) {
+            // When closing a previous day's forgotten clock-out, Brain rightly does not prompt
+            // for an early clock-out reason; supply a descriptive reason so Insan never rejects
+            // morning clock-outs of yesterday's shift with HTTP 422.
+            $payload['early_clock_out_reason'] = self::CLOSING_PREVIOUS_SHIFT_REASON;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function postIngest(string $url, string $apiKey, array $payload): \Illuminate\Http\Client\Response
+    {
+        $now = time();
+        $serviceToken = JWT::encode([
+            'iss' => config('app.url'),
+            'iat' => $now,
+            'exp' => $now + 120,
+            'sub' => 'system',
+            'typ' => 'service',
+            'aud' => 'resource-attendance-ingest',
+        ], $apiKey, 'HS256');
+
+        return Http::timeout(self::HTTP_TIMEOUT_SECONDS)
+            ->withToken($serviceToken)
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Nexus-Api-Key' => $apiKey,
+            ])
+            ->post($url, $payload);
     }
 
     public function resolveResourceApplication(): ?Application

@@ -11,6 +11,7 @@ use App\Services\ResourceAttendanceForwarder;
 use App\Services\ResourceTimeOffClient;
 use App\Support\ApiTokenAuth;
 use App\Support\AppSettings;
+use App\Support\AttendanceEarlyClockOutEvaluator;
 use App\Support\AttendanceLateEvaluator;
 use App\Support\AttendancePolicyValidator;
 use App\Support\AttendanceReminderEvaluator;
@@ -305,6 +306,7 @@ class AttendanceController extends Controller
             'screen_resolution' => ['nullable', 'string', 'max:32'],
             'timezone' => ['nullable', 'string', 'max:64'],
             'late_clock_in_reason' => ['nullable', 'string', 'max:500'],
+            'early_clock_out_reason' => ['nullable', 'string', 'max:500'],
             'metadata' => ['nullable', 'array'],
             'captured_at' => ['nullable', 'date'],
         ]);
@@ -369,7 +371,29 @@ class AttendanceController extends Controller
             if (! empty($late['is_late']) && $reason !== '') {
                 $metadata['policy']['late_clock_in_reason'] = $reason;
             }
+        } else {
+            $early = AttendanceEarlyClockOutEvaluator::evaluate($user, $capturedAt, $lastRecord);
+            $earlyReason = trim((string) ($validated['early_clock_out_reason'] ?? ''));
+
+            if (! empty($early['require_early_clock_out_reason']) && ! empty($early['is_early_leave']) && $earlyReason === '') {
+                return response()->json([
+                    'message' => 'An early clock-out reason is required when leaving before your shift end.',
+                ], 422);
+            }
+
+            unset($early['require_early_clock_out_reason']);
+            $metadata['policy'] = array_merge($metadata['policy'] ?? [], $early);
+
+            if ($earlyReason !== '') {
+                $metadata['policy']['early_clock_out_reason'] = $earlyReason;
+            }
         }
+
+        $metadata['insan_sync'] = [
+            'status' => 'pending',
+            'direction' => 'outbound',
+            'queued_at' => now()->toIso8601String(),
+        ];
 
         $record = AttendanceRecord::query()->create([
             'user_id' => $user->id,
@@ -387,6 +411,7 @@ class AttendanceController extends Controller
             'ip_address' => $request->ip(),
             'metadata' => $metadata,
             'captured_at' => $capturedAt,
+            'source' => 'brain',
         ]);
 
         app(ResourceAttendanceForwarder::class)->forwardAfterResponse($record, $user);
@@ -417,6 +442,8 @@ class AttendanceController extends Controller
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'type' => ['nullable', 'in:clock_in,clock_out'],
+            'source' => ['nullable', 'in:brain,insan'],
+            'sync_status' => ['nullable', 'in:synced,failed,pending,retrying'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'offset' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -441,6 +468,10 @@ class AttendanceController extends Controller
             ->selectRaw('COUNT(DISTINCT user_id) as unique_users')
             ->first();
 
+        $syncFailedCount = (clone $summaryQuery)
+            ->where('metadata->insan_sync->status', 'failed')
+            ->count();
+
         return response()->json([
             'records' => $records->map(fn (AttendanceRecord $record) => $this->serializeRecord($record))->values(),
             'summary' => [
@@ -448,12 +479,40 @@ class AttendanceController extends Controller
                 'clock_ins' => (int) ($summaryRow->clock_ins ?? 0),
                 'clock_outs' => (int) ($summaryRow->clock_outs ?? 0),
                 'unique_users' => (int) ($summaryRow->unique_users ?? 0),
+                'sync_failed' => (int) $syncFailedCount,
             ],
             'pagination' => [
                 'limit' => $limit,
                 'offset' => $offset,
             ],
         ]);
+    }
+
+    public function resync(Request $request, AttendanceRecord $attendanceRecord): JsonResponse
+    {
+        if ($response = $this->authorizePermission($request, PermissionCatalog::ATTENDANCE_VIEW_ALL)) {
+            return $response;
+        }
+
+        if (in_array($attendanceRecord->source, ['insan', 'kashfi', 'resource'], true)) {
+            return response()->json([
+                'message' => 'This record originated from Nexus Insan and does not need outbound sync.',
+            ], 422);
+        }
+
+        $attendanceRecord->loadMissing('user:id,full_name,name,email,department_id');
+        $result = app(ResourceAttendanceForwarder::class)->forwardWithResult(
+            record: $attendanceRecord,
+            user: $attendanceRecord->user,
+            allowLegacyFallback: $request->boolean('legacy_fallback', true),
+        );
+
+        $fresh = $attendanceRecord->fresh(['user:id,full_name,name,email']);
+
+        return response()->json([
+            'result' => $result,
+            'record' => $fresh ? $this->serializeRecord($fresh) : null,
+        ], in_array($result['status'], ['pushed', 'retried_with_fallback'], true) ? 200 : 422);
     }
 
     public function exportCsv(Request $request): StreamedResponse|JsonResponse
@@ -468,6 +527,8 @@ class AttendanceController extends Controller
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'type' => ['nullable', 'in:clock_in,clock_out'],
+            'source' => ['nullable', 'in:brain,insan'],
+            'sync_status' => ['nullable', 'in:synced,failed,pending,retrying'],
         ]);
 
         $query = AttendanceRecord::query()
@@ -486,6 +547,9 @@ class AttendanceController extends Controller
                 'Email',
                 'Department',
                 'Type',
+                'Source',
+                'Insan Sync Status',
+                'Insan Sync Error',
                 'Date',
                 'Time',
                 'Location',
@@ -499,6 +563,8 @@ class AttendanceController extends Controller
                 'Timezone',
                 'IP Address',
                 'Shift',
+                'Late Reason',
+                'Early Clock-Out Reason',
                 'Worked Minutes',
                 'Overtime Minutes',
                 'Photo URL',
@@ -511,6 +577,9 @@ class AttendanceController extends Controller
                 }
 
                 $policy = is_array($record->metadata['policy'] ?? null) ? $record->metadata['policy'] : [];
+                $insanSync = is_array($record->metadata['insan_sync'] ?? null) ? $record->metadata['insan_sync'] : [];
+                $sourceLabel = in_array($record->source, ['insan', 'kashfi', 'resource'], true) ? 'Insan' : 'Brain';
+                $syncStatusLabel = $insanSync['status'] ?? ($sourceLabel === 'Insan' ? 'synced' : 'unknown');
                 $capturedAt = $record->captured_at;
                 if ($capturedAt) {
                     $timezone = $record->timezone ?: config('app.timezone');
@@ -527,6 +596,9 @@ class AttendanceController extends Controller
                     $record->user?->email,
                     $record->user?->department?->name,
                     $record->type === 'clock_in' ? 'Clock In' : 'Clock Out',
+                    $sourceLabel,
+                    $syncStatusLabel,
+                    $insanSync['error'] ?? null,
                     $capturedAt?->format('Y-m-d'),
                     $capturedAt?->format('H:i:s'),
                     $record->location_label,
@@ -540,6 +612,8 @@ class AttendanceController extends Controller
                     $record->timezone,
                     $record->ip_address,
                     $policy['shift_name'] ?? null,
+                    $policy['late_clock_in_reason'] ?? null,
+                    $policy['early_clock_out_reason'] ?? null,
                     $policy['worked_minutes'] ?? null,
                     $policy['overtime_minutes'] ?? null,
                     $photoUrl,
@@ -614,6 +688,41 @@ class AttendanceController extends Controller
 
         if (! empty($filters['type'])) {
             $query->where('type', $filters['type']);
+        }
+
+        if (! empty($filters['source'])) {
+            if ($filters['source'] === 'insan') {
+                $query->whereIn('source', ['insan', 'kashfi', 'resource']);
+            } else {
+                $query->where(function (Builder $q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '')
+                        ->orWhere('source', 'brain');
+                });
+            }
+        }
+
+        if (! empty($filters['sync_status'])) {
+            $status = $filters['sync_status'];
+            if ($status === 'synced') {
+                $query->where(function (Builder $q) {
+                    $q->where('metadata->insan_sync->status', 'synced')
+                        ->orWhereIn('source', ['insan', 'kashfi', 'resource']);
+                });
+            } elseif ($status === 'pending') {
+                $query->where(function (Builder $q) {
+                    $q->whereIn('metadata->insan_sync->status', ['pending', 'retrying'])
+                        ->orWhere(function (Builder $inner) {
+                            $inner->where(function (Builder $src) {
+                                $src->whereNull('source')
+                                    ->orWhere('source', '')
+                                    ->orWhere('source', 'brain');
+                            })->whereNull('metadata->insan_sync->status');
+                        });
+                });
+            } else {
+                $query->where('metadata->insan_sync->status', $status);
+            }
         }
     }
 

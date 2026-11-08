@@ -9,6 +9,9 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('attendance:send-reminders')->everyFiveMinutes();
+Schedule::command('attendance:push-to-insan --from="24 hours ago"')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10);
 Schedule::command('applications:check-health')->everyFiveMinutes();
 Schedule::command('mail:check-inbox-push')
     ->everyTwoMinutes()

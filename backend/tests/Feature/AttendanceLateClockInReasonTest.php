@@ -14,8 +14,11 @@ class AttendanceLateClockInReasonTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeUserWithShift(bool $requireReason, array $shifts = []): User
-    {
+    private function makeUserWithShift(
+        bool $requireReason,
+        array $shifts = [],
+        bool $requireEarlyReason = false,
+    ): User {
         $department = Department::query()->create(['name' => 'Ops']);
 
         DepartmentAttendanceSetting::query()->create([
@@ -23,7 +26,7 @@ class AttendanceLateClockInReasonTest extends TestCase
             'enabled' => true,
             'timezone' => 'Asia/Kuala_Lumpur',
             'grace_period_minutes' => 15,
-            'require_early_clock_out_reason' => false,
+            'require_early_clock_out_reason' => $requireEarlyReason,
             'require_late_clock_in_reason' => $requireReason,
             'allow_outside_shift_hours' => true,
             'overtime_enabled' => false,
@@ -44,6 +47,24 @@ class AttendanceLateClockInReasonTest extends TestCase
             'department_id' => $department->id,
             'email' => 'late-user@example.com',
         ]);
+    }
+
+    private function clockOut(User $user, Carbon $capturedAt, ?string $reason = null)
+    {
+        $payload = [
+            'type' => 'clock_out',
+            'photo_url' => 'https://example.com/out.jpg',
+            'captured_at' => $capturedAt->toIso8601String(),
+            'timezone' => 'Asia/Kuala_Lumpur',
+        ];
+
+        if ($reason !== null) {
+            $payload['early_clock_out_reason'] = $reason;
+        }
+
+        $token = ApiTokenAuth::issueToken($user);
+
+        return $this->withToken($token)->postJson('/api/attendance/clock', $payload);
     }
 
     private function clockIn(User $user, Carbon $capturedAt, ?string $reason = null)
@@ -184,5 +205,79 @@ class AttendanceLateClockInReasonTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonPath('message', 'A late clock-in reason is required when arriving after your shift start.');
+    }
+
+    public function test_early_clock_out_without_reason_rejected_when_required(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-07-29 08:55:00', 'Asia/Kuala_Lumpur');
+        $outAt = Carbon::parse('2026-07-29 16:30:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        $this->clockOut($user, $outAt)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'An early clock-out reason is required when leaving before your shift end.');
+    }
+
+    public function test_early_clock_out_with_reason_succeeds_and_stores_metadata(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-07-29 08:55:00', 'Asia/Kuala_Lumpur');
+        $outAt = Carbon::parse('2026-07-29 16:30:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        $this->clockOut($user, $outAt, 'Clinic appointment')
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_early_leave', true)
+            ->assertJsonPath('metadata.policy.early_leave_minutes', 90)
+            ->assertJsonPath('metadata.policy.early_clock_out_reason', 'Clinic appointment');
+    }
+
+    public function test_morning_clock_out_after_forgotten_previous_day_does_not_require_early_reason(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-10-29 10:08:00', 'Asia/Kuala_Lumpur');
+        $nextMorningOutAt = Carbon::parse('2026-10-30 09:57:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        // Closing yesterday's open clock-in (even after today's 09:00 shift start)
+        // must NOT trigger early_clock_out_reason because yesterday's 18:00 shift end already passed.
+        $this->clockOut($user, $nextMorningOutAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_early_leave', false);
+    }
+
+    public function test_same_day_early_clock_out_before_shift_start_requires_reason(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-10-30 08:30:00', 'Asia/Kuala_Lumpur');
+        $outAt = Carbon::parse('2026-10-30 08:50:00', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        $this->clockOut($user, $outAt)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'An early clock-out reason is required when leaving before your shift end.');
+
+        $this->clockOut($user, $outAt, 'Emergency at home')
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_early_leave', true)
+            ->assertJsonPath('metadata.policy.early_clock_out_reason', 'Emergency at home');
+    }
+
+    public function test_clock_out_at_or_after_shift_end_does_not_require_reason(): void
+    {
+        $user = $this->makeUserWithShift(requireReason: false, requireEarlyReason: true);
+        $inAt = Carbon::parse('2026-07-29 08:55:00', 'Asia/Kuala_Lumpur');
+        $outAt = Carbon::parse('2026-07-29 18:00:25', 'Asia/Kuala_Lumpur');
+
+        $this->clockIn($user, $inAt)->assertCreated();
+
+        $this->clockOut($user, $outAt)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.is_early_leave', false);
     }
 }

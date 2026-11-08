@@ -163,9 +163,10 @@ class AttendanceShiftResolver
             return $shifts[0];
         }
 
+        $lookaheadWindow = max($earlyWindow, 180);
         $within = [];
         foreach ($shifts as $shift) {
-            if (AttendancePolicyValidator::isWithinShift($shift, $at, $grace, $earlyWindow)) {
+            if (AttendancePolicyValidator::isWithinShift($shift, $at, $grace, $lookaheadWindow)) {
                 $within[] = $shift;
             }
         }

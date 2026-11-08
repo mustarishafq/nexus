@@ -166,6 +166,8 @@ export default function SystemEvents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [directionFilter, setDirectionFilter] = useState('all');
+  const [expandedId, setExpandedId] = useState(null);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -181,8 +183,20 @@ export default function SystemEvents() {
 
   const filtered = events.filter(e => {
     if (statusFilter !== 'all' && e.status !== statusFilter) return false;
-    if (typeFilter !== 'all' && e.event_type !== typeFilter) return false;
-    if (search && !e.title?.toLowerCase().includes(search.toLowerCase()) && !e.system_id?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (typeFilter === 'attendance_sync') {
+      if (e.payload?.category !== 'attendance_sync') return false;
+    } else if (typeFilter !== 'all' && e.event_type !== typeFilter) {
+      return false;
+    }
+    if (directionFilter !== 'all' && e.payload?.direction !== directionFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const inTitle = e.title?.toLowerCase().includes(q);
+      const inSystem = e.system_id?.toLowerCase().includes(q);
+      const inEmail = e.payload?.user_email?.toLowerCase().includes(q);
+      const inError = e.payload?.error?.toLowerCase().includes(q);
+      if (!inTitle && !inSystem && !inEmail && !inError) return false;
+    }
     return true;
   });
 
@@ -192,7 +206,7 @@ export default function SystemEvents() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, typeFilter]);
+  }, [search, statusFilter, typeFilter, directionFilter]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -227,15 +241,24 @@ export default function SystemEvents() {
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-32 h-9 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="attendance_sync">Attendance Sync</SelectItem>
             <SelectItem value="info">Info</SelectItem>
             <SelectItem value="warning">Warning</SelectItem>
             <SelectItem value="error">Error</SelectItem>
             <SelectItem value="critical">Critical</SelectItem>
             <SelectItem value="health_check">Health Check</SelectItem>
             <SelectItem value="webhook">Webhook</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={directionFilter} onValueChange={setDirectionFilter}>
+          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue placeholder="Direction" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Directions</SelectItem>
+            <SelectItem value="outbound">Outbound (Brain → Insan)</SelectItem>
+            <SelectItem value="inbound">Inbound (Insan → Brain)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -270,55 +293,100 @@ export default function SystemEvents() {
                   const tc = getSystemEventTypeVisual(event.event_type);
                   const StatusIcon = sc.icon;
                   const TypeIcon = tc.icon;
+                  const isExpanded = expandedId === event.id;
+                  const direction = event.payload?.direction;
                   return (
-                    <tr key={event.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="p-3">
-                        <p className="font-medium text-sm">{event.title}</p>
-                      </td>
-                      <td className="p-3">
-                        <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{event.system_id}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className={cn("flex items-center gap-1 text-xs", tc.color)}>
-                          <TypeIcon className="w-3 h-3" /> {event.event_type}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <Badge className={cn("text-[10px] border-0", sc.bg, sc.color)}>
-                          <StatusIcon className="w-2.5 h-2.5 mr-1" /> {event.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {event.severity && (
-                          <div className="flex items-center gap-1">
-                            <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className={cn("h-full rounded-full",
-                                  event.severity <= 3 ? 'bg-success' : event.severity <= 6 ? 'bg-warning' : 'bg-destructive'
+                    <React.Fragment key={event.id}>
+                      <tr
+                        onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
+                      >
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">{event.title}</p>
+                            {direction ? (
+                              <span
+                                className={cn(
+                                  'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                                  direction === 'outbound'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'bg-info/10 text-info',
                                 )}
-                                style={{ width: `${event.severity * 10}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-muted-foreground">{event.severity}/10</span>
+                              >
+                                {direction === 'outbound' ? 'Out → Insan' : 'In ← Insan'}
+                              </span>
+                            ) : null}
                           </div>
-                        )}
-                      </td>
-                      <td className="p-3 text-xs text-muted-foreground">
-                        {format(new Date(event.created_date), 'MMM d, h:mm a')}
-                      </td>
-                      <td className="p-3">
-                        {event.status === 'pending' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => updateMut.mutate({ id: event.id, data: { status: 'acknowledged' } })}
-                          >
-                            Acknowledge
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
+                          {event.payload?.error ? (
+                            <p className="mt-0.5 max-w-xl truncate text-xs text-destructive">
+                              {event.payload.error}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="p-3">
+                          <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{event.system_id}</span>
+                        </td>
+                        <td className="p-3">
+                          <span className={cn("flex items-center gap-1 text-xs", tc.color)}>
+                            <TypeIcon className="w-3 h-3" /> {event.event_type}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <Badge className={cn("text-[10px] border-0", sc.bg, sc.color)}>
+                            <StatusIcon className="w-2.5 h-2.5 mr-1" /> {event.status}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {event.severity && (
+                            <div className="flex items-center gap-1">
+                              <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={cn("h-full rounded-full",
+                                    event.severity <= 3 ? 'bg-success' : event.severity <= 6 ? 'bg-warning' : 'bg-destructive'
+                                  )}
+                                  style={{ width: `${event.severity * 10}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{event.severity}/10</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">
+                          {format(new Date(event.created_date), 'MMM d, h:mm a')}
+                        </td>
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            {event.status === 'pending' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => updateMut.mutate({ id: event.id, data: { status: 'acknowledged' } })}
+                              >
+                                Acknowledge
+                              </Button>
+                            )}
+                            {event.payload ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-muted-foreground"
+                                onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && event.payload ? (
+                        <tr className="border-b border-border bg-muted/10">
+                          <td colSpan={7} className="p-3">
+                            <CodeBlock language="json" code={JSON.stringify(event.payload, null, 2)} />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
