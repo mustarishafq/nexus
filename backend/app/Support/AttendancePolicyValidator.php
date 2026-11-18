@@ -133,6 +133,7 @@ class AttendancePolicyValidator
             'attendance_location_id' => $location?->id ?? $setting->attendance_location_id,
             'attendance_location_name' => $location?->name,
             'geofence_enabled' => (bool) ($location?->geofence_enabled || $activeRelease !== null),
+            'geofence_location_enabled' => (bool) $location?->geofence_enabled,
             'center_latitude' => $location?->center_latitude !== null ? (float) $location->center_latitude : null,
             'center_longitude' => $location?->center_longitude !== null ? (float) $location->center_longitude : null,
             'sites' => AttendanceLocationSettings::resolveSites($location),
@@ -233,6 +234,20 @@ class AttendancePolicyValidator
         ?SpecialReleasePin $activeRelease = null,
     ): void {
         if ($activeRelease) {
+            // The release pin is an extra allowed site, not a replacement: a punch at the
+            // user's default work location is still accepted while the release is active.
+            if ($location?->geofence_enabled && $latitude !== null && $longitude !== null) {
+                $defaultMatch = self::matchLocationSite($location, $latitude, $longitude);
+                if ($defaultMatch !== null) {
+                    $metadata['special_release_id'] = $activeRelease->id;
+                    $metadata['special_release_type'] = $activeRelease->type;
+                    $metadata['matched_site_name'] = $defaultMatch['name'];
+                    $metadata['distance_meters'] = round($defaultMatch['distance'], 1);
+
+                    return;
+                }
+            }
+
             self::validateSpecialReleaseGeofence(
                 $activeRelease,
                 $activeRelease->allowOutsideRadius,
@@ -324,6 +339,23 @@ class AttendancePolicyValidator
      * @param  array<int, string>  $warnings
      * @param  array<string, mixed>  $metadata
      */
+    /**
+     * @return array{name: string|null, distance: float}|null
+     */
+    private static function matchLocationSite(AttendanceLocation $location, float $latitude, float $longitude): ?array
+    {
+        $match = null;
+
+        foreach (AttendanceLocationSettings::resolveSites($location) as $site) {
+            $distance = self::haversineMeters((float) $site['latitude'], (float) $site['longitude'], $latitude, $longitude);
+            if ($distance <= $location->radius_meters && ($match === null || $distance < $match['distance'])) {
+                $match = ['name' => $site['name'] ?? null, 'distance' => $distance];
+            }
+        }
+
+        return $match;
+    }
+
     private static function validateSpecialReleaseGeofence(
         SpecialReleasePin $release,
         bool $allowOutside,

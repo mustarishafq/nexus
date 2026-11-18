@@ -169,6 +169,26 @@ class SpecialReleaseClockInTest extends TestCase
         $this->assertStringContainsString('Special release', (string) data_get($response->json('metadata'), 'policy.matched_site_name'));
     }
 
+    public function test_special_release_still_allows_clock_at_default_location(): void
+    {
+        $this->createInsanApplication();
+        [$employee] = $this->makeEmployeeWithGeofence(allowOutsideRadius: false);
+        $token = ApiTokenAuth::issueToken($employee);
+        $today = now('Asia/Kuala_Lumpur')->toDateString();
+
+        $this->fakeApprovedRelease($employee, $today);
+
+        // Morning at home pin, then back at the office for the afternoon.
+        $this->clock($token, $this->homeLat, $this->homeLng)->assertCreated();
+        $this->clock($token, $this->homeLat, $this->homeLng, 'clock_out')->assertCreated();
+
+        $this->travel(2)->minutes();
+        $this->clock($token, $this->officeLat, $this->officeLng)
+            ->assertCreated()
+            ->assertJsonPath('metadata.policy.special_release_id', 99)
+            ->assertJsonPath('metadata.policy.matched_site_name', 'Primary');
+    }
+
     public function test_special_release_allow_outside_radius_overrides_department_geofence(): void
     {
         $this->createInsanApplication();

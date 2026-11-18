@@ -264,12 +264,18 @@ export default function AttendanceClockIn() {
     : '';
 
   const attendanceSites = useMemo(() => {
+    const departmentRadius = Number(policy?.radius_meters);
+    const departmentSites = resolveAttendanceSites(policy).map((site) => ({
+      ...site,
+      radius_meters: Number.isFinite(departmentRadius) ? departmentRadius : undefined,
+    }));
     if (activeSpecialRelease?.center_latitude != null && activeSpecialRelease?.center_longitude != null) {
       const typeLabel = activeSpecialRelease.type === 'wfh'
         ? 'WFH'
         : activeSpecialRelease.type === 'outstation'
           ? 'Outstation'
           : 'Other';
+      // Release pin is an extra allowed site; the default work location still counts.
       return [
         {
           name: `Special release (${typeLabel})`,
@@ -277,13 +283,10 @@ export default function AttendanceClockIn() {
           longitude: Number(activeSpecialRelease.center_longitude),
           radius_meters: Number(activeSpecialRelease.radius_meters) || 100,
         },
+        ...(policy?.geofence_location_enabled ? departmentSites : []),
       ];
     }
-    const departmentRadius = Number(policy?.radius_meters);
-    return resolveAttendanceSites(policy).map((site) => ({
-      ...site,
-      radius_meters: Number.isFinite(departmentRadius) ? departmentRadius : undefined,
-    }));
+    return departmentSites;
   }, [policy, activeSpecialRelease]);
   const siteRadiusMeters = Number(
     activeSpecialRelease ? activeSpecialRelease.radius_meters : policy?.radius_meters,
