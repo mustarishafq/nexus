@@ -42,6 +42,7 @@ class User extends Authenticatable
         'attendance_shift_location_ids',
         'company_id',
         'job_title',
+        'level_position',
         'work_phone',
         'personal_phone',
         'personal_phone_visible',

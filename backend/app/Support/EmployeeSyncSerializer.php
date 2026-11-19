@@ -40,6 +40,7 @@ class EmployeeSyncSerializer
             'ask_me_about' => $user->ask_me_about,
             'employee_id' => $user->employee_id,
             'job_title' => $user->job_title,
+            'level_position' => $user->level_position,
             'employment_type' => $user->employment_type,
             'joined_at' => $user->joined_at?->toDateString(),
             'date_of_birth' => $user->date_of_birth?->toDateString(),

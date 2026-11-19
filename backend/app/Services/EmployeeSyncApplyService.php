@@ -28,6 +28,8 @@ class EmployeeSyncApplyService
     private const SCALAR_FIELDS = [
         'employee_id',
         'job_title',
+        // Grade from the Insan org chart. Unlike job_title it may be cleared.
+        'level_position',
         'employment_type',
         'joined_at',
         'date_of_birth',

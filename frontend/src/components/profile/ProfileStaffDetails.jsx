@@ -61,7 +61,7 @@ export default function ProfileStaffDetails({ user }) {
   const employmentType = getEmploymentTypeLabel(user?.employment_type);
 
   const hasWorkDetails = Boolean(
-    user?.job_title || manager || user?.work_phone || user?.personal_phone || employmentType
+    user?.job_title || user?.level_position || manager || user?.work_phone || user?.personal_phone || employmentType
   );
 
   return (
@@ -77,6 +77,13 @@ export default function ProfileStaffDetails({ user }) {
               <div>
                 <p className="text-xs text-muted-foreground">Job title</p>
                 <p className="text-sm font-medium mt-0.5">{user.job_title}</p>
+              </div>
+            ) : null}
+
+            {user?.level_position ? (
+              <div>
+                <p className="text-xs text-muted-foreground">Level</p>
+                <p className="text-sm font-medium mt-0.5">{user.level_position}</p>
               </div>
             ) : null}
 
